@@ -75,6 +75,7 @@ export class PostgresStore implements Store {
   private listener: PoolClient | null = null;
   private listenerReconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private listenerConnecting = false;
+  private poolErrorHandlerAttached = false;
   private closed = false;
   private ready = false;
 
@@ -93,6 +94,7 @@ export class PostgresStore implements Store {
 
   async init(): Promise<void> {
     this.closed = false;
+    this.attachPoolErrorHandler();
     if (!(await databaseReady(this.pool)))
       throw new Error('PostgreSQL schema is not ready; run the migrate job first');
     const listener = await this.pool.connect();
@@ -106,6 +108,24 @@ export class PostgresStore implements Store {
     this.attachListener(listener);
     this.ready = true;
   }
+
+  private attachPoolErrorHandler(): void {
+    if (this.poolErrorHandlerAttached) return;
+    this.pool.on('error', this.handlePoolError);
+    this.poolErrorHandlerAttached = true;
+  }
+
+  private readonly handlePoolError = (error: Error): void => {
+    if (this.closed) return;
+    this.ready = false;
+    console.warn(
+      JSON.stringify({
+        event: 'postgres.pool_error',
+        message: error.message,
+        code: (error as Error & { code?: string }).code,
+      }),
+    );
+  };
 
   private attachListener(listener: PoolClient): void {
     listener.on('notification', (message) => {
@@ -205,6 +225,10 @@ export class PostgresStore implements Store {
       this.listener = null;
     }
     this.ready = false;
+    if (this.poolErrorHandlerAttached) {
+      this.pool.off('error', this.handlePoolError);
+      this.poolErrorHandlerAttached = false;
+    }
     await this.pool.end();
   }
 
