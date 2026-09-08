@@ -1,7 +1,7 @@
 # 安全说明
 
 - 密码使用 Argon2id；access token 只在内存，refresh token 只保存哈希或平台安全存储。
-- Web 使用 HttpOnly refresh Cookie、显式 CORS、CSP/安全响应头、请求体限制和 Owner 范围查询。
+- Web 使用 HttpOnly refresh Cookie、显式 CORS、CSP/安全响应头、请求体限制和 Owner 范围查询。支持 HTTP 或 HTTPS 入口；HTTP 登录页会显示安全警告，但密码和会话信息仍会明文传输，公网应使用 HTTPS。
 - 所有 REST/WebSocket 输入通过 Zod 或显式参数校验；写入要求 Idempotency-Key，更新要求 baseVersion。
 - Markdown 原始 HTML、脚本、事件属性和危险 URL scheme 禁止；预览再次 sanitize，外链强制安全打开。
 - Electron 关闭 nodeIntegration，开启 contextIsolation、sandbox、webSecurity；preload 不暴露原始 ipcRenderer，窗口导航和外链使用 allowlist。

@@ -974,20 +974,23 @@ function validateRuntimeConfig(config: AppConfig): void {
   try {
     origin = new URL(config.appOrigin);
   } catch {
-    throw new Error('APP_ORIGIN must be an absolute HTTPS origin in production');
+    throw new Error('APP_ORIGIN must be an absolute HTTP or HTTPS origin in production');
   }
-  if (origin.protocol !== 'https:')
-    throw new Error('APP_ORIGIN must be an absolute HTTPS origin in production');
+  if (origin.protocol !== 'http:' && origin.protocol !== 'https:')
+    throw new Error('APP_ORIGIN must be an absolute HTTP or HTTPS origin in production');
   if (
     config.corsAllowedOrigins.some((allowedOrigin) => {
       try {
-        return new URL(allowedOrigin).protocol !== 'https:';
+        const parsed = new URL(allowedOrigin);
+        return parsed.protocol !== 'http:' && parsed.protocol !== 'https:';
       } catch {
         return true;
       }
     })
   )
-    throw new Error('CORS_ALLOWED_ORIGINS must contain HTTPS origins in production');
+    throw new Error(
+      'CORS_ALLOWED_ORIGINS must contain absolute HTTP or HTTPS origins in production',
+    );
   if (
     config.nativeAllowedOrigins.some((allowedOrigin) => {
       try {

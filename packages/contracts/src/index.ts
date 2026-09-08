@@ -201,11 +201,11 @@ export const reorderSchema = z.object({
 });
 export const bootstrapSchema = z.object({
   username: z.string().trim().min(1).max(64),
-  password: z.string().min(12).max(200),
+  password: z.string().min(6),
 });
 export const loginSchema = z.object({
   username: z.string().trim().min(1).max(64),
-  password: z.string().min(1).max(200),
+  password: z.string().min(6),
   deviceId: uuidSchema.optional(),
   deviceName: z.string().trim().min(1).max(100).optional(),
   platform: z.string().trim().min(1).max(40).optional(),

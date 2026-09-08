@@ -10,9 +10,9 @@ TaskDock 的生产部署使用 GitHub Container Registry 中已经构建好的 D
 openssl rand -base64 48
 ```
 
-填写真实 HTTPS `APP_ORIGIN`、数据库密码和显式 `CORS_ALLOWED_ORIGINS`。实际秘密不进入 Git、镜像或日志。
+填写真实 HTTP 或 HTTPS `APP_ORIGIN`、数据库密码和显式 `CORS_ALLOWED_ORIGINS`。实际秘密不进入 Git、镜像或日志。
 
-生产环境必须设置 `DEV_MEMORY_STORE=false`（Compose 已设置），并使用随机的 `BOOTSTRAP_TOKEN`、`ACCESS_TOKEN_SECRET` 和 `REFRESH_TOKEN_PEPPER`。`APP_ORIGIN` 与允许的 CORS origin 必须使用 HTTPS；公开入口只应是 Caddy 的 80/443，PostgreSQL 不发布到宿主机。
+生产环境必须设置 `DEV_MEMORY_STORE=false`（Compose 已设置），并使用随机的 `BOOTSTRAP_TOKEN`、`ACCESS_TOKEN_SECRET` 和 `REFRESH_TOKEN_PEPPER`。`APP_ORIGIN` 与允许的 CORS origin 必须是完整的 HTTP 或 HTTPS 地址；使用 HTTP 时页面会显示安全警告，密码和会话信息会明文传输，公网环境建议使用 HTTPS。公开入口只应是 Caddy 的 80/443，PostgreSQL 不发布到宿主机。
 
 ## 首次部署
 
@@ -30,7 +30,7 @@ export APP_VERSION=0.1.0
 docker compose pull
 docker compose --profile operations run --rm migrate
 docker compose up -d postgres app gateway
-curl -fsS https://your-host.example/health/ready
+curl -fsS http://your-host.example/health/ready  # 使用 HTTPS 时将 http 改为 https
 ```
 
 Compose 使用的应用镜像默认为：
@@ -41,7 +41,7 @@ ghcr.io/igngserver/taskdock:${APP_VERSION}
 
 如果需要使用其他镜像仓库，可以设置 `TASKDOCK_IMAGE`。不要把生产 Compose 改回 `build:`，也不要在生产服务器上执行 `git pull` 后从源代码构建。
 
-Caddy 终止 TLS，只有 gateway 发布 80/443；app 仅在 Compose 网络监听，PostgreSQL 没有宿主机端口。访问 Web 后使用 bootstrap token 初始化一次 Owner，随后轮换或移除 `BOOTSTRAP_TOKEN`。
+如果使用 HTTPS，Caddy 终止 TLS；如果使用 HTTP，Caddy 直接提供 HTTP 服务。两种模式下只有 gateway 发布 80/443；app 仅在 Compose 网络监听，PostgreSQL 没有宿主机端口。访问 Web 后使用 bootstrap token 初始化一次 Owner，随后轮换或移除 `BOOTSTRAP_TOKEN`。
 
 ## 升级/回滚
 
@@ -52,7 +52,7 @@ export APP_VERSION=0.2.0
 docker compose pull
 docker compose --profile operations run --rm migrate
 docker compose up -d app gateway
-curl -fsS https://your-host.example/health/ready
+curl -fsS http://your-host.example/health/ready  # 使用 HTTPS 时将 http 改为 https
 ```
 
 迁移 job 成功后再切换 app；`/health/live` 只证明进程存活，`/health/ready` 才用于确认 PostgreSQL schema 已就绪。迁移失败时不要替换正在运行的 app；不兼容 schema 按恢复文档在新卷恢复旧备份。
