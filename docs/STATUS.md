@@ -14,7 +14,7 @@
 | M3 时间点/Placement     | PASS（代码+单测+核心浏览器 smoke）/NOT RUN（真实多端验收）                     | DATE/EVENT、到达/归档、加入/复制/移动/移除/排序、rollover/undo、同一 Task 多 Placement 已实现；桌面拖拽、键盘动作和移动端 Bottom Sheet 代码路径已提供，设备触摸验收未运行。                                                                                                                                                                      |
 | M4 离线同步/PWA         | PASS（代码+单测+构建）/NOT RUN（双端真实网络切换）                             | Dexie、原子 outbox、严格 FIFO、push/pull、游标过期快照、冲突合并/恢复、失败重试/退避和 WebSocket 失效通知已实现；基础真实 API cross-context 读取已通过，但真实双浏览器 API 离线恢复、响应丢失、冲突矩阵和 iOS WebKit 未运行。                                                                                                                    |
 | M5 Electron             | PASS（Linux 目录包+静态安全 smoke）/NOT RUN（GUI/Windows）                     | ESM 路径、Hub 配置 IPC、凭据边界、单实例、窗口状态和导航 allowlist 已实现；Linux x64 目录包及校验和生成，静态安全 smoke 通过；GUI launch 因 `chrome-sandbox` 不是 root-owned `4755` 而未运行，不能通过 `--no-sandbox` 绕过；Windows NSIS 安装/升级/卸载需要 Windows runner 或 Wine。                                                             |
-| M6 Capacitor Android    | PASS（release 构建）/NOT RUN（真机）                                           | Capacitor Android 工程、HTTPS/混合内容限制、Secure Storage、生命周期/网络/返回键适配已实现；未签名 release APK 已构建；无连接的 adb 设备，真机安装、离线恢复和长按交互未运行。                                                                                                                                                                   |
+| M6 Capacitor Android    | PASS（release 构建）/NOT RUN（真机）                                           | Capacitor Android 工程、HTTPS/混合内容限制、Secure Storage、生命周期/网络/返回键适配已实现；已签名 release APK 已构建并通过 apksigner、aapt2 包信息检查；无连接的 adb 设备，真机安装、离线恢复和长按交互未运行。                                                                                                                                 |
 | M7 生产化/文档          | PASS（静态配置+文档+PG migration/独立备份恢复/容量）/NOT RUN（Docker Compose） | Compose、Caddy、Dockerfile、migration job、健康检查、备份恢复和安全文档已提供；PostgreSQL migration、独立 `pg_dump -Fc`/`pg_restore` 和隔离库容量门禁已通过，恢复计数为 `users=1/tasks=3/placements=3/notes=3/schema_migrations=4`，当前无 Docker，Compose build/up、真实 HTTPS、重启和容器卷恢复仍未运行。                                      |
 
 ## 已执行门禁
@@ -34,7 +34,7 @@ E2E_REAL=1 ... pnpm test:e2e PASS（内存 Chromium/mobile 8/8、Firefox 4/4；�
 pnpm a11y                  PASS（Chromium axe：1 suite）
 pnpm desktop:test          PASS
 pnpm desktop:package       PASS（Linux dir/package）；NOT RUN（真实 Electron launch、Windows NSIS）
-pnpm android:assembleRelease PASS（unsigned APK，SHA-256 见下）
+pnpm android:assembleRelease PASS（已签名 APK，SHA-256 见下）
 DATABASE_URL=... pnpm db:migrate PASS（真实 PostgreSQL 18）
 独立 pg_dump -Fc / pg_restore PASS（MISC-1；备注 version=2；恢复计数见上）
 pnpm compose:smoke         NOT RUN（当前环境无 Docker）
@@ -45,8 +45,8 @@ pnpm release:gate          FAIL（2026-09-08：`format`、lint、typecheck、uni
 ## 产物
 
 - Electron Linux x64 目录包：`apps/desktop/release/linux-unpacked/`；可执行文件 SHA-256：`1ddc392c64e401f3e8e3682a12af14da5b23c8ff91349d33eea4642ef620f982`。
-- Android release：`apps/mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk`；SHA-256：`d585aca82b899e5277b7cefa72eff44fc5e3b75bb5afbd84a277069b0f35d367`。
-- APK 本地检查：包名 `com.devtodo.app`、min SDK 24、target/compile SDK 36、`allowBackup=false`、`usesCleartextTraffic=false`，且包含当前 Web 资源；未签名，不等于正式发布包。
+- Android release：`apps/mobile/android/app/build/outputs/apk/release/app-release.apk`；本地验证 SHA-256：`b480d30c3e005ca877096d020dd4f6111f96bb448672ce81b813fe971006817a`。
+- APK 本地检查：包名 `com.devtodo.app`、min SDK 24、target/compile SDK 36、`allowBackup=false`、`usesCleartextTraffic=false`，且包含当前 Web 资源；已通过 APK Signature Scheme v2 签名验证，可以作为安装包分发。
 
 ## 当前实现边界
 

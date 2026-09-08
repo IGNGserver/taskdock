@@ -1,5 +1,27 @@
 apply plugin: 'com.android.application'
 
+// Release APK 必须签名，否则 Android 会提示“没有 package info”或拒绝安装。
+// 本地构建优先读取 apps/mobile/android/signing/taskdock-release.properties；
+// CI 则通过环境变量注入同一把长期签名密钥。
+def releaseSigningProperties = new Properties()
+def releaseSigningPropertiesFile = rootProject.file('signing/taskdock-release.properties')
+if (releaseSigningPropertiesFile.exists()) {
+    releaseSigningPropertiesFile.withInputStream { releaseSigningProperties.load(it) }
+}
+def signingValue = { String propertyName, String environmentName ->
+    releaseSigningProperties.getProperty(propertyName) ?: System.getenv(environmentName)
+}
+def releaseStoreFile = signingValue('storeFile', 'TASKDOCK_ANDROID_KEYSTORE_PATH')
+def releaseStoreType = signingValue('storeType', 'TASKDOCK_ANDROID_KEYSTORE_TYPE') ?: 'PKCS12'
+def releaseStorePassword = signingValue('storePassword', 'TASKDOCK_ANDROID_KEYSTORE_PASSWORD')
+def releaseKeyAlias = signingValue('keyAlias', 'TASKDOCK_ANDROID_KEY_ALIAS')
+def releaseKeyPassword = signingValue('keyPassword', 'TASKDOCK_ANDROID_KEY_PASSWORD')
+def releaseSigningAvailable = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword].every { it }
+def releaseTaskRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+if (releaseTaskRequested && !releaseSigningAvailable) {
+    throw new GradleException('缺少 Android Release 签名配置。请准备 signing/taskdock-release.properties 或 TASKDOCK_ANDROID_* 环境变量。')
+}
+
 android {
     namespace = "com.devtodo.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,9 +38,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (releaseSigningAvailable) {
+                storeFile rootProject.file(releaseStoreFile)
+                storeType releaseStoreType
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
