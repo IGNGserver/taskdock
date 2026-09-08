@@ -169,6 +169,13 @@ async function main(): Promise<void> {
   } catch (error) {
     console.error('FAIL: Compose smoke failed.');
     console.error(error);
+    try {
+      compose(['ps']);
+      compose(['logs', '--no-color', 'postgres']);
+    } catch (diagnosticError) {
+      console.error('Compose failure diagnostics were unavailable.');
+      console.error(diagnosticError);
+    }
     process.exitCode = 1;
   } finally {
     if (backupDir) await rm(backupDir, { recursive: true, force: true });
