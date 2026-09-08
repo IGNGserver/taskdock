@@ -41,4 +41,6 @@ jobs:
       - run: pnpm compose:smoke
       - run: pnpm openapi:check
       - run: pnpm desktop:test
-      - run: REQUIRE_DESKTOP_LAUNCH=1 pnpm desktop:package
+      # GitHub 托管的 Linux Runner 不保证提供 root-owned 4755 的 Electron 沙箱助手；
+      # 此处验证可重现的桌面打包，真实启动验收由带图形环境的发布/人工测试完成。
+      - run: pnpm desktop:package
