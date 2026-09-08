@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -35,11 +35,19 @@ function compose(
 
 function curl(
   path: string,
-  options: { method?: string; body?: unknown; token?: string } = {},
+  options: {
+    method?: string;
+    body?: unknown;
+    token?: string;
+    mutationId?: string;
+    clientId?: string;
+  } = {},
 ): string {
   const args = ['--fail-with-body', '--silent', '--show-error', '--retry', '2'];
   if (options.method) args.push('--request', options.method);
   if (options.token) args.push('--header', `Authorization: Bearer ${options.token}`);
+  if (options.mutationId) args.push('--header', `Idempotency-Key: ${options.mutationId}`);
+  if (options.clientId) args.push('--header', `X-Client-Id: ${options.clientId}`);
   if (options.body !== undefined) {
     args.push(
       '--header',
@@ -106,6 +114,8 @@ async function main(): Promise<void> {
     const projectResponse = curl('/api/v1/projects', {
       method: 'POST',
       token: login.accessToken,
+      mutationId: randomUUID(),
+      clientId: randomUUID(),
       body: { name: 'Compose smoke', taskPrefix: `SM${process.pid % 10}` },
     });
     assert(JSON.parse(projectResponse).name === 'Compose smoke', 'PostgreSQL write failed');
