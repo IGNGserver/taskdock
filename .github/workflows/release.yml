@@ -76,7 +76,7 @@ jobs:
 
           version = os.environ['RELEASE_VERSION'].strip()
           changes = os.environ['RELEASE_CHANGES'].strip()
-          if not re.fullmatch(r'0|[1-9]\d*\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?', version):
+          if not re.fullmatch(r'(?:0|[1-9]\d*)\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?', version):
               print(f'版本号格式不正确: {version}', file=sys.stderr)
               sys.exit(1)
           prerelease = '-' in version
