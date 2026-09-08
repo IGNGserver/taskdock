@@ -1,0 +1,84 @@
+x-taskdock-image: &taskdock_image '${TASKDOCK_IMAGE:-ghcr.io/igngserver/taskdock}:${APP_VERSION:-latest}'
+
+services:
+  postgres:
+    image: postgres:18.6-alpine3.24@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-devtodo}
+      POSTGRES_USER: ${POSTGRES_USER:-devtodo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a database password in .env}
+    volumes:
+      - devtodo_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [devtodo]
+
+  migrate:
+    image: *taskdock_image
+    profiles: [operations]
+    environment: &app-env
+      NODE_ENV: production
+      APP_VERSION: ${APP_VERSION:-latest}
+      APP_PORT: 3000
+      APP_ORIGIN: ${APP_ORIGIN:?set the public HTTPS origin in .env}
+      DATABASE_URL: postgres://${POSTGRES_USER:-devtodo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-devtodo}
+      BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?set a random bootstrap token in .env}
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:?set an access token secret in .env}
+      REFRESH_TOKEN_PEPPER: ${REFRESH_TOKEN_PEPPER:?set a refresh token pepper in .env}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set explicit allowed origins in .env}
+      NATIVE_ALLOWED_ORIGINS: ${NATIVE_ALLOWED_ORIGINS:-devtodo://app,capacitor://localhost,https://localhost}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      DEV_MEMORY_STORE: 'false'
+    command: ['node', 'apps/api/dist/migrate.js']
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [devtodo]
+
+  app:
+    image: *taskdock_image
+    restart: unless-stopped
+    environment: *app-env
+    depends_on:
+      postgres: { condition: service_healthy }
+    expose: ['3000']
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [devtodo]
+
+  gateway:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN:?set the public HTTPS origin in .env}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app: { condition: service_healthy }
+    networks: [devtodo]
+
+volumes:
+  devtodo_pgdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  devtodo:
+    driver: bridge

@@ -1,0 +1,37 @@
+{
+  "name": "@devtodo/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aparajita/capacitor-secure-storage": "^8.0.0",
+    "@capacitor/app": "^8.0.1",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/network": "^8.0.1",
+    "@devtodo/contracts": "workspace:*",
+    "@devtodo/domain": "workspace:*",
+    "@devtodo/sync-client": "workspace:*",
+    "@devtodo/ui": "workspace:*",
+    "@vitejs/plugin-react": "^5.0.4",
+    "dexie": "^4.2.0",
+    "dompurify": "^3.2.6",
+    "lucide-react": "^0.542.0",
+    "marked": "^16.3.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.8.2",
+    "vite": "^7.1.4",
+    "vite-plugin-pwa": "^1.0.2"
+  },
+  "devDependencies": {
+    "@types/dompurify": "^3.2.0",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9"
+  }
+}

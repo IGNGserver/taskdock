@@ -1,0 +1,44 @@
+name: quality
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6-alpine3.24@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+        env:
+          POSTGRES_DB: devtodo_test
+          POSTGRES_USER: devtodo
+          POSTGRES_PASSWORD: devtodo_test_password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U devtodo -d devtodo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11.18.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24.18.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:integration
+        env:
+          DATABASE_URL: postgres://devtodo:devtodo_test_password@127.0.0.1:5432/devtodo_test
+      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - run: pnpm test:e2e
+      - run: E2E_REAL=1 pnpm test:e2e
+      - run: pnpm compose:smoke
+      - run: pnpm openapi:check
+      - run: pnpm desktop:test
+      - run: REQUIRE_DESKTOP_LAUNCH=1 pnpm desktop:package

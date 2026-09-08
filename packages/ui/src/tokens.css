@@ -1,0 +1,27 @@
+:root {
+  --dt-canvas: #f5f6f8;
+  --dt-surface: #ffffff;
+  --dt-surface-subtle: #f9fafb;
+  --dt-ink: #1f2430;
+  --dt-ink-soft: #414855;
+  --dt-muted: #5f6672;
+  --dt-faint: #5f6672;
+  --dt-line: #e2e5ea;
+  --dt-line-strong: #cfd4dc;
+  --dt-accent: #4656c8;
+  --dt-accent-soft: #eef0ff;
+  --dt-success: #25734d;
+  --dt-success-soft: #eaf7ef;
+  --dt-warning: #9a6111;
+  --dt-warning-soft: #fff6df;
+  --dt-danger: #b23a48;
+  --dt-danger-soft: #fff0f1;
+  --dt-radius: 12px;
+  --dt-radius-small: 8px;
+  --dt-shadow-popover: 0 16px 36px rgba(31, 36, 48, 0.13), 0 3px 10px rgba(31, 36, 48, 0.08);
+  --dt-font-sans:
+    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', 'Microsoft YaHei',
+    sans-serif;
+  --dt-font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+}

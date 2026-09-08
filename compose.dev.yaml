@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:18.6-alpine3.24@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+    environment:
+      POSTGRES_DB: devtodo
+      POSTGRES_USER: devtodo
+      POSTGRES_PASSWORD: devtodo-dev-only
+    ports: ['127.0.0.1:5433:5432']
+    volumes: [devtodo_dev_pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U devtodo -d devtodo']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  migrate:
+    build: { context: ., dockerfile: infra/docker/Dockerfile }
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://devtodo:devtodo-dev-only@postgres:5432/devtodo
+    command: ['node', 'apps/api/dist/migrate.js']
+    depends_on:
+      postgres: { condition: service_healthy }
+  app:
+    build: { context: ., dockerfile: infra/docker/Dockerfile }
+    environment:
+      NODE_ENV: development
+      APP_PORT: 3000
+      APP_ORIGIN: http://localhost:3000
+      DATABASE_URL: postgres://devtodo:devtodo-dev-only@postgres:5432/devtodo
+      BOOTSTRAP_TOKEN: dev-only-bootstrap-token-change-before-use
+      ACCESS_TOKEN_SECRET: dev-only-access-secret-change-before-use
+      REFRESH_TOKEN_PEPPER: dev-only-refresh-pepper-change-before-use
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
+      DEV_MEMORY_STORE: 'false'
+    ports: ['127.0.0.1:3000:3000']
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+volumes:
+  devtodo_dev_pgdata:

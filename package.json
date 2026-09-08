@@ -1,0 +1,47 @@
+{
+  "name": "devtodo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "TaskDock - an offline-first, self-hosted task workbench for individual developers.",
+  "packageManager": "pnpm@11.18.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @devtodo/api --filter @devtodo/web dev",
+    "build": "pnpm -r --if-present build",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "pnpm -r --if-present build && pnpm -r --if-present typecheck && tsc -p tsconfig.scripts.json --noEmit",
+    "test": "vitest run",
+    "test:integration": "tsx scripts/integration-smoke.ts",
+    "test:e2e": "tsx scripts/e2e-gate.ts",
+    "a11y": "playwright test apps/web/e2e/a11y.spec.ts --project=chromium",
+    "format:check": "prettier --check .",
+    "format:write": "prettier --write .",
+    "compose:smoke": "tsx scripts/compose-smoke.ts",
+    "server:smoke": "tsx scripts/server-smoke.ts",
+    "perf:capacity": "tsx scripts/perf-capacity.ts",
+    "release:gate": "tsx scripts/release-gate.ts",
+    "desktop:package": "pnpm --filter @devtodo/desktop package",
+    "desktop:test": "tsx scripts/desktop-security-smoke.ts",
+    "android:assembleRelease": "pnpm --filter @devtodo/web build && pnpm --filter @devtodo/mobile exec cap sync android && tsx scripts/android-assemble.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "openapi:check": "tsx scripts/openapi-check.ts"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@eslint/js": "^9.35.0",
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^24.3.0",
+    "eslint": "^9.35.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.42.0",
+    "vitest": "^3.2.4"
+  }
+}
