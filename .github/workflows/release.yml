@@ -286,6 +286,8 @@ jobs:
       - docker
     runs-on: ubuntu-latest
     steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
       - name: 下载 Linux 安装包
         uses: actions/download-artifact@v4
         with:
