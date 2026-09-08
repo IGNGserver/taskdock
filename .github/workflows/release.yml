@@ -132,7 +132,7 @@ jobs:
         run: node -e "const fs=require('fs'); for (const f of ['package.json','apps/desktop/package.json']) { const p=JSON.parse(fs.readFileSync(f)); p.version=process.env.RELEASE_VERSION; fs.writeFileSync(f, JSON.stringify(p,null,2)+'\n'); }"
       - name: 构建桌面客户端
         run: |
-          pnpm --filter @devtodo/web build
+          pnpm --filter @devtodo/web... build
           pnpm --filter @devtodo/desktop build
           pnpm --filter @devtodo/desktop exec electron-builder --config electron-builder.yml --linux dir
       - name: 打包并生成校验和
@@ -175,7 +175,7 @@ jobs:
       - name: 构建 Windows 安装程序
         shell: pwsh
         run: |
-          pnpm --filter @devtodo/web build
+          pnpm --filter @devtodo/web... build
           pnpm --filter @devtodo/desktop build
           pnpm --filter @devtodo/desktop exec electron-builder --config electron-builder.yml --win nsis
       - name: 整理 Windows 安装包
