@@ -319,3 +319,5 @@ jobs:
             args+=(--prerelease)
           fi
           gh release create "${args[@]}"
+
+# 手动发布流程：默认生成预发布版本。
