@@ -87,6 +87,8 @@ docker compose up -d
 
 TaskDock 的 Docker 部署使用已经构建好的版本镜像，不会在服务器上拉取仓库最新代码，也不会在服务器上重新编译项目。生产环境建议固定具体版本号；只有你明确接受自动跟随最新稳定版本时，才使用 `latest`。
 
+> **数据库卷提示：** 当前 Docker 镜像使用 PostgreSQL 18 的标准数据目录。若你曾经使用早期版本的 `compose.yaml` 创建过数据库卷，升级前请先按 [备份与恢复](docs/BACKUP_RESTORE.md) 完成备份，并使用备份恢复到新的数据库卷；不要直接删除旧卷。
+
 打开 `APP_ORIGIN` 对应的网址，使用 `BOOTSTRAP_TOKEN` 完成首次初始化。初始化成功后，应从 `.env` 中删除或轮换 `BOOTSTRAP_TOKEN`。
 
 ### 3. 升级
