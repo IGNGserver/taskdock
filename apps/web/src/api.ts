@@ -92,8 +92,8 @@ export function getHubOrigin(): string {
     runtimeHubOrigin ?? new URLSearchParams(location.search).get('hubOrigin') ?? undefined;
   if (!configured) throw new Error('桌面端未配置中枢地址');
   const parsed = new URL(configured);
-  if (parsed.protocol !== 'https:' && !isLocalDevelopmentOrigin(parsed))
-    throw new Error('桌面端中枢地址必须使用 HTTPS');
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
+    throw new Error('桌面端中枢地址必须使用 HTTP 或 HTTPS');
   return parsed.origin;
 }
 
@@ -509,8 +509,8 @@ function normalizeHubOrigin(value: string): string {
   } catch {
     throw new Error('中枢地址不是有效 URL');
   }
-  if (parsed.protocol !== 'https:' && !isLocalDevelopmentOrigin(parsed))
-    throw new Error('中枢地址必须使用 HTTPS；开发环境仅允许 localhost HTTP');
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
+    throw new Error('中枢地址必须使用 HTTP 或 HTTPS');
   return parsed.origin;
 }
 
@@ -518,12 +518,6 @@ function isNetworkError(error: unknown): boolean {
   return (
     error instanceof TypeError ||
     (error instanceof Error && /network|fetch|offline/i.test(error.message))
-  );
-}
-
-function isLocalDevelopmentOrigin(value: URL): boolean {
-  return (
-    value.protocol === 'http:' && (value.hostname === 'localhost' || value.hostname === '127.0.0.1')
   );
 }
 

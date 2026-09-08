@@ -24,7 +24,7 @@ services:
       NODE_ENV: production
       APP_VERSION: ${APP_VERSION:-latest}
       APP_PORT: 3000
-      APP_ORIGIN: ${APP_ORIGIN:?set the public HTTPS origin in .env}
+      APP_ORIGIN: ${APP_ORIGIN:?set the public HTTP or HTTPS origin in .env}
       DATABASE_URL: postgres://${POSTGRES_USER:-devtodo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-devtodo}
       BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?set a random bootstrap token in .env}
       ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:?set an access token secret in .env}
@@ -65,7 +65,7 @@ services:
       - '80:80'
       - '443:443'
     environment:
-      APP_ORIGIN: ${APP_ORIGIN:?set the public HTTPS origin in .env}
+      APP_ORIGIN: ${APP_ORIGIN:?set the public HTTP or HTTPS origin in .env}
     volumes:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

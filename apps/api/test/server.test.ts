@@ -6,6 +6,38 @@ import { buildServer } from '../src/server.js';
 import { MemoryStore } from '../src/store.js';
 
 describe('Fastify API', () => {
+  it('accepts a six-digit numeric owner password and allows an HTTP production origin', async () => {
+    const token = 'test-bootstrap-token-that-is-long-enough-six-digit';
+    const { app } = await buildServer({
+      store: new MemoryStore(),
+      config: {
+        nodeEnv: 'production',
+        webRoot: '/tmp/devtodo-no-web',
+        bootstrapToken: token,
+        accessTokenSecret: 'test-access-secret-that-is-long-enough-1234567890',
+        refreshTokenPepper: 'test-refresh-pepper-that-is-long-enough-1234567890',
+        databaseUrl: 'postgres://devtodo:password@localhost:5432/devtodo',
+        appOrigin: 'http://tasks.example.com',
+        corsAllowedOrigins: ['http://tasks.example.com'],
+        nativeAllowedOrigins: ['devtodo://app', 'capacitor://localhost', 'https://localhost'],
+        devMemoryStore: false,
+      },
+    });
+    const bootstrap = await app.inject({
+      method: 'POST',
+      url: '/api/v1/bootstrap',
+      payload: { token, username: 'numeric-owner', password: '100728' },
+    });
+    expect(bootstrap.statusCode).toBe(201);
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { username: 'numeric-owner', password: '100728' },
+    });
+    expect(login.statusCode).toBe(200);
+    await app.close();
+  });
+
   it('bootstraps, authenticates, and applies shared task state to all placements', async () => {
     const token = 'test-bootstrap-token-that-is-long-enough-123';
     const { app, store } = await buildServer({

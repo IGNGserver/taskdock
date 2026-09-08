@@ -1276,6 +1276,21 @@ a {
   font-size: 11px;
   line-height: 1.6;
 }
+.http-security-warning {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 18px;
+  padding: 11px 13px;
+  border: 1px solid #e8c36a;
+  border-radius: 8px;
+  background: #fff8df;
+  color: #73530a;
+  font-size: 11px;
+  line-height: 1.55;
+}
+.http-security-warning strong {
+  font-size: 11px;
+}
 .hub-check-row {
   display: flex;
   align-items: center;

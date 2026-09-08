@@ -355,11 +355,19 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
         <p className="eyebrow">PERSONAL DEV WORKSPACE</p>
         <h1>{mode === 'bootstrap' ? '建立你的工作区' : '欢迎回来'}</h1>
         <p className="auth-intro">一个任务本体，多处安排。离线时也能继续捕获和整理。</p>
+        {isHttpOrigin(nativeClient ? hubOrigin : window.location.origin) && (
+          <div className="http-security-warning" role="alert">
+            <strong>当前使用 HTTP</strong>
+            <span>
+              密码和会话信息会以明文传输。HTTP 适合可信内网或测试环境，公网部署建议改用 HTTPS。
+            </span>
+          </div>
+        )}
         <form onSubmit={submit} className="stack-form">
           {nativeClient && (
             <>
               <Field
-                label="中枢 HTTPS 地址"
+                label="中枢 HTTP/HTTPS 地址"
                 value={hubOrigin}
                 onChange={setHubOriginValue}
                 type="url"
@@ -381,7 +389,7 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
                 )}
               </div>
               <p className="field-help">
-                首次使用先填写自托管中枢地址，例如 https://todo.example.com。
+                首次使用先填写自托管中枢地址，例如 https://todo.example.com；也支持 http:// 地址。
               </p>
             </>
           )}
@@ -404,7 +412,7 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
           />
           <p className="field-help">
             {mode === 'bootstrap'
-              ? '密码至少 12 位。初始化只允许成功一次。'
+              ? '密码至少 6 位，可使用纯数字或其他字符。初始化只允许成功一次。'
               : '浏览器会用安全 Cookie 保持会话。'}
           </p>
           {error && (
@@ -3444,7 +3452,8 @@ function HubSettingsSection() {
     <div className="settings-section hub-settings-section">
       <h2>中枢连接</h2>
       <p className="field-help">
-        桌面端和 Android 端只接受 HTTPS 中枢；修改后会重新载入本地工作区。
+        桌面端和 Android 端支持 HTTP 或 HTTPS 中枢；HTTP
+        会显示安全警告，修改后会重新载入本地工作区。
       </p>
       <label className="field">
         <span>中枢地址</span>
@@ -3456,10 +3465,18 @@ function HubSettingsSection() {
             setState('idle');
             setMessage('');
           }}
-          placeholder="https://todo.example.com"
+          placeholder="https://todo.example.com 或 http://192.168.1.10"
           autoComplete="url"
         />
       </label>
+      {isHttpOrigin(origin) && (
+        <div className="http-security-warning" role="alert">
+          <strong>当前地址使用 HTTP</strong>
+          <span>
+            密码和会话信息会以明文传输。请仅在可信内网或测试环境使用，公网部署建议改用 HTTPS。
+          </span>
+        </div>
+      )}
       <div className="hub-check-row">
         <button
           type="button"
@@ -4274,6 +4291,14 @@ function timePointLabel(points: TimePointDto[], id: string): string {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+function isHttpOrigin(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 function breadcrumb(pathname: string): string {
   if (pathname.startsWith('/today')) return '今日';
   if (pathname.startsWith('/tasks')) return '所有任务';

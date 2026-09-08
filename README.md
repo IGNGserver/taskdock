@@ -50,12 +50,14 @@ cp .env.example .env
 
 编辑 `.env`，至少填写：
 
-- `APP_ORIGIN`：用户访问 TaskDock 的 HTTPS 地址，例如 `https://tasks.example.com`
+- `APP_ORIGIN`：用户访问 TaskDock 的 HTTP 或 HTTPS 地址，例如 `https://tasks.example.com` 或 `http://192.168.1.10`。使用 HTTP 时页面会显示安全警告，公网环境建议使用 HTTPS
 - `POSTGRES_PASSWORD`：数据库密码
 - `BOOTSTRAP_TOKEN`：第一次初始化管理员账户时使用的一次性令牌
 - `ACCESS_TOKEN_SECRET`：访问令牌密钥
 - `REFRESH_TOKEN_PEPPER`：刷新令牌保护密钥
 - `CORS_ALLOWED_ORIGINS`：允许访问的前端地址，通常与 `APP_ORIGIN` 相同
+
+首次初始化 Owner 时，用户密码至少 6 位，不限制数字、字母或其他字符，也没有最大长度限制。
 
 随机密钥可以用下面的命令生成：
 
@@ -132,7 +134,7 @@ TaskDock 的设计目标是让用户自己掌握数据：
 - 客户端会保存必要的本地缓存和待同步操作；
 - Docker Compose 默认不会把 PostgreSQL 端口暴露到公网；
 - 访问令牌、数据库密码和其他密钥不应提交到 GitHub；
-- 生产环境应使用 HTTPS，并定期执行备份和恢复演练。
+- 生产环境建议使用 HTTPS，并定期执行备份和恢复演练。TaskDock 也支持 HTTP 外网地址，但会显示安全警告；HTTP 会明文传输密码和会话信息，请仅在可信内网或测试环境使用。
 
 请阅读 [安全说明](docs/SECURITY.md) 和 [备份与恢复](docs/BACKUP_RESTORE.md) 后再用于重要数据。
 
