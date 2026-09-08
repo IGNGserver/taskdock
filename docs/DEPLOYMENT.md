@@ -18,6 +18,8 @@ openssl rand -base64 48
 
 从 GitHub 仓库取得 `compose.yaml` 和 `.env.example` 后，在服务器上执行：
 
+> **数据库卷提示：** 当前 Compose 使用 PostgreSQL 18 的 `/var/lib/postgresql` 数据卷布局。若旧部署使用过早期 Compose 文件，请先完成数据库备份，再按 [备份与恢复](BACKUP_RESTORE.md) 恢复到新的数据库卷；不要直接删除旧卷。
+
 ```bash
 cp .env.example .env
 # 编辑 .env，填入真实配置

@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-devtodo}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a database password in .env}
     volumes:
-      - devtodo_pgdata:/var/lib/postgresql/data
+      - devtodo_pgdata:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
       interval: 5s

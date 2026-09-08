@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: devtodo
       POSTGRES_PASSWORD: devtodo-dev-only
     ports: ['127.0.0.1:5433:5432']
-    volumes: [devtodo_dev_pgdata:/var/lib/postgresql/data]
+    volumes: [devtodo_dev_pgdata:/var/lib/postgresql]
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U devtodo -d devtodo']
       interval: 5s
