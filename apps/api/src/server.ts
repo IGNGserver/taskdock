@@ -1256,10 +1256,14 @@ async function requireNativeExchange(
   return true;
 }
 
+function refreshCookieShouldBeSecure(config: AppConfig): boolean {
+  return new URL(config.appOrigin).protocol === 'https:';
+}
+
 function setRefreshCookie(reply: FastifyReply, value: string, config: AppConfig): void {
   reply.setCookie('devtodo_refresh', value, {
     httpOnly: true,
-    secure: config.nodeEnv === 'production',
+    secure: refreshCookieShouldBeSecure(config),
     sameSite: 'lax',
     path: '/api/v1/auth',
     maxAge: config.refreshTokenTtlDays * 86_400,
@@ -1268,7 +1272,7 @@ function setRefreshCookie(reply: FastifyReply, value: string, config: AppConfig)
 function clearRefreshCookie(reply: FastifyReply, config: AppConfig): void {
   reply.clearCookie('devtodo_refresh', {
     httpOnly: true,
-    secure: config.nodeEnv === 'production',
+    secure: refreshCookieShouldBeSecure(config),
     sameSite: 'lax',
     path: '/api/v1/auth',
   });

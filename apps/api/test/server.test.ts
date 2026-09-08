@@ -35,6 +35,47 @@ describe('Fastify API', () => {
       payload: { username: 'numeric-owner', password: '100728' },
     });
     expect(login.statusCode).toBe(200);
+    const setCookie = login.headers['set-cookie'];
+    const refreshCookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
+    expect(refreshCookie).toContain('devtodo_refresh=');
+    expect(refreshCookie).toContain('HttpOnly');
+    expect(refreshCookie).not.toContain('Secure');
+    await app.close();
+  });
+
+  it('marks the web refresh cookie as Secure when the app origin is HTTPS', async () => {
+    const token = 'test-bootstrap-token-that-is-long-enough-https-cookie';
+    const { app } = await buildServer({
+      store: new MemoryStore(),
+      config: {
+        nodeEnv: 'production',
+        webRoot: '/tmp/devtodo-no-web',
+        bootstrapToken: token,
+        accessTokenSecret: 'test-access-secret-that-is-long-enough-1234567890',
+        refreshTokenPepper: 'test-refresh-pepper-that-is-long-enough-1234567890',
+        databaseUrl: 'postgres://devtodo:password@localhost:5432/devtodo',
+        appOrigin: 'https://tasks.example.com',
+        corsAllowedOrigins: ['https://tasks.example.com'],
+        nativeAllowedOrigins: ['devtodo://app', 'capacitor://localhost', 'https://localhost'],
+        devMemoryStore: false,
+      },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/bootstrap',
+      payload: { token, username: 'https-owner', password: '100728' },
+    });
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { username: 'https-owner', password: '100728' },
+    });
+    expect(login.statusCode).toBe(200);
+    const setCookie = login.headers['set-cookie'];
+    const refreshCookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
+    expect(refreshCookie).toContain('devtodo_refresh=');
+    expect(refreshCookie).toContain('HttpOnly');
+    expect(refreshCookie).toContain('Secure');
     await app.close();
   });
 
