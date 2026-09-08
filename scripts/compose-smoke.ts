@@ -166,6 +166,8 @@ async function main(): Promise<void> {
         '--clean',
         '--if-exists',
         '--no-owner',
+        '-U',
+        'devtodo',
         '--dbname=devtodo',
       ],
       { input: backup },
