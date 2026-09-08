@@ -1,0 +1,321 @@
+name: 发布 TaskDock
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号，不要带 v，例如 0.2.0-rc.1'
+        required: true
+        type: string
+      release_type:
+        description: '发布类型：默认是预发布，只有明确要求时选择正式发布'
+        required: true
+        default: prerelease
+        type: choice
+        options:
+          - prerelease
+          - release
+      changes:
+        description: '必须使用中文填写本次更新内容、已知问题和安装包状态'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: taskdock-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY_IMAGE: ghcr.io/igngserver/taskdock
+
+jobs:
+  validate:
+    name: 发布前检查
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6-alpine3.24@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+        env:
+          POSTGRES_DB: devtodo_test
+          POSTGRES_USER: devtodo
+          POSTGRES_PASSWORD: devtodo_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U devtodo -d devtodo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 设置 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.18.0
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      - name: 校验版本号和中文更新说明
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_CHANGES: ${{ inputs.changes }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+
+          version = os.environ['RELEASE_VERSION'].strip()
+          changes = os.environ['RELEASE_CHANGES'].strip()
+          if not re.fullmatch(r'0|[1-9]\d*\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?', version):
+              print(f'版本号格式不正确: {version}', file=sys.stderr)
+              sys.exit(1)
+          prerelease = '-' in version
+          if os.environ.get('RELEASE_TYPE') == 'release' and prerelease:
+              print('正式发布不能使用 alpha、beta 或 rc 预发布版本号。', file=sys.stderr)
+              sys.exit(1)
+          if os.environ.get('RELEASE_TYPE') == 'prerelease' and not prerelease:
+              print('预发布必须使用带 alpha、beta 或 rc 后缀的版本号。', file=sys.stderr)
+              sys.exit(1)
+          if not changes or not re.search(r'[\u4e00-\u9fff]', changes):
+              print('发布说明必须包含中文，并且不能是空白内容。', file=sys.stderr)
+              sys.exit(1)
+          print(f'准备发布 TaskDock {version}')
+          PY
+      - name: 格式检查
+        run: pnpm format:check
+      - name: Lint
+        run: pnpm lint
+      - name: 类型检查
+        run: pnpm typecheck
+      - name: 单元测试
+        run: pnpm test
+      - name: 集成测试
+        env:
+          DATABASE_URL: postgres://devtodo:devtodo_test_password@127.0.0.1:5432/devtodo_test
+        run: pnpm test:integration
+      - name: 构建
+        run: pnpm build
+      - name: OpenAPI 检查
+        run: pnpm openapi:check
+
+  desktop-linux:
+    name: 构建 Linux 桌面包
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 设置 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.18.0
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      - name: 写入构建版本
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: node -e "const fs=require('fs'); for (const f of ['package.json','apps/desktop/package.json']) { const p=JSON.parse(fs.readFileSync(f)); p.version=process.env.RELEASE_VERSION; fs.writeFileSync(f, JSON.stringify(p,null,2)+'\n'); }"
+      - name: 构建桌面客户端
+        run: |
+          pnpm --filter @devtodo/web build
+          pnpm --filter @devtodo/desktop build
+          pnpm --filter @devtodo/desktop exec electron-builder --config electron-builder.yml --linux dir
+      - name: 打包并生成校验和
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p artifacts
+          tar -C apps/desktop/release -czf "artifacts/TaskDock-${RELEASE_VERSION}-linux-x64.tar.gz" linux-unpacked
+          sha256sum "artifacts/TaskDock-${RELEASE_VERSION}-linux-x64.tar.gz" > "artifacts/TaskDock-${RELEASE_VERSION}-linux-x64.tar.gz.sha256"
+      - name: 上传 Linux 安装包
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskdock-linux
+          path: artifacts/*
+          if-no-files-found: error
+
+  desktop-windows:
+    name: 构建 Windows 桌面安装包
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 设置 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.18.0
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      - name: 写入构建版本
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        shell: pwsh
+        run: node -e "const fs=require('fs'); for (const f of ['package.json','apps/desktop/package.json']) { const p=JSON.parse(fs.readFileSync(f)); p.version=process.env.RELEASE_VERSION; fs.writeFileSync(f, JSON.stringify(p,null,2)+'\n'); }"
+      - name: 构建 Windows 安装程序
+        shell: pwsh
+        run: |
+          pnpm --filter @devtodo/web build
+          pnpm --filter @devtodo/desktop build
+          pnpm --filter @devtodo/desktop exec electron-builder --config electron-builder.yml --win nsis
+      - name: 整理 Windows 安装包
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Copy-Item "apps/desktop/release/TaskDock-$env:RELEASE_VERSION-x64.exe" "artifacts/TaskDock-$env:RELEASE_VERSION-windows-x64.exe"
+          if (Test-Path "apps/desktop/release/TaskDock-$env:RELEASE_VERSION-x64.7z") { Copy-Item "apps/desktop/release/TaskDock-$env:RELEASE_VERSION-x64.7z" "artifacts/TaskDock-$env:RELEASE_VERSION-windows-x64.7z" }
+      - name: 上传 Windows 安装包
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskdock-windows
+          path: artifacts/*
+          if-no-files-found: error
+
+  mobile-android:
+    name: 构建 Android 安装包
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 设置 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.18.0
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - name: 设置 Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      - name: 构建 Android APK
+        env:
+          TASKDOCK_VERSION: ${{ inputs.version }}
+        run: pnpm android:assembleRelease
+      - name: 整理 Android 安装包
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p artifacts
+          cp apps/mobile/android/app/build/outputs/apk/release/*-unsigned.apk "artifacts/TaskDock-${RELEASE_VERSION}-android-unsigned.apk"
+      - name: 上传 Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskdock-android
+          path: artifacts/*
+          if-no-files-found: error
+
+  docker:
+    name: 构建并发布 Docker 镜像
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 生成镜像标签
+        id: meta
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+        run: |
+          {
+            echo "tags<<EOF"
+            echo "${REGISTRY_IMAGE}:${RELEASE_VERSION}"
+            echo "${REGISTRY_IMAGE}:v${RELEASE_VERSION}"
+            if [ "${RELEASE_TYPE}" = "release" ]; then
+              echo "${REGISTRY_IMAGE}:latest"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: 构建并推送镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=TaskDock
+            org.opencontainers.image.version=${{ inputs.version }}
+            org.opencontainers.image.source=https://github.com/IGNGserver/taskdock
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  publish:
+    name: 创建 GitHub Release
+    needs:
+      - desktop-linux
+      - desktop-windows
+      - mobile-android
+      - docker
+    runs-on: ubuntu-latest
+    steps:
+      - name: 下载 Linux 安装包
+        uses: actions/download-artifact@v4
+        with:
+          name: taskdock-linux
+          path: release-assets
+      - name: 下载 Windows 安装包
+        uses: actions/download-artifact@v4
+        with:
+          name: taskdock-windows
+          path: release-assets
+      - name: 下载 Android 安装包
+        uses: actions/download-artifact@v4
+        with:
+          name: taskdock-android
+          path: release-assets
+      - name: 写入中文发布说明
+        env:
+          RELEASE_CHANGES: ${{ inputs.changes }}
+        run: |
+          printf '%s\n' "$RELEASE_CHANGES" > release-notes.md
+          printf '\n\n---\n\n## Docker 镜像\n\n```text\nghcr.io/igngserver/taskdock:%s\n```\n' '${{ inputs.version }}' >> release-notes.md
+          printf '\n## 本次附件\n\n- Windows 桌面安装包\n- Linux 桌面客户端压缩包及 SHA-256 校验文件\n- Android APK\n' >> release-notes.md
+      - name: 创建 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+        run: |
+          args=("v${RELEASE_VERSION}" --title "TaskDock ${RELEASE_VERSION}" --notes-file release-notes.md release-assets/*)
+          if [ "${RELEASE_TYPE}" = "prerelease" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${args[@]}"

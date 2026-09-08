@@ -1,0 +1,5 @@
+DEVELOPMENT_PLAN.md
+apps/web/dist
+apps/desktop/dist
+apps/mobile/android
+node_modules

@@ -1,0 +1,23 @@
+appId: com.devtodo.app
+productName: TaskDock
+directories:
+  output: release
+files:
+  - dist/**
+extraResources:
+  - from: ../web/dist
+    to: web
+    filter:
+      - '**/*'
+linux:
+  target:
+    - dir
+  category: Office
+  executableName: devtodo
+win:
+  target:
+    - nsis
+  artifactName: TaskDock-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

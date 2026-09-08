@@ -1,0 +1,263 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "TaskDock API",
+    "version": "0.1.0",
+    "description": "Task/Placement separated API. All mutable resources require Idempotency-Key and baseVersion where applicable."
+  },
+  "servers": [{ "url": "/api/v1" }],
+  "security": [{ "bearerAuth": [] }],
+  "components": {
+    "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer" } },
+    "parameters": {
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "description": "Opaque keyset cursor returned by the previous page.",
+        "schema": { "type": "string", "maxLength": 512 }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "description": "Page size. Defaults to 100 and cannot exceed 500.",
+        "schema": { "type": "integer", "minimum": 1, "maximum": 500, "default": 100 }
+      }
+    },
+    "responses": {
+      "Conflict": {
+        "description": "version or uniqueness conflict",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": ["code", "message", "requestId", "details"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "requestId": { "type": "string", "format": "uuid" },
+          "details": {}
+        }
+      },
+      "Task": {
+        "type": "object",
+        "required": [
+          "id",
+          "referenceId",
+          "projectId",
+          "category",
+          "title",
+          "status",
+          "priority",
+          "rank",
+          "version"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "referenceId": { "type": "string" },
+          "projectId": { "type": ["string", "null"] },
+          "category": { "enum": ["FEATURE", "MISC"] },
+          "title": { "type": "string" },
+          "status": { "enum": ["TODO", "IN_PROGRESS", "DONE"] },
+          "priority": { "enum": ["NONE", "LOW", "MEDIUM", "HIGH"] },
+          "rank": { "type": "string" },
+          "version": { "type": "integer" }
+        }
+      },
+      "Placement": {
+        "type": "object",
+        "required": ["id", "taskId", "timePointId", "rank", "version"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "taskId": { "type": "string", "format": "uuid" },
+          "timePointId": { "type": "string", "format": "uuid" },
+          "rank": { "type": "string" },
+          "version": { "type": "integer" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/bootstrap/status": {
+      "get": { "security": [], "responses": { "200": { "description": "initialization status" } } }
+    },
+    "/bootstrap": {
+      "post": {
+        "security": [],
+        "responses": {
+          "201": { "description": "owner created" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": { "security": [], "responses": { "200": { "description": "session created" } } }
+    },
+    "/auth/refresh": {
+      "post": { "security": [], "responses": { "200": { "description": "rotated session" } } }
+    },
+    "/auth/logout": {
+      "post": { "security": [], "responses": { "200": { "description": "session revoked" } } }
+    },
+    "/auth/native/challenge": {
+      "post": {
+        "security": [],
+        "description": "Issue a one-time native exchange challenge for an allowed Origin.",
+        "responses": { "201": { "description": "one-time native challenge" } }
+      }
+    },
+    "/me": { "get": { "responses": { "200": { "description": "current user" } } } },
+    "/devices": { "get": { "responses": { "200": { "description": "devices" } } } },
+    "/devices/{id}": { "delete": { "responses": { "204": { "description": "device revoked" } } } },
+    "/settings": {
+      "get": { "responses": { "200": { "description": "settings" } } },
+      "patch": { "responses": { "200": { "description": "settings updated" } } }
+    },
+    "/projects": {
+      "get": {
+        "parameters": [
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": { "200": { "description": "projects page: { items, nextCursor }" } }
+      },
+      "post": { "responses": { "201": { "description": "project created" } } }
+    },
+    "/projects/{id}": {
+      "get": { "responses": { "200": { "description": "project" } } },
+      "patch": { "responses": { "200": { "description": "project updated" } } }
+    },
+    "/projects/{id}/archive": {
+      "post": { "responses": { "200": { "description": "project archived" } } }
+    },
+    "/projects/{id}/restore": {
+      "post": { "responses": { "200": { "description": "project restored" } } }
+    },
+    "/projects/reorder": {
+      "post": { "responses": { "200": { "description": "projects reordered" } } }
+    },
+    "/tasks": {
+      "get": {
+        "parameters": [
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": { "200": { "description": "tasks page: { items, nextCursor }" } }
+      },
+      "post": { "responses": { "201": { "description": "task created" } } }
+    },
+    "/tasks/{id}": {
+      "get": { "responses": { "200": { "description": "task detail" } } },
+      "patch": { "responses": { "200": { "description": "task updated" } } }
+    },
+    "/tasks/{id}/archive": {
+      "post": { "responses": { "200": { "description": "task archived" } } }
+    },
+    "/tasks/{id}/restore": {
+      "post": { "responses": { "200": { "description": "task restored" } } }
+    },
+    "/tasks/{id}/duplicate": {
+      "post": { "responses": { "201": { "description": "task duplicated" } } }
+    },
+    "/tasks/reorder": {
+      "post": { "responses": { "200": { "description": "tasks reordered" } } }
+    },
+    "/tasks/{id}/note": {
+      "get": { "responses": { "200": { "description": "note" } } },
+      "put": { "responses": { "200": { "description": "note updated" } } }
+    },
+    "/search/tasks": {
+      "get": {
+        "parameters": [{ "$ref": "#/components/parameters/Limit" }],
+        "responses": { "200": { "description": "owner-scoped task search" } }
+      }
+    },
+    "/time-points": {
+      "get": {
+        "parameters": [
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": { "200": { "description": "time points page: { items, nextCursor }" } }
+      }
+    },
+    "/time-points/date": {
+      "post": { "responses": { "201": { "description": "date time point" } } }
+    },
+    "/time-points/events": {
+      "post": { "responses": { "201": { "description": "event time point" } } }
+    },
+    "/time-points/{id}": {
+      "get": { "responses": { "200": { "description": "time point" } } },
+      "patch": { "responses": { "200": { "description": "time point updated" } } }
+    },
+    "/time-points/{id}/reach": {
+      "post": { "responses": { "200": { "description": "event reached" } } }
+    },
+    "/time-points/{id}/archive": {
+      "post": { "responses": { "200": { "description": "event archived" } } }
+    },
+    "/time-points/{id}/restore": {
+      "post": { "responses": { "200": { "description": "event restored" } } }
+    },
+    "/time-points/events/reorder": {
+      "post": { "responses": { "200": { "description": "events reordered" } } }
+    },
+    "/time-points/{id}/placements": {
+      "get": {
+        "parameters": [
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": { "description": "placements page with task snapshots: { items, nextCursor }" }
+        }
+      }
+    },
+    "/time-points/{id}/placements/reorder": {
+      "post": { "responses": { "200": { "description": "placements reordered" } } }
+    },
+    "/placements": { "post": { "responses": { "201": { "description": "placement created" } } } },
+    "/placements/{id}": {
+      "delete": { "responses": { "204": { "description": "placement removed" } } }
+    },
+    "/placements/{id}/move": {
+      "post": { "responses": { "200": { "description": "placement moved" } } }
+    },
+    "/placements/{id}/copy": {
+      "post": { "responses": { "200": { "description": "placement copied" } } }
+    },
+    "/dates/{localDate}/rollover": {
+      "post": { "responses": { "200": { "description": "unfinished tasks copied to next date" } } }
+    },
+    "/rollovers/{operationId}/undo": {
+      "post": { "responses": { "200": { "description": "rollover undo" } } }
+    },
+    "/sync/snapshot": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Atomic owner snapshot and snapshot cursor; V1 is bounded and not paged."
+          }
+        }
+      }
+    },
+    "/sync/pull": {
+      "get": {
+        "responses": {
+          "200": { "description": "change batch" },
+          "410": { "description": "cursor expired" }
+        }
+      }
+    },
+    "/sync/push": { "post": { "responses": { "200": { "description": "per-mutation results" } } } },
+    "/sync/status": { "get": { "responses": { "200": { "description": "sync status" } } } },
+    "/ws": {
+      "get": {
+        "description": "authenticated WebSocket invalidation endpoint",
+        "responses": { "101": { "description": "switching protocols" } }
+      }
+    }
+  }
+}

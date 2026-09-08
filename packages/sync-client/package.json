@@ -1,0 +1,23 @@
+{
+  "name": "@devtodo/sync-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@devtodo/contracts": "workspace:*",
+    "dexie": "^4.2.0"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.5"
+  }
+}
