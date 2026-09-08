@@ -181,6 +181,7 @@ async function main(): Promise<void> {
     console.error(error);
     try {
       compose(['ps']);
+      compose(['logs', '--no-color', 'app']);
       compose(['logs', '--no-color', 'postgres']);
     } catch (diagnosticError) {
       console.error('Compose failure diagnostics were unavailable.');
