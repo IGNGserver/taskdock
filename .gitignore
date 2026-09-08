@@ -17,3 +17,5 @@ apps/desktop/out/
 apps/desktop/release/
 *.keystore
 *.jks
+apps/mobile/android/signing/*.properties
+apps/mobile/android/signing/*.secret

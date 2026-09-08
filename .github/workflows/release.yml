@@ -216,7 +216,29 @@ jobs:
           java-version: '21'
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
-      - name: 构建 Android APK
+      - name: 准备 Android Release 签名
+        env:
+          KEYSTORE_BASE64: ${{ secrets.TASKDOCK_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.TASKDOCK_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.TASKDOCK_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.TASKDOCK_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64" || { echo '缺少 GitHub Actions Secret: TASKDOCK_ANDROID_KEYSTORE_BASE64' >&2; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo '缺少 GitHub Actions Secret: TASKDOCK_ANDROID_KEYSTORE_PASSWORD' >&2; exit 1; }
+          test -n "$KEY_ALIAS" || { echo '缺少 GitHub Actions Secret: TASKDOCK_ANDROID_KEY_ALIAS' >&2; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo '缺少 GitHub Actions Secret: TASKDOCK_ANDROID_KEY_PASSWORD' >&2; exit 1; }
+          mkdir -p apps/mobile/android/signing
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > apps/mobile/android/signing/taskdock-release.keystore
+          cat > apps/mobile/android/signing/taskdock-release.properties <<EOF
+          storeFile=signing/taskdock-release.keystore
+          storeType=PKCS12
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+          chmod 600 apps/mobile/android/signing/taskdock-release.keystore apps/mobile/android/signing/taskdock-release.properties
+      - name: 构建并验证已签名 Android APK
         env:
           TASKDOCK_VERSION: ${{ inputs.version }}
         run: pnpm android:assembleRelease
@@ -224,8 +246,10 @@ jobs:
         env:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
+          set -euo pipefail
           mkdir -p artifacts
-          cp apps/mobile/android/app/build/outputs/apk/release/*-unsigned.apk "artifacts/TaskDock-${RELEASE_VERSION}-android-unsigned.apk"
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "artifacts/TaskDock-${RELEASE_VERSION}-android.apk"
+          cp apps/mobile/android/app/build/outputs/apk/release/SHA256SUMS "artifacts/TaskDock-${RELEASE_VERSION}-android.sha256"
       - name: 上传 Android APK
         uses: actions/upload-artifact@v4
         with:
@@ -309,7 +333,7 @@ jobs:
         run: |
           printf '%s\n' "$RELEASE_CHANGES" > release-notes.md
           printf '\n\n---\n\n## Docker 镜像\n\n```text\nghcr.io/igngserver/taskdock:%s\n```\n' '${{ inputs.version }}' >> release-notes.md
-          printf '\n## 本次附件\n\n- Windows 桌面安装包\n- Linux 桌面客户端压缩包及 SHA-256 校验文件\n- Android APK\n' >> release-notes.md
+          printf '\n## 本次附件\n\n- Windows 桌面安装包\n- Linux 桌面客户端压缩包及 SHA-256 校验文件\n- 已签名 Android APK 及 SHA-256 校验文件\n' >> release-notes.md
       - name: 创建 Release
         env:
           GH_TOKEN: ${{ github.token }}
