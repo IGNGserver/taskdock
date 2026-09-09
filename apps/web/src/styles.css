@@ -1276,6 +1276,23 @@ a {
   font-size: 11px;
   line-height: 1.6;
 }
+.bootstrap-notice {
+  display: grid;
+  gap: 0.35rem;
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.bootstrap-notice strong {
+  font-weight: 700;
+}
+
 .http-security-warning {
   display: grid;
   gap: 4px;

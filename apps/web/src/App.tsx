@@ -295,11 +295,10 @@ function AuthenticatedApp() {
 function LoginScreen({ initialized }: { initialized: boolean }) {
   const auth = useAuth();
   const nativeClient = isNativeClient();
-  const [mode, setMode] = useState<'login' | 'bootstrap'>(initialized ? 'login' : 'bootstrap');
+  const [hubInitialized, setHubInitialized] = useState(initialized);
   const [hubOrigin, setHubOriginValue] = useState(getConfiguredHubOrigin() ?? '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [token, setToken] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [hubCheck, setHubCheck] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
@@ -315,8 +314,9 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
       const origin = await setHubOrigin(hubOrigin);
       const status = await testHubConnection(origin, controller.signal);
       setHubCheck('success');
+      setHubInitialized(status.initialized);
       setHubCheckMessage(
-        status.initialized ? '连接成功 · Owner 已初始化' : '连接成功 · 等待初始化',
+        status.initialized ? '连接成功 · Owner 已初始化' : '连接成功 · 等待部署者初始化',
       );
     } catch (cause) {
       setHubCheck('error');
@@ -337,8 +337,11 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
     setBusy(true);
     try {
       if (nativeClient) await setHubOrigin(hubOrigin);
-      if (mode === 'bootstrap') await auth.bootstrap(token, username, password);
-      else await auth.login(username, password, '浏览器');
+      if (!hubInitialized) {
+        setError('中枢尚未完成初始化，请先在部署中枢时完成 Owner 初始化。');
+        return;
+      }
+      await auth.login(username, password, '浏览器');
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '操作失败，请检查网络和输入');
     } finally {
@@ -353,8 +356,17 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
           <span>TaskDock</span>
         </div>
         <p className="eyebrow">PERSONAL DEV WORKSPACE</p>
-        <h1>{mode === 'bootstrap' ? '建立你的工作区' : '欢迎回来'}</h1>
+        <h1>{hubInitialized ? '欢迎回来' : '等待中枢初始化'}</h1>
         <p className="auth-intro">一个任务本体，多处安排。离线时也能继续捕获和整理。</p>
+        {!hubInitialized && (
+          <div className="bootstrap-notice" role="status">
+            <strong>请先完成中枢部署</strong>
+            <span>
+              初始化令牌只在部署中枢时使用。请让部署者在服务器端完成首次 Owner
+              初始化，完成后刷新此页面即可登录。
+            </span>
+          </div>
+        )}
         {isHttpOrigin(nativeClient ? hubOrigin : window.location.origin) && (
           <div className="http-security-warning" role="alert">
             <strong>当前使用 HTTP</strong>
@@ -393,52 +405,26 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
               </p>
             </>
           )}
-          {mode === 'bootstrap' && (
-            <Field
-              label="初始化令牌"
-              value={token}
-              onChange={setToken}
-              type="password"
-              autoComplete="off"
-            />
-          )}
           <Field label="用户名" value={username} onChange={setUsername} autoComplete="username" />
           <Field
             label="密码"
             value={password}
             onChange={setPassword}
             type="password"
-            autoComplete={mode === 'bootstrap' ? 'new-password' : 'current-password'}
+            autoComplete="current-password"
           />
           <p className="field-help">
-            {mode === 'bootstrap'
-              ? '密码至少 6 位，可使用纯数字或其他字符。初始化只允许成功一次。'
-              : '浏览器会用安全 Cookie 保持会话。'}
+            密码为至少 6 位；可以直接使用 6 位纯数字。浏览器会用安全 Cookie 保持会话。
           </p>
           {error && (
             <div role="alert" className="form-error">
               {error}
             </div>
           )}
-          <button className="primary-button wide" disabled={busy}>
-            {busy ? (
-              <LoaderCircle className="spin" size={17} />
-            ) : mode === 'bootstrap' ? (
-              '初始化并进入'
-            ) : (
-              '登录'
-            )}
+          <button className="primary-button wide" disabled={busy || !hubInitialized}>
+            {busy ? <LoaderCircle className="spin" size={17} /> : '登录'}
           </button>
         </form>
-        <button
-          className="text-button auth-switch"
-          onClick={() => {
-            setMode(mode === 'login' ? 'bootstrap' : 'login');
-            setError('');
-          }}
-        >
-          {mode === 'login' ? '这是第一次使用？初始化 Owner' : '已有工作区？返回登录'}
-        </button>
       </div>
       <aside className="auth-aside">
         <span className="aside-number">01</span>

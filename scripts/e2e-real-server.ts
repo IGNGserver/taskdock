@@ -5,6 +5,7 @@ const children: ChildProcess[] = [];
 let e2ePool: Pool | undefined;
 let shutdownPromise: Promise<void> | undefined;
 const e2eUsername = process.env['E2E_USERNAME'] ?? 'e2e-real-owner';
+const e2ePassword = process.env['E2E_PASSWORD'] ?? 'e2e-real-password-change-me';
 
 function start(command: string, args: string[], env: NodeJS.ProcessEnv): ChildProcess {
   const child = spawn(command, args, {
@@ -92,6 +93,13 @@ async function main(): Promise<void> {
     ...apiEnv,
   });
   await waitFor('http://127.0.0.1:3000/health/live');
+  const bootstrap = await fetch('http://127.0.0.1:3000/api/v1/bootstrap', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: bootstrapToken, username: e2eUsername, password: e2ePassword }),
+  });
+  if (bootstrap.status !== 201)
+    throw new Error(`real E2E fixture bootstrap failed: HTTP ${bootstrap.status}`);
   start('pnpm', ['--filter', '@devtodo/web', 'dev', '--host', '127.0.0.1', '--port', '4173'], {});
   await waitFor('http://127.0.0.1:4173');
 

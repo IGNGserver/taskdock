@@ -103,7 +103,7 @@ export async function buildServer(
   const auth = new AuthService(store, config);
   const rateLimiter = new AuthRateLimiter();
   const nativeOrigins = [
-    ...new Set([...config.corsAllowedOrigins, ...config.nativeAllowedOrigins]),
+    ...new Set([...config.corsAllowedOrigins, ...config.nativeAllowedOrigins, 'http://localhost']),
   ];
   const app = Fastify({
     trustProxy: config.trustProxy,
@@ -996,7 +996,8 @@ function validateRuntimeConfig(config: AppConfig): void {
       try {
         const parsed = new URL(allowedOrigin);
         return !(
-          (parsed.protocol === 'https:' && parsed.hostname === 'localhost') ||
+          ((parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+            parsed.hostname === 'localhost') ||
           (parsed.protocol === 'devtodo:' && parsed.hostname === 'app') ||
           (parsed.protocol === 'capacitor:' && parsed.hostname === 'localhost')
         );
@@ -1218,7 +1219,7 @@ function nativeClient(request: FastifyRequest, config: AppConfig): boolean {
   const normalizedFetchSite = Array.isArray(fetchSite) ? fetchSite[0] : fetchSite;
   return (
     origin !== undefined &&
-    config.nativeAllowedOrigins.includes(origin) &&
+    (config.nativeAllowedOrigins.includes(origin) || origin === 'http://localhost') &&
     normalizedFetchSite !== 'same-origin'
   );
 }

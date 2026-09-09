@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('shows the first-run capture screen with labelled fields', async ({ page }) => {
+test('explains that first-run initialization happens during deployment', async ({ page }) => {
   await page.route('**/api/v1/auth/refresh', (route) =>
     route.fulfill({
       status: 401,
@@ -16,10 +16,10 @@ test('shows the first-run capture screen with labelled fields', async ({ page })
     }),
   );
   await page.goto('/login');
-  await expect(page.getByRole('heading', { name: '建立你的工作区' })).toBeVisible();
-  await expect(page.getByLabel('初始化令牌')).toBeVisible();
-  await expect(page.getByLabel('用户名')).toBeVisible();
-  await expect(page.getByRole('button', { name: '初始化并进入' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '等待中枢初始化' })).toBeVisible();
+  await expect(page.getByText('初始化令牌只在部署中枢时使用。')).toBeVisible();
+  await expect(page.getByLabel('初始化令牌')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '登录' })).toBeDisabled();
 });
 
 test('opens the authenticated quick-capture dialog and exposes mobile navigation', async ({
