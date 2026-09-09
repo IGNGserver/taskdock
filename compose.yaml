@@ -44,7 +44,8 @@ services:
     environment: *app-env
     depends_on:
       postgres: { condition: service_healthy }
-    expose: ['3000']
+    ports:
+      - '${TASKDOCK_PORT:-48731}:3000'
     healthcheck:
       test:
         [
@@ -59,6 +60,7 @@ services:
     networks: [devtodo]
 
   gateway:
+    profiles: [gateway]
     image: caddy:2.10.2-alpine
     restart: unless-stopped
     ports:
