@@ -50,7 +50,8 @@ cp .env.example .env
 
 编辑 `.env`，至少填写：
 
-- `APP_ORIGIN`：用户访问 TaskDock 的 HTTP 或 HTTPS 地址，例如 `https://tasks.example.com` 或 `http://192.168.1.10`。使用 HTTP 时页面会显示安全警告，公网环境建议使用 HTTPS
+- `TASKDOCK_PORT`：TaskDock 默认对外 HTTP 端口，默认是 `48731`；如果 NAS 上该端口已被占用，可以改成其他五位端口
+- `APP_ORIGIN`：用户访问 TaskDock 的 HTTP 或 HTTPS 地址，例如 `https://tasks.example.com` 或 `http://192.168.1.10:48731`。使用 HTTP 时页面会显示安全警告，公网环境建议使用 HTTPS
 - `POSTGRES_PASSWORD`：数据库密码
 - `BOOTSTRAP_TOKEN`：第一次初始化管理员账户时使用的一次性令牌
 - `ACCESS_TOKEN_SECRET`：访问令牌密钥
@@ -91,7 +92,7 @@ TaskDock 的 Docker 部署使用已经构建好的版本镜像，不会在服务
 
 > **数据库卷提示：** 当前 Docker 镜像使用 PostgreSQL 18 的标准数据目录。若你曾经使用早期版本的 `compose.yaml` 创建过数据库卷，升级前请先按 [备份与恢复](docs/BACKUP_RESTORE.md) 完成备份，并使用备份恢复到新的数据库卷；不要直接删除旧卷。
 
-打开 `APP_ORIGIN` 对应的网址，使用 `BOOTSTRAP_TOKEN` 完成首次初始化。初始化成功后，应从 `.env` 中删除或轮换 `BOOTSTRAP_TOKEN`。
+默认 Docker 部署会直接通过 `TASKDOCK_PORT` 提供 HTTP 服务，默认访问地址是 `http://服务器地址:48731`。打开 `APP_ORIGIN` 对应的网址，使用 `BOOTSTRAP_TOKEN` 完成首次初始化。初始化成功后，应从 `.env` 中删除或轮换 `BOOTSTRAP_TOKEN`。
 
 ### 3. 升级
 
@@ -132,7 +133,7 @@ TaskDock 的设计目标是让用户自己掌握数据：
 
 - 任务、安排和笔记保存在自托管中枢的 PostgreSQL 中；
 - 客户端会保存必要的本地缓存和待同步操作；
-- Docker Compose 默认不会把 PostgreSQL 端口暴露到公网；
+- Docker Compose 默认不会把 PostgreSQL 端口暴露到公网；TaskDock 默认通过 `48731` 提供 HTTP 访问；
 - 访问令牌、数据库密码和其他密钥不应提交到 GitHub；
 - 生产环境建议使用 HTTPS，并定期执行备份和恢复演练。TaskDock 也支持 HTTP 外网地址，但会显示安全警告；HTTP 会明文传输密码和会话信息，请仅在可信内网或测试环境使用。
 
