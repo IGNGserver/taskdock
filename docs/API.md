@@ -4,7 +4,7 @@ Base URL：`/api/v1`。完整路径清单在 [openapi.json](openapi.json)。JSON
 
 ## 认证
 
-首次部署使用 `POST /bootstrap`，令牌来自 `BOOTSTRAP_TOKEN`，成功后永久关闭。`POST /auth/login` 返回短时 access token；Web refresh token 是 `HttpOnly`、`SameSite=Lax` Cookie：使用 HTTPS 时还会带有 `Secure` 属性，使用 HTTP 时为了让 HTTP 外网地址可用而不带 `Secure`，但密码和会话信息会明文传输，页面会显示安全警告。原生容器应通过平台安全存储持有 refresh token。每次 refresh 都轮换 token，旧链重放会撤销该设备会话链。
+首次部署由部署中枢执行 `docker compose --profile operations run --rm bootstrap`，服务端内部仍使用 `POST /bootstrap` 和 `BOOTSTRAP_TOKEN`，成功后永久关闭；Web、桌面和手机客户端不提供初始化令牌输入。`POST /auth/login` 返回短时 access token；Web refresh token 是 `HttpOnly`、`SameSite=Lax` Cookie：使用 HTTPS 时还会带有 `Secure` 属性，使用 HTTP 时为了让 HTTP 外网地址可用而不带 `Secure`，但密码和会话信息会明文传输，页面会显示安全警告。原生容器应通过平台安全存储持有 refresh token。每次 refresh 都轮换 token，旧链重放会撤销该设备会话链。
 
 ## 写入约定
 

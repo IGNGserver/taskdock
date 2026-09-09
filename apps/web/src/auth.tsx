@@ -47,7 +47,6 @@ interface AuthContextValue {
   engine: SyncEngine | null;
   connection: ConnectionStatus;
   login: (username: string, password: string, deviceName?: string) => Promise<void>;
-  bootstrap: (token: string, username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   updateSettings: (next: SettingsDto) => void;
@@ -282,18 +281,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [initialize],
   );
 
-  const bootstrap = useCallback(
-    async (token: string, username: string, password: string) => {
-      await request('/bootstrap', {
-        method: 'POST',
-        body: JSON.stringify({ token, username, password }),
-      });
-      setInitialized(true);
-      await login(username, password, '初始化浏览器');
-    },
-    [login],
-  );
-
   const logout = useCallback(async () => {
     authOperationRef.current += 1;
     lockAuthLocally();
@@ -346,7 +333,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       engine,
       connection,
       login,
-      bootstrap,
       logout,
       refresh,
       updateSettings,
@@ -360,7 +346,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       engine,
       connection,
       login,
-      bootstrap,
       logout,
       refresh,
       updateSettings,

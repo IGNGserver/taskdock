@@ -43,6 +43,33 @@ describe('Fastify API', () => {
     await app.close();
   });
 
+  it('allows the Android HTTP WebView origin for bootstrap status', async () => {
+    const { app } = await buildServer({
+      store: new MemoryStore(),
+      config: {
+        nodeEnv: 'production',
+        webRoot: '/tmp/devtodo-no-web',
+        bootstrapToken: 'test-bootstrap-token-that-is-long-enough-http-origin',
+        accessTokenSecret: 'test-access-secret-that-is-long-enough-1234567890',
+        refreshTokenPepper: 'test-refresh-pepper-that-is-long-enough-1234567890',
+        databaseUrl: 'postgres://devtodo:password@localhost:5432/devtodo',
+        appOrigin: 'http://tasks.example.com',
+        corsAllowedOrigins: ['http://tasks.example.com'],
+        nativeAllowedOrigins: ['devtodo://app', 'capacitor://localhost', 'https://localhost'],
+        devMemoryStore: false,
+      },
+    });
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/bootstrap/status',
+      headers: { origin: 'http://localhost' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost');
+    expect(response.json()).toEqual({ initialized: false });
+    await app.close();
+  });
+
   it('marks the web refresh cookie as Secure when the app origin is HTTPS', async () => {
     const token = 'test-bootstrap-token-that-is-long-enough-https-cookie';
     const { app } = await buildServer({

@@ -14,6 +14,8 @@ openssl rand -base64 48
 
 生产环境必须设置 `DEV_MEMORY_STORE=false`（Compose 已设置），并使用随机的 `BOOTSTRAP_TOKEN`、`ACCESS_TOKEN_SECRET` 和 `REFRESH_TOKEN_PEPPER`。`APP_ORIGIN` 与允许的 CORS origin 必须是完整的 HTTP 或 HTTPS 地址；使用 HTTP 时页面会显示安全警告，密码和会话信息会明文传输，公网环境建议使用 HTTPS。默认部署直接由 TaskDock 应用提供 HTTP 服务，公开入口是 `TASKDOCK_PORT`（默认 `48731`）；PostgreSQL 不发布到宿主机。需要 Caddy 反向代理时，再使用 `--profile gateway`，不要同时让两个服务占用同一个宿主机端口。
 
+TaskDock 允许至少 6 位的密码，6 位纯数字也可以，没有额外的字符种类限制。`BOOTSTRAP_TOKEN` 只在部署中枢时使用，客户端不会显示或要求填写初始化令牌。
+
 ## 首次部署
 
 从 GitHub 仓库取得 `compose.yaml` 和 `.env.example` 后，在服务器上执行：
@@ -41,7 +43,15 @@ ghcr.io/igngserver/taskdock:${APP_VERSION}
 
 如果需要使用其他镜像仓库，可以设置 `TASKDOCK_IMAGE`。不要把生产 Compose 改回 `build:`，也不要在生产服务器上执行 `git pull` 后从源代码构建。
 
-默认情况下 app 发布 `48731:3000`，直接提供 HTTP 服务；使用 HTTP 时页面会显示安全警告，密码和会话信息会明文传输，公网环境建议使用 HTTPS。PostgreSQL 没有宿主机端口。访问 Web 后使用 bootstrap token 初始化一次 Owner，随后轮换或移除 `BOOTSTRAP_TOKEN`。
+默认情况下 app 发布 `48731:3000`，直接提供 HTTP 服务；使用 HTTP 时页面会显示安全警告，密码和会话信息会明文传输，公网环境建议使用 HTTPS。PostgreSQL 没有宿主机端口。在 `.env` 中填写 `OWNER_USERNAME`、`OWNER_PASSWORD`，然后由部署中枢执行一次 Owner 初始化：
+
+```bash
+docker compose --profile operations run --rm migrate
+docker compose --profile operations run --rm bootstrap
+docker compose up -d app
+```
+
+初始化命令会读取部署环境中的 `BOOTSTRAP_TOKEN`，不会把令牌交给 Web、桌面或手机客户端。初始化成功后，建议从 `.env` 中删除 `OWNER_PASSWORD`，并轮换或移除 `BOOTSTRAP_TOKEN`。
 
 ## 升级/回滚
 

@@ -6,8 +6,6 @@ test.describe('real API and IndexedDB workflow', () => {
 
   const username = process.env['E2E_USERNAME'] ?? 'e2e-real-owner';
   const password = 'e2e-real-password-change-me';
-  const bootstrapToken =
-    process.env['E2E_BOOTSTRAP_TOKEN'] ?? 'devtodo-local-bootstrap-token-change-me-now';
 
   test('captures into Today and converges in a second browser context', async ({
     page,
@@ -26,17 +24,10 @@ test.describe('real API and IndexedDB workflow', () => {
       await expect(targetPage.getByRole('dialog', { name: '快速添加' })).toBeVisible();
     };
 
-    const status = await page.request.get('/api/v1/bootstrap/status');
-    const statusBody = (await status.json()) as { initialized?: unknown };
     await page.goto('/login');
     await page.getByLabel('用户名').fill(username);
     await page.getByLabel('密码').fill(password);
-    if (statusBody.initialized === false) {
-      await page.getByLabel('初始化令牌').fill(bootstrapToken);
-      await page.getByRole('button', { name: '初始化并进入' }).click();
-    } else {
-      await page.getByRole('button', { name: '登录' }).click();
-    }
+    await page.getByRole('button', { name: '登录' }).click();
     const quickEntry = isMobile
       ? page.getByRole('button', { name: '打开创建菜单' })
       : page.getByRole('button', { name: '快速添加' });
