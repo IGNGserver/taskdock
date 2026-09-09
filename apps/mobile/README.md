@@ -20,4 +20,4 @@ apps/mobile/android/signing/taskdock-release.secret
 
 GitHub Actions 发布流程使用同一把密钥对应的 Secrets：`TASKDOCK_ANDROID_KEYSTORE_BASE64`、`TASKDOCK_ANDROID_KEYSTORE_PASSWORD`、`TASKDOCK_ANDROID_KEY_ALIAS` 和 `TASKDOCK_ANDROID_KEY_PASSWORD`。工作流会验证 APK 签名后，才会把安装包放入 Release。
 
-如果没有 Android SDK、Java、Gradle 或签名材料，根命令会明确报告 `NOT RUN` 或失败，不会再生成容易被误认为可安装包的未签名 APK。`src/adapter.ts` 已接入 Capacitor App、Network、Browser 和 `@aparajita/capacitor-secure-storage`：refresh token 只经 Keystore 支持的 Secure Storage 保存，不写入 localStorage 或普通 Preferences。还需在真实 Android 设备验收返回键、网络恢复、离线 outbox 和 HTTP/HTTPS 中枢连接。
+如果没有 Android SDK、Java、Gradle 或签名材料，根命令会明确报告 `NOT RUN` 或失败，不会再生成容易被误认为可安装包的未签名 APK。`src/adapter.ts` 已接入 Capacitor App、Network、Browser 和 `@aparajita/capacitor-secure-storage`：refresh token 只经 Keystore 支持的 Secure Storage 保存，不写入 localStorage 或普通 Preferences。Android 客户端允许连接 HTTP 中枢地址（例如 `http://47.95.17.77:48731`），因为自托管部署可能没有 HTTPS；HTTP 连接会由界面显示安全警告。还需在真实 Android 设备验收返回键、网络恢复、离线 outbox 和 HTTP/HTTPS 中枢连接。

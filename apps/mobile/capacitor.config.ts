@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'TaskDock',
   webDir: '../web/dist',
   bundledWebRuntime: false,
-  server: { androidScheme: 'https', cleartext: false },
+  server: { androidScheme: 'http', cleartext: true },
   android: { allowMixedContent: false, captureInput: false },
   plugins: { App: { disableBackButtonHandler: true } },
 };
