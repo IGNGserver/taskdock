@@ -25,6 +25,7 @@ import {
   readLocal,
 } from './local.js';
 import { isAuthLocallyLocked } from './auth-lock.js';
+import { normalizeHubOrigin } from './hub-origin.js';
 
 const API_BASE = '/api/v1';
 let accessToken: string | null = null;
@@ -77,6 +78,10 @@ export function isDesktopClient(): boolean {
   return Boolean(desktopBridge());
 }
 
+export function isWindowsDesktop(): boolean {
+  return isDesktopClient() && desktopBridge()?.platform === 'win32';
+}
+
 export function isNativeMobileClient(): boolean {
   return Capacitor.isNativePlatform();
 }
@@ -87,14 +92,14 @@ export function getHubOrigin(): string {
     if (!configured) throw new Error('移动端未配置中枢地址');
     return configured;
   }
+  if (isDesktopClient()) {
+    const configured =
+      runtimeHubOrigin ?? new URLSearchParams(location.search).get('hubOrigin') ?? undefined;
+    if (!configured) throw new Error('桌面端未配置中枢地址');
+    return normalizeHubOrigin(configured);
+  }
   if (location.protocol !== 'file:' && location.protocol !== 'devtodo:') return location.origin;
-  const configured =
-    runtimeHubOrigin ?? new URLSearchParams(location.search).get('hubOrigin') ?? undefined;
-  if (!configured) throw new Error('桌面端未配置中枢地址');
-  const parsed = new URL(configured);
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
-    throw new Error('桌面端中枢地址必须使用 HTTP 或 HTTPS');
-  return parsed.origin;
+  throw new Error('桌面端未配置中枢地址');
 }
 
 export function getConfiguredHubOrigin(): string | null {
@@ -144,6 +149,8 @@ export async function testHubConnection(
   signal?: AbortSignal,
 ): Promise<{ initialized: boolean }> {
   const origin = normalizeHubOrigin(value);
+  const desktop = desktopBridge();
+  if (desktop) return withAbort(desktop.testHubConnection(origin), signal);
   const response = await fetch(`${origin}${API_BASE}/bootstrap/status`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
@@ -250,11 +257,25 @@ async function requestNetwork<T>(
   }
   let response: Response;
   try {
-    response = await fetch(`${getHubOrigin()}${API_BASE}${path}`, {
-      ...init,
-      headers,
-      credentials: 'include',
-    });
+    const desktop = desktopBridge();
+    if (desktop) {
+      const result = await desktop.request({
+        url: `${getHubOrigin()}${API_BASE}${path}`,
+        method,
+        headers: Object.fromEntries(headers.entries()),
+        body: typeof init.body === 'string' ? init.body : null,
+      });
+      response = new Response(result.body, {
+        status: result.status,
+        headers: result.headers,
+      });
+    } else {
+      response = await fetch(`${getHubOrigin()}${API_BASE}${path}`, {
+        ...init,
+        headers,
+        credentials: 'include',
+      });
+    }
   } catch (error) {
     if (isNetworkError(error)) {
       const pathname = path.split('?')[0] ?? path;
@@ -502,16 +523,32 @@ export function mutation<T extends Record<string, unknown>>(
 
 export { API_BASE };
 
-function normalizeHubOrigin(value: string): string {
-  let parsed: URL;
-  try {
-    parsed = new URL(value.trim());
-  } catch {
-    throw new Error('中枢地址不是有效 URL');
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
-    throw new Error('中枢地址必须使用 HTTP 或 HTTPS');
-  return parsed.origin;
+export { isHttpOrigin, normalizeHubOrigin } from './hub-origin.js';
+
+function withAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  const abortReason = () =>
+    signal.reason ?? new DOMException('The operation was aborted', 'AbortError');
+  if (signal.aborted) return Promise.reject(abortReason());
+
+  return new Promise<T>((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener('abort', onAbort);
+    const onAbort = () => {
+      cleanup();
+      reject(abortReason());
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error: unknown) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
 }
 
 function isNetworkError(error: unknown): boolean {
@@ -522,6 +559,14 @@ function isNetworkError(error: unknown): boolean {
 }
 
 interface DesktopBridge {
+  platform: string;
+  testHubConnection: (origin: string) => Promise<{ initialized: boolean }>;
+  request: (input: {
+    url: string;
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string | null;
+  }) => Promise<{ status: number; body: string; headers: Record<string, string> }>;
   authLogin: (
     username: string,
     password: string,

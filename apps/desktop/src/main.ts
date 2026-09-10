@@ -3,6 +3,8 @@ import {
   BrowserWindow,
   globalShortcut,
   ipcMain,
+  Menu,
+  nativeTheme,
   protocol,
   safeStorage,
   shell,
@@ -11,6 +13,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseHubOrigin, validateHubRequest, type HubRequestInput } from './hub-policy.js';
 
 const isDevelopment = process.env['NODE_ENV'] === 'development';
 const configuredRendererOrigin = process.env['DEVTODO_APP_ORIGIN'];
@@ -59,6 +62,38 @@ interface HubResponse {
   body: Record<string, unknown>;
 }
 
+interface HubRequestResult {
+  status: number;
+  body: string;
+  headers: Record<string, string>;
+}
+
+type SystemTheme = 'light' | 'dark';
+
+function getSystemTheme(): SystemTheme {
+  return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+}
+
+function themeBackground(theme: SystemTheme): string {
+  return theme === 'dark' ? '#11141a' : '#f5f6f8';
+}
+
+function themeTitleBar(theme: SystemTheme): { color: string; symbolColor: string } {
+  return theme === 'dark'
+    ? { color: '#171b23', symbolColor: '#eef2f7' }
+    : { color: '#f5f6f8', symbolColor: '#1f2430' };
+}
+
+function applyWindowTheme(): void {
+  if (!mainWindow) return;
+  const theme = getSystemTheme();
+  mainWindow.setBackgroundColor(themeBackground(theme));
+  if (process.platform === 'win32')
+    mainWindow.setTitleBarOverlay({ ...themeTitleBar(theme), height: 36 });
+  if (!mainWindow.webContents.isDestroyed())
+    mainWindow.webContents.send('devtodo:theme-changed', theme);
+}
+
 function createWindow(): void {
   if (mainWindow) {
     mainWindow.show();
@@ -74,6 +109,13 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 640,
     show: false,
+    backgroundColor: themeBackground(getSystemTheme()),
+    ...(process.platform === 'win32'
+      ? {
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay: { ...themeTitleBar(getSystemTheme()), height: 36 },
+        }
+      : {}),
     webPreferences: {
       preload: join(moduleDir, 'preload.js'),
       nodeIntegration: false,
@@ -85,6 +127,7 @@ function createWindow(): void {
   });
   mainWindow.once('ready-to-show', () => mainWindow?.show());
   mainWindow.webContents.once('did-finish-load', () => {
+    applyWindowTheme();
     if (process.env['DEVTODO_DESKTOP_SMOKE'] === '1') console.log('DEVTODO_DESKTOP_RENDERER_READY');
   });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -95,21 +138,25 @@ function createWindow(): void {
     if (!isAllowedNavigation(url)) event.preventDefault();
   });
   const webIndex = resolve(webRoot, 'index.html');
+  const configuredHubOrigin = readConfiguredHubOrigin();
   if (isDevelopment) {
     const origin = configuredRendererOrigin ?? 'http://localhost:5173';
     if (!isAllowedNavigation(origin)) throw new Error('development app origin is not allowed');
-    void mainWindow.loadURL(origin);
+    const rendererUrl = new URL(origin);
+    if (configuredHubOrigin) rendererUrl.searchParams.set('hubOrigin', configuredHubOrigin);
+    void mainWindow.loadURL(rendererUrl.toString());
   } else {
     if (!existsSync(webIndex)) throw new Error('packaged web assets are missing');
-    const configuredHubOrigin = readConfiguredHubOrigin();
     const query = configuredHubOrigin
       ? `?hubOrigin=${encodeURIComponent(configuredHubOrigin)}`
       : '';
     void mainWindow.loadURL(`devtodo://app/index.html${query}`);
   }
   mainWindow.on('closed', () => {
+    nativeTheme.removeListener('updated', applyWindowTheme);
     mainWindow = null;
   });
+  nativeTheme.on('updated', applyWindowTheme);
   mainWindow.on('close', () => {
     if (!mainWindow) return;
     const bounds = mainWindow.getBounds();
@@ -131,22 +178,6 @@ function isAllowedNavigation(url: string): boolean {
   }
 }
 
-function parseHubOrigin(value: string): string | null {
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol === 'https:') return parsed.origin;
-    if (
-      isDevelopment &&
-      parsed.protocol === 'http:' &&
-      (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1')
-    )
-      return parsed.origin;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 function readConfiguredHubOrigin(): string | null {
   try {
     const parsed = JSON.parse(readFileSync(hubOriginFile(), 'utf8')) as { origin?: unknown };
@@ -158,7 +189,8 @@ function readConfiguredHubOrigin(): string | null {
 
 function saveConfiguredHubOrigin(value: string): string {
   const origin = parseHubOrigin(value);
-  if (!origin) throw new Error('Hub origin must be HTTPS (or local HTTP in development)');
+  if (!origin)
+    throw new Error('Hub origin must use HTTPS or a trusted private-network HTTP address');
   writeFileSync(hubOriginFile(), JSON.stringify({ origin }), { mode: 0o600 });
   return origin;
 }
@@ -174,6 +206,60 @@ function nativeAuthFailure(
   details: unknown = null,
 ): NativeAuthFailure {
   return { ok: false, status, code, message, details };
+}
+
+async function requestHub(
+  input: HubRequestInput,
+  allowUnconfiguredOrigin = false,
+): Promise<HubRequestResult> {
+  const validated = validateHubRequest(input, readConfiguredHubOrigin(), allowUnconfiguredOrigin);
+  const headers = new Headers(validated.headers);
+  headers.set('Origin', 'devtodo://app');
+
+  let response: Response;
+  try {
+    response = await fetch(validated.url, {
+      method: validated.method,
+      headers,
+      body:
+        validated.method === 'GET' || validated.method === 'HEAD'
+          ? undefined
+          : (validated.body ?? undefined),
+      redirect: 'error',
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch {
+    throw new Error('network request failed: 无法连接中枢，请检查地址、证书和网络');
+  }
+
+  const responseHeaders: Record<string, string> = {};
+  const contentType = response.headers.get('content-type');
+  if (contentType) responseHeaders['content-type'] = contentType;
+  return { status: response.status, body: await response.text(), headers: responseHeaders };
+}
+
+async function testHubConnection(
+  value: string,
+  signal?: AbortSignal,
+): Promise<{ initialized: boolean }> {
+  const origin = parseHubOrigin(value);
+  if (!origin) throw new Error('invalid hub origin');
+  const requested = new URL(`${origin}/api/v1/bootstrap/status`);
+  let response: Response;
+  try {
+    response = await fetch(requested, {
+      method: 'GET',
+      headers: { Accept: 'application/json', Origin: 'devtodo://app' },
+      redirect: 'error',
+      signal: signal ?? AbortSignal.timeout(8_000),
+    });
+  } catch {
+    throw new Error('network request failed: 无法连接中枢，请检查地址、证书和网络');
+  }
+  if (!response.ok) throw new Error(`中枢返回 HTTP ${response.status}`);
+  const body = (await response.json().catch(() => null)) as { initialized?: unknown } | null;
+  if (!body || typeof body.initialized !== 'boolean') throw new Error('中枢响应格式无效');
+  return { initialized: body.initialized };
 }
 
 async function postHubJson(path: string, body: Record<string, unknown>): Promise<HubResponse> {
@@ -192,6 +278,7 @@ async function postHubJson(path: string, body: Record<string, unknown>): Promise
         Origin: 'devtodo://app',
       },
       body: JSON.stringify(body),
+      redirect: 'error',
       signal: AbortSignal.timeout(15_000),
     });
     const parsed = (await response.json().catch(() => ({}))) as unknown;
@@ -458,9 +545,14 @@ if (singleInstanceLock) {
     .whenReady()
     .then(() => {
       registerAppProtocol();
+      if (process.platform === 'win32') Menu.setApplicationMenu(null);
       ipcMain.handle('devtodo:version', (event) => {
         assertIpcSender(event.sender);
         return app.getVersion();
+      });
+      ipcMain.handle('devtodo:theme-get', (event) => {
+        assertIpcSender(event.sender);
+        return getSystemTheme();
       });
       ipcMain.handle('devtodo:open-external', (event, url: unknown) => {
         assertIpcSender(event.sender);
@@ -472,10 +564,22 @@ if (singleInstanceLock) {
         assertIpcSender(event.sender);
         return readConfiguredHubOrigin();
       });
-      ipcMain.handle('devtodo:hub-set', (event, value: unknown) => {
+      ipcMain.handle('devtodo:hub-set', async (event, value: unknown) => {
         assertIpcSender(event.sender);
         if (typeof value !== 'string') throw new Error('invalid request');
-        return saveConfiguredHubOrigin(value);
+        const previous = readConfiguredHubOrigin();
+        const next = saveConfiguredHubOrigin(value);
+        if (previous !== next) await removeSecureRefreshToken();
+        return next;
+      });
+      ipcMain.handle('devtodo:hub-test', async (event, value: unknown) => {
+        assertIpcSender(event.sender);
+        if (typeof value !== 'string') throw new Error('invalid request');
+        return testHubConnection(value);
+      });
+      ipcMain.handle('devtodo:hub-request', async (event, input: unknown) => {
+        assertIpcSender(event.sender);
+        return requestHub(input as HubRequestInput);
       });
       ipcMain.handle(
         'devtodo:auth-login',

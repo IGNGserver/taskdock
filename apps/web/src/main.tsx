@@ -6,6 +6,9 @@ import '@devtodo/ui/tokens.css';
 import './styles.css';
 import { App } from './App.js';
 import { AuthProvider } from './auth.js';
+import { installTheme } from './theme.js';
+
+installTheme();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

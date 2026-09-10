@@ -1,7 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('devtodoDesktop', {
+  platform: process.platform,
   version: (): Promise<string> => ipcRenderer.invoke('devtodo:version'),
+  getSystemTheme: (): Promise<'light' | 'dark'> => ipcRenderer.invoke('devtodo:theme-get'),
+  onSystemThemeChanged: (listener: (theme: 'light' | 'dark') => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, theme: 'light' | 'dark') => listener(theme);
+    ipcRenderer.on('devtodo:theme-changed', handler);
+    return () => ipcRenderer.removeListener('devtodo:theme-changed', handler);
+  },
   openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('devtodo:open-external', url),
   authLogin: (
     username: string,
@@ -13,12 +20,29 @@ contextBridge.exposeInMainWorld('devtodoDesktop', {
   authLogout: (): Promise<{ ok: true }> => ipcRenderer.invoke('devtodo:auth-logout'),
   getHubOrigin: (): Promise<string | null> => ipcRenderer.invoke('devtodo:hub-get'),
   setHubOrigin: (origin: string): Promise<string> => ipcRenderer.invoke('devtodo:hub-set', origin),
+  testHubConnection: (origin: string): Promise<{ initialized: boolean }> =>
+    ipcRenderer.invoke('devtodo:hub-test', origin),
+  request: (input: DesktopHubRequest): Promise<DesktopHubResponse> =>
+    ipcRenderer.invoke('devtodo:hub-request', input),
   onQuickCapture: (listener: () => void): (() => void) => {
     const handler = () => listener();
     ipcRenderer.on('devtodo:quick-capture', handler);
     return () => ipcRenderer.removeListener('devtodo:quick-capture', handler);
   },
 });
+
+interface DesktopHubRequest {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string | null;
+}
+
+interface DesktopHubResponse {
+  status: number;
+  body: string;
+  headers: Record<string, string>;
+}
 
 interface DesktopAuthResponse {
   ok: boolean;
@@ -34,7 +58,10 @@ interface DesktopAuthResponse {
 declare global {
   interface Window {
     devtodoDesktop?: {
+      platform: string;
       version: () => Promise<string>;
+      getSystemTheme: () => Promise<'light' | 'dark'>;
+      onSystemThemeChanged: (listener: (theme: 'light' | 'dark') => void) => () => void;
       openExternal: (url: string) => Promise<boolean>;
       authLogin: (
         username: string,
@@ -45,6 +72,8 @@ declare global {
       authLogout: () => Promise<{ ok: true }>;
       getHubOrigin: () => Promise<string | null>;
       setHubOrigin: (origin: string) => Promise<string>;
+      testHubConnection: (origin: string) => Promise<{ initialized: boolean }>;
+      request: (input: DesktopHubRequest) => Promise<DesktopHubResponse>;
       onQuickCapture: (listener: () => void) => () => void;
     };
   }

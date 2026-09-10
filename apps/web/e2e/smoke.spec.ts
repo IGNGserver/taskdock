@@ -30,6 +30,16 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
     username: 'e2e-user',
     createdAt: '2026-09-04T10:00:00.000Z',
   };
+  const project = {
+    id: '00000000-0000-7000-8000-000000000004',
+    name: 'IGNG站点移动端回归验证项目名称很长但不应撑破卡片',
+    taskPrefix: 'INGNSITE',
+    rank: '1024',
+    version: 1,
+    archivedAt: null,
+    createdAt: '2026-09-04T10:00:00.000Z',
+    updatedAt: '2026-09-04T10:00:00.000Z',
+  };
   const settings = {
     ownerId: user.id,
     timezone: 'Asia/Shanghai',
@@ -112,11 +122,17 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
         contentType: 'application/json',
         body: JSON.stringify({ items: [] }),
       });
+    if (route.request().method() === 'GET' && path.endsWith('/devices'))
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
     if (route.request().method() === 'GET' && path.endsWith('/projects'))
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ items: [] }),
+        body: JSON.stringify({ items: [project] }),
       });
     if (route.request().method() === 'GET' && path.endsWith('/tasks'))
       return route.fulfill({
@@ -142,8 +158,31 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
       ? page.getByRole('button', { name: '打开创建菜单' })
       : page.getByRole('button', { name: '快速添加' });
   await expect(quickEntry).toBeVisible();
-  if (testInfo.project.name === 'mobile')
+  if (testInfo.project.name === 'mobile') {
     await expect(page.getByRole('navigation', { name: '移动导航' })).toBeVisible();
+    const menuButton = page.getByRole('button', { name: '打开侧边栏' });
+    await menuButton.click();
+    const drawer = page.getByRole('complementary', { name: '移动侧边栏' });
+    await expect(drawer).toBeVisible();
+    await page.evaluate(() =>
+      window.dispatchEvent(new Event('devtodo:native-back', { cancelable: true })),
+    );
+    await expect(drawer).toBeHidden();
+    await menuButton.click();
+    await drawer.getByRole('link', { name: '设置' }).click();
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(drawer).toBeHidden();
+    await page
+      .getByRole('navigation', { name: '移动导航' })
+      .getByRole('link', { name: '项目' })
+      .click();
+    await expect(page).toHaveURL(/\/projects$/);
+    const projectCard = page.locator('.project-card').first();
+    await expect(projectCard).toBeVisible();
+    const cardBox = await projectCard.boundingBox();
+    expect(cardBox).not.toBeNull();
+    expect(cardBox?.width).toBeGreaterThan(300);
+  }
 
   await quickEntry.click();
   if (testInfo.project.name === 'mobile') {

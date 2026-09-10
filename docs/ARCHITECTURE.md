@@ -14,6 +14,7 @@ Browser、iOS PWA、Electron 和 Capacitor 都加载同一份 React Web 产物�
 - `apps/web`：唯一产品界面和 PWA 应用壳。
 - `apps/desktop`：安全 BrowserWindow/preload、平台安全存储和全局快捷键。
 - `apps/mobile`：Capacitor 配置与生命周期/安全存储接口边界。
+- 主题：Web 使用 `prefers-color-scheme`，Electron 使用 `nativeTheme`，Android 使用 `Configuration.uiMode` 同步系统栏；主题是设备运行时状态，不进入账号同步设置。
 
 路由只做解析、认证和响应映射；Task 与 Placement 语义集中在 Store 调用的领域函数中。所有资源取值先检查 `ownerId`，随机 UUID 不能代替授权检查。
 
@@ -31,3 +32,4 @@ Browser、iOS PWA、Electron 和 Capacitor 都加载同一份 React Web 产物�
 
 - [0001 Store persistence](adr/0001-store-persistence.md)：说明 PostgreSQL 权威存储、owner-scoped SQL、事务内 change/receipt 和容量升级边界。
 - [0002 Client packaging and placement interactions](adr/0002-client-packaging-and-placement-interactions.md)：说明 Electron builder、原生桌面拖拽、键盘等价操作和移动端 Bottom Sheet 的 V1 取舍。
+- [深色模式](DARK_MODE.md)：说明三端系统主题读取、共享颜色令牌和验收边界。
