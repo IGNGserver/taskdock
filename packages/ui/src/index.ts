@@ -1,9 +1,15 @@
 export const designTokens = {
-  accent: '#4656c8',
-  surface: '#ffffff',
-  canvas: '#f5f6f8',
-  ink: '#1f2430',
-  muted: '#6b7280',
-  line: '#e2e5ea',
-  radius: '12px',
+  primary: '#4f5f90',
+  primaryContainer: '#dce2ff',
+  surface: '#fbf8ff',
+  surfaceContainer: '#efedf4',
+  canvas: '#f5f2f9',
+  onSurface: '#1a1b20',
+  onSurfaceVariant: '#45464f',
+  outline: '#767780',
+  outlineVariant: '#c6c6d0',
+  radius: '16px',
+  radiusSmall: '12px',
 } as const;
+
+export type DesignTokenName = keyof typeof designTokens;

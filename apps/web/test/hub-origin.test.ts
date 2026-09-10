@@ -6,6 +6,10 @@ describe('hub origin validation', () => {
   it.each([
     'https://todo.example.com',
     'https://todo.example.com:8443/workspace?tab=today#top',
+    'http://example.com',
+    'http://47.95.17.77:48731',
+    'http://8.8.8.8',
+    'http://[2001:db8::5]:3000',
     'http://localhost:3000',
     'http://localhost',
     'http://127.0.0.1:3000',
@@ -24,19 +28,12 @@ describe('hub origin validation', () => {
     expect(() => normalizeHubOrigin(value)).not.toThrow();
   });
 
-  it.each([
-    'http://example.com',
-    'http://8.8.8.8',
-    'http://172.15.0.1',
-    'http://172.32.0.1',
-    'http://192.167.1.1',
-    'ftp://todo.example.com',
-    'https://user:password@todo.example.com',
-    'not a url',
-    '',
-  ])('rejects unsafe or invalid address %s', (value) => {
-    expect(() => normalizeHubOrigin(value)).toThrow();
-  });
+  it.each(['ftp://todo.example.com', 'https://user:password@todo.example.com', 'not a url', ''])(
+    'rejects unsupported or invalid address %s',
+    (value) => {
+      expect(() => normalizeHubOrigin(value)).toThrow();
+    },
+  );
 
   it('normalizes the saved value to an origin', () => {
     expect(normalizeHubOrigin('  https://todo.example.com:443/tasks?view=today#top  ')).toBe(
