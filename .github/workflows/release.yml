@@ -141,7 +141,10 @@ jobs:
         run: |
           mkdir -p artifacts
           tar -C apps/desktop/release -czf "artifacts/TaskDock-${RELEASE_VERSION}-linux-x64.tar.gz" linux-unpacked
-          sha256sum "artifacts/TaskDock-${RELEASE_VERSION}-linux-x64.tar.gz" > "artifacts/TaskDock-${RELEASE_VERSION}-linux-x64.tar.gz.sha256"
+          (
+            cd artifacts
+            sha256sum "TaskDock-${RELEASE_VERSION}-linux-x64.tar.gz" > "TaskDock-${RELEASE_VERSION}-linux-x64.tar.gz.sha256"
+          )
       - name: 上传 Linux 安装包
         uses: actions/upload-artifact@v4
         with:
@@ -249,7 +252,10 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts
           cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "artifacts/TaskDock-${RELEASE_VERSION}-android.apk"
-          cp apps/mobile/android/app/build/outputs/apk/release/SHA256SUMS "artifacts/TaskDock-${RELEASE_VERSION}-android.sha256"
+          (
+            cd artifacts
+            sha256sum "TaskDock-${RELEASE_VERSION}-android.apk" > "TaskDock-${RELEASE_VERSION}-android.sha256"
+          )
       - name: 上传 Android APK
         uses: actions/upload-artifact@v4
         with:
