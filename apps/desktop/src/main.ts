@@ -203,8 +203,7 @@ function readConfiguredHubOrigin(): string | null {
 
 function saveConfiguredHubOrigin(value: string): string {
   const origin = parseHubOrigin(value);
-  if (!origin)
-    throw new Error('Hub origin must use HTTPS or a trusted private-network HTTP address');
+  if (!origin) throw new Error('Hub origin must be a valid HTTP or HTTPS URL without credentials');
   writeFileSync(hubOriginFile(), JSON.stringify({ origin }), { mode: 0o600 });
   return origin;
 }

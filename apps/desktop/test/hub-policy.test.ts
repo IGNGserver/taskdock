@@ -1,41 +1,29 @@
 import { describe, expect, it } from 'vitest';
 
-import { isTrustedHttpHost, parseHubOrigin, validateHubRequest } from '../src/hub-policy.js';
+import { parseHubOrigin, validateHubRequest } from '../src/hub-policy.js';
 
 describe('desktop hub policy', () => {
   it.each([
     ['https://todo.example.com/path', 'https://todo.example.com'],
+    ['http://example.com/path', 'http://example.com'],
+    ['http://47.95.17.77:48731/tasks', 'http://47.95.17.77:48731'],
+    ['http://[2001:db8::5]:3000', 'http://[2001:db8::5]:3000'],
     ['http://localhost:3000', 'http://localhost:3000'],
     ['http://10.0.0.5:3000/tasks', 'http://10.0.0.5:3000'],
     ['http://[::1]:3000', 'http://[::1]:3000'],
     ['http://[fc00::5]:3000', 'http://[fc00::5]:3000'],
     ['http://[fe80::5]:3000', 'http://[fe80::5]:3000'],
     ['http://[::ffff:192.168.1.20]:3000', 'http://[::ffff:c0a8:114]:3000'],
-  ])('normalizes trusted origin %s', (value, expected) => {
+  ])('normalizes HTTP or HTTPS origin %s', (value, expected) => {
     expect(parseHubOrigin(value)).toBe(expected);
   });
 
-  it.each([
-    'http://example.com',
-    'http://8.8.8.8',
-    'http://172.15.0.1',
-    'http://172.32.0.1',
-    'http://192.167.1.1',
-    'http://[2001:db8::5]',
-    'https://user:password@todo.example.com',
-    'ftp://todo.example.com',
-    'not a url',
-  ])('rejects unsafe or invalid hub origin %s', (value) => {
-    expect(parseHubOrigin(value)).toBeNull();
-  });
-
-  it('accepts only the explicitly trusted private host ranges for HTTP', () => {
-    expect(isTrustedHttpHost('127.0.0.1')).toBe(true);
-    expect(isTrustedHttpHost('192.168.1.20')).toBe(true);
-    expect(isTrustedHttpHost('172.31.255.254')).toBe(true);
-    expect(isTrustedHttpHost('172.32.0.1')).toBe(false);
-    expect(isTrustedHttpHost('2001:db8::5')).toBe(false);
-  });
+  it.each(['https://user:password@todo.example.com', 'ftp://todo.example.com', 'not a url'])(
+    'rejects credential-bearing, unsupported, or invalid hub origin %s',
+    (value) => {
+      expect(parseHubOrigin(value)).toBeNull();
+    },
+  );
 
   it('validates a same-origin API request and keeps only allowed headers', () => {
     const request = validateHubRequest(

@@ -136,7 +136,7 @@ TaskDock 的设计目标是让用户自己掌握数据：
 - 客户端会保存必要的本地缓存和待同步操作；
 - Docker Compose 默认不会把 PostgreSQL 端口暴露到公网；TaskDock 默认通过 `48731` 提供 HTTP 访问；
 - 访问令牌、数据库密码和其他密钥不应提交到 GitHub；
-- 生产环境建议使用 HTTPS，并定期执行备份和恢复演练。TaskDock 也支持 HTTP 外网地址，但会显示安全警告；HTTP 会明文传输密码和会话信息，请仅在可信内网或测试环境使用。
+- 生产环境建议使用 HTTPS，并定期执行备份和恢复演练。TaskDock 也支持 HTTP 外网地址，但会显示安全警告；HTTP 会明文传输密码和会话信息，请确认网络可信。
 
 请阅读 [安全说明](docs/SECURITY.md) 和 [备份与恢复](docs/BACKUP_RESTORE.md) 后再用于重要数据。
 

@@ -84,6 +84,8 @@ import {
   testHubConnection,
 } from './api.js';
 import { useAuth } from './auth.js';
+import { M3Button, M3Chip, M3IconButton, M3SegmentedControl } from './components/m3.js';
+import { nextTaskStatus, reorderIds, taskStatusActionLabel } from './task-behavior.js';
 
 type PlacementWithTask = { id: string; task: TaskDto };
 type PresenceState = 'entering' | 'present' | 'exiting';
@@ -139,12 +141,7 @@ function DesktopChrome({ children }: { children: ReactNode }) {
   if (!windowsDesktop) return children;
   return (
     <div className="desktop-app-shell">
-      <div className="desktop-titlebar" aria-label="TaskDock 窗口标题栏">
-        <div className="desktop-titlebar-brand">
-          <span className="brand-mark">D</span>
-          <span>TaskDock · 开发任务工作台</span>
-        </div>
-      </div>
+      <div className="desktop-window-drag-region" aria-hidden="true" />
       {children}
     </div>
   );
@@ -342,7 +339,7 @@ function HubSetupScreen({
           <div className="http-security-warning" role="alert">
             <strong>当前地址使用 HTTP</strong>
             <span>
-              仅建议用于可信内网或测试环境；公网中枢请使用 HTTPS，否则密码和会话信息可能被窃听。
+              HTTP 地址可以连接外网中枢，但密码和会话信息会明文传输；正式公网部署仍建议使用 HTTPS。
             </span>
           </div>
         )}
@@ -360,7 +357,8 @@ function HubSetupScreen({
             autoFocus={!initialOrigin}
           />
           <p className="field-help">
-            例如 https://todo.example.com、http://192.168.1.10:3000 或 http://localhost:3000。
+            例如 https://todo.example.com、http://47.95.17.77:48731 或 http://localhost:3000。HTTP
+            地址会显示安全提示。
           </p>
           <button
             type="button"
@@ -492,7 +490,8 @@ function AuthenticatedApp() {
   const navItems = useMemo(
     () => [
       { to: '/today', label: '今日', icon: Target },
-      { to: '/tasks', label: '所有任务', icon: LayoutList },
+      { to: '/inbox', label: '收集箱', icon: Inbox },
+      { to: '/tasks', label: '任务库', icon: LayoutList },
       { to: '/time/calendar', label: '日历', icon: CalendarDays },
       { to: '/time/events', label: '时间点', icon: Clock3 },
     ],
@@ -501,6 +500,7 @@ function AuthenticatedApp() {
   const mobileNavItems = useMemo(
     () => [
       { to: '/today', label: '今日', icon: Target },
+      { to: '/inbox', label: '收集箱', icon: Inbox },
       { to: '/projects', label: '项目', icon: FolderKanban },
       { to: '/time', label: '时间', icon: Clock3 },
       { to: '/more', label: '更多', icon: MoreHorizontal },
@@ -522,7 +522,6 @@ function AuthenticatedApp() {
         <div className="nav-section-label">项目</div>
         <ProjectNav />
         <nav aria-label="更多导航" className="secondary-nav">
-          <NavItem to="/misc" label="全局杂项" icon={<Inbox size={17} />} />
           <NavItem to="/archive" label="归档" icon={<Archive size={17} />} />
           <NavItem to="/settings" label="设置" icon={<Settings size={17} />} />
         </nav>
@@ -555,17 +554,18 @@ function AuthenticatedApp() {
             <span>搜索任务、备注…</span>
             <kbd>⌘ K</kbd>
           </button>
-          <button
+          <ConnectionStatus />
+          <M3Button
             className="quick-button"
+            leadingIcon={<Plus size={17} />}
             aria-label="快速添加"
             onClick={() => {
               setQuickKind('task');
               setQuickOpen(true);
             }}
           >
-            <Plus size={17} />
-            <span>快速添加</span>
-          </button>
+            快速添加
+          </M3Button>
         </header>
         <div className="page-wrap">
           <Routes>
@@ -574,7 +574,8 @@ function AuthenticatedApp() {
             <Route path="/tasks" element={<TasksPage onOpenTask={openTask} />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/projects/:projectId" element={<ProjectPage onOpenTask={openTask} />} />
-            <Route path="/misc" element={<MiscPage onOpenTask={openTask} />} />
+            <Route path="/inbox" element={<InboxPage onOpenTask={openTask} />} />
+            <Route path="/misc" element={<Navigate to="/inbox" replace />} />
             <Route path="/time" element={<TimeHubPage />} />
             <Route path="/time/calendar" element={<CalendarPage onOpenTask={openTask} />} />
             <Route
@@ -760,9 +761,7 @@ function LoginScreen({
         {isHttpOrigin(nativeClient ? hubOrigin : window.location.origin) && (
           <div className="http-security-warning" role="alert">
             <strong>当前使用 HTTP</strong>
-            <span>
-              密码和会话信息会以明文传输。HTTP 适合可信内网或测试环境，公网部署建议改用 HTTPS。
-            </span>
+            <span>密码和会话信息会以明文传输，请确认网络可信；正式公网部署仍建议使用 HTTPS。</span>
           </div>
         )}
         <form onSubmit={submit} className="stack-form">
@@ -795,8 +794,8 @@ function LoginScreen({
                 )}
               </div>
               <p className="field-help">
-                首次使用先填写自托管中枢地址，例如 https://todo.example.com；也支持可信内网 http://
-                地址。
+                首次使用先填写自托管中枢地址，例如 https://todo.example.com；也支持外网或内网
+                http:// 地址，但密码和会话信息会明文传输。
               </p>
             </>
           )}
@@ -938,7 +937,6 @@ function MobileSidebar({
         <div className="nav-section-label">项目</div>
         <ProjectNav onNavigate={onClose} />
         <nav aria-label="移动更多导航" className="secondary-nav">
-          <NavItem to="/misc" label="全局杂项" icon={<Inbox size={17} />} onClick={onClose} />
           <NavItem to="/archive" label="归档" icon={<Archive size={17} />} onClick={onClose} />
           <NavItem to="/settings" label="设置" icon={<Settings size={17} />} onClick={onClose} />
         </nav>
@@ -1036,8 +1034,13 @@ function TimeHubPage() {
 
 function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
   const links = [
-    { to: '/tasks', label: '所有任务', description: '浏览和整理完整任务库。', icon: LayoutList },
-    { to: '/misc', label: '全局杂项', description: '查看不属于具体项目的任务。', icon: Inbox },
+    { to: '/tasks', label: '任务库', description: '浏览和整理完整任务库。', icon: LayoutList },
+    {
+      to: '/inbox',
+      label: '收集箱',
+      description: '先收集不属于具体项目的任务，再决定何时安排。',
+      icon: Inbox,
+    },
     {
       to: '/archive',
       label: '归档',
@@ -1360,23 +1363,16 @@ function QuickCaptureDialog({
   };
   return (
     <Modal title="快速添加" onClose={onClose} state={presence.state}>
-      <div className="segmented-control" role="tablist">
-        {(
-          [
-            ['task', '任务'],
-            ['project', '项目'],
-            ['event', '时间点'],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            className={kind === value ? 'selected' : ''}
-            onClick={() => setKind(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <M3SegmentedControl
+        label="创建类型"
+        value={kind}
+        onChange={setKind}
+        options={[
+          { value: 'task', label: '任务' },
+          { value: 'project', label: '项目' },
+          { value: 'event', label: '时间点' },
+        ]}
+      />
       <form onSubmit={submit} className="stack-form">
         <Field
           label={kind === 'task' ? '任务标题' : kind === 'project' ? '项目名称' : '时间点名称'}
@@ -1387,7 +1383,13 @@ function QuickCaptureDialog({
         />
         {kind === 'task' && (
           <p className="field-help">
-            {defaultTaskProjectId ? '将创建到当前项目的杂项分组。' : '将创建到全局杂项。'}
+            {placeTaskOnToday
+              ? defaultTaskProjectId
+                ? '将创建到当前项目的杂项分组，并同时安排到今天。任务本体仍只保留一份。'
+                : '将创建到全局杂项，并同时安排到今天。任务本体仍只保留一份。'
+              : defaultTaskProjectId
+                ? '将创建到当前项目的杂项分组。之后可以从任务行安排日期或时间点。'
+                : '将创建到全局杂项。之后可以从任务行安排日期或时间点。'}
           </p>
         )}
         {kind === 'project' && (
@@ -1658,6 +1660,7 @@ function TaskRow({
   onChanged,
   compact = false,
   onMove,
+  onDrop,
   canMoveUp = false,
   canMoveDown = false,
 }: {
@@ -1666,6 +1669,7 @@ function TaskRow({
   onChanged?: () => void;
   compact?: boolean;
   onMove?: (direction: 'up' | 'down') => Promise<void> | void;
+  onDrop?: (event: ReactDragEvent<HTMLElement>) => void;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
 }) {
@@ -1699,7 +1703,7 @@ function TaskRow({
     setError('');
     try {
       await mutation('PATCH', `/tasks/${task.id}`, {
-        status: task.status === 'DONE' ? 'TODO' : 'DONE',
+        status: nextTaskStatus(task.status),
         baseVersion: task.version,
       });
       onChanged?.();
@@ -1755,22 +1759,33 @@ function TaskRow({
   };
   return (
     <div
-      className={`task-row ${task.status === 'DONE' ? 'is-done' : ''} ${compact ? 'compact' : ''}`}
+      className={`task-row ${task.status === 'DONE' ? 'is-done' : ''} ${task.status === 'IN_PROGRESS' ? 'is-progress' : ''} ${compact ? 'compact' : ''}`}
       data-testid={`task-${task.id}`}
-      draggable
+      data-task-id={task.id}
+      draggable={Boolean(onDrop)}
       onPointerDown={startLongPress}
       onPointerUp={cancelLongPress}
       onPointerLeave={cancelLongPress}
       onPointerCancel={cancelLongPress}
       onDragStart={(event) => {
-        event.dataTransfer.effectAllowed = 'copy';
+        event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('application/x-devtodo-task', task.id);
         event.dataTransfer.setData('text/plain', task.id);
+      }}
+      onDragOver={(event) => {
+        if (onDrop) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (!onDrop) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onDrop(event);
       }}
     >
       <button
         className="task-status-button"
-        aria-label={task.status === 'DONE' ? '重新打开任务' : '完成任务'}
+        aria-label={taskStatusActionLabel(task.status)}
+        title={taskStatusActionLabel(task.status)}
         onClick={() => void toggleStatus()}
         disabled={busy}
       >
@@ -1805,13 +1820,20 @@ function TaskRow({
         </span>
       </button>
       <div className="task-actions">
-        <button
+        <M3IconButton
+          className="icon-button task-schedule-action"
+          label="安排到时间点"
+          onClick={() => setPlacementTargetOpen(true)}
+        >
+          <CalendarDays size={16} />
+        </M3IconButton>
+        <M3IconButton
           className="icon-button"
-          aria-label="更多任务操作（也可长按任务行）"
+          label="更多任务操作（也可长按任务行）"
           onClick={() => setMenu(!menu)}
         >
           <MoreHorizontal size={17} />
-        </button>
+        </M3IconButton>
         {menu && (
           <div className="row-menu">
             <button onClick={() => void archive()}>
@@ -1882,12 +1904,31 @@ function TaskList({
   emptyTitle?: string;
   emptyDescription?: string;
 }) {
+  const handleDrop = async (event: ReactDragEvent<HTMLElement>, targetTaskId: string) => {
+    if (!onMove) return;
+    const sourceTaskId = event.dataTransfer.getData('application/x-devtodo-task');
+    if (!sourceTaskId || sourceTaskId === targetTaskId) return;
+    const nextIds = reorderIds(
+      tasks.map((task) => task.id),
+      sourceTaskId,
+      targetTaskId,
+    );
+    if (nextIds.every((id, index) => id === tasks[index]?.id)) return;
+    await mutation('POST', '/tasks/reorder', { ids: nextIds });
+    onChanged?.();
+    window.dispatchEvent(new Event('devtodo:data-changed'));
+  };
   if (!tasks.length)
     return (
       <EmptyState icon={<Sparkles size={20} />} title={emptyTitle} description={emptyDescription} />
     );
   return (
-    <div className="task-list">
+    <div
+      className={`task-list ${onMove ? 'task-drop-target' : ''}`}
+      onDragOver={(event) => {
+        if (onMove) event.preventDefault();
+      }}
+    >
       {tasks.map((task, index) => (
         <TaskRow
           key={task.id}
@@ -1895,6 +1936,7 @@ function TaskList({
           onOpen={onOpenTask}
           onChanged={onChanged}
           onMove={onMove ? (direction) => onMove(task.id, direction) : undefined}
+          onDrop={onMove ? (event) => void handleDrop(event, task.id) : undefined}
           canMoveUp={index > 0}
           canMoveDown={index < tasks.length - 1}
         />
@@ -1937,7 +1979,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       setRollover({ operationId: result.operationId, count: result.createdIds.length });
       window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
-      setRolloverError(cause instanceof ApiError ? cause.message : '复制到明天失败，请重试');
+      setRolloverError(cause instanceof ApiError ? cause.message : '安排到明天失败，请重试');
     }
   };
   const undo = async () => {
@@ -1956,6 +1998,8 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   };
   const active = data.items.filter(({ task }) => task.status !== 'DONE');
   const done = data.items.filter(({ task }) => task.status === 'DONE');
+  const total = active.length + done.length;
+  const completionPercent = total ? Math.round((done.length / total) * 100) : 0;
   const movePlacement = async (placementId: string, direction: 'up' | 'down') => {
     if (!data.point) return;
     const activeIndexes = data.items
@@ -1982,21 +2026,41 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         description="把今天要处理的内容放在眼前，完成状态会同步到每一个安排位置。"
         action={
           <div className="header-actions">
-            <button
-              className="secondary-button"
+            <M3Button
+              variant="tonal"
+              leadingIcon={<Plus size={16} />}
               onClick={() => setShowTaskPicker(true)}
               disabled={!data.point}
             >
-              <Plus size={16} />
               从任务库加入
-            </button>
-            <button className="secondary-button" onClick={() => void doRollover()}>
-              <Copy size={16} />
-              复制未完成到明天
-            </button>
+            </M3Button>
+            <M3Button
+              variant="outlined"
+              leadingIcon={<Copy size={16} />}
+              onClick={() => void doRollover()}
+              disabled={!data.point || active.length === 0}
+            >
+              安排未完成到明天
+            </M3Button>
           </div>
         }
       />
+      <section className="today-overview" aria-label="今日进度">
+        <div className="today-overview-copy">
+          <span className="today-overview-label">今日聚焦</span>
+          <strong>{total ? `${done.length} / ${total} 已完成` : '还没有安排任务'}</strong>
+        </div>
+        <div
+          className="today-progress"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={completionPercent}
+        >
+          <span style={{ width: `${completionPercent}%` }} />
+        </div>
+        <span className="today-overview-percent">{completionPercent}%</span>
+      </section>
       {rollover && (
         <div className="undo-banner">
           <span>已安排 {rollover.count} 项到明天</span>
@@ -2043,7 +2107,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         <SkeletonList />
       ) : (
         <>
-          <SectionTitle title="进行中与稍后" count={active.length} />
+          <SectionTitle title="今天要做" count={active.length} />
           <PlacementList
             items={active}
             pointId={data.point?.id}
@@ -2054,10 +2118,13 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             emptyDescription="可以从所有任务中安排内容，或先捕获一个全局杂项。"
             emptyAction={
               data.point ? (
-                <button className="primary-button" onClick={() => setShowTaskPicker(true)}>
-                  <Plus size={16} />
+                <M3Button
+                  variant="filled"
+                  leadingIcon={<Plus size={16} />}
+                  onClick={() => setShowTaskPicker(true)}
+                >
                   从任务库加入
-                </button>
+                </M3Button>
               ) : undefined
             }
           />
@@ -2120,33 +2187,39 @@ function TasksPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
     <div className="page">
       <PageHeader
         eyebrow="TASK LIBRARY"
-        title="所有任务"
-        description="长期任务库是任务本体；日期和事件只是它们的安排位置。"
+        title="任务库"
+        description="任务本体只保留一份；日期和时间点是可重复的安排位置。"
       />
       <QuickCapture onCreated={() => void reload()} />
-      <div className="filter-tabs" role="tablist">
-        {(
-          [
-            ['ALL', '全部'],
-            ['IN_PROGRESS', '进行中'],
-            ['TODO', '待开始'],
-            ['DONE', '已完成'],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            role="tab"
-            aria-selected={filter === value}
-            className={filter === value ? 'selected' : ''}
-            onClick={() => setFilter(value)}
-          >
-            {label}
-            <span>
-              {value === 'ALL' ? data.length : data.filter((task) => task.status === value).length}
-            </span>
-          </button>
-        ))}
+      <div className="task-library-summary" aria-label="任务状态概览">
+        <M3Chip selected>{data.length} 个任务</M3Chip>
+        <M3Chip>{data.filter((task) => task.status === 'IN_PROGRESS').length} 进行中</M3Chip>
+        <M3Chip>{data.filter((task) => task.status === 'TODO').length} 待开始</M3Chip>
+        <M3Chip>{data.filter((task) => task.status === 'DONE').length} 已完成</M3Chip>
       </div>
+      <M3SegmentedControl
+        label="任务状态筛选"
+        value={filter}
+        onChange={setFilter}
+        options={[
+          { value: 'ALL', label: '全部', count: data.length },
+          {
+            value: 'IN_PROGRESS',
+            label: '进行中',
+            count: data.filter((task) => task.status === 'IN_PROGRESS').length,
+          },
+          {
+            value: 'TODO',
+            label: '待开始',
+            count: data.filter((task) => task.status === 'TODO').length,
+          },
+          {
+            value: 'DONE',
+            label: '已完成',
+            count: data.filter((task) => task.status === 'DONE').length,
+          },
+        ]}
+      />
       {error && <ErrorState error={error} onRetry={() => void reload()} />}
       {loading ? (
         <SkeletonList />
@@ -2157,8 +2230,11 @@ function TasksPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   );
 }
 
-function MiscPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
-  const loader = useCallback(() => requestAll<TaskDto>('/tasks?projectId=null&category=MISC'), []);
+function InboxPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
+  const loader = useCallback(
+    () => requestAll<TaskDto>('/tasks?projectId=null&category=MISC&archived=false'),
+    [],
+  );
   const { data, loading, error, reload } = useReloadable(loader, []);
   const moveTask = async (taskId: string, direction: 'up' | 'down') => {
     const index = data.findIndex((task) => task.id === taskId);
@@ -2172,7 +2248,11 @@ function MiscPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   };
   return (
     <div className="page">
-      <PageHeader title="全局杂项" description="不属于具体项目，但仍然值得保留的开发工作。" />
+      <PageHeader
+        eyebrow="INBOX"
+        title="收集箱"
+        description="先把下一步收进来，再安排到项目、日期或时间点；这里的任务仍是全局杂项。"
+      />
       <QuickCapture category="MISC" onCreated={() => void reload()} />
       {error && <ErrorState error={error} onRetry={() => void reload()} />}
       {loading ? (
@@ -2183,8 +2263,8 @@ function MiscPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           onOpenTask={onOpenTask}
           onChanged={() => void reload()}
           onMove={(taskId, direction) => moveTask(taskId, direction)}
-          emptyTitle="全局杂项是空的"
-          emptyDescription="例如：整理开发服务器、更新个人工具或记录一个想法。"
+          emptyTitle="收集箱是空的"
+          emptyDescription="例如：整理开发服务器、更新个人工具或记录一个想法。捕获后可以从任务行直接安排时间。"
         />
       )}
     </div>
@@ -2197,7 +2277,7 @@ function ProjectPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
     if (!projectId) throw new Error('缺少项目');
     const [project, tasks] = await Promise.all([
       request<ProjectDto>(`/projects/${projectId}`),
-      requestAll<TaskDto>(`/tasks?projectId=${projectId}`),
+      requestAll<TaskDto>(`/tasks?projectId=${projectId}&archived=false`),
     ]);
     return { project, tasks };
   }, [projectId]);
@@ -2248,31 +2328,43 @@ function ProjectPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         action={
           data.project ? (
             <div className="header-actions">
-              <button className="secondary-button" onClick={() => setEditOpen(true)}>
+              <M3Button
+                variant="outlined"
+                leadingIcon={<Pencil size={16} />}
+                onClick={() => setEditOpen(true)}
+              >
                 编辑项目
-              </button>
-              <button className="secondary-button" onClick={() => void archiveProject()}>
-                {data.project.archivedAt ? <Undo2 size={16} /> : <Archive size={16} />}
+              </M3Button>
+              <M3Button
+                variant="outlined"
+                leadingIcon={data.project.archivedAt ? <Undo2 size={16} /> : <Archive size={16} />}
+                onClick={() => void archiveProject()}
+              >
                 {data.project.archivedAt ? '恢复项目' : '归档项目'}
-              </button>
+              </M3Button>
             </div>
           ) : undefined
         }
       />
       {error && <ErrorState error={error} onRetry={() => void reload()} />}
       {actionError && <ErrorState error={actionError} onRetry={() => void archiveProject()} />}
-      <div className="project-tabs">
-        {(['FEATURE', 'MISC'] as const).map((value) => (
-          <button
-            key={value}
-            className={tab === value ? 'selected' : ''}
-            onClick={() => setTab(value)}
-          >
-            {value === 'FEATURE' ? '功能' : '杂项'}
-            <span>{data.tasks.filter((task) => task.category === value).length}</span>
-          </button>
-        ))}
-      </div>
+      <M3SegmentedControl
+        label="项目任务类型"
+        value={tab}
+        onChange={setTab}
+        options={[
+          {
+            value: 'FEATURE',
+            label: '功能',
+            count: data.tasks.filter((task) => task.category === 'FEATURE').length,
+          },
+          {
+            value: 'MISC',
+            label: '杂项',
+            count: data.tasks.filter((task) => task.category === 'MISC').length,
+          },
+        ]}
+      />
       <QuickCapture projectId={projectId} category={tab} onCreated={() => void reload()} />
       <TaskList
         tasks={data.tasks.filter((task) => task.category === tab)}
@@ -2581,10 +2673,9 @@ function EventsPage() {
         title="时间点"
         description="事件有自己的生命周期，不会自动完成或移动其中的任务。"
         action={
-          <button className="primary-button" onClick={() => setOpen(true)}>
-            <Plus size={16} />
+          <M3Button leadingIcon={<Plus size={16} />} onClick={() => setOpen(true)}>
             新建时间点
-          </button>
+          </M3Button>
         }
       />
       {error && <ErrorState error={error} onRetry={() => void reload()} />}
@@ -2633,10 +2724,9 @@ function EventsPage() {
           title="还没有自定义时间点"
           description="例如“Codex 额度重置后”或下一次发布窗口。"
           action={
-            <button className="primary-button" onClick={() => setOpen(true)}>
-              <Plus size={16} />
+            <M3Button leadingIcon={<Plus size={16} />} onClick={() => setOpen(true)}>
               创建时间点
-            </button>
+            </M3Button>
           }
         />
       )}
@@ -2827,28 +2917,28 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         description={`${items.length} 项安排 · ${items.filter(({ task }) => task.status === 'DONE').length} 项已完成`}
         action={
           <div className="header-actions">
-            <button className="secondary-button" onClick={() => setEditOpen(true)}>
-              <Pencil size={16} />
+            <M3Button
+              variant="outlined"
+              leadingIcon={<Pencil size={16} />}
+              onClick={() => setEditOpen(true)}
+            >
               编辑时间点
-            </button>
-            <button className="secondary-button" onClick={() => void archiveOrReach()}>
-              {point.archivedAt ? (
-                <>
+            </M3Button>
+            <M3Button
+              variant="outlined"
+              leadingIcon={
+                point.archivedAt ? (
                   <Undo2 size={16} />
-                  恢复时间点
-                </>
-              ) : point.reachedAt ? (
-                <>
+                ) : point.reachedAt ? (
                   <Archive size={16} />
-                  归档时间点
-                </>
-              ) : (
-                <>
+                ) : (
                   <Check size={16} />
-                  标记已到达
-                </>
-              )}
-            </button>
+                )
+              }
+              onClick={() => void archiveOrReach()}
+            >
+              {point.archivedAt ? '恢复时间点' : point.reachedAt ? '归档时间点' : '标记已到达'}
+            </M3Button>
           </div>
         }
       />
@@ -2862,10 +2952,14 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         title="安排在这里"
         count={items.length}
         action={
-          <button className="secondary-button small" onClick={() => setShowAdd(true)}>
-            <Plus size={15} />
+          <M3Button
+            size="small"
+            variant="tonal"
+            leadingIcon={<Plus size={15} />}
+            onClick={() => setShowAdd(true)}
+          >
             从任务库加入
-          </button>
+          </M3Button>
         }
       />
       <PlacementList
@@ -2877,10 +2971,9 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         emptyTitle="这个时间点还没有安排"
         emptyDescription="从任务库加入已有任务；它不会创建新的 Task。"
         emptyAction={
-          <button className="primary-button" onClick={() => setShowAdd(true)}>
-            <Plus size={16} />
+          <M3Button leadingIcon={<Plus size={16} />} onClick={() => setShowAdd(true)}>
             加入任务
-          </button>
+          </M3Button>
         }
       />
       {showAdd && (
@@ -2999,7 +3092,7 @@ function PlacementRow({
     setError('');
     try {
       await mutation('PATCH', `/tasks/${task.id}`, {
-        status: task.status === 'DONE' ? 'TODO' : 'DONE',
+        status: nextTaskStatus(task.status),
         baseVersion: task.version,
       });
       onChanged();
@@ -3036,7 +3129,8 @@ function PlacementRow({
     >
       <button
         className="task-status-button"
-        aria-label={task.status === 'DONE' ? '重新打开任务' : '完成任务'}
+        aria-label={onToggleStatus ? taskStatusActionLabel(task.status) : '打开任务'}
+        title={onToggleStatus ? taskStatusActionLabel(task.status) : '打开任务'}
         onClick={() => (onToggleStatus ? void toggleStatus() : onOpen(task.id))}
         disabled={busy}
       >
@@ -3098,7 +3192,7 @@ function PlacementRow({
               }}
             >
               <Copy size={15} />
-              复制到其他时间点
+              再安排到其他时间点
             </button>
           </div>
         )}
@@ -3216,11 +3310,16 @@ function PlacementTargetModal({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const { settings } = useAuth();
   const [points, setPoints] = useState<TimePointDto[]>([]);
+  const [targetKind, setTargetKind] = useState<'date' | 'event'>('date');
   const [targetId, setTargetId] = useState('');
   const [localDate, setLocalDate] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const today = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
+  const tomorrow = shiftLocalDate(today, 1);
+  const eventPoints = points.filter((point) => point.type === 'EVENT');
   useEffect(() => {
     void requestAll<TimePointDto>('/time-points?archived=false')
       .then((items) => setPoints(items))
@@ -3233,7 +3332,8 @@ function PlacementTargetModal({
     setError('');
     try {
       let nextId = targetId;
-      if (localDate.trim()) nextId = (await createDate(localDate.trim())).id;
+      if (targetKind === 'date' && localDate.trim())
+        nextId = (await createDate(localDate.trim())).id;
       if (!nextId) throw new Error('请选择事件或输入日期');
       if (mode === 'move' && nextId === placement.timePointId)
         throw new Error('目标时间点不能与当前位置相同');
@@ -3258,38 +3358,72 @@ function PlacementTargetModal({
     }
   };
   return (
-    <Modal title={mode === 'move' ? '移动到其他时间点' : '复制到其他时间点'} onClose={onClose}>
+    <Modal title={mode === 'move' ? '移动到其他时间点' : '再安排到其他时间点'} onClose={onClose}>
       <form className="stack-form" onSubmit={submit}>
-        <label className="field">
-          <span>已有时间点</span>
-          <select value={targetId} onChange={(event) => setTargetId(event.target.value)}>
-            <option value="">选择事件或日期</option>
-            {points.map((point) => (
-              <option key={point.id} value={point.id}>
-                {point.type === 'DATE' ? `日期 · ${point.localDate}` : `事件 · ${point.title}`}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>或新建日期</span>
-          <input
-            type="date"
-            value={localDate}
-            onChange={(event) => {
-              setLocalDate(event.target.value);
-              setTargetId('');
-            }}
-          />
-        </label>
+        <p className="field-help">
+          {mode === 'move'
+            ? '移动会改变当前安排的位置，任务本体和其他安排不受影响。'
+            : '再安排会保留当前安排，并为同一个任务创建一个新的安排位置。'}
+        </p>
+        <M3SegmentedControl
+          label="目标类型"
+          value={targetKind}
+          options={[
+            { value: 'date', label: '日期' },
+            { value: 'event', label: '自定义时间点' },
+          ]}
+          onChange={(nextMode) => {
+            setTargetKind(nextMode);
+            setTargetId('');
+            setLocalDate('');
+          }}
+        />
+        {targetKind === 'date' ? (
+          <>
+            <div className="date-shortcuts" aria-label="快速选择日期">
+              <M3Chip selected={localDate === today} onClick={() => setLocalDate(today)}>
+                今天
+              </M3Chip>
+              <M3Chip selected={localDate === tomorrow} onClick={() => setLocalDate(tomorrow)}>
+                明天
+              </M3Chip>
+            </div>
+            <label className="field">
+              <span>选择日期</span>
+              <input
+                type="date"
+                value={localDate}
+                onChange={(event) => setLocalDate(event.target.value)}
+              />
+            </label>
+          </>
+        ) : (
+          <label className="field">
+            <span>选择自定义时间点</span>
+            <select value={targetId} onChange={(event) => setTargetId(event.target.value)}>
+              <option value="">选择事件</option>
+              {eventPoints.map((point) => (
+                <option key={point.id} value={point.id}>
+                  {point.title}
+                </option>
+              ))}
+            </select>
+            {!eventPoints.length && (
+              <small className="field-help">还没有可用的自定义时间点。</small>
+            )}
+          </label>
+        )}
         {error && (
           <div role="alert" className="form-error">
             {error}
           </div>
         )}
-        <button className="primary-button wide" disabled={busy || (!targetId && !localDate)}>
+        <M3Button
+          className="wide"
+          disabled={busy || (targetKind === 'event' ? !targetId : !localDate)}
+        >
           {busy ? '处理中…' : mode === 'move' ? '移动安排' : '创建副本安排'}
-        </button>
+        </M3Button>
       </form>
     </Modal>
   );
@@ -3330,11 +3464,16 @@ function TaskPlacementTargetModal({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const { settings } = useAuth();
   const [points, setPoints] = useState<TimePointDto[]>([]);
+  const [mode, setMode] = useState<'date' | 'event'>('date');
   const [targetId, setTargetId] = useState('');
   const [localDate, setLocalDate] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const today = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
+  const tomorrow = shiftLocalDate(today, 1);
+  const eventPoints = points.filter((point) => point.type === 'EVENT');
   useEffect(() => {
     void requestAll<TimePointDto>('/time-points?archived=false')
       .then((items) => setPoints(items))
@@ -3347,7 +3486,7 @@ function TaskPlacementTargetModal({
     setError('');
     try {
       let nextId = targetId;
-      if (localDate.trim()) nextId = (await createDate(localDate.trim())).id;
+      if (mode === 'date' && localDate.trim()) nextId = (await createDate(localDate.trim())).id;
       if (!nextId) throw new Error('请选择事件或输入日期');
       await addPlacement(task.id, nextId);
       onDone();
@@ -3367,36 +3506,62 @@ function TaskPlacementTargetModal({
     <Modal title="安排到时间点" onClose={onClose}>
       <form className="stack-form" onSubmit={submit}>
         <p className="field-help">将“{task.title}”安排到一个日期或事件，不会复制任务本体。</p>
-        <label className="field">
-          <span>已有时间点</span>
-          <select value={targetId} onChange={(event) => setTargetId(event.target.value)}>
-            <option value="">选择事件或日期</option>
-            {points.map((point) => (
-              <option key={point.id} value={point.id}>
-                {point.type === 'DATE' ? `日期 · ${point.localDate}` : `事件 · ${point.title}`}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>或新建日期</span>
-          <input
-            type="date"
-            value={localDate}
-            onChange={(event) => {
-              setLocalDate(event.target.value);
-              setTargetId('');
-            }}
-          />
-        </label>
+        <M3SegmentedControl
+          label="安排类型"
+          value={mode}
+          options={[
+            { value: 'date', label: '日期' },
+            { value: 'event', label: '自定义时间点' },
+          ]}
+          onChange={(nextMode) => {
+            setMode(nextMode);
+            setTargetId('');
+            setLocalDate('');
+          }}
+        />
+        {mode === 'date' ? (
+          <>
+            <div className="date-shortcuts" aria-label="快速选择日期">
+              <M3Chip selected={localDate === today} onClick={() => setLocalDate(today)}>
+                今天
+              </M3Chip>
+              <M3Chip selected={localDate === tomorrow} onClick={() => setLocalDate(tomorrow)}>
+                明天
+              </M3Chip>
+            </div>
+            <label className="field">
+              <span>选择日期</span>
+              <input
+                type="date"
+                value={localDate}
+                onChange={(event) => setLocalDate(event.target.value)}
+              />
+            </label>
+          </>
+        ) : (
+          <label className="field">
+            <span>选择自定义时间点</span>
+            <select value={targetId} onChange={(event) => setTargetId(event.target.value)}>
+              <option value="">选择事件</option>
+              {eventPoints.map((point) => (
+                <option key={point.id} value={point.id}>
+                  {point.title}
+                </option>
+              ))}
+            </select>
+            {!eventPoints.length && (
+              <small className="field-help">还没有可用的自定义时间点。</small>
+            )}
+          </label>
+        )}
         {error && (
           <div role="alert" className="form-error">
             {error}
           </div>
         )}
-        <button className="primary-button wide" disabled={busy || (!targetId && !localDate)}>
+        <M3Button className="wide" disabled={busy || (mode === 'event' ? !targetId : !localDate)}>
           {busy ? '处理中…' : '安排任务'}
-        </button>
+        </M3Button>
       </form>
     </Modal>
   );
@@ -3417,12 +3582,17 @@ function AddTaskModal({
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (query.trim())
+      if (query.trim()) {
         void request<{ items: Array<{ task: TaskDto }> }>(
           `/search/tasks?q=${encodeURIComponent(query)}`,
         )
           .then((result) => setItems(result.items.map(({ task }) => task)))
           .catch(() => setItems([]));
+        return;
+      }
+      void requestAll<TaskDto>('/tasks?archived=false')
+        .then((result) => setItems(result.filter((task) => task.status !== 'DONE').slice(0, 12)))
+        .catch(() => setItems([]));
     }, 150);
     return () => window.clearTimeout(timer);
   }, [query]);
@@ -3458,6 +3628,7 @@ function AddTaskModal({
           {error}
         </div>
       )}
+      {!query && <p className="field-help picker-hint">最近未完成的任务</p>}
       <div className="picker-list">
         {items.map((task) => (
           <button
@@ -3479,7 +3650,11 @@ function AddTaskModal({
           </button>
         ))}
       </div>
-      {query && !items.length && <div className="command-empty">没有可加入的任务</div>}
+      {!items.length && (
+        <div className="command-empty">
+          {query ? '没有可加入的任务' : '没有未完成任务，可以先在任务库创建。'}
+        </div>
+      )}
     </Modal>
   );
 }
@@ -3573,8 +3748,9 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         title="日历"
         description="按本地日期安排任务，不把日期当成截止日期。"
         action={
-          <button
-            className="secondary-button"
+          <M3Button
+            variant="outlined"
+            leadingIcon={<Target size={16} />}
             onClick={() => {
               const today = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
               setMonth(today.slice(0, 7));
@@ -3582,27 +3758,27 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             }}
           >
             回到今天
-          </button>
+          </M3Button>
         }
       />
       <div className="calendar-layout">
         <section className="calendar-panel">
           <div className="calendar-head">
-            <button
-              className="icon-button"
+            <M3IconButton
+              label="上个月"
               aria-label="上个月"
               onClick={() => setMonth(shiftMonth(month, -1))}
             >
               <ChevronLeft size={18} />
-            </button>
+            </M3IconButton>
             <h2>{formatMonth(month)}</h2>
-            <button
-              className="icon-button"
+            <M3IconButton
+              label="下个月"
               aria-label="下个月"
               onClick={() => setMonth(shiftMonth(month, 1))}
             >
               <ChevronRight size={18} />
-            </button>
+            </M3IconButton>
           </div>
           <label className="calendar-date-jump">
             <span>跳转到日期</span>
@@ -3640,10 +3816,14 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               <span className="eyebrow">SELECTED DATE</span>
               <h2>{formatDate(selected)}</h2>
             </div>
-            <button className="secondary-button small" onClick={() => setShowAdd(true)}>
-              <Plus size={15} />
+            <M3Button
+              size="small"
+              variant="tonal"
+              leadingIcon={<Plus size={15} />}
+              onClick={() => setShowAdd(true)}
+            >
               加入任务
-            </button>
+            </M3Button>
           </div>
           {detailError && <ErrorState error={detailError} onRetry={() => void loadSelected()} />}
           <PlacementList
@@ -3952,9 +4132,7 @@ function HubSettingsSection() {
       {isHttpOrigin(origin) && (
         <div className="http-security-warning" role="alert">
           <strong>当前地址使用 HTTP</strong>
-          <span>
-            密码和会话信息会以明文传输。请仅在可信内网或测试环境使用，公网部署建议改用 HTTPS。
-          </span>
+          <span>密码和会话信息会以明文传输，请确认网络可信；正式公网部署仍建议使用 HTTPS。</span>
         </div>
       )}
       <div className="hub-check-row">
@@ -4783,9 +4961,9 @@ function isHttpOrigin(value: string): boolean {
 
 function breadcrumb(pathname: string): string {
   if (pathname.startsWith('/today')) return '今日';
-  if (pathname.startsWith('/tasks')) return '所有任务';
+  if (pathname.startsWith('/tasks')) return '任务库';
   if (pathname.startsWith('/projects')) return '项目';
-  if (pathname.startsWith('/misc')) return '全局杂项';
+  if (pathname.startsWith('/inbox') || pathname.startsWith('/misc')) return '收集箱';
   if (pathname.startsWith('/time/calendar')) return '时间 / 日历';
   if (pathname.startsWith('/time/events')) return '时间 / 时间点';
   if (pathname.startsWith('/archive')) return '归档';
