@@ -7,7 +7,7 @@
   "description": "Secure Electron shell for TaskDock",
   "author": "TaskDock",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node --input-type=module -e \"import { rm } from 'node:fs/promises'; await rm('dist', { recursive: true, force: true });\" && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "package": "pnpm --filter @devtodo/web build && pnpm build && pnpm --workspace-root exec tsx scripts/desktop-package.ts"
   },

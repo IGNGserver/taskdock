@@ -1,4 +1,6 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import electron = require('electron');
+
+const { contextBridge, ipcRenderer } = electron;
 
 contextBridge.exposeInMainWorld('devtodoDesktop', {
   platform: process.platform,
@@ -44,37 +46,19 @@ interface DesktopHubResponse {
   headers: Record<string, string>;
 }
 
-interface DesktopAuthResponse {
-  ok: boolean;
-  accessToken?: string;
-  user?: Record<string, unknown>;
-  device?: Record<string, unknown>;
-  status?: number;
-  code?: string;
-  message?: string;
+interface DesktopAuthSuccess {
+  ok: true;
+  accessToken: string;
+  user: Record<string, unknown>;
+  device: Record<string, unknown>;
+}
+
+interface DesktopAuthFailure {
+  ok: false;
+  status: number;
+  code: string;
+  message: string;
   details?: unknown;
 }
 
-declare global {
-  interface Window {
-    devtodoDesktop?: {
-      platform: string;
-      version: () => Promise<string>;
-      getSystemTheme: () => Promise<'light' | 'dark'>;
-      onSystemThemeChanged: (listener: (theme: 'light' | 'dark') => void) => () => void;
-      openExternal: (url: string) => Promise<boolean>;
-      authLogin: (
-        username: string,
-        password: string,
-        deviceName: string,
-      ) => Promise<DesktopAuthResponse>;
-      authRefresh: () => Promise<DesktopAuthResponse>;
-      authLogout: () => Promise<{ ok: true }>;
-      getHubOrigin: () => Promise<string | null>;
-      setHubOrigin: (origin: string) => Promise<string>;
-      testHubConnection: (origin: string) => Promise<{ initialized: boolean }>;
-      request: (input: DesktopHubRequest) => Promise<DesktopHubResponse>;
-      onQuickCapture: (listener: () => void) => () => void;
-    };
-  }
-}
+type DesktopAuthResponse = DesktopAuthSuccess | DesktopAuthFailure;

@@ -67,4 +67,4 @@ curl -fsS http://your-host.example:48731/health/ready  # 使用 HTTPS 或自定�
 
 迁移 job 成功后再切换 app；`/health/live` 只证明进程存活，`/health/ready` 才用于确认 PostgreSQL schema 已就绪。迁移失败时不要替换正在运行的 app；不兼容 schema 按恢复文档在新卷恢复旧备份。
 
-预发布版本也可以部署，但必须使用它自己的版本号，例如 `APP_VERSION=0.2.0-rc.1`。预发布镜像不会使用 `latest` 标签。
+预发布版本也可以部署，但必须使用它自己的版本号，例如 `APP_VERSION=0.2.0-rc.1`。预发布镜像不会使用 `latest` 标签；升级后应检查 `/version` 的 `appVersion` 与 `.env` 中的 `APP_VERSION` 一致，避免旧镜像或旧 Service Worker 继续提供旧版资源。

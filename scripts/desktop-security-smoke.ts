@@ -7,7 +7,7 @@ async function main(): Promise<void> {
   );
   const source = await readFile(new URL('../apps/desktop/src/main.ts', import.meta.url), 'utf8');
   const preload = await readFile(
-    new URL('../apps/desktop/src/preload.ts', import.meta.url),
+    new URL('../apps/desktop/src/preload.cts', import.meta.url),
     'utf8',
   );
   const required = [
@@ -20,6 +20,7 @@ async function main(): Promise<void> {
     'will-navigate',
     'process.resourcesPath',
     'devtodo://app/',
+    "preload: join(moduleDir, 'preload.cjs')",
     'titleBarStyle',
     'titleBarOverlay',
     'nativeTheme',
@@ -43,7 +44,10 @@ async function main(): Promise<void> {
       throw new Error(`raw refresh-token bridge exposure detected: ${marker}`);
   for (const marker of ['getSystemTheme', 'onSystemThemeChanged'])
     if (!preload.includes(marker)) throw new Error(`theme bridge marker missing: ${marker}`);
-  if (preload.includes('ipcRenderer:') || preload.includes('require('))
+  if (
+    preload.includes('ipcRenderer:') ||
+    !preload.includes("contextBridge.exposeInMainWorld('devtodoDesktop'")
+  )
     throw new Error('raw renderer IPC exposure detected');
   for (const marker of ['extraResources:', 'from: ../web/dist', 'to: web'])
     if (!builderConfig.includes(marker))

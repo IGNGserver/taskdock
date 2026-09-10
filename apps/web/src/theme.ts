@@ -8,6 +8,7 @@ interface DesktopThemeBridge {
 declare global {
   interface Window {
     devtodoDesktop?: DesktopThemeBridge;
+    __DEVTODO_NATIVE_THEME__?: ThemeName;
   }
 }
 
@@ -32,6 +33,10 @@ function updateThemeColor(theme: ThemeName): void {
   if (meta) meta.content = themeColor;
 }
 
+function readNativeTheme(): ThemeName | null {
+  return normalizeTheme(window.__DEVTODO_NATIVE_THEME__);
+}
+
 export function applyTheme(theme: ThemeName): void {
   const root = document.documentElement;
   root.dataset.theme = theme;
@@ -46,7 +51,9 @@ export function installTheme(): () => void {
     typeof window.matchMedia === 'function' ? window.matchMedia(darkMediaQuery) : null;
   const applySystemTheme = (value: unknown) => {
     const theme =
-      normalizeTheme(value) ?? (mediaQuery ? resolveTheme(mediaQuery.matches) : 'light');
+      normalizeTheme(value) ??
+      readNativeTheme() ??
+      (mediaQuery ? resolveTheme(mediaQuery.matches) : 'light');
     applyTheme(theme);
   };
 
@@ -54,6 +61,11 @@ export function installTheme(): () => void {
   const onMediaChange = (event: MediaQueryListEvent) =>
     applySystemTheme(event.matches ? 'dark' : 'light');
   mediaQuery?.addEventListener('change', onMediaChange);
+  const onNativeThemeChange = (event: Event) => {
+    const detail = (event as CustomEvent<{ theme?: unknown }>).detail;
+    applySystemTheme(detail?.theme);
+  };
+  window.addEventListener('devtodo:native-theme-changed', onNativeThemeChange);
 
   const desktop = window.devtodoDesktop;
   const removeDesktopListener = desktop?.onSystemThemeChanged((theme) => applySystemTheme(theme));
@@ -65,6 +77,7 @@ export function installTheme(): () => void {
 
   return () => {
     mediaQuery?.removeEventListener('change', onMediaChange);
+    window.removeEventListener('devtodo:native-theme-changed', onNativeThemeChange);
     removeDesktopListener?.();
   };
 }

@@ -71,9 +71,11 @@ import {
   createTask,
   getConfiguredHubOrigin,
   isDesktopClient,
+  isDesktopShell,
   isNativeClient,
   isNativeMobileClient,
   isWindowsDesktop,
+  loadConfiguredHubOrigin,
   normalizeHubOrigin,
   mutation,
   request,
@@ -116,15 +118,19 @@ function usePresence(open: boolean, exitDuration = 220) {
 
 export function App() {
   const auth = useAuth();
-  const content = isDesktopClient() ? (
-    <DesktopStartup />
-  ) : auth.status === 'loading' ? (
-    <LoadingScreen label="正在打开本地工作区" />
-  ) : auth.status === 'anonymous' ? (
-    <LoginScreen initialized={auth.initialized} />
-  ) : (
-    <AuthenticatedApp />
-  );
+  const desktopShell = isDesktopShell();
+  const content =
+    desktopShell && !isDesktopClient() ? (
+      <DesktopBridgeUnavailableScreen />
+    ) : desktopShell ? (
+      <DesktopStartup />
+    ) : auth.status === 'loading' ? (
+      <LoadingScreen label="正在打开本地工作区" />
+    ) : auth.status === 'anonymous' ? (
+      <LoginScreen initialized={auth.initialized} />
+    ) : (
+      <AuthenticatedApp />
+    );
   return <DesktopChrome>{content}</DesktopChrome>;
 }
 
@@ -146,13 +152,44 @@ function DesktopChrome({ children }: { children: ReactNode }) {
 
 type DesktopStartupPhase = 'checking' | 'setup' | 'waiting' | 'ready' | 'error';
 
+function DesktopBridgeUnavailableScreen() {
+  return (
+    <main className="auth-page hub-setup-page">
+      <div className="auth-panel">
+        <div className="brand auth-brand">
+          <span className="brand-mark">D</span>
+          <span>TaskDock</span>
+        </div>
+        <p className="eyebrow">DESKTOP RUNTIME</p>
+        <h1>桌面安全通道未加载</h1>
+        <p className="auth-intro">
+          当前窗口是桌面客户端，但安全桥接没有启动，因此无法读取或保存中枢地址。
+        </p>
+        <div className="form-error" role="alert">
+          请完全退出 TaskDock 后重试；如果问题持续，请重新安装最新桌面版本。
+        </div>
+        <button
+          type="button"
+          className="primary-button wide"
+          onClick={() => window.location.reload()}
+        >
+          重新加载客户端
+        </button>
+      </div>
+      <aside className="auth-aside">
+        <span className="aside-number">00</span>
+        <p>先恢复连接，再开始工作。</p>
+        <span className="aside-rule" />
+        <small>桌面端不会在桥接缺失时回退到网页登录，避免错误地使用错误的中枢会话。</small>
+      </aside>
+    </main>
+  );
+}
+
 function DesktopStartup() {
   const auth = useAuth();
-  const initialOriginRef = useRef(getConfiguredHubOrigin());
-  const [origin, setOrigin] = useState(initialOriginRef.current);
-  const [phase, setPhase] = useState<DesktopStartupPhase>(
-    initialOriginRef.current ? 'checking' : 'setup',
-  );
+  const [origin, setOrigin] = useState<string | null>(null);
+  const [phase, setPhase] = useState<DesktopStartupPhase>('checking');
   const [message, setMessage] = useState('');
 
   const verify = useCallback(async (candidate: string) => {
@@ -179,8 +216,16 @@ function DesktopStartup() {
   }, []);
 
   useEffect(() => {
-    const initialOrigin = initialOriginRef.current;
-    if (initialOrigin) void verify(initialOrigin);
+    let active = true;
+    void loadConfiguredHubOrigin().then((initialOrigin) => {
+      if (!active) return;
+      setOrigin(initialOrigin);
+      if (initialOrigin) void verify(initialOrigin);
+      else setPhase('setup');
+    });
+    return () => {
+      active = false;
+    };
   }, [verify]);
 
   const handleConnected = useCallback((nextOrigin: string, initialized: boolean) => {
@@ -1234,7 +1279,7 @@ function QuickCapture({
         onChange={(event) => setTitle(event.target.value)}
         placeholder={category === 'FEATURE' ? '添加一个功能任务…' : '现在要记下什么？'}
       />
-      <kbd>↵</kbd>
+      <kbd aria-hidden="true">↵</kbd>
       {error && (
         <span className="capture-error" role="alert">
           {error}

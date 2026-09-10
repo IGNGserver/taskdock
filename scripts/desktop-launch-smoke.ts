@@ -62,12 +62,14 @@ async function main(): Promise<void> {
   let output = '';
   let sawWindow = false;
   let sawRenderer = false;
+  let sawBridge = false;
   let fatal = false;
   const consume = (chunk: Buffer): void => {
     const text = chunk.toString();
     output += text;
     sawWindow ||= text.includes('DEVTODO_DESKTOP_WINDOW_CREATED');
     sawRenderer ||= text.includes('DEVTODO_DESKTOP_RENDERER_READY');
+    sawBridge ||= text.includes('DEVTODO_DESKTOP_BRIDGE_READY');
     fatal ||=
       /DevTodo desktop failed to start|ReferenceError:|uncaughtException|UnhandledPromiseRejection/i.test(
         text,
@@ -87,7 +89,7 @@ async function main(): Promise<void> {
     child.kill('SIGTERM');
     await Promise.race([exit, new Promise((resolve) => setTimeout(resolve, 3_000))]);
   }
-  if (fatal || !sawWindow || !sawRenderer) {
+  if (fatal || !sawWindow || !sawRenderer || !sawBridge) {
     console.error('FAIL: Electron launch smoke did not reach a healthy window and renderer.');
     console.error(output);
     process.exitCode = 1;

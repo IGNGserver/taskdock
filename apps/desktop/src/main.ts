@@ -117,7 +117,7 @@ function createWindow(): void {
         }
       : {}),
     webPreferences: {
-      preload: join(moduleDir, 'preload.js'),
+      preload: join(moduleDir, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -128,7 +128,21 @@ function createWindow(): void {
   mainWindow.once('ready-to-show', () => mainWindow?.show());
   mainWindow.webContents.once('did-finish-load', () => {
     applyWindowTheme();
-    if (process.env['DEVTODO_DESKTOP_SMOKE'] === '1') console.log('DEVTODO_DESKTOP_RENDERER_READY');
+    const windowForSmoke = mainWindow;
+    if (!windowForSmoke) return;
+    void windowForSmoke.webContents
+      .executeJavaScript('Boolean(window.devtodoDesktop)', true)
+      .then((bridgeReady) => {
+        if (process.env['DEVTODO_DESKTOP_SMOKE'] !== '1') return;
+        console.log(
+          bridgeReady ? 'DEVTODO_DESKTOP_BRIDGE_READY' : 'DEVTODO_DESKTOP_BRIDGE_MISSING',
+        );
+        console.log('DEVTODO_DESKTOP_RENDERER_READY');
+      })
+      .catch(() => {
+        if (process.env['DEVTODO_DESKTOP_SMOKE'] === '1')
+          console.log('DEVTODO_DESKTOP_BRIDGE_MISSING');
+      });
   });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     openExternal(url);
@@ -143,14 +157,14 @@ function createWindow(): void {
     const origin = configuredRendererOrigin ?? 'http://localhost:5173';
     if (!isAllowedNavigation(origin)) throw new Error('development app origin is not allowed');
     const rendererUrl = new URL(origin);
+    rendererUrl.searchParams.set('desktop', '1');
     if (configuredHubOrigin) rendererUrl.searchParams.set('hubOrigin', configuredHubOrigin);
     void mainWindow.loadURL(rendererUrl.toString());
   } else {
     if (!existsSync(webIndex)) throw new Error('packaged web assets are missing');
-    const query = configuredHubOrigin
-      ? `?hubOrigin=${encodeURIComponent(configuredHubOrigin)}`
-      : '';
-    void mainWindow.loadURL(`devtodo://app/index.html${query}`);
+    const query = new URLSearchParams({ desktop: '1' });
+    if (configuredHubOrigin) query.set('hubOrigin', configuredHubOrigin);
+    void mainWindow.loadURL(`devtodo://app/index.html?${query.toString()}`);
   }
   mainWindow.on('closed', () => {
     nativeTheme.removeListener('updated', applyWindowTheme);

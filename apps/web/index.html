@@ -7,14 +7,7 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="description" content="TaskDock：为个人开发工作设计的离线优先任务工作台" />
     <title>TaskDock · 开发任务工作台</title>
-    <script>
-      (() => {
-        const isDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
-        const theme = isDark ? 'dark' : 'light';
-        document.documentElement.dataset.theme = theme;
-        document.documentElement.style.colorScheme = theme;
-      })();
-    </script>
+    <script src="/theme-preload.js"></script>
   </head>
   <body>
     <div id="root"></div>

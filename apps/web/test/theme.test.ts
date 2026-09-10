@@ -37,7 +37,11 @@ describe('theme resolution', () => {
       documentElement: root,
       querySelector: vi.fn(() => meta),
     } as unknown as Document;
-    const windowStub = { matchMedia: vi.fn(() => mediaQuery) } as unknown as Window;
+    const windowStub = {
+      matchMedia: vi.fn(() => mediaQuery),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as Window;
     Object.defineProperty(globalThis, 'window', { configurable: true, value: windowStub });
     Object.defineProperty(globalThis, 'document', { configurable: true, value: documentStub });
 
@@ -53,5 +57,42 @@ describe('theme resolution', () => {
 
     dispose();
     expect(mediaQuery.removeEventListener).toHaveBeenCalledOnce();
+    expect(windowStub.removeEventListener).toHaveBeenCalledOnce();
+  });
+
+  it('accepts native Android theme events', () => {
+    let nativeListener: ((event: Event) => void) | undefined;
+    const mediaQuery = {
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as MediaQueryList;
+    const root = { dataset: {} as DOMStringMap, style: { colorScheme: '' } } as HTMLElement;
+    const meta = { content: '' } as HTMLMetaElement;
+    const documentStub = {
+      documentElement: root,
+      querySelector: vi.fn(() => meta),
+    } as unknown as Document;
+    const windowStub = {
+      matchMedia: vi.fn(() => mediaQuery),
+      addEventListener: vi.fn((_type: string, listener: (event: Event) => void) => {
+        nativeListener = listener;
+      }),
+      removeEventListener: vi.fn(),
+    } as unknown as Window;
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: windowStub });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: documentStub });
+
+    const dispose = installTheme();
+    expect(root.dataset.theme).toBe('light');
+
+    nativeListener?.(
+      new CustomEvent('devtodo:native-theme-changed', { detail: { theme: 'dark' } }),
+    );
+    expect(root.dataset.theme).toBe('dark');
+    expect(meta.content).toBe('#11141a');
+
+    dispose();
+    expect(windowStub.removeEventListener).toHaveBeenCalledOnce();
   });
 });

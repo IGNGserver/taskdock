@@ -22,6 +22,7 @@ import {
   getLastRefreshFailure,
   isNativeClient,
   isDesktopClient,
+  isDesktopShell,
   readNativeRefreshToken,
   refreshAccessToken,
   request,
@@ -155,6 +156,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     const operation = authOperationRef.current;
+    if (isDesktopShell() && !isDesktopClient()) {
+      if (operation === authOperationRef.current) {
+        setStatus('anonymous');
+        setInitialized(false);
+      }
+      return;
+    }
     if (isAuthLocallyLocked()) {
       try {
         setInitialized((await request<{ initialized: boolean }>('/bootstrap/status')).initialized);
