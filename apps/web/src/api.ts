@@ -78,6 +78,12 @@ export function isDesktopClient(): boolean {
   return Boolean(desktopBridge());
 }
 
+export function isDesktopShell(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (window.location.protocol === 'devtodo:') return true;
+  return new URLSearchParams(window.location.search).get('desktop') === '1';
+}
+
 export function isWindowsDesktop(): boolean {
   return isDesktopClient() && desktopBridge()?.platform === 'win32';
 }
@@ -117,6 +123,22 @@ export function getConfiguredHubOrigin(): string | null {
     const configured = localStorage.getItem('devtodo.hub-origin');
     if (!configured) return null;
     return normalizeHubOrigin(configured);
+  } catch {
+    return null;
+  }
+}
+
+export async function loadConfiguredHubOrigin(): Promise<string | null> {
+  const desktop = desktopBridge();
+  if (!desktop) return getConfiguredHubOrigin();
+  const configured = getConfiguredHubOrigin();
+  if (configured) return configured;
+  try {
+    const persisted = await desktop.getHubOrigin();
+    if (!persisted) return null;
+    const normalized = normalizeHubOrigin(persisted);
+    runtimeHubOrigin = normalized;
+    return normalized;
   } catch {
     return null;
   }

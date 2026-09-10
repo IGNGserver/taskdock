@@ -9,13 +9,15 @@
 
 ## 主题来源
 
-| 客户端       | 读取方式                                            | 变化监听                                                              |
-| ------------ | --------------------------------------------------- | --------------------------------------------------------------------- |
-| 浏览器 / PWA | `window.matchMedia('(prefers-color-scheme: dark)')` | `MediaQueryList.change`                                               |
-| Electron     | 主进程 `nativeTheme.shouldUseDarkColors`            | `nativeTheme.updated`，经 preload 类型化桥接                          |
-| Android      | `Configuration.uiMode & UI_MODE_NIGHT_MASK`         | `onConfigurationChanged`；WebView 页面同步使用 `prefers-color-scheme` |
+| 客户端       | 读取方式                                            | 变化监听                                                                                             |
+| ------------ | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 浏览器 / PWA | `window.matchMedia('(prefers-color-scheme: dark)')` | `MediaQueryList.change`                                                                              |
+| Electron     | 主进程 `nativeTheme.shouldUseDarkColors`            | `nativeTheme.updated`，经 preload 类型化桥接                                                         |
+| Android      | `Configuration.uiMode & UI_MODE_NIGHT_MASK`         | `onCreate`、`onConfigurationChanged`、`onResume`；原生向 WebView 派发 `devtodo:native-theme-changed` |
 
 主题控制器将结果归一为 `light` 或 `dark`，写入 `<html data-theme="…">` 和 `color-scheme`。`index.html` 在 React 启动前先执行一次轻量判断，避免首屏闪烁。
+
+首屏判断脚本位于 `apps/web/public/theme-preload.js`，通过外部静态资源加载，以兼容 API 服务的严格 `script-src 'self'` CSP；不要把主题初始化改回内联脚本。Android 同时设置系统栏颜色和图标明暗，并通过原生事件更新 WebView，避免仅依赖 WebView 对 `prefers-color-scheme` 的实现差异。
 
 ## 颜色令牌
 

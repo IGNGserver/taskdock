@@ -2349,6 +2349,9 @@ a {
   .quick-capture {
     margin-bottom: 26px;
   }
+  .quick-capture kbd {
+    display: none;
+  }
   .section-title {
     margin-top: 25px;
   }

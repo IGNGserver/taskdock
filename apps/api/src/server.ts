@@ -102,8 +102,21 @@ export async function buildServer(
   await store.init();
   const auth = new AuthService(store, config);
   const rateLimiter = new AuthRateLimiter();
+  let appOrigin: string | null = null;
+  try {
+    appOrigin = new URL(config.appOrigin).origin;
+  } catch {
+    appOrigin = null;
+  }
   const nativeOrigins = [
-    ...new Set([...config.corsAllowedOrigins, ...config.nativeAllowedOrigins, 'http://localhost']),
+    ...new Set(
+      [
+        ...config.corsAllowedOrigins,
+        ...config.nativeAllowedOrigins,
+        appOrigin,
+        'http://localhost',
+      ].filter((origin): origin is string => Boolean(origin)),
+    ),
   ];
   const app = Fastify({
     trustProxy: config.trustProxy,
@@ -185,6 +198,7 @@ export async function buildServer(
   app.addHook('onRequest', async (request, reply) => {
     const requestId = validRequestId(request.headers['x-request-id']) ?? request.id;
     reply.header('X-Request-Id', requestId);
+    reply.header('X-TaskDock-Version', config.appVersion);
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     reply.header('X-Frame-Options', 'DENY');

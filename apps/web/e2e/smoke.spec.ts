@@ -159,6 +159,7 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
       : page.getByRole('button', { name: '快速添加' });
   await expect(quickEntry).toBeVisible();
   if (testInfo.project.name === 'mobile') {
+    await expect(page.locator('.quick-capture kbd')).toBeHidden();
     await expect(page.getByRole('navigation', { name: '移动导航' })).toBeVisible();
     const menuButton = page.getByRole('button', { name: '打开侧边栏' });
     await menuButton.click();

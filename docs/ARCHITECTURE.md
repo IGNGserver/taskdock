@@ -12,9 +12,9 @@ Browser、iOS PWA、Electron 和 Capacitor 都加载同一份 React Web 产物�
 - `apps/api`：认证、Owner 限定的资源端点、同步协议和 PostgreSQL adapter。
 - `packages/sync-client`：IndexedDB/Dexie schema、outbox、push/pull、冲突记录和重同步。
 - `apps/web`：唯一产品界面和 PWA 应用壳。
-- `apps/desktop`：安全 BrowserWindow/preload、平台安全存储和全局快捷键。
+- `apps/desktop`：安全 BrowserWindow/preload、平台安全存储、桌面中枢地址隔离和全局快捷键。
 - `apps/mobile`：Capacitor 配置与生命周期/安全存储接口边界。
-- 主题：Web 使用 `prefers-color-scheme`，Electron 使用 `nativeTheme`，Android 使用 `Configuration.uiMode` 同步系统栏；主题是设备运行时状态，不进入账号同步设置。
+- 主题：Web 使用 `prefers-color-scheme`，Electron 使用 `nativeTheme`，Android 使用 `Configuration.uiMode` 同步系统栏并向 WebView 派发主题事件；主题是设备运行时状态，不进入账号同步设置。
 
 路由只做解析、认证和响应映射；Task 与 Placement 语义集中在 Store 调用的领域函数中。所有资源取值先检查 `ownerId`，随机 UUID 不能代替授权检查。
 

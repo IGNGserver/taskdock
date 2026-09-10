@@ -93,12 +93,37 @@ async function main(): Promise<void> {
     assert(live.status === 200, `live health returned ${live.status}`);
     const ready = await fetchWithTimeout(`${baseUrl}/health/ready`);
     assert(ready.status === 200, `ready health returned ${ready.status}`);
+    let indexBody = '';
     for (const path of ['/', '/today']) {
       const response = await fetchWithTimeout(`${baseUrl}${path}`);
       const body = await response.text();
       assert(response.status === 200, `${path} returned ${response.status}`);
       assert(body.includes('<div id="root">'), `${path} did not return the built SPA shell`);
+      if (path === '/') {
+        indexBody = body;
+        assert(
+          body.includes('<script src="/theme-preload.js"></script>'),
+          'SPA shell does not load the CSP-safe theme preloader',
+        );
+        assert(
+          !body.includes("window.matchMedia?.('(prefers-color-scheme: dark)')"),
+          'SPA shell still contains the blocked inline theme prelude',
+        );
+        const themePreload = await fetchWithTimeout(`${baseUrl}/theme-preload.js`);
+        const themePreloadBody = await themePreload.text();
+        assert(themePreload.status === 200, 'theme preloader returned a non-200 response');
+        assert(
+          themePreloadBody.includes('__DEVTODO_NATIVE_THEME__'),
+          'theme preloader does not support native theme state',
+        );
+        const csp = response.headers.get('content-security-policy') ?? '';
+        assert(csp.includes("script-src 'self'"), 'SPA shell is missing the strict script CSP');
+      }
     }
+    assert(indexBody.length > 0, 'SPA index response was empty');
+    const version = await fetchWithTimeout(`${baseUrl}/version`);
+    const versionBody = (await version.json()) as { appVersion?: unknown };
+    assert(version.status === 200 && typeof versionBody.appVersion === 'string', 'version failed');
     const unknown = await fetchWithTimeout(`${baseUrl}/api/v1/does-not-exist`);
     const unknownBody = (await unknown.json()) as { code?: unknown };
     assert(unknown.status === 404, `unknown API route returned ${unknown.status}`);
