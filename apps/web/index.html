@@ -4,8 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#f5f6f8" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="description" content="TaskDock：为个人开发工作设计的离线优先任务工作台" />
     <title>TaskDock · 开发任务工作台</title>
+    <script>
+      (() => {
+        const isDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+        const theme = isDark ? 'dark' : 'light';
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

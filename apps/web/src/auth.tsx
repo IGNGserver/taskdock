@@ -102,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (navigator.onLine) void localEngine.sync().catch(() => undefined);
     socketRef.current?.close();
+    if (isDesktopClient()) return;
     try {
       const socket = new WebSocket(websocketUrl());
       socketRef.current = socket;

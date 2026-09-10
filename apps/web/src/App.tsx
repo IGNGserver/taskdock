@@ -29,6 +29,7 @@ import {
   Link2,
   LoaderCircle,
   LogOut,
+  Menu,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -69,7 +70,11 @@ import {
   createEvent,
   createTask,
   getConfiguredHubOrigin,
+  isDesktopClient,
   isNativeClient,
+  isNativeMobileClient,
+  isWindowsDesktop,
+  normalizeHubOrigin,
   mutation,
   request,
   requestAll,
@@ -79,12 +84,306 @@ import {
 import { useAuth } from './auth.js';
 
 type PlacementWithTask = { id: string; task: TaskDto };
+type PresenceState = 'entering' | 'present' | 'exiting';
+
+function usePresence(open: boolean, exitDuration = 220) {
+  const [mounted, setMounted] = useState(open);
+  const [state, setState] = useState<PresenceState>(open ? 'present' : 'exiting');
+  const duration =
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 1
+      : exitDuration;
+
+  useEffect(() => {
+    let frame = 0;
+    let timer: number | undefined;
+    if (open) {
+      setMounted(true);
+      setState('entering');
+      frame = window.requestAnimationFrame(() => setState('present'));
+    } else if (mounted) {
+      setState('exiting');
+      timer = window.setTimeout(() => setMounted(false), duration);
+    }
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [duration, mounted, open]);
+
+  return { mounted, state };
+}
 
 export function App() {
   const auth = useAuth();
+  const content = isDesktopClient() ? (
+    <DesktopStartup />
+  ) : auth.status === 'loading' ? (
+    <LoadingScreen label="正在打开本地工作区" />
+  ) : auth.status === 'anonymous' ? (
+    <LoginScreen initialized={auth.initialized} />
+  ) : (
+    <AuthenticatedApp />
+  );
+  return <DesktopChrome>{content}</DesktopChrome>;
+}
+
+function DesktopChrome({ children }: { children: ReactNode }) {
+  const windowsDesktop = isWindowsDesktop();
+  if (!windowsDesktop) return children;
+  return (
+    <div className="desktop-app-shell">
+      <div className="desktop-titlebar" aria-label="TaskDock 窗口标题栏">
+        <div className="desktop-titlebar-brand">
+          <span className="brand-mark">D</span>
+          <span>TaskDock · 开发任务工作台</span>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+type DesktopStartupPhase = 'checking' | 'setup' | 'waiting' | 'ready' | 'error';
+
+function DesktopStartup() {
+  const auth = useAuth();
+  const initialOriginRef = useRef(getConfiguredHubOrigin());
+  const [origin, setOrigin] = useState(initialOriginRef.current);
+  const [phase, setPhase] = useState<DesktopStartupPhase>(
+    initialOriginRef.current ? 'checking' : 'setup',
+  );
+  const [message, setMessage] = useState('');
+
+  const verify = useCallback(async (candidate: string) => {
+    setPhase('checking');
+    setMessage('正在连接中枢…');
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8_000);
+    try {
+      const status = await testHubConnection(candidate, controller.signal);
+      setPhase(status.initialized ? 'ready' : 'waiting');
+      setMessage('');
+    } catch (cause) {
+      setPhase('error');
+      setMessage(
+        cause instanceof DOMException && cause.name === 'AbortError'
+          ? '连接超时，请检查地址、证书和网络。'
+          : cause instanceof Error
+            ? cause.message
+            : '无法连接中枢，请检查地址、证书和网络。',
+      );
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }, []);
+
+  useEffect(() => {
+    const initialOrigin = initialOriginRef.current;
+    if (initialOrigin) void verify(initialOrigin);
+  }, [verify]);
+
+  const handleConnected = useCallback((nextOrigin: string, initialized: boolean) => {
+    setOrigin(nextOrigin);
+    setMessage('');
+    setPhase(initialized ? 'ready' : 'waiting');
+  }, []);
+  const handleChangeOrigin = useCallback(() => {
+    setPhase('setup');
+    setMessage('');
+  }, []);
+  const prepareSwitch = useCallback(
+    async (nextOrigin: string) => {
+      const currentOrigin = getConfiguredHubOrigin();
+      if (currentOrigin && currentOrigin !== nextOrigin) await auth.logout();
+    },
+    [auth],
+  );
+
+  if (phase === 'setup')
+    return (
+      <HubSetupScreen
+        initialOrigin={origin ?? ''}
+        errorMessage={message}
+        onConnected={handleConnected}
+        beforeSave={prepareSwitch}
+      />
+    );
+  if (phase === 'checking') return <LoadingScreen label="正在连接中枢" />;
+  if (phase === 'error')
+    return (
+      <HubSetupScreen
+        initialOrigin={origin ?? ''}
+        errorMessage={message}
+        onConnected={handleConnected}
+        beforeSave={prepareSwitch}
+      />
+    );
+  if (phase === 'waiting')
+    return (
+      <HubWaitingScreen
+        origin={origin ?? ''}
+        onRetry={() => origin && void verify(origin)}
+        onChangeOrigin={handleChangeOrigin}
+      />
+    );
   if (auth.status === 'loading') return <LoadingScreen label="正在打开本地工作区" />;
-  if (auth.status === 'anonymous') return <LoginScreen initialized={auth.initialized} />;
+  if (auth.status === 'anonymous')
+    return <LoginScreen initialized onChangeHub={handleChangeOrigin} />;
   return <AuthenticatedApp />;
+}
+
+function HubSetupScreen({
+  initialOrigin,
+  errorMessage,
+  onConnected,
+  beforeSave,
+}: {
+  initialOrigin: string;
+  errorMessage: string;
+  onConnected: (origin: string, initialized: boolean) => void;
+  beforeSave?: (origin: string) => Promise<void>;
+}) {
+  const [origin, setOrigin] = useState(initialOrigin);
+  const [state, setState] = useState<'idle' | 'checking' | 'error'>('idle');
+  const [message, setMessage] = useState(errorMessage);
+
+  useEffect(() => setMessage(errorMessage), [errorMessage]);
+
+  const connect = async () => {
+    if (state === 'checking' || !origin.trim()) return;
+    setState('checking');
+    setMessage('正在测试连接…');
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8_000);
+    try {
+      const normalized = normalizeHubOrigin(origin);
+      const status = await testHubConnection(normalized, controller.signal);
+      await beforeSave?.(normalized);
+      const saved = await setHubOrigin(normalized);
+      onConnected(saved, status.initialized);
+    } catch (cause) {
+      setState('error');
+      setMessage(
+        cause instanceof DOMException && cause.name === 'AbortError'
+          ? '连接超时，请检查地址、证书和网络。'
+          : cause instanceof Error
+            ? cause.message
+            : '无法连接中枢，请检查地址、证书和网络。',
+      );
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
+
+  return (
+    <main className="auth-page hub-setup-page">
+      <div className="auth-panel">
+        <div className="brand auth-brand">
+          <span className="brand-mark">D</span>
+          <span>TaskDock</span>
+        </div>
+        <p className="eyebrow">DESKTOP CONNECTION</p>
+        <h1>{initialOrigin ? '连接中枢' : '配置中枢地址'}</h1>
+        <p className="auth-intro">
+          桌面端不会默认绑定网页地址。先连接你的自托管中枢，之后登录、同步和离线数据都会跟随这个地址隔离。
+        </p>
+        {message && (
+          <div className={`${state === 'error' ? 'form-error' : 'bootstrap-notice'}`} role="status">
+            {message}
+          </div>
+        )}
+        {isHttpOrigin(origin) && (
+          <div className="http-security-warning" role="alert">
+            <strong>当前地址使用 HTTP</strong>
+            <span>
+              仅建议用于可信内网或测试环境；公网中枢请使用 HTTPS，否则密码和会话信息可能被窃听。
+            </span>
+          </div>
+        )}
+        <div className="stack-form">
+          <Field
+            label="中枢 HTTP/HTTPS 地址"
+            value={origin}
+            onChange={(value) => {
+              setOrigin(value);
+              setState('idle');
+              setMessage('');
+            }}
+            type="url"
+            autoComplete="url"
+            autoFocus={!initialOrigin}
+          />
+          <p className="field-help">
+            例如 https://todo.example.com、http://192.168.1.10:3000 或 http://localhost:3000。
+          </p>
+          <button
+            type="button"
+            className="primary-button wide"
+            onClick={() => void connect()}
+            disabled={state === 'checking' || !origin.trim()}
+          >
+            {state === 'checking' ? <LoaderCircle className="spin" size={17} /> : '测试并连接'}
+          </button>
+        </div>
+      </div>
+      <aside className="auth-aside">
+        <span className="aside-number">01</span>
+        <p>先连接，再安排。</p>
+        <span className="aside-rule" />
+        <small>中枢地址是桌面端的运行边界，切换地址不会串用另一套会话。</small>
+      </aside>
+    </main>
+  );
+}
+
+function HubWaitingScreen({
+  origin,
+  onRetry,
+  onChangeOrigin,
+}: {
+  origin: string;
+  onRetry: () => void;
+  onChangeOrigin: () => void;
+}) {
+  return (
+    <main className="auth-page hub-setup-page">
+      <div className="auth-panel">
+        <div className="brand auth-brand">
+          <span className="brand-mark">D</span>
+          <span>TaskDock</span>
+        </div>
+        <p className="eyebrow">DESKTOP CONNECTION</p>
+        <h1>等待中枢初始化</h1>
+        <p className="auth-intro">已连接到中枢，但部署者还没有完成首次 Owner 初始化。</p>
+        <div className="bootstrap-notice" role="status">
+          <strong>请先完成中枢部署</strong>
+          <span>
+            初始化令牌只在部署中枢时使用。请让部署者在服务器端完成首次 Owner
+            初始化，完成后点击重试即可登录。
+          </span>
+        </div>
+        <div className="hub-origin-card">
+          <span>当前中枢</span>
+          <code>{origin}</code>
+        </div>
+        <div className="hub-check-row">
+          <button type="button" className="primary-button" onClick={onRetry}>
+            重新检查
+          </button>
+          <button type="button" className="secondary-button" onClick={onChangeOrigin}>
+            更换中枢
+          </button>
+        </div>
+      </div>
+      <aside className="auth-aside">
+        <span className="aside-number">02</span>
+        <p>部署完成，再开始。</p>
+        <span className="aside-rule" />
+        <small>桌面端不会代替部署者创建 Owner，初始化仍由中枢服务端负责。</small>
+      </aside>
+    </main>
+  );
 }
 
 function AuthenticatedApp() {
@@ -94,6 +393,7 @@ function AuthenticatedApp() {
   const [quickKind, setQuickKind] = useState<'task' | 'project' | 'event'>('task');
   const [commandOpen, setCommandOpen] = useState(false);
   const [mobileActionOpen, setMobileActionOpen] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useSearchParams();
   const recentProjectId =
     auth.settings?.defaultCaptureTarget === 'RECENT_CONTEXT'
@@ -110,6 +410,7 @@ function AuthenticatedApp() {
         setCommandOpen(false);
         setQuickOpen(false);
         setMobileActionOpen(false);
+        setMobileSidebarOpen(false);
       }
     };
     window.addEventListener('keydown', listener);
@@ -136,12 +437,13 @@ function AuthenticatedApp() {
       else if (quickOpen) setQuickOpen(false);
       else if (mobileActionOpen) setMobileActionOpen(false);
       else if (selectedTask.get('task')) closeTask();
+      else if (mobileSidebarOpen) setMobileSidebarOpen(false);
       else return;
       event.preventDefault();
     };
     window.addEventListener('devtodo:native-back', listener);
     return () => window.removeEventListener('devtodo:native-back', listener);
-  }, [closeTask, commandOpen, mobileActionOpen, quickOpen, selectedTask]);
+  }, [closeTask, commandOpen, mobileActionOpen, mobileSidebarOpen, quickOpen, selectedTask]);
   const navItems = useMemo(
     () => [
       { to: '/today', label: '今日', icon: Target },
@@ -190,6 +492,14 @@ function AuthenticatedApp() {
       </aside>
       <main className="main-shell">
         <header className="topbar">
+          <button
+            className="mobile-menu"
+            aria-label="打开侧边栏"
+            aria-expanded={mobileSidebarOpen}
+            onClick={() => setMobileSidebarOpen(true)}
+          >
+            <Menu size={19} />
+          </button>
           <div className="breadcrumbs">{breadcrumb(location.pathname)}</div>
           <button
             className="command-trigger"
@@ -235,6 +545,11 @@ function AuthenticatedApp() {
           </Routes>
         </div>
       </main>
+      <MobileSidebar
+        open={mobileSidebarOpen}
+        navItems={navItems}
+        onClose={() => setMobileSidebarOpen(false)}
+      />
       <nav className="mobile-bottom-nav" aria-label="移动导航">
         {mobileNavItems.map(({ to, label, icon: Icon }) => (
           <NavLink
@@ -292,9 +607,17 @@ function AuthenticatedApp() {
   );
 }
 
-function LoginScreen({ initialized }: { initialized: boolean }) {
+function LoginScreen({
+  initialized,
+  onChangeHub,
+}: {
+  initialized: boolean;
+  onChangeHub?: () => void;
+}) {
   const auth = useAuth();
   const nativeClient = isNativeClient();
+  const mobileClient = isNativeMobileClient();
+  const desktopClient = isDesktopClient();
   const [hubInitialized, setHubInitialized] = useState(initialized);
   const [hubOrigin, setHubOriginValue] = useState(getConfiguredHubOrigin() ?? '');
   const [username, setUsername] = useState('');
@@ -303,21 +626,25 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
   const [busy, setBusy] = useState(false);
   const [hubCheck, setHubCheck] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
   const [hubCheckMessage, setHubCheckMessage] = useState('');
-  const checkHub = async () => {
-    if (!nativeClient || hubCheck === 'checking') return;
+
+  useEffect(() => setHubInitialized(initialized), [initialized]);
+
+  const checkHub = async (): Promise<boolean | null> => {
+    if (!mobileClient || hubCheck === 'checking' || !hubOrigin.trim()) return null;
     setError('');
     setHubCheck('checking');
     setHubCheckMessage('正在测试连接…');
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 8_000);
     try {
-      const origin = await setHubOrigin(hubOrigin);
-      const status = await testHubConnection(origin, controller.signal);
+      const status = await testHubConnection(hubOrigin, controller.signal);
+      await setHubOrigin(hubOrigin);
       setHubCheck('success');
       setHubInitialized(status.initialized);
       setHubCheckMessage(
         status.initialized ? '连接成功 · Owner 已初始化' : '连接成功 · 等待部署者初始化',
       );
+      return status.initialized;
     } catch (cause) {
       setHubCheck('error');
       setHubCheckMessage(
@@ -327,6 +654,7 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
             ? cause.message
             : '无法连接中枢，请检查地址、证书和网络',
       );
+      return null;
     } finally {
       window.clearTimeout(timeout);
     }
@@ -336,12 +664,20 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
     setError('');
     setBusy(true);
     try {
-      if (nativeClient) await setHubOrigin(hubOrigin);
-      if (!hubInitialized) {
+      let nextInitialized = hubInitialized;
+      if (mobileClient) {
+        const configured = getConfiguredHubOrigin();
+        if (!configured || configured !== normalizeHubOrigin(hubOrigin)) {
+          const checked = await checkHub();
+          if (checked === null) return;
+          nextInitialized = checked;
+        }
+      }
+      if (!nextInitialized) {
         setError('中枢尚未完成初始化，请先在部署中枢时完成 Owner 初始化。');
         return;
       }
-      await auth.login(username, password, '浏览器');
+      await auth.login(username, password, desktopClient ? '桌面端' : '浏览器');
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '操作失败，请检查网络和输入');
     } finally {
@@ -358,6 +694,15 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
         <p className="eyebrow">PERSONAL DEV WORKSPACE</p>
         <h1>{hubInitialized ? '欢迎回来' : '等待中枢初始化'}</h1>
         <p className="auth-intro">一个任务本体，多处安排。离线时也能继续捕获和整理。</p>
+        {desktopClient && onChangeHub && (
+          <div className="hub-origin-card login-hub-origin">
+            <span>当前中枢</span>
+            <code>{hubOrigin}</code>
+            <button type="button" className="text-button" onClick={onChangeHub}>
+              更换中枢
+            </button>
+          </div>
+        )}
         {!hubInitialized && (
           <div className="bootstrap-notice" role="status">
             <strong>请先完成中枢部署</strong>
@@ -376,12 +721,16 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
           </div>
         )}
         <form onSubmit={submit} className="stack-form">
-          {nativeClient && (
+          {mobileClient && (
             <>
               <Field
                 label="中枢 HTTP/HTTPS 地址"
                 value={hubOrigin}
-                onChange={setHubOriginValue}
+                onChange={(value) => {
+                  setHubOriginValue(value);
+                  setHubCheck('idle');
+                  setHubCheckMessage('');
+                }}
                 type="url"
                 autoComplete="url"
               />
@@ -401,7 +750,8 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
                 )}
               </div>
               <p className="field-help">
-                首次使用先填写自托管中枢地址，例如 https://todo.example.com；也支持 http:// 地址。
+                首次使用先填写自托管中枢地址，例如 https://todo.example.com；也支持可信内网 http://
+                地址。
               </p>
             </>
           )}
@@ -467,12 +817,88 @@ function Field({
   );
 }
 
-function NavItem({ to, label, icon }: { to: string; label: string; icon: ReactNode }) {
+function NavItem({
+  to,
+  label,
+  icon,
+  onClick,
+}: {
+  to: string;
+  label: string;
+  icon: ReactNode;
+  onClick?: () => void;
+}) {
   return (
-    <NavLink to={to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+    <NavLink
+      to={to}
+      onClick={onClick}
+      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+    >
       {icon}
       <span>{label}</span>
     </NavLink>
+  );
+}
+
+function MobileSidebar({
+  open,
+  navItems,
+  onClose,
+}: {
+  open: boolean;
+  navItems: Array<{ to: string; label: string; icon: typeof Target }>;
+  onClose: () => void;
+}) {
+  const presence = usePresence(open);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    previousFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeRef.current?.focus();
+    return () => previousFocus.current?.focus();
+  }, [open]);
+  if (!presence.mounted) return null;
+  const interactive = presence.state !== 'exiting';
+  return (
+    <div className={`mobile-sidebar-layer presence-${presence.state}`} aria-hidden={!interactive}>
+      <button
+        className="mobile-sidebar-backdrop"
+        aria-label="关闭侧边栏"
+        tabIndex={interactive ? 0 : -1}
+        onClick={onClose}
+      />
+      <aside className="mobile-sidebar" aria-label="移动侧边栏">
+        <header className="mobile-sidebar-header">
+          <div className="brand">
+            <span className="brand-mark">D</span>
+            <span>TaskDock</span>
+          </div>
+          <button
+            ref={closeRef}
+            className="sidebar-close"
+            aria-label="关闭侧边栏"
+            onClick={onClose}
+            tabIndex={interactive ? 0 : -1}
+          >
+            <X size={19} />
+          </button>
+        </header>
+        <nav aria-label="移动主导航" className="primary-nav">
+          {navItems.map(({ to, label, icon: Icon }) => (
+            <NavItem key={to} to={to} label={label} icon={<Icon size={17} />} onClick={onClose} />
+          ))}
+        </nav>
+        <div className="nav-section-label">项目</div>
+        <ProjectNav onNavigate={onClose} />
+        <nav aria-label="移动更多导航" className="secondary-nav">
+          <NavItem to="/misc" label="全局杂项" icon={<Inbox size={17} />} onClick={onClose} />
+          <NavItem to="/archive" label="归档" icon={<Archive size={17} />} onClick={onClose} />
+          <NavItem to="/settings" label="设置" icon={<Settings size={17} />} onClick={onClose} />
+        </nav>
+      </aside>
+    </div>
   );
 }
 
@@ -485,7 +911,8 @@ function MobileActionSheet({
   onClose: () => void;
   onSelect: (kind: 'task' | 'project' | 'event') => void;
 }) {
-  if (!open) return null;
+  const presence = usePresence(open);
+  if (!presence.mounted) return null;
   const actions = [
     {
       kind: 'task' as const,
@@ -507,7 +934,7 @@ function MobileActionSheet({
     },
   ];
   return (
-    <Modal title="创建" onClose={onClose}>
+    <Modal title="创建" onClose={onClose} state={presence.state}>
       <div className="mobile-action-sheet">
         {actions.map(({ kind, label, description, icon: Icon }) => (
           <button key={kind} className="mobile-action-item" onClick={() => onSelect(kind)}>
@@ -608,7 +1035,7 @@ function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
   );
 }
 
-function ProjectNav() {
+function ProjectNav({ onNavigate }: { onNavigate?: () => void } = {}) {
   const [projects, setProjects] = useState<ProjectDto[]>([]);
   const reload = useCallback(() => {
     void requestAll<ProjectDto>('/projects')
@@ -626,6 +1053,7 @@ function ProjectNav() {
         <NavLink
           key={project.id}
           to={`/projects/${project.id}`}
+          onClick={onNavigate}
           className={({ isActive }) => `project-nav-item ${isActive ? 'active' : ''}`}
         >
           <span className="project-dot" />
@@ -633,7 +1061,7 @@ function ProjectNav() {
           <span className="nav-prefix">{project.taskPrefix}</span>
         </NavLink>
       ))}
-      <NavLink to="/projects" className="nav-item nav-create">
+      <NavLink to="/projects" onClick={onNavigate} className="nav-item nav-create">
         <Plus size={16} />
         <span>新建项目</span>
       </NavLink>
@@ -843,7 +1271,8 @@ function QuickCaptureDialog({
       setError('');
     }
   }, [initialKind, open]);
-  if (!open) return null;
+  const presence = usePresence(open);
+  if (!presence.mounted) return null;
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
@@ -885,7 +1314,7 @@ function QuickCaptureDialog({
     }
   };
   return (
-    <Modal title="快速添加" onClose={onClose}>
+    <Modal title="快速添加" onClose={onClose} state={presence.state}>
       <div className="segmented-control" role="tablist">
         {(
           [
@@ -936,11 +1365,14 @@ function Modal({
   title,
   onClose,
   children,
+  state = 'present',
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  state?: PresenceState;
 }) {
+  const interactive = state !== 'exiting';
   const modalRef = useRef<HTMLElement | null>(null);
   const previousFocus = useRef<HTMLElement | null>(
     typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
@@ -949,7 +1381,7 @@ function Modal({
   );
   useEffect(() => {
     const modal = modalRef.current;
-    if (!modal) return;
+    if (!modal || !interactive) return;
     const focusToRestore = previousFocus.current;
     const focusable = () =>
       Array.from(
@@ -983,18 +1415,19 @@ function Modal({
       modal.removeEventListener('keydown', onKeyDown);
       focusToRestore?.focus();
     };
-  }, [onClose]);
+  }, [interactive, onClose]);
   return (
     <div
-      className="modal-layer"
+      className={`modal-layer presence-${state}`}
+      aria-hidden={!interactive}
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (interactive && event.target === event.currentTarget) onClose();
       }}
     >
       <section
         ref={modalRef}
-        className="modal"
+        className={`modal presence-${state}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
@@ -1029,6 +1462,7 @@ function CommandPalette({
   const [items, setItems] = useState<Array<{ task: TaskDto; project: ProjectDto | null }>>([]);
   const [actionError, setActionError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const presence = usePresence(open);
   useEffect(() => {
     if (!open) return;
     setQuery('');
@@ -1060,16 +1494,17 @@ function CommandPalette({
       setActionError(cause instanceof ApiError ? cause.message : '安排到今天失败，请重试');
     }
   };
-  if (!open) return null;
+  if (!presence.mounted) return null;
   return (
     <div
-      className="modal-layer command-layer"
+      className={`modal-layer command-layer presence-${presence.state}`}
+      aria-hidden={presence.state === 'exiting'}
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (presence.state !== 'exiting' && event.target === event.currentTarget) onClose();
       }}
     >
       <section
-        className="command-panel"
+        className={`command-panel presence-${presence.state}`}
         role="dialog"
         aria-modal="true"
         aria-label="搜索和命令面板"
@@ -3416,6 +3851,7 @@ function SettingsPage() {
 }
 
 function HubSettingsSection() {
+  const auth = useAuth();
   const [origin, setOrigin] = useState(getConfiguredHubOrigin() ?? '');
   const [state, setState] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
@@ -3423,23 +3859,36 @@ function HubSettingsSection() {
     if (state === 'checking' || !origin.trim()) return;
     setState('checking');
     setMessage('正在测试连接…');
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8_000);
     try {
-      const status = await testHubConnection(origin);
-      await setHubOrigin(origin);
+      const nextOrigin = normalizeHubOrigin(origin);
+      const status = await testHubConnection(nextOrigin, controller.signal);
+      const currentOrigin = getConfiguredHubOrigin();
+      if (currentOrigin !== nextOrigin) await auth.logout();
+      await setHubOrigin(nextOrigin);
       setState('success');
-      setMessage(status.initialized ? '连接成功，正在切换中枢…' : '连接成功，正在切换中枢…');
+      setMessage(status.initialized ? '连接成功，正在切换中枢…' : '连接成功，等待中枢初始化…');
       window.setTimeout(() => window.location.reload(), 250);
     } catch (cause) {
       setState('error');
-      setMessage(cause instanceof Error ? cause.message : '无法连接中枢');
+      setMessage(
+        cause instanceof DOMException && cause.name === 'AbortError'
+          ? '连接超时，请检查地址、证书和网络'
+          : cause instanceof Error
+            ? cause.message
+            : '无法连接中枢',
+      );
+    } finally {
+      window.clearTimeout(timeout);
     }
   };
   return (
     <div className="settings-section hub-settings-section">
       <h2>中枢连接</h2>
       <p className="field-help">
-        桌面端和 Android 端支持 HTTP 或 HTTPS 中枢；HTTP
-        会显示安全警告，修改后会重新载入本地工作区。
+        修改前会先测试新地址。切换后会清理当前设备会话并重新载入，旧中枢的 refresh token
+        不会带到新中枢。
       </p>
       <label className="field">
         <span>中枢地址</span>
@@ -3736,11 +4185,9 @@ function TaskDetail({
     server: TaskDto | NoteDto;
   } | null>(null);
   const [mergedConflict, setMergedConflict] = useState('');
+  const presence = usePresence(Boolean(taskId));
   const loadDetail = useCallback(async () => {
-    if (!taskId) {
-      setDetail(null);
-      return;
-    }
+    if (!taskId) return;
     const next = await request<{ task: TaskDto; note: NoteDto; placements: PlacementDto[] }>(
       `/tasks/${taskId}`,
     );
@@ -3759,7 +4206,7 @@ function TaskDetail({
       setTimePoints(items),
     );
   }, [taskId]);
-  if (!taskId || !detail) return null;
+  if (!presence.mounted || !taskId || !detail) return null;
   const saveTask = async (patch: Record<string, unknown>) => {
     try {
       const task = (await mutation('PATCH', `/tasks/${detail.task.id}`, {
@@ -3931,7 +4378,11 @@ function TaskDetail({
     }
   };
   return (
-    <aside className="detail-panel" aria-label="任务详情">
+    <aside
+      className={`detail-panel presence-${presence.state}`}
+      aria-label="任务详情"
+      aria-hidden={presence.state === 'exiting'}
+    >
       <div className="detail-header">
         <div>
           <span className="reference-id">{detail.task.referenceId || '待同步分配'}</span>
