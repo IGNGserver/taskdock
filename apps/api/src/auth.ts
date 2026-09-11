@@ -65,11 +65,13 @@ export class AuthService {
     const platform = input.platform ?? 'web';
     return this.store.withMutation(async () => {
       const device = await this.store.createDevice(user.id, input.deviceId, deviceName, platform);
+      // Refresh session does not expire by time; valid until explicit logout or chain revocation.
+      const expiresAt = new Date(Date.now() + 100 * 365 * 86_400_000).toISOString();
       await this.store.createSession(
         user.id,
         device.id,
         this.hashRefreshToken(refreshToken),
-        new Date(Date.now() + this.config.refreshTokenTtlDays * 86_400_000).toISOString(),
+        expiresAt,
       );
       return {
         accessToken: await this.signAccessToken(user.id, device.id),
@@ -89,8 +91,6 @@ export class AuthService {
         await this.store.revokeSessionChain(session);
         return { replayDetected: true as const };
       }
-      if (new Date(session.expiresAt).getTime() <= Date.now())
-        throw new DomainError('AUTH_SESSION_REVOKED', '会话已过期');
       const device = await this.store.getDevice(session.ownerId, session.deviceId);
       if (device.revokedAt) throw new DomainError('AUTH_SESSION_REVOKED', '设备会话已撤销');
       const user = await this.store.getUserRecord(session.ownerId);

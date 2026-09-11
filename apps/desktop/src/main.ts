@@ -9,7 +9,7 @@ import {
   safeStorage,
   shell,
 } from 'electron';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -208,6 +208,14 @@ function saveConfiguredHubOrigin(value: string): string {
   return origin;
 }
 
+function removeConfiguredHubOrigin(): void {
+  try {
+    unlinkSync(hubOriginFile());
+  } catch {
+    /* an absent origin file is already the desired state */
+  }
+}
+
 function assertIpcSender(sender: Electron.WebContents): void {
   if (sender !== mainWindow?.webContents) throw new Error('invalid sender');
 }
@@ -314,18 +322,58 @@ function responseDetails(body: Record<string, unknown>): unknown {
   return body['details'] ?? null;
 }
 
+const SECURE_TOKEN_MAGIC_SAFE = Buffer.from([0x54, 0x4b, 0x53, 0x31]); // 'TKS1'
+const SECURE_TOKEN_MAGIC_PLAIN = Buffer.from([0x54, 0x4b, 0x50, 0x31]); // 'TKP1'
+
 async function saveSecureRefreshToken(token: string): Promise<void> {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('secure storage unavailable');
-  await writeFile(secureFile(), safeStorage.encryptString(token), { mode: 0o600 });
+  if (safeStorage.isEncryptionAvailable()) {
+    try {
+      const encrypted = safeStorage.encryptString(token);
+      const payload = Buffer.concat([SECURE_TOKEN_MAGIC_SAFE, encrypted]);
+      await writeFile(secureFile(), payload, { mode: 0o600 });
+      return;
+    } catch {
+      // safeStorage failed despite being available, fallback to restricted file
+    }
+  }
+  const payload = Buffer.concat([SECURE_TOKEN_MAGIC_PLAIN, Buffer.from(token, 'utf8')]);
+  await writeFile(secureFile(), payload, { mode: 0o600 });
 }
 
 async function readSecureRefreshToken(): Promise<string | null> {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('secure storage unavailable');
+  let fileBuffer: Buffer;
   try {
-    return safeStorage.decryptString(await readFile(secureFile()));
+    fileBuffer = await readFile(secureFile());
   } catch {
     return null;
   }
+  if (fileBuffer.length < 4) return null;
+
+  const magic = fileBuffer.subarray(0, 4);
+  const data = fileBuffer.subarray(4);
+
+  if (magic.equals(SECURE_TOKEN_MAGIC_SAFE)) {
+    if (!safeStorage.isEncryptionAvailable()) return null;
+    try {
+      return safeStorage.decryptString(data);
+    } catch {
+      return null;
+    }
+  }
+
+  if (magic.equals(SECURE_TOKEN_MAGIC_PLAIN)) {
+    return data.toString('utf8');
+  }
+
+  // Backward compatibility with legacy tokens saved directly as safeStorage ciphertext
+  if (safeStorage.isEncryptionAvailable()) {
+    try {
+      return safeStorage.decryptString(fileBuffer);
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 async function removeSecureRefreshToken(): Promise<void> {
@@ -460,6 +508,7 @@ async function nativeLogout(): Promise<{ ok: true }> {
     /* local logout must complete even if the Hub or secure storage is unavailable */
   } finally {
     await removeSecureRefreshToken();
+    removeConfiguredHubOrigin();
   }
   return { ok: true };
 }

@@ -8,6 +8,12 @@ interface NativeLifecycleOptions {
 }
 
 export function installNativeLifecycle(options: NativeLifecycleOptions): () => void {
+  if (typeof document !== 'undefined') {
+    if (Capacitor.isNativePlatform()) {
+      document.documentElement.classList.add('native-mobile-shell');
+      document.body.classList.add('native-mobile-shell');
+    }
+  }
   if (!Capacitor.isNativePlatform()) return () => undefined;
   let disposed = false;
   let removers: Array<() => void> = [];

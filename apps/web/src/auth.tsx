@@ -14,6 +14,7 @@ import {
 import {
   ApiError,
   createSyncEngine,
+  clearConfiguredHubOrigin,
   clearNativeRefreshToken,
   desktopAuthLogin,
   desktopAuthLogout,
@@ -302,6 +303,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {}),
       }).catch(() => undefined);
     }
+    await clearConfiguredHubOrigin().catch(() => undefined);
     socketRef.current?.close();
     try {
       await clearNativeRefreshToken();
