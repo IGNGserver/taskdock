@@ -48,12 +48,12 @@ describe('theme resolution', () => {
     const dispose = installTheme();
     expect(root.dataset.theme).toBe('dark');
     expect(root.style.colorScheme).toBe('dark');
-    expect(meta.content).toBe('#11141a');
+    expect(meta.content).toBe('#0d0e13');
 
     mediaListener?.({ matches: false } as MediaQueryListEvent);
     expect(root.dataset.theme).toBe('light');
     expect(root.style.colorScheme).toBe('light');
-    expect(meta.content).toBe('#f5f6f8');
+    expect(meta.content).toBe('#f5f2f9');
 
     dispose();
     expect(mediaQuery.removeEventListener).toHaveBeenCalledOnce();
@@ -90,7 +90,7 @@ describe('theme resolution', () => {
       new CustomEvent('devtodo:native-theme-changed', { detail: { theme: 'dark' } }),
     );
     expect(root.dataset.theme).toBe('dark');
-    expect(meta.content).toBe('#11141a');
+    expect(meta.content).toBe('#0d0e13');
 
     dispose();
     expect(windowStub.removeEventListener).toHaveBeenCalledOnce();

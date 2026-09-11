@@ -1,5 +1,6 @@
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 :root {
@@ -12,10 +13,73 @@
   font-family: var(--dt-font-sans);
   font-synthesis: none;
 }
+html,
+body {
+  height: 100%;
+}
 body {
   margin: 0;
   min-width: 320px;
   background: var(--dt-canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 移动端与原生客户端全局视口锁紧，杜绝网页橡皮筋与全屏乱滚 */
+@media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+html.native-mobile-shell,
+html.native-mobile-shell body,
+html.native-mobile-shell #root {
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 移动端细微滚动条定制与隐藏网页滚动条 */
+@media (max-width: 767px) {
+  * {
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
+html.native-mobile-shell * {
+  scrollbar-width: none;
+}
+html.native-mobile-shell *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* 允许内容选取的安全区域 */
+input,
+textarea,
+[contenteditable='true'],
+.markdown-preview,
+.detail-title-input,
+.reference-id,
+code,
+pre {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .desktop-app-shell {
@@ -53,6 +117,14 @@ select {
 button {
   color: inherit;
   cursor: pointer;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 button:disabled {
   cursor: not-allowed;
@@ -2249,7 +2321,7 @@ a {
 }
 
 @media (min-width: 768px) {
-  .mobile-sidebar-layer {
+  html:not(.native-mobile-shell) .mobile-sidebar-layer {
     display: none !important;
   }
 }
@@ -2269,11 +2341,35 @@ a {
   .mobile-menu {
     display: grid;
   }
+  .app-frame {
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
+    flex-direction: column;
+  }
   .main-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    height: 100dvh;
+    min-height: 0;
     margin-left: 0;
-    padding-bottom: calc(65px + var(--dt-safe-bottom));
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+  .page-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .page-wrap::-webkit-scrollbar {
+    display: none;
   }
   .topbar {
+    flex: none;
     height: calc(58px + var(--dt-safe-top));
     padding: var(--dt-safe-top) 15px 0;
   }
@@ -2427,10 +2523,14 @@ a {
   }
   .auth-page {
     grid-template-columns: 1fr;
-    padding: 26px 24px;
+    height: 100%;
+    height: 100dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: calc(26px + var(--dt-safe-top)) 24px calc(32px + var(--dt-safe-bottom));
   }
   .auth-page .eyebrow {
-    margin-top: 72px;
+    margin-top: 16px;
   }
   .auth-aside {
     display: none;
@@ -2452,6 +2552,16 @@ a {
   .detail-actions {
     justify-content: flex-start;
   }
+  .command-layer {
+    padding-top: calc(16px + var(--dt-safe-top));
+    padding-right: calc(12px + var(--dt-safe-right));
+    padding-left: calc(12px + var(--dt-safe-left));
+    align-items: flex-start;
+  }
+  .command-panel {
+    width: 100%;
+    max-height: calc(100dvh - 32px - var(--dt-safe-top) - var(--dt-safe-bottom));
+  }
   .modal-layer:not(.command-layer) {
     align-items: end;
     padding: calc(12px + var(--dt-safe-top)) var(--dt-safe-right) 0 var(--dt-safe-left);
@@ -2470,6 +2580,121 @@ a {
   .modal.presence-exiting {
     animation-name: dt-sheet-out;
   }
+}
+
+/* 原生移动端应用壳：无论屏幕分辨率或横竖屏，强制使用原生 App Shell 规则 */
+html.native-mobile-shell .sidebar {
+  display: none !important;
+}
+html.native-mobile-shell .mobile-menu {
+  display: grid !important;
+}
+html.native-mobile-shell .app-frame {
+  height: 100% !important;
+  height: 100dvh !important;
+  overflow: hidden !important;
+  flex-direction: column !important;
+}
+html.native-mobile-shell .main-shell {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  margin-left: 0 !important;
+  padding-bottom: 0 !important;
+  overflow: hidden !important;
+}
+html.native-mobile-shell .page-wrap {
+  flex: 1 !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important;
+}
+html.native-mobile-shell .page-wrap::-webkit-scrollbar {
+  display: none !important;
+}
+html.native-mobile-shell .topbar {
+  flex: none !important;
+  height: calc(64px + var(--dt-safe-top)) !important;
+  padding: var(--dt-safe-top) 16px 0 !important;
+}
+html.native-mobile-shell .command-trigger {
+  width: 38px !important;
+  margin-left: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+html.native-mobile-shell .command-trigger span,
+html.native-mobile-shell .command-trigger kbd {
+  display: none !important;
+}
+html.native-mobile-shell .quick-button {
+  display: none !important;
+}
+html.native-mobile-shell .mobile-bottom-nav {
+  position: fixed !important;
+  z-index: 18 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  display: grid !important;
+  grid-template-columns: repeat(5, 1fr) !important;
+  height: calc(67px + var(--dt-safe-bottom)) !important;
+  padding: 7px var(--dt-safe-right) var(--dt-safe-bottom) var(--dt-safe-left) !important;
+}
+html.native-mobile-shell .mobile-fab {
+  position: fixed !important;
+  z-index: 19 !important;
+  right: calc(18px + var(--dt-safe-right)) !important;
+  bottom: calc(75px + var(--dt-safe-bottom)) !important;
+  display: grid !important;
+}
+html.native-mobile-shell .page,
+html.native-mobile-shell .narrow-page {
+  width: calc(100% - 32px) !important;
+  padding-top: 24px !important;
+  padding-bottom: calc(96px + var(--dt-safe-bottom)) !important;
+}
+html.native-mobile-shell .detail-panel {
+  top: calc(64px + var(--dt-safe-top)) !important;
+  width: 100% !important;
+  height: calc(100dvh - 64px - var(--dt-safe-top)) !important;
+}
+html.native-mobile-shell .project-grid {
+  grid-template-columns: 1fr !important;
+}
+html.native-mobile-shell .header-actions {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  width: 100% !important;
+}
+html.native-mobile-shell .header-actions > .m3-button,
+html.native-mobile-shell .header-actions > .primary-button,
+html.native-mobile-shell .header-actions > .secondary-button {
+  width: 100% !important;
+}
+html.native-mobile-shell .task-row {
+  min-height: 68px !important;
+  padding-right: 6px !important;
+}
+html.native-mobile-shell .task-title {
+  white-space: normal !important;
+  line-height: 1.4 !important;
+}
+html.native-mobile-shell .task-reorder-actions {
+  display: none !important;
+}
+html.native-mobile-shell .m3-segmented-control {
+  width: 100% !important;
+}
+html.native-mobile-shell .m3-segmented-control button {
+  flex: 1 !important;
+  min-width: 0 !important;
+  padding: 0 10px !important;
 }
 @keyframes dt-sheet-in {
   from {
@@ -3369,6 +3594,12 @@ body {
   background: var(--m3-secondary-container);
   font-weight: 750;
 }
+.mobile-nav-link:active {
+  transform: scale(0.95);
+}
+.mobile-action-item:active {
+  transform: scale(0.985);
+}
 
 .mobile-fab {
   border-color: var(--m3-primary);
@@ -3387,7 +3618,8 @@ body {
   .page,
   .narrow-page {
     width: calc(100% - 32px);
-    padding-top: 30px;
+    padding-top: 24px;
+    padding-bottom: calc(96px + var(--dt-safe-bottom));
   }
 
   .page-header h1 {

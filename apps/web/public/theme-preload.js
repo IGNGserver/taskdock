@@ -1,4 +1,11 @@
 (() => {
+  if (
+    window.Capacitor?.isNativePlatform?.() ||
+    window.Capacitor?.platform === 'android' ||
+    window.Capacitor?.platform === 'ios'
+  ) {
+    document.documentElement.classList.add('native-mobile-shell');
+  }
   const nativeTheme = window.__DEVTODO_NATIVE_THEME__;
   const mediaQuery = window.matchMedia?.('(prefers-color-scheme: dark)');
   const theme =
@@ -9,6 +16,6 @@
         : 'light';
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
-  const themeColor = theme === 'dark' ? '#11141a' : '#f5f6f8';
+  const themeColor = theme === 'dark' ? '#0d0e13' : '#f5f2f9';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
 })();

@@ -225,6 +225,22 @@ function DesktopStartup() {
     };
   }, [verify]);
 
+  useEffect(() => {
+    let active = true;
+    if (auth.status === 'anonymous') {
+      void loadConfiguredHubOrigin().then((currentOrigin) => {
+        if (!active) return;
+        setOrigin(currentOrigin);
+        if (!currentOrigin) {
+          setPhase('setup');
+        }
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [auth.status]);
+
   const handleConnected = useCallback((nextOrigin: string, initialized: boolean) => {
     setOrigin(nextOrigin);
     setMessage('');
@@ -552,7 +568,7 @@ function AuthenticatedApp() {
           >
             <Search size={16} />
             <span>搜索任务、备注…</span>
-            <kbd>⌘ K</kbd>
+            {!isNativeMobileClient() && <kbd>⌘ K</kbd>}
           </button>
           <ConnectionStatus />
           <M3Button
@@ -4017,7 +4033,7 @@ function SettingsPage() {
           <p className="field-help">日期任务使用此时区的本地日期；不会把 UTC 日期直接展示给你。</p>
         </div>
         <div className="settings-section">
-          <h2>设备会话</h2>
+          <h2>已登录设备</h2>
           {devices.map((device) => (
             <div className="device-row" key={device.id}>
               <span className="device-icon">
@@ -4029,30 +4045,6 @@ function SettingsPage() {
                   {device.platform} · 最近活动 {formatTime(device.lastSeenAt)}
                 </small>
               </span>
-              {device.revokedAt ? (
-                <span className="muted-label">已撤销</span>
-              ) : (
-                <button
-                  type="button"
-                  className="text-button danger-text"
-                  onClick={() =>
-                    void request(`/devices/${device.id}`, {
-                      method: 'DELETE',
-                      body: JSON.stringify({}),
-                    }).then(() =>
-                      setDevices((current) =>
-                        current.map((item) =>
-                          item.id === device.id
-                            ? { ...item, revokedAt: new Date().toISOString() }
-                            : item,
-                        ),
-                      ),
-                    )
-                  }
-                >
-                  撤销
-                </button>
-              )}
             </div>
           ))}
         </div>

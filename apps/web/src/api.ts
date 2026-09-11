@@ -166,6 +166,24 @@ export async function setHubOrigin(value: string): Promise<string> {
   return origin;
 }
 
+export async function clearConfiguredHubOrigin(): Promise<void> {
+  runtimeHubOrigin = null;
+  if (typeof window !== 'undefined' && window.location.protocol === 'devtodo:') {
+    try {
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete('hubOrigin');
+      window.history.replaceState(null, '', nextUrl);
+    } catch {
+      // Ignored if history manipulation is unavailable.
+    }
+  }
+  try {
+    localStorage.removeItem('devtodo.hub-origin');
+  } catch {
+    // Ignored if localStorage is unavailable.
+  }
+}
+
 export async function testHubConnection(
   value: string,
   signal?: AbortSignal,

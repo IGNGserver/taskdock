@@ -3,6 +3,6 @@
     <color name="colorPrimary">#4F5BD5</color>
     <color name="colorPrimaryDark">#3949AB</color>
     <color name="colorAccent">#4F5BD5</color>
-    <color name="taskdock_background">#F5F6F8</color>
-    <color name="taskdock_system_bar">#F5F6F8</color>
+    <color name="taskdock_background">#F5F2F9</color>
+    <color name="taskdock_system_bar">#F5F2F9</color>
 </resources>

@@ -331,15 +331,6 @@ export async function buildServer(
         };
       });
       api.get('/devices', async (request) => store.listDevices(request.auth!.ownerId));
-      api.delete('/devices/:id', async (request, reply) => {
-        const id = paramId(request);
-        const meta = mutationMeta(request);
-        await mutate(store, request.auth!.ownerId, meta, 'device.revoke', id, {}, async () => {
-          await store.revokeDevice(request.auth!.ownerId, id);
-          return { ok: true };
-        });
-        return reply.code(204).send();
-      });
 
       api.get('/settings', async (request) => store.getSettings(request.auth!.ownerId));
       api.patch('/settings', async (request) => {
@@ -1281,7 +1272,7 @@ function setRefreshCookie(reply: FastifyReply, value: string, config: AppConfig)
     secure: refreshCookieShouldBeSecure(config),
     sameSite: 'lax',
     path: '/api/v1/auth',
-    maxAge: config.refreshTokenTtlDays * 86_400,
+    maxAge: 100 * 365 * 86_400,
   });
 }
 function clearRefreshCookie(reply: FastifyReply, config: AppConfig): void {

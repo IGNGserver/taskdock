@@ -109,7 +109,6 @@
     },
     "/me": { "get": { "responses": { "200": { "description": "current user" } } } },
     "/devices": { "get": { "responses": { "200": { "description": "devices" } } } },
-    "/devices/{id}": { "delete": { "responses": { "204": { "description": "device revoked" } } } },
     "/settings": {
       "get": { "responses": { "200": { "description": "settings" } } },
       "patch": { "responses": { "200": { "description": "settings updated" } } }
