@@ -205,6 +205,37 @@ describe('Fastify API', () => {
     expect(
       (placements.json() as { items: Array<{ task: { status: string } }> }).items[0]?.task.status,
     ).toBe('DONE');
+    const projectCounts = await app.inject({
+      method: 'GET',
+      url: '/api/v1/projects/task-counts',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(projectCounts.statusCode).toBe(200);
+    expect(projectCounts.json()).toEqual({
+      items: [{ projectId: project.id, openCount: 0, doneCount: 1 }],
+    });
+    const dateCounts = await app.inject({
+      method: 'GET',
+      url: '/api/v1/time-points/placement-counts?type=DATE&from=2026-09-04&to=2026-09-04',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(dateCounts.statusCode).toBe(200);
+    expect(
+      (dateCounts.json() as { items: Array<{ totalCount: number; doneCount: number }> }).items,
+    ).toEqual([
+      { timePointId: dateId, localDate: '2026-09-04', totalCount: 1, openCount: 0, doneCount: 1 },
+    ]);
+    const eventCounts = await app.inject({
+      method: 'GET',
+      url: `/api/v1/time-points/placement-counts?type=EVENT&archived=false`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(eventCounts.statusCode).toBe(200);
+    expect(
+      (eventCounts.json() as { items: Array<{ timePointId: string; openCount: number }> }).items,
+    ).toEqual([
+      { timePointId: eventId, localDate: null, totalCount: 1, openCount: 0, doneCount: 1 },
+    ]);
     expect(store.listTasks(user.id)).toHaveLength(1);
     await app.close();
   });

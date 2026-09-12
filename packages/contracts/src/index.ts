@@ -47,6 +47,12 @@ export interface ProjectDto {
   updatedAt: string;
 }
 
+export interface ProjectTaskCountDto {
+  projectId: string;
+  openCount: number;
+  doneCount: number;
+}
+
 export interface TaskDto {
   id: string;
   referenceId: string;
@@ -87,6 +93,14 @@ export interface TimePointDto {
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TimePointPlacementCountDto {
+  timePointId: string;
+  localDate: string | null;
+  totalCount: number;
+  openCount: number;
+  doneCount: number;
 }
 
 export interface PlacementDto {

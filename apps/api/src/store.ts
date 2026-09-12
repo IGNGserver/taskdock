@@ -5,12 +5,14 @@ import type {
   NoteDto,
   PlacementDto,
   ProjectDto,
+  ProjectTaskCountDto,
   SettingsDto,
   TaskCategory,
   TaskDto,
   TaskPriority,
   TaskStatus,
   TimePointDto,
+  TimePointPlacementCountDto,
   TimePointType,
   UserDto,
 } from '@devtodo/contracts';
@@ -476,6 +478,33 @@ export class MemoryStore {
       )
       .sort(rankSort)
       .map((project) => this.projectDto(project));
+  }
+
+  listProjectTaskCounts(ownerId: string, archived = false): ProjectTaskCountDto[] {
+    this.getUser(ownerId);
+    const projects = [...this.state.projects.values()]
+      .filter(
+        (project) =>
+          project.ownerId === ownerId &&
+          !project.deletedAt &&
+          (archived ? Boolean(project.archivedAt) : !project.archivedAt),
+      )
+      .sort(rankSort);
+    const counts = new Map<string, ProjectTaskCountDto>(
+      projects.map((project) => [
+        project.id,
+        { projectId: project.id, openCount: 0, doneCount: 0 },
+      ]),
+    );
+    for (const task of this.state.tasks.values()) {
+      if (task.ownerId !== ownerId || task.deletedAt || task.archivedAt || !task.projectId)
+        continue;
+      const count = counts.get(task.projectId);
+      if (!count) continue;
+      if (task.status === 'DONE') count.doneCount += 1;
+      else count.openCount += 1;
+    }
+    return projects.map((project) => counts.get(project.id)!);
   }
 
   getProject(ownerId: string, id: string, includeArchived = true): ProjectDto {
@@ -945,6 +974,54 @@ export class MemoryStore {
           : rankSort(a, b),
       )
       .map((point) => this.timePointDto(point));
+  }
+
+  listTimePointPlacementCounts(
+    ownerId: string,
+    type: TimePointType,
+    archived?: boolean,
+    fromDate?: string,
+    toDate?: string,
+  ): TimePointPlacementCountDto[] {
+    this.getUser(ownerId);
+    const points = [...this.state.timePoints.values()]
+      .filter(
+        (point) =>
+          point.ownerId === ownerId &&
+          !point.deletedAt &&
+          point.type === type &&
+          (archived === undefined || archived === Boolean(point.archivedAt)) &&
+          (fromDate === undefined || (point.localDate ?? '') >= fromDate) &&
+          (toDate === undefined || (point.localDate ?? '') <= toDate),
+      )
+      .sort((a, b) =>
+        a.type === 'DATE' && b.type === 'DATE'
+          ? (a.localDate ?? '').localeCompare(b.localDate ?? '')
+          : rankSort(a, b),
+      );
+    const counts = new Map<string, TimePointPlacementCountDto>(
+      points.map((point) => [
+        point.id,
+        {
+          timePointId: point.id,
+          localDate: point.localDate,
+          totalCount: 0,
+          openCount: 0,
+          doneCount: 0,
+        },
+      ]),
+    );
+    for (const placement of this.state.placements.values()) {
+      if (placement.ownerId !== ownerId || placement.deletedAt) continue;
+      const count = counts.get(placement.timePointId);
+      if (!count) continue;
+      const task = this.state.tasks.get(placement.taskId);
+      if (!task || task.ownerId !== ownerId || task.deletedAt || task.archivedAt) continue;
+      count.totalCount += 1;
+      if (task.status === 'DONE') count.doneCount += 1;
+      else count.openCount += 1;
+    }
+    return points.map((point) => counts.get(point.id)!);
   }
 
   getTimePoint(ownerId: string, id: string): TimePointDto {
@@ -1894,6 +1971,7 @@ export interface Store {
     id?: string,
   ): MaybePromise<ProjectDto>;
   listProjects(ownerId: string, archived?: boolean): MaybePromise<ProjectDto[]>;
+  listProjectTaskCounts(ownerId: string, archived?: boolean): MaybePromise<ProjectTaskCountDto[]>;
   getProject(ownerId: string, id: string, includeArchived?: boolean): MaybePromise<ProjectDto>;
   updateProject(
     ownerId: string,
@@ -1959,6 +2037,13 @@ export interface Store {
     type?: TimePointType,
     archived?: boolean,
   ): MaybePromise<TimePointDto[]>;
+  listTimePointPlacementCounts(
+    ownerId: string,
+    type: TimePointType,
+    archived?: boolean,
+    fromDate?: string,
+    toDate?: string,
+  ): MaybePromise<TimePointPlacementCountDto[]>;
   getTimePoint(ownerId: string, id: string): MaybePromise<TimePointDto>;
   updateTimePoint(
     ownerId: string,

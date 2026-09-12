@@ -2,9 +2,11 @@ import type {
   NoteDto,
   PlacementDto,
   ProjectDto,
+  ProjectTaskCountDto,
   SettingsDto,
   TaskDto,
   TimePointDto,
+  TimePointPlacementCountDto,
 } from '@devtodo/contracts';
 import {
   isMergeableConflictCommand,
@@ -44,6 +46,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -63,6 +66,7 @@ import {
   useNavigate,
   useSearchParams,
 } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import {
   ApiError,
   addPlacement,
@@ -90,7 +94,7 @@ import { M3Button, M3Chip, M3IconButton, M3Select, M3SegmentedControl } from './
 import { PwaLifecycleNotice } from './pwa.js';
 import { nextTaskStatus, reorderIds, taskStatusActionLabel } from './task-behavior.js';
 
-type PlacementWithTask = { id: string; task: TaskDto };
+type PlacementWithTask = PlacementDto & { task: TaskDto };
 type PresenceState = 'entering' | 'present' | 'exiting';
 
 function usePresence(open: boolean, exitDuration = 220) {
@@ -119,6 +123,29 @@ function usePresence(open: boolean, exitDuration = 220) {
   }, [duration, mounted, open]);
 
   return { mounted, state };
+}
+
+function useDismissibleMenu(open: boolean, onClose: () => void) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: globalThis.PointerEvent) => {
+      if (event.target instanceof Node && !containerRef.current?.contains(event.target)) onClose();
+    };
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [onClose, open]);
+  return containerRef;
 }
 
 export function App() {
@@ -558,17 +585,19 @@ function AuthenticatedApp() {
           <BrandMark />
           <span>TaskDock</span>
         </div>
-        <nav aria-label="主导航" className="primary-nav">
-          {navItems.map(({ to, label, icon: Icon }) => (
-            <NavItem key={to} to={to} label={label} icon={<Icon size={17} />} />
-          ))}
-        </nav>
-        <div className="nav-section-label">项目</div>
-        <ProjectNav />
-        <nav aria-label="更多导航" className="secondary-nav">
-          <NavItem to="/archive" label="归档" icon={<Archive size={17} />} />
-          <NavItem to="/settings" label="设置" icon={<Settings size={17} />} />
-        </nav>
+        <div className="sidebar-scroll">
+          <nav aria-label="主导航" className="primary-nav">
+            {navItems.map(({ to, label, icon: Icon }) => (
+              <NavItem key={to} to={to} label={label} icon={<Icon size={17} />} />
+            ))}
+          </nav>
+          <div className="nav-section-label">项目</div>
+          <ProjectNav />
+          <nav aria-label="更多导航" className="secondary-nav">
+            <NavItem to="/archive" label="归档" icon={<Archive size={17} />} />
+            <NavItem to="/settings" label="设置" icon={<Settings size={17} />} />
+          </nav>
+        </div>
         <div className="sidebar-bottom">
           <ConnectionStatus />
           <button className="user-chip" onClick={() => void auth.logout()} title="退出当前设备">
@@ -950,14 +979,48 @@ function MobileSidebar({
 }) {
   const presence = usePresence(open);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (!open) return;
     previousFocus.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeRef.current?.focus();
-    return () => previousFocus.current?.focus();
-  }, [open]);
+    document.documentElement.classList.add('drawer-open');
+    const previousOverflow = document.body.style.overflow;
+    const previousTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = drawerRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])',
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.documentElement.classList.remove('drawer-open');
+      document.body.style.overflow = previousOverflow;
+      document.body.style.touchAction = previousTouchAction;
+      previousFocus.current?.focus();
+    };
+  }, [onClose, open]);
   if (!presence.mounted) return null;
   const interactive = presence.state !== 'exiting';
   return (
@@ -968,7 +1031,7 @@ function MobileSidebar({
         tabIndex={interactive ? 0 : -1}
         onClick={onClose}
       />
-      <aside className="mobile-sidebar" aria-label="移动侧边栏">
+      <aside ref={drawerRef} className="mobile-sidebar" aria-label="移动侧边栏">
         <header className="mobile-sidebar-header">
           <div className="brand">
             <BrandMark />
@@ -984,17 +1047,19 @@ function MobileSidebar({
             <X size={19} />
           </button>
         </header>
-        <nav aria-label="移动主导航" className="primary-nav">
-          {navItems.map(({ to, label, icon: Icon }) => (
-            <NavItem key={to} to={to} label={label} icon={<Icon size={17} />} onClick={onClose} />
-          ))}
-        </nav>
-        <div className="nav-section-label">项目</div>
-        <ProjectNav onNavigate={onClose} />
-        <nav aria-label="移动更多导航" className="secondary-nav">
-          <NavItem to="/archive" label="归档" icon={<Archive size={17} />} onClick={onClose} />
-          <NavItem to="/settings" label="设置" icon={<Settings size={17} />} onClick={onClose} />
-        </nav>
+        <div className="mobile-sidebar-scroll">
+          <nav aria-label="移动主导航" className="primary-nav">
+            {navItems.map(({ to, label, icon: Icon }) => (
+              <NavItem key={to} to={to} label={label} icon={<Icon size={17} />} onClick={onClose} />
+            ))}
+          </nav>
+          <div className="nav-section-label">项目</div>
+          <ProjectNav onNavigate={onClose} />
+          <nav aria-label="移动更多导航" className="secondary-nav">
+            <NavItem to="/archive" label="归档" icon={<Archive size={17} />} onClick={onClose} />
+            <NavItem to="/settings" label="设置" icon={<Settings size={17} />} onClick={onClose} />
+          </nav>
+        </div>
       </aside>
     </div>
   );
@@ -1152,7 +1217,7 @@ function ProjectNav({ onNavigate }: { onNavigate?: () => void } = {}) {
   }, [reload]);
   return (
     <div className="project-nav">
-      {projects.slice(0, 6).map((project) => (
+      {projects.map((project) => (
         <NavLink
           key={project.id}
           to={`/projects/${project.id}`}
@@ -1475,6 +1540,7 @@ function Modal({
   state?: PresenceState;
 }) {
   const interactive = state !== 'exiting';
+  const titleId = useId();
   const modalRef = useRef<HTMLElement | null>(null);
   const previousFocus = useRef<HTMLElement | null>(
     typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
@@ -1500,6 +1566,7 @@ function Modal({
         return;
       }
       if (event.key !== 'Tab') return;
+      if (!modal.contains(document.activeElement)) return;
       const elements = focusable();
       if (!elements.length) return;
       const firstElement = elements[0]!;
@@ -1512,13 +1579,26 @@ function Modal({
         firstElement.focus();
       }
     };
-    modal.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown);
     return () => {
-      modal.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keydown', onKeyDown);
       focusToRestore?.focus();
     };
   }, [interactive, onClose]);
-  return (
+  useEffect(() => {
+    if (!interactive) return;
+    document.documentElement.classList.add('modal-open');
+    const previousOverflow = document.body.style.overflow;
+    const previousTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    return () => {
+      document.documentElement.classList.remove('modal-open');
+      document.body.style.overflow = previousOverflow;
+      document.body.style.touchAction = previousTouchAction;
+    };
+  }, [interactive]);
+  const content = (
     <div
       className={`modal-layer presence-${state}`}
       aria-hidden={!interactive}
@@ -1532,17 +1612,80 @@ function Modal({
         className={`modal presence-${state}`}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="modal-title"
+        aria-labelledby={titleId}
+        onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="modal-header">
-          <h2 id="modal-title">{title}</h2>
-          <button className="icon-button" onClick={onClose} aria-label="关闭">
+          <h2 id={titleId}>{title}</h2>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="关闭">
             <X size={18} />
           </button>
         </div>
         {children}
       </section>
     </div>
+  );
+  return typeof document === 'undefined' ? content : createPortal(content, document.body);
+}
+
+function ConfirmDialog({
+  title,
+  description,
+  confirmLabel,
+  cancelLabel = '取消',
+  danger = true,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  title: string;
+  description: ReactNode;
+  confirmLabel: string;
+  cancelLabel?: string;
+  danger?: boolean;
+  error?: string;
+  onClose: () => void;
+  onConfirm: () => Promise<boolean | void> | boolean | void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [localError, setLocalError] = useState('');
+  const confirm = async () => {
+    if (busy) return;
+    setBusy(true);
+    setLocalError('');
+    try {
+      const result = await onConfirm();
+      if (result !== false) onClose();
+    } catch (cause) {
+      setLocalError(cause instanceof ApiError ? cause.message : '操作失败，请重试');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title={title} onClose={busy ? () => undefined : onClose}>
+      <div className="confirm-dialog">
+        <p>{description}</p>
+        {(error || localError) && (
+          <div className="form-error" role="alert">
+            {error || localError}
+          </div>
+        )}
+        <div className="confirm-actions">
+          <M3Button variant="text" onClick={onClose} disabled={busy}>
+            {cancelLabel}
+          </M3Button>
+          <M3Button
+            variant={danger ? 'filled' : 'tonal'}
+            className={danger ? 'danger-confirm-button' : undefined}
+            onClick={() => void confirm()}
+            disabled={busy}
+          >
+            {busy ? '处理中…' : confirmLabel}
+          </M3Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -1731,8 +1874,11 @@ function TaskRow({
   const [busy, setBusy] = useState(false);
   const [menu, setMenu] = useState(false);
   const [error, setError] = useState('');
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [placementTargetOpen, setPlacementTargetOpen] = useState(false);
   const longPressRef = useRef<number | null>(null);
+  const closeMenu = useCallback(() => setMenu(false), []);
+  const menuRef = useDismissibleMenu(menu, closeMenu);
   const cancelLongPress = () => {
     if (longPressRef.current !== null) {
       window.clearTimeout(longPressRef.current);
@@ -1769,8 +1915,8 @@ function TaskRow({
       setBusy(false);
     }
   };
-  const archive = async () => {
-    if (busy) return;
+  const archive = async (): Promise<boolean> => {
+    if (busy) return false;
     setBusy(true);
     setError('');
     try {
@@ -1778,8 +1924,10 @@ function TaskRow({
       await mutation('POST', `/tasks/${task.id}/${action}`, { baseVersion: task.version });
       onChanged?.();
       window.dispatchEvent(new Event('devtodo:data-changed'));
+      return true;
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '归档操作失败');
+      return false;
     } finally {
       setBusy(false);
       setMenu(false);
@@ -1872,34 +2020,57 @@ function TaskRow({
           <span className="reference-id">{task.referenceId || '待同步分配'}</span>
           {task.priority !== 'NONE' && <PriorityPill priority={task.priority} />}
           {task.status === 'IN_PROGRESS' && <span className="status-label">进行中</span>}
+          {task.archivedAt && <span className="status-label">已归档</span>}
         </span>
       </button>
-      <div className="task-actions">
-        <M3IconButton
-          className="icon-button task-schedule-action"
-          label="安排到时间点"
-          onClick={() => setPlacementTargetOpen(true)}
-        >
-          <CalendarDays size={16} />
-        </M3IconButton>
+      <div ref={menuRef} className="task-actions">
+        {task.archivedAt && (
+          <M3IconButton
+            className="icon-button"
+            label="恢复任务"
+            onClick={() => void archive()}
+            disabled={busy}
+          >
+            <Undo2 size={16} />
+          </M3IconButton>
+        )}
+        {!task.archivedAt && (
+          <M3IconButton
+            className="icon-button task-schedule-action"
+            label="安排到时间点"
+            onClick={() => setPlacementTargetOpen(true)}
+          >
+            <CalendarDays size={16} />
+          </M3IconButton>
+        )}
         <M3IconButton
           className="icon-button"
           label="更多任务操作（也可长按任务行）"
+          aria-expanded={menu}
+          aria-haspopup="menu"
           onClick={() => setMenu(!menu)}
         >
           <MoreHorizontal size={17} />
         </M3IconButton>
         {menu && (
-          <div className="row-menu">
-            <button onClick={() => void archive()}>
+          <div className="row-menu" role="menu">
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenu(false);
+                if (task.archivedAt) void archive();
+                else setArchiveConfirmOpen(true);
+              }}
+            >
               {task.archivedAt ? <Undo2 size={15} /> : <Archive size={15} />}
               {task.archivedAt ? '恢复任务' : '归档任务'}
             </button>
-            <button onClick={() => void duplicate()}>
+            <button role="menuitem" onClick={() => void duplicate()}>
               <Copy size={15} />
               复制任务
             </button>
             <button
+              role="menuitem"
               onClick={() => {
                 onOpen(task.id);
                 setMenu(false);
@@ -1908,15 +2079,18 @@ function TaskRow({
               <Link2 size={15} />
               打开详情
             </button>
-            <button
-              onClick={() => {
-                setMenu(false);
-                setPlacementTargetOpen(true);
-              }}
-            >
-              <Target size={15} />
-              安排到时间点
-            </button>
+            {!task.archivedAt && (
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenu(false);
+                  setPlacementTargetOpen(true);
+                }}
+              >
+                <Target size={15} />
+                安排到时间点
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1933,6 +2107,16 @@ function TaskRow({
             setPlacementTargetOpen(false);
             onChanged?.();
           }}
+        />
+      )}
+      {archiveConfirmOpen && (
+        <ConfirmDialog
+          title="归档任务"
+          description={`确定要归档“${task.title}”吗？任务不会被删除，之后可以在归档中心恢复。`}
+          confirmLabel="归档任务"
+          error={error}
+          onClose={() => setArchiveConfirmOpen(false)}
+          onConfirm={archive}
         />
       )}
     </div>
@@ -1959,8 +2143,10 @@ function TaskList({
   emptyTitle?: string;
   emptyDescription?: string;
 }) {
+  const [dropError, setDropError] = useState('');
+  const [dropBusy, setDropBusy] = useState(false);
   const handleDrop = async (event: ReactDragEvent<HTMLElement>, targetTaskId: string) => {
-    if (!onMove) return;
+    if (!onMove || dropBusy) return;
     const sourceTaskId = event.dataTransfer.getData('application/x-devtodo-task');
     if (!sourceTaskId || sourceTaskId === targetTaskId) return;
     const nextIds = reorderIds(
@@ -1969,34 +2155,49 @@ function TaskList({
       targetTaskId,
     );
     if (nextIds.every((id, index) => id === tasks[index]?.id)) return;
-    await mutation('POST', '/tasks/reorder', { ids: nextIds });
-    onChanged?.();
-    window.dispatchEvent(new Event('devtodo:data-changed'));
+    setDropBusy(true);
+    setDropError('');
+    try {
+      await mutation('POST', '/tasks/reorder', { ids: nextIds });
+      onChanged?.();
+      window.dispatchEvent(new Event('devtodo:data-changed'));
+    } catch (cause) {
+      setDropError(cause instanceof ApiError ? cause.message : '任务排序失败，请重试');
+    } finally {
+      setDropBusy(false);
+    }
   };
   if (!tasks.length)
     return (
       <EmptyState icon={<Sparkles size={20} />} title={emptyTitle} description={emptyDescription} />
     );
   return (
-    <div
-      className={`task-list ${onMove ? 'task-drop-target' : ''}`}
-      onDragOver={(event) => {
-        if (onMove) event.preventDefault();
-      }}
-    >
-      {tasks.map((task, index) => (
-        <TaskRow
-          key={task.id}
-          task={task}
-          onOpen={onOpenTask}
-          onChanged={onChanged}
-          onMove={onMove ? (direction) => onMove(task.id, direction) : undefined}
-          onDrop={onMove ? (event) => void handleDrop(event, task.id) : undefined}
-          canMoveUp={index > 0}
-          canMoveDown={index < tasks.length - 1}
-        />
-      ))}
-    </div>
+    <>
+      {dropError && (
+        <div className="inline-error" role="alert">
+          {dropError}
+        </div>
+      )}
+      <div
+        className={`task-list ${onMove ? 'task-drop-target' : ''}`}
+        onDragOver={(event) => {
+          if (onMove && !dropBusy) event.preventDefault();
+        }}
+      >
+        {tasks.map((task, index) => (
+          <TaskRow
+            key={task.id}
+            task={task}
+            onOpen={onOpenTask}
+            onChanged={onChanged}
+            onMove={onMove ? (direction) => onMove(task.id, direction) : undefined}
+            onDrop={onMove ? (event) => void handleDrop(event, task.id) : undefined}
+            canMoveUp={index > 0}
+            canMoveDown={index < tasks.length - 1}
+          />
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -2005,20 +2206,32 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const localDate = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
   const loader = useCallback(async () => {
     const point = await createDate(localDate);
-    const [items, reachedEvents] = await Promise.all([
+    const [items, reachedEvents, eventCountResponse] = await Promise.all([
       requestAll<PlacementWithTask>(`/time-points/${point.id}/placements`),
       requestAll<TimePointDto>('/time-points?type=EVENT&archived=false'),
+      request<{ items: TimePointPlacementCountDto[] }>(
+        '/time-points/placement-counts?type=EVENT&archived=false',
+      ),
     ]);
     return {
       point,
       items,
       reachedEvents: reachedEvents.filter((candidate) => candidate.reachedAt),
+      eventCounts: Object.fromEntries(
+        eventCountResponse.items.map((item) => [item.timePointId, item]),
+      ),
     };
   }, [localDate]);
-  const { data, loading, error, reload } = useReloadable(loader, {
+  const { data, loading, error, reload } = useReloadable<{
+    point: TimePointDto | null;
+    items: PlacementWithTask[];
+    reachedEvents: TimePointDto[];
+    eventCounts: Record<string, TimePointPlacementCountDto>;
+  }>(loader, {
     point: null as TimePointDto | null,
     items: [] as PlacementWithTask[],
     reachedEvents: [] as TimePointDto[],
+    eventCounts: {} as Record<string, TimePointPlacementCountDto>,
   });
   const [rollover, setRollover] = useState<{ operationId: string; count: number } | null>(null);
   const [rolloverError, setRolloverError] = useState('');
@@ -2143,7 +2356,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                   <strong>{event.title}</strong>
                   <small>查看其中未完成的安排</small>
                 </span>
-                <EventCount pointId={event.id} />
+                <EventCount count={data.eventCounts[event.id]?.openCount} />
                 <ChevronRight size={16} />
               </NavLink>
             ))}
@@ -2166,6 +2379,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           <SectionTitle title="今天要做" count={active.length} />
           <PlacementList
             items={active}
+            reorderItems={data.items}
             pointId={data.point?.id}
             onOpenTask={onOpenTask}
             onChanged={() => void reload()}
@@ -2204,7 +2418,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               {done.map((item) => (
                 <PlacementRow
                   key={item.id}
-                  placementId={item.id}
+                  placement={item}
                   task={item.task}
                   onOpen={onOpenTask}
                   onChanged={() => void reload()}
@@ -2329,6 +2543,7 @@ function InboxPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
 
 function ProjectPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const { projectId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const loader = useCallback(async () => {
     if (!projectId) throw new Error('缺少项目');
     const [project, tasks] = await Promise.all([
@@ -2341,9 +2556,26 @@ function ProjectPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
     project: null as ProjectDto | null,
     tasks: [] as TaskDto[],
   });
-  const [tab, setTab] = useState<'FEATURE' | 'MISC'>('FEATURE');
   const [editOpen, setEditOpen] = useState(false);
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState('');
+  const tab = searchParams.get('category') === 'MISC' ? 'MISC' : 'FEATURE';
+  const statusParam = searchParams.get('status');
+  const status: 'ALL' | 'TODO' | 'IN_PROGRESS' | 'DONE' =
+    statusParam === 'TODO' || statusParam === 'IN_PROGRESS' || statusParam === 'DONE'
+      ? statusParam
+      : 'ALL';
+  const updateFilter = (key: 'category' | 'status', value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if ((key === 'category' && value === 'FEATURE') || (key === 'status' && value === 'ALL'))
+      next.delete(key);
+    else next.set(key, value);
+    setSearchParams(next, { replace: true });
+  };
+  const visibleTasks = data.tasks.filter(
+    (task) => task.category === tab && (status === 'ALL' || task.status === status),
+  );
   const moveTask = async (taskId: string, direction: 'up' | 'down') => {
     const group = data.tasks.filter((task) => task.category === tab && !task.archivedAt);
     const index = group.findIndex((task) => task.id === taskId);
@@ -2355,8 +2587,9 @@ function ProjectPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
     await reload();
     window.dispatchEvent(new Event('devtodo:data-changed'));
   };
-  const archiveProject = async () => {
-    if (!data.project) return;
+  const archiveProject = async (): Promise<boolean> => {
+    if (!data.project) return false;
+    setActionBusy(true);
     try {
       setActionError('');
       const action = data.project.archivedAt ? 'restore' : 'archive';
@@ -2365,8 +2598,12 @@ function ProjectPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       });
       await reload();
       window.dispatchEvent(new Event('devtodo:data-changed'));
+      return true;
     } catch (cause) {
       setActionError(cause instanceof ApiError ? cause.message : '项目操作失败');
+      return false;
+    } finally {
+      setActionBusy(false);
     }
   };
   if (loading && !data.project)
@@ -2387,6 +2624,7 @@ function ProjectPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               <M3Button
                 variant="outlined"
                 leadingIcon={<Pencil size={16} />}
+                disabled={Boolean(data.project.archivedAt)}
                 onClick={() => setEditOpen(true)}
               >
                 编辑项目
@@ -2394,7 +2632,10 @@ function ProjectPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               <M3Button
                 variant="outlined"
                 leadingIcon={data.project.archivedAt ? <Undo2 size={16} /> : <Archive size={16} />}
-                onClick={() => void archiveProject()}
+                disabled={actionBusy}
+                onClick={() =>
+                  data.project?.archivedAt ? void archiveProject() : setArchiveConfirmOpen(true)
+                }
               >
                 {data.project.archivedAt ? '恢复项目' : '归档项目'}
               </M3Button>
@@ -2403,11 +2644,24 @@ function ProjectPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         }
       />
       {error && <ErrorState error={error} onRetry={() => void reload()} />}
-      {actionError && <ErrorState error={actionError} onRetry={() => void archiveProject()} />}
+      {data.project?.archivedAt && (
+        <div className="archive-notice" role="status">
+          <Archive size={15} />
+          <span>项目已归档。项目任务仍然保留；恢复项目后才能继续添加任务或编辑项目。</span>
+        </div>
+      )}
+      {actionError && (
+        <ErrorState
+          error={actionError}
+          onRetry={() =>
+            void (data.project?.archivedAt ? archiveProject() : setArchiveConfirmOpen(true))
+          }
+        />
+      )}
       <M3SegmentedControl
         label="项目任务类型"
         value={tab}
-        onChange={setTab}
+        onChange={(next) => updateFilter('category', next)}
         options={[
           {
             value: 'FEATURE',
@@ -2421,12 +2675,37 @@ function ProjectPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           },
         ]}
       />
-      <QuickCapture projectId={projectId} category={tab} onCreated={() => void reload()} />
+      <M3SegmentedControl
+        label="项目任务状态"
+        value={status}
+        onChange={(next) => updateFilter('status', next)}
+        options={[
+          { value: 'ALL', label: '全部', count: data.tasks.length },
+          {
+            value: 'TODO',
+            label: '待处理',
+            count: data.tasks.filter((task) => task.status === 'TODO').length,
+          },
+          {
+            value: 'IN_PROGRESS',
+            label: '进行中',
+            count: data.tasks.filter((task) => task.status === 'IN_PROGRESS').length,
+          },
+          {
+            value: 'DONE',
+            label: '已完成',
+            count: data.tasks.filter((task) => task.status === 'DONE').length,
+          },
+        ]}
+      />
+      {!data.project?.archivedAt && (
+        <QuickCapture projectId={projectId} category={tab} onCreated={() => void reload()} />
+      )}
       <TaskList
-        tasks={data.tasks.filter((task) => task.category === tab)}
+        tasks={visibleTasks}
         onOpenTask={onOpenTask}
         onChanged={() => void reload()}
-        onMove={(taskId, direction) => moveTask(taskId, direction)}
+        onMove={status === 'ALL' ? (taskId, direction) => moveTask(taskId, direction) : undefined}
         emptyTitle={tab === 'FEATURE' ? '还没有功能任务' : '项目杂项为空'}
         emptyDescription="从一行输入开始，之后可以在详情中补充备注和安排。"
       />
@@ -2439,6 +2718,16 @@ function ProjectPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             void reload();
             window.dispatchEvent(new Event('devtodo:data-changed'));
           }}
+        />
+      )}
+      {archiveConfirmOpen && data.project && (
+        <ConfirmDialog
+          title="归档项目"
+          description={`确定要归档“${data.project.name}”吗？项目会从默认列表隐藏，但其中的 ${data.tasks.length} 个任务不会被删除或自动归档。你之后可以在归档中心恢复项目。`}
+          confirmLabel="归档项目"
+          error={actionError}
+          onClose={() => setArchiveConfirmOpen(false)}
+          onConfirm={archiveProject}
         />
       )}
     </div>
@@ -2455,9 +2744,13 @@ function EditProjectModal({
   onSaved: () => void;
 }) {
   const [name, setName] = useState(project.name);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError('');
     try {
       await mutation('PATCH', `/projects/${project.id}`, {
         name,
@@ -2466,6 +2759,8 @@ function EditProjectModal({
       onSaved();
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '保存失败');
+    } finally {
+      setBusy(false);
     }
   };
   return (
@@ -2478,8 +2773,8 @@ function EditProjectModal({
             {error}
           </div>
         )}
-        <button className="primary-button wide" disabled={!name.trim()}>
-          保存项目
+        <button className="primary-button wide" disabled={busy || !name.trim()}>
+          {busy ? '保存中…' : '保存项目'}
         </button>
       </form>
     </Modal>
@@ -2487,18 +2782,47 @@ function EditProjectModal({
 }
 
 function ProjectsPage() {
-  const loader = useCallback(() => requestAll<ProjectDto>('/projects'), []);
-  const { data, loading, error, reload } = useReloadable(loader, []);
+  const loader = useCallback(async () => {
+    const [projects, countResponse] = await Promise.all([
+      requestAll<ProjectDto>('/projects'),
+      request<{ items: ProjectTaskCountDto[] }>('/projects/task-counts'),
+    ]);
+    return {
+      projects,
+      counts: Object.fromEntries(countResponse.items.map((item) => [item.projectId, item])),
+    };
+  }, []);
+  const { data, loading, error, reload } = useReloadable(loader, {
+    projects: [] as ProjectDto[],
+    counts: {} as Record<string, ProjectTaskCountDto>,
+  });
   const [open, setOpen] = useState(false);
+  const [editProject, setEditProject] = useState<ProjectDto | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<ProjectDto | null>(null);
+  const [actionError, setActionError] = useState('');
   const moveProject = async (projectId: string, direction: 'up' | 'down') => {
-    const index = data.findIndex((project) => project.id === projectId);
+    const index = data.projects.findIndex((project) => project.id === projectId);
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (index < 0 || targetIndex < 0 || targetIndex >= data.length) return;
-    const next = [...data];
+    if (index < 0 || targetIndex < 0 || targetIndex >= data.projects.length) return;
+    const next = [...data.projects];
     [next[index], next[targetIndex]] = [next[targetIndex]!, next[index]!];
     await mutation('POST', '/projects/reorder', { ids: next.map((project) => project.id) });
     await reload();
     window.dispatchEvent(new Event('devtodo:data-changed'));
+  };
+  const archiveProject = async (project: ProjectDto): Promise<boolean> => {
+    try {
+      setActionError('');
+      await mutation('POST', `/projects/${project.id}/archive`, {
+        baseVersion: project.version,
+      });
+      await reload();
+      window.dispatchEvent(new Event('devtodo:data-changed'));
+      return true;
+    } catch (cause) {
+      setActionError(cause instanceof ApiError ? cause.message : '项目归档失败');
+      return false;
+    }
   };
   return (
     <div className="page">
@@ -2507,18 +2831,28 @@ function ProjectsPage() {
         title="项目"
         description="每个项目有固定的功能与杂项两组任务。"
         action={
-          <button className="primary-button" onClick={() => setOpen(true)}>
-            <Plus size={16} />
-            新建项目
-          </button>
+          <div className="header-actions">
+            <NavLink to="/archive" className="secondary-button">
+              查看归档
+            </NavLink>
+            <button className="primary-button" onClick={() => setOpen(true)}>
+              <Plus size={16} />
+              新建项目
+            </button>
+          </div>
         }
       />
       {error && <ErrorState error={error} onRetry={() => void reload()} />}
+      {actionError && (
+        <div className="inline-error" role="alert">
+          {actionError}
+        </div>
+      )}
       {loading ? (
         <SkeletonList />
-      ) : data.length ? (
+      ) : data.projects.length ? (
         <div className="project-grid">
-          {data.map((project, index) => (
+          {data.projects.map((project, index) => (
             <div key={project.id} className="project-card-shell">
               <NavLink to={`/projects/${project.id}`} className="project-card">
                 <div className="project-card-top">
@@ -2528,8 +2862,24 @@ function ProjectsPage() {
                   <span className="reference-id">{project.taskPrefix}</span>
                 </div>
                 <h2>{project.name}</h2>
-                <ProjectCount projectId={project.id} />
+                <ProjectCount count={data.counts[project.id]} />
               </NavLink>
+              <div className="project-card-actions" aria-label={`${project.name} 项目操作`}>
+                <M3IconButton
+                  className="icon-button"
+                  label={`编辑${project.name}`}
+                  onClick={() => setEditProject(project)}
+                >
+                  <Pencil size={15} />
+                </M3IconButton>
+                <M3IconButton
+                  className="icon-button"
+                  label={`归档${project.name}`}
+                  onClick={() => setArchiveTarget(project)}
+                >
+                  <Archive size={15} />
+                </M3IconButton>
+              </div>
               <div className="card-reorder-actions" aria-label="调整项目顺序">
                 <button
                   className="icon-button"
@@ -2543,7 +2893,7 @@ function ProjectsPage() {
                   className="icon-button"
                   aria-label="下移项目"
                   onClick={() => void moveProject(project.id, 'down')}
-                  disabled={index === data.length - 1}
+                  disabled={index === data.projects.length - 1}
                 >
                   <ChevronDown size={15} />
                 </button>
@@ -2574,25 +2924,35 @@ function ProjectsPage() {
           }}
         />
       )}
+      {editProject && (
+        <EditProjectModal
+          project={editProject}
+          onClose={() => setEditProject(null)}
+          onSaved={() => {
+            setEditProject(null);
+            void reload();
+            window.dispatchEvent(new Event('devtodo:data-changed'));
+          }}
+        />
+      )}
+      {archiveTarget && (
+        <ConfirmDialog
+          title="归档项目"
+          description={`确定要归档“${archiveTarget.name}”吗？项目会从默认列表隐藏，但其中的任务不会被删除或自动归档。你之后可以在归档中心恢复项目。`}
+          confirmLabel="归档项目"
+          error={actionError}
+          onClose={() => setArchiveTarget(null)}
+          onConfirm={() => archiveProject(archiveTarget)}
+        />
+      )}
     </div>
   );
 }
 
-function ProjectCount({ projectId }: { projectId: string }) {
-  const [count, setCount] = useState<{ open: number; done: number } | null>(null);
-  useEffect(() => {
-    void requestAll<TaskDto>(`/tasks?projectId=${projectId}`)
-      .then((items) =>
-        setCount({
-          open: items.filter((task) => task.status !== 'DONE').length,
-          done: items.filter((task) => task.status === 'DONE').length,
-        }),
-      )
-      .catch(() => undefined);
-  }, [projectId]);
+function ProjectCount({ count }: { count?: ProjectTaskCountDto }) {
   return (
     <p className="project-count">
-      {count ? `${count.open} 项未完成 · ${count.done} 项已完成` : '读取任务…'}
+      {count ? `${count.openCount} 项未完成 · ${count.doneCount} 项已完成` : '读取任务…'}
     </p>
   );
 }
@@ -2606,9 +2966,13 @@ function CreateProjectModal({
 }) {
   const [name, setName] = useState('');
   const [prefix, setPrefix] = useState('');
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError('');
     try {
       await request('/projects', {
         method: 'POST',
@@ -2617,6 +2981,8 @@ function CreateProjectModal({
       onCreated();
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '创建失败');
+    } finally {
+      setBusy(false);
     }
   };
   return (
@@ -2631,8 +2997,8 @@ function CreateProjectModal({
         />
         <p className="field-help">2–10 位大写字母或数字，以字母开头。创建任务后代号不可修改。</p>
         {error && <div className="form-error">{error}</div>}
-        <button className="primary-button wide" disabled={!name.trim() || !prefix.trim()}>
-          创建项目
+        <button className="primary-button wide" disabled={busy || !name.trim() || !prefix.trim()}>
+          {busy ? '创建中…' : '创建项目'}
         </button>
       </form>
     </Modal>
@@ -2652,19 +3018,26 @@ function SkeletonList() {
 
 function EventsPage() {
   const loader = useCallback(async () => {
-    const [active, archived] = await Promise.all([
+    const [active, archived, countResponse] = await Promise.all([
       requestAll<TimePointDto>('/time-points?type=EVENT&archived=false'),
       requestAll<TimePointDto>('/time-points?type=EVENT&archived=true'),
+      request<{ items: TimePointPlacementCountDto[] }>('/time-points/placement-counts?type=EVENT'),
     ]);
-    return { active, archived };
+    return {
+      active,
+      archived,
+      counts: Object.fromEntries(countResponse.items.map((item) => [item.timePointId, item])),
+    };
   }, []);
   const { data, loading, error, reload } = useReloadable(loader, {
     active: [] as TimePointDto[],
     archived: [] as TimePointDto[],
+    counts: {} as Record<string, TimePointPlacementCountDto>,
   });
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<TimePointDto | null>(null);
   const [actionError, setActionError] = useState('');
+  const [restoreBusyId, setRestoreBusyId] = useState<string | null>(null);
   const moveEvent = async (eventId: string, direction: 'up' | 'down') => {
     try {
       const index = data.active.findIndex((point) => point.id === eventId);
@@ -2681,6 +3054,19 @@ function EventsPage() {
       setActionError(cause instanceof ApiError ? cause.message : '时间点排序失败，请重试');
     }
   };
+  const restoreEvent = async (point: TimePointDto) => {
+    if (restoreBusyId) return;
+    setRestoreBusyId(point.id);
+    setActionError('');
+    try {
+      await restoreEntity(`/time-points/${point.id}`, point.version);
+      await reload();
+    } catch (cause) {
+      setActionError(cause instanceof ApiError ? cause.message : '恢复时间点失败，请重试');
+    } finally {
+      setRestoreBusyId(null);
+    }
+  };
   const renderEvent = (point: TimePointDto) => {
     const index = data.active.findIndex((candidate) => candidate.id === point.id);
     return (
@@ -2691,7 +3077,7 @@ function EventsPage() {
             <strong>{point.title}</strong>
             <small>{point.reachedAt ? `已于 ${formatTime(point.reachedAt)} 到达` : '等待中'}</small>
           </span>
-          <EventCount pointId={point.id} />
+          <EventCount count={data.counts[point.id]?.openCount} />
           <ChevronRight size={16} />
         </NavLink>
         <div className="timeline-actions" aria-label="时间点操作">
@@ -2766,9 +3152,18 @@ function EventsPage() {
                       <strong>{point.title}</strong>
                       <small>已归档 · {point.reachedAt ? '曾到达' : '未到达'}</small>
                     </span>
-                    <EventCount pointId={point.id} />
+                    <EventCount count={data.counts[point.id]?.openCount} />
                     <ChevronRight size={16} />
                   </NavLink>
+                  <div className="timeline-actions archived-timeline-actions">
+                    <button
+                      className="secondary-button small"
+                      disabled={restoreBusyId === point.id}
+                      onClick={() => void restoreEvent(point)}
+                    >
+                      {restoreBusyId === point.id ? '恢复中…' : '恢复时间点'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -2813,14 +3208,20 @@ function EventsPage() {
 
 function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [title, setTitle] = useState('');
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError('');
     try {
       await createEvent(title);
       onCreated();
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '创建失败');
+    } finally {
+      setBusy(false);
     }
   };
   return (
@@ -2831,8 +3232,8 @@ function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreat
           这是一个事件节点，不是截止日期；它的到达状态与任务完成状态独立。
         </p>
         {error && <div className="form-error">{error}</div>}
-        <button className="primary-button wide" disabled={!title.trim()}>
-          创建时间点
+        <button className="primary-button wide" disabled={busy || !title.trim()}>
+          {busy ? '创建中…' : '创建时间点'}
         </button>
       </form>
     </Modal>
@@ -2885,16 +3286,8 @@ function EditEventModal({
   );
 }
 
-function EventCount({ pointId }: { pointId: string }) {
-  const [count, setCount] = useState('');
-  useEffect(() => {
-    void requestAll<{ task: TaskDto }>(`/time-points/${pointId}/placements`)
-      .then((items) =>
-        setCount(`${items.filter(({ task }) => task.status !== 'DONE').length} 项未完成`),
-      )
-      .catch(() => undefined);
-  }, [pointId]);
-  return <span className="event-count">{count}</span>;
+function EventCount({ count }: { count?: number }) {
+  return <span className="event-count">{count === undefined ? '—' : `${count} 项未完成`}</span>;
 }
 
 function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
@@ -2904,6 +3297,8 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const [error, setError] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
   const load = useCallback(async () => {
     if (!eventId) return;
     try {
@@ -2936,7 +3331,8 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         <SkeletonList />
       </div>
     );
-  const archiveOrReach = async () => {
+  const changeEventState = async (): Promise<boolean> => {
+    setActionBusy(true);
     try {
       if (point.archivedAt)
         await mutation('POST', `/time-points/${point.id}/restore`, { baseVersion: point.version });
@@ -2945,8 +3341,12 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       else await mutation('POST', `/time-points/${point.id}/reach`, { baseVersion: point.version });
       await load();
       window.dispatchEvent(new Event('devtodo:data-changed'));
+      return true;
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '操作失败');
+      return false;
+    } finally {
+      setActionBusy(false);
     }
   };
   const movePlacement = async (placementId: string, direction: 'up' | 'down') => {
@@ -2976,6 +3376,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             <M3Button
               variant="outlined"
               leadingIcon={<Pencil size={16} />}
+              disabled={Boolean(point.archivedAt) || actionBusy}
               onClick={() => setEditOpen(true)}
             >
               编辑时间点
@@ -2991,7 +3392,12 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                   <Check size={16} />
                 )
               }
-              onClick={() => void archiveOrReach()}
+              disabled={actionBusy}
+              onClick={() =>
+                point.archivedAt || !point.reachedAt
+                  ? void changeEventState()
+                  : setArchiveConfirmOpen(true)
+              }
             >
               {point.archivedAt ? '恢复时间点' : point.reachedAt ? '归档时间点' : '标记已到达'}
             </M3Button>
@@ -3013,6 +3419,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             variant="tonal"
             leadingIcon={<Plus size={15} />}
             onClick={() => setShowAdd(true)}
+            disabled={Boolean(point.archivedAt)}
           >
             从任务库加入
           </M3Button>
@@ -3023,7 +3430,8 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         pointId={point.id}
         onOpenTask={onOpenTask}
         onChanged={() => void load()}
-        onMove={movePlacement}
+        onMove={point.archivedAt ? undefined : movePlacement}
+        readOnly={Boolean(point.archivedAt)}
         emptyTitle="这个时间点还没有安排"
         emptyDescription="从任务库加入已有任务；它不会创建新的 Task。"
         emptyAction={
@@ -3053,12 +3461,22 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           }}
         />
       )}
+      {archiveConfirmOpen && (
+        <ConfirmDialog
+          title="归档时间点"
+          description={`确定要归档“${point.title ?? ''}”吗？其中的任务安排会保留，但这个时间点将从默认列表隐藏；之后可以从归档中心恢复。`}
+          confirmLabel="归档时间点"
+          error={error}
+          onClose={() => setArchiveConfirmOpen(false)}
+          onConfirm={changeEventState}
+        />
+      )}
     </div>
   );
 }
 
 function PlacementRow({
-  placementId,
+  placement,
   task,
   onOpen,
   onChanged,
@@ -3067,8 +3485,9 @@ function PlacementRow({
   canMoveUp = false,
   canMoveDown = false,
   onToggleStatus = false,
+  readOnly = false,
 }: {
-  placementId: string;
+  placement: PlacementDto;
   task: TaskDto;
   onOpen: (id: string) => void;
   onChanged: () => void;
@@ -3077,13 +3496,15 @@ function PlacementRow({
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   onToggleStatus?: boolean;
+  readOnly?: boolean;
 }) {
   const [menu, setMenu] = useState(false);
-  const [placement, setPlacement] = useState<PlacementDto | null>(null);
   const [targetMode, setTargetMode] = useState<'copy' | 'move' | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const longPressRef = useRef<number | null>(null);
+  const closeMenu = useCallback(() => setMenu(false), []);
+  const menuRef = useDismissibleMenu(menu, closeMenu);
   const cancelLongPress = () => {
     if (longPressRef.current !== null) {
       window.clearTimeout(longPressRef.current);
@@ -3103,24 +3524,11 @@ function PlacementRow({
       longPressRef.current = null;
     }, 550);
   };
-  const loadPlacement = useCallback(async () => {
-    const detail = await request<{ task: TaskDto; placements: PlacementDto[] }>(
-      `/tasks/${task.id}`,
-    );
-    const next = detail.placements.find((item) => item.id === placementId);
-    if (!next) throw new Error('安排不存在');
-    setPlacement(next);
-    return next;
-  }, [placementId, task.id]);
-  useEffect(() => {
-    void loadPlacement().catch(() => undefined);
-  }, [loadPlacement]);
   const remove = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      const current = placement ?? (await loadPlacement());
-      await mutation('DELETE', `/placements/${placementId}`, { baseVersion: current.version });
+      await mutation('DELETE', `/placements/${placement.id}`, { baseVersion: placement.version });
       onChanged();
       window.dispatchEvent(new Event('devtodo:data-changed'));
       setMenu(false);
@@ -3162,22 +3570,23 @@ function PlacementRow({
   return (
     <div
       className="task-row"
-      draggable
+      draggable={!readOnly}
       onPointerDown={startLongPress}
       onPointerUp={cancelLongPress}
       onPointerLeave={cancelLongPress}
       onPointerCancel={cancelLongPress}
       onDragStart={(event) => {
+        if (readOnly) return;
         event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('application/x-devtodo-placement', placementId);
+        event.dataTransfer.setData('application/x-devtodo-placement', placement.id);
         event.dataTransfer.setData('application/x-devtodo-task', task.id);
         event.dataTransfer.setData('text/plain', task.id);
       }}
       onDragOver={(event) => {
-        if (onDrop) event.preventDefault();
+        if (onDrop && !readOnly) event.preventDefault();
       }}
       onDrop={(event) => {
-        if (!onDrop) return;
+        if (!onDrop || readOnly) return;
         event.preventDefault();
         event.stopPropagation();
         onDrop(event);
@@ -3187,12 +3596,12 @@ function PlacementRow({
         className="task-status-button"
         aria-label={onToggleStatus ? taskStatusActionLabel(task.status) : '打开任务'}
         title={onToggleStatus ? taskStatusActionLabel(task.status) : '打开任务'}
-        onClick={() => (onToggleStatus ? void toggleStatus() : onOpen(task.id))}
+        onClick={() => (onToggleStatus && !readOnly ? void toggleStatus() : onOpen(task.id))}
         disabled={busy}
       >
         <StatusIcon status={task.status} />
       </button>
-      {onMove && (
+      {onMove && !readOnly && (
         <div className="task-reorder-actions" aria-label="调整安排顺序">
           <button
             className="icon-button"
@@ -3218,43 +3627,49 @@ function PlacementRow({
           <span className="reference-id">{task.referenceId}</span>
         </span>
       </button>
-      <div className="task-actions">
-        <button
-          className="icon-button"
-          aria-label="安排操作（也可长按安排行）"
-          onClick={() => setMenu(!menu)}
-        >
-          <MoreHorizontal size={17} />
-        </button>
-        {menu && (
-          <div className="row-menu">
-            <button onClick={() => void remove()}>
-              <Trash2 size={15} />
-              从此处移除
-            </button>
-            <button
-              onClick={() => {
-                setMenu(false);
-                setTargetMode('move');
-              }}
-            >
-              <Target size={15} />
-              移动到其他时间点
-            </button>
-            <button
-              onClick={() => {
-                setMenu(false);
-                setTargetMode('copy');
-              }}
-            >
-              <Copy size={15} />
-              再安排到其他时间点
-            </button>
-          </div>
-        )}
-      </div>
+      {!readOnly && (
+        <div ref={menuRef} className="task-actions">
+          <button
+            className="icon-button"
+            aria-label="安排操作（也可长按安排行）"
+            aria-expanded={menu}
+            aria-haspopup="menu"
+            onClick={() => setMenu(!menu)}
+          >
+            <MoreHorizontal size={17} />
+          </button>
+          {menu && (
+            <div className="row-menu" role="menu">
+              <button role="menuitem" onClick={() => void remove()}>
+                <Trash2 size={15} />
+                从此处移除
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenu(false);
+                  setTargetMode('move');
+                }}
+              >
+                <Target size={15} />
+                移动到其他时间点
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenu(false);
+                  setTargetMode('copy');
+                }}
+              >
+                <Copy size={15} />
+                再安排到其他时间点
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {error && <span className="row-error">{error}</span>}
-      {targetMode && placement && (
+      {targetMode && (
         <PlacementTargetModal
           placement={placement}
           mode={targetMode}
@@ -3275,43 +3690,63 @@ function PlacementList({
   onOpenTask,
   onChanged,
   onMove,
+  reorderItems,
   emptyTitle,
   emptyDescription,
   emptyAction,
+  readOnly = false,
 }: {
   items: PlacementWithTask[];
   pointId?: string;
   onOpenTask: (id: string) => void;
   onChanged: () => void;
   onMove?: (placementId: string, direction: 'up' | 'down') => Promise<void> | void;
+  reorderItems?: PlacementWithTask[];
   emptyTitle: string;
   emptyDescription: string;
   emptyAction?: ReactNode;
+  readOnly?: boolean;
 }) {
+  const [dropError, setDropError] = useState('');
+  const [dropBusy, setDropBusy] = useState(false);
+  const allItems = reorderItems ?? items;
   const handleDrop = async (event: ReactDragEvent<HTMLElement>, targetPlacementId?: string) => {
-    if (!pointId) return;
+    if (!pointId || readOnly || dropBusy) return;
     const sourcePlacementId = event.dataTransfer.getData('application/x-devtodo-placement');
     if (targetPlacementId && sourcePlacementId && sourcePlacementId !== targetPlacementId) {
-      const sourceIndex = items.findIndex((item) => item.id === sourcePlacementId);
-      const targetIndex = items.findIndex((item) => item.id === targetPlacementId);
+      const sourceIndex = allItems.findIndex((item) => item.id === sourcePlacementId);
+      const targetIndex = allItems.findIndex((item) => item.id === targetPlacementId);
       if (sourceIndex >= 0 && targetIndex >= 0) {
-        const next = [...items];
+        const next = [...allItems];
         const [moved] = next.splice(sourceIndex, 1);
         const insertionIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
         if (moved) next.splice(insertionIndex, 0, moved);
+        setDropBusy(true);
+        setDropError('');
         try {
           await mutation('POST', `/time-points/${pointId}/placements/reorder`, {
             ids: next.map((item) => item.id),
           });
           onChanged();
           window.dispatchEvent(new Event('devtodo:data-changed'));
-        } catch {
-          /* the destination page reload surfaces the current server state */
+        } catch (cause) {
+          setDropError(cause instanceof ApiError ? cause.message : '安排排序失败，请重试');
+        } finally {
+          setDropBusy(false);
         }
         return;
       }
     }
-    await moveDraggedPlacement(event, pointId);
+    setDropBusy(true);
+    setDropError('');
+    try {
+      await moveDraggedPlacement(event, pointId);
+      onChanged();
+    } catch (cause) {
+      setDropError(cause instanceof ApiError ? cause.message : '安排操作失败，请重试');
+    } finally {
+      setDropBusy(false);
+    }
   };
   const empty = (
     <EmptyState
@@ -3321,36 +3756,150 @@ function PlacementList({
       action={emptyAction}
     />
   );
+  const dropNotice = dropError ? (
+    <div className="inline-error" role="alert">
+      {dropError}
+    </div>
+  ) : null;
   if (!items.length)
     return (
-      <div
-        className="task-list placement-drop-target placement-empty-drop"
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={(event) => void handleDrop(event)}
-      >
-        {empty}
-      </div>
+      <>
+        {dropNotice}
+        <div
+          className="task-list placement-drop-target placement-empty-drop"
+          onDragOver={(event) => {
+            if (!readOnly && !dropBusy) event.preventDefault();
+          }}
+          onDrop={(event) => void handleDrop(event)}
+        >
+          {empty}
+        </div>
+      </>
     );
   return (
-    <div
-      className="task-list placement-drop-target"
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={(event) => void handleDrop(event)}
-    >
-      {items.map((item, index) => (
-        <PlacementRow
-          key={item.id}
-          placementId={item.id}
-          task={item.task}
-          onOpen={onOpenTask}
-          onChanged={onChanged}
-          onDrop={(event) => void handleDrop(event, item.id)}
-          onMove={onMove ? (direction) => onMove(item.id, direction) : undefined}
-          canMoveUp={index > 0}
-          canMoveDown={index < items.length - 1}
-          onToggleStatus
+    <>
+      {dropNotice}
+      <div
+        className="task-list placement-drop-target"
+        onDragOver={(event) => {
+          if (!readOnly && !dropBusy) event.preventDefault();
+        }}
+        onDrop={(event) => void handleDrop(event)}
+      >
+        {items.map((item, index) => (
+          <PlacementRow
+            key={item.id}
+            placement={item}
+            task={item.task}
+            onOpen={onOpenTask}
+            onChanged={onChanged}
+            onDrop={readOnly ? undefined : (event) => void handleDrop(event, item.id)}
+            onMove={
+              readOnly ? undefined : onMove ? (direction) => onMove(item.id, direction) : undefined
+            }
+            canMoveUp={index > 0}
+            canMoveDown={index < items.length - 1}
+            onToggleStatus={!readOnly}
+            readOnly={readOnly}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function EventTargetField({
+  points,
+  value,
+  onChange,
+  onPointCreated,
+}: {
+  points: TimePointDto[];
+  value: string;
+  onChange: (value: string) => void;
+  onPointCreated: (point: TimePointDto) => void;
+}) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const eventPoints = points.filter((point) => point.type === 'EVENT');
+  return (
+    <div className="field">
+      <span>选择自定义时间点</span>
+      {createOpen ? (
+        <InlineEventCreator
+          onCancel={() => setCreateOpen(false)}
+          onCreated={(point) => {
+            onPointCreated(point);
+            setCreateOpen(false);
+          }}
         />
-      ))}
+      ) : (
+        <>
+          <M3Select value={value} onChange={(event) => onChange(event.target.value)}>
+            <option value="">选择事件</option>
+            {eventPoints.map((point) => (
+              <option key={point.id} value={point.id}>
+                {point.title}
+              </option>
+            ))}
+          </M3Select>
+          <div className="event-target-actions">
+            <small className="field-help">
+              {eventPoints.length ? '也可以新建一个自定义时间点。' : '还没有可用的自定义时间点。'}
+            </small>
+            <button type="button" className="text-button" onClick={() => setCreateOpen(true)}>
+              <Plus size={14} />
+              新建时间点
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function InlineEventCreator({
+  onCancel,
+  onCreated,
+}: {
+  onCancel: () => void;
+  onCreated: (point: TimePointDto) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const create = async () => {
+    if (busy || !title.trim()) return;
+    setBusy(true);
+    setError('');
+    try {
+      onCreated(await createEvent(title.trim()));
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : '创建时间点失败，请重试');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="inline-event-creator">
+      <Field label="时间点名称" value={title} onChange={setTitle} autoFocus autoComplete="off" />
+      {error && (
+        <div className="form-error" role="alert">
+          {error}
+        </div>
+      )}
+      <div className="inline-event-actions">
+        <button type="button" className="text-button" onClick={onCancel} disabled={busy}>
+          返回选择
+        </button>
+        <M3Button
+          size="small"
+          type="button"
+          onClick={() => void create()}
+          disabled={busy || !title.trim()}
+        >
+          {busy ? '创建中…' : '创建并选择'}
+        </M3Button>
+      </div>
     </div>
   );
 }
@@ -3375,7 +3924,6 @@ function PlacementTargetModal({
   const [error, setError] = useState('');
   const today = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
   const tomorrow = shiftLocalDate(today, 1);
-  const eventPoints = points.filter((point) => point.type === 'EVENT');
   useEffect(() => {
     void requestAll<TimePointDto>('/time-points?archived=false')
       .then((items) => setPoints(items))
@@ -3454,20 +4002,15 @@ function PlacementTargetModal({
             </label>
           </>
         ) : (
-          <label className="field">
-            <span>选择自定义时间点</span>
-            <M3Select value={targetId} onChange={(event) => setTargetId(event.target.value)}>
-              <option value="">选择事件</option>
-              {eventPoints.map((point) => (
-                <option key={point.id} value={point.id}>
-                  {point.title}
-                </option>
-              ))}
-            </M3Select>
-            {!eventPoints.length && (
-              <small className="field-help">还没有可用的自定义时间点。</small>
-            )}
-          </label>
+          <EventTargetField
+            points={points}
+            value={targetId}
+            onChange={setTargetId}
+            onPointCreated={(point) => {
+              setPoints((current) => [...current, point]);
+              setTargetId(point.id);
+            }}
+          />
         )}
         {error && (
           <div role="alert" className="form-error">
@@ -3492,23 +4035,19 @@ async function moveDraggedPlacement(event: ReactDragEvent<HTMLElement>, targetTi
     event.dataTransfer.getData('application/x-devtodo-task') ||
     event.dataTransfer.getData('text/plain');
   if (!taskId) return;
-  try {
-    if (!placementId) {
-      await addPlacement(taskId, targetTimePointId);
-      window.dispatchEvent(new Event('devtodo:data-changed'));
-      return;
-    }
-    const detail = await request<{ placements: PlacementDto[] }>(`/tasks/${taskId}`);
-    const placement = detail.placements.find((item) => item.id === placementId);
-    if (!placement || placement.timePointId === targetTimePointId) return;
-    await mutation('POST', `/placements/${placementId}/move`, {
-      timePointId: targetTimePointId,
-      baseVersion: placement.version,
-    });
+  if (!placementId) {
+    await addPlacement(taskId, targetTimePointId);
     window.dispatchEvent(new Event('devtodo:data-changed'));
-  } catch {
-    /* the destination page reload surfaces the current server state */
+    return;
   }
+  const detail = await request<{ placements: PlacementDto[] }>(`/tasks/${taskId}`);
+  const placement = detail.placements.find((item) => item.id === placementId);
+  if (!placement || placement.timePointId === targetTimePointId) return;
+  await mutation('POST', `/placements/${placementId}/move`, {
+    timePointId: targetTimePointId,
+    baseVersion: placement.version,
+  });
+  window.dispatchEvent(new Event('devtodo:data-changed'));
 }
 
 function TaskPlacementTargetModal({
@@ -3529,7 +4068,6 @@ function TaskPlacementTargetModal({
   const [error, setError] = useState('');
   const today = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
   const tomorrow = shiftLocalDate(today, 1);
-  const eventPoints = points.filter((point) => point.type === 'EVENT');
   useEffect(() => {
     void requestAll<TimePointDto>('/time-points?archived=false')
       .then((items) => setPoints(items))
@@ -3595,20 +4133,15 @@ function TaskPlacementTargetModal({
             </label>
           </>
         ) : (
-          <label className="field">
-            <span>选择自定义时间点</span>
-            <M3Select value={targetId} onChange={(event) => setTargetId(event.target.value)}>
-              <option value="">选择事件</option>
-              {eventPoints.map((point) => (
-                <option key={point.id} value={point.id}>
-                  {point.title}
-                </option>
-              ))}
-            </M3Select>
-            {!eventPoints.length && (
-              <small className="field-help">还没有可用的自定义时间点。</small>
-            )}
-          </label>
+          <EventTargetField
+            points={points}
+            value={targetId}
+            onChange={setTargetId}
+            onPointCreated={(point) => {
+              setPoints((current) => [...current, point]);
+              setTargetId(point.id);
+            }}
+          />
         )}
         {error && (
           <div role="alert" className="form-error">
@@ -3642,7 +4175,14 @@ function AddTaskModal({
         void request<{ items: Array<{ task: TaskDto }> }>(
           `/search/tasks?q=${encodeURIComponent(query)}`,
         )
-          .then((result) => setItems(result.items.map(({ task }) => task)))
+          .then((result) =>
+            setItems(
+              result.items
+                .map(({ task }) => task)
+                .filter((task) => !task.archivedAt && task.status !== 'DONE')
+                .slice(0, 12),
+            ),
+          )
           .catch(() => setItems([]));
         return;
       }
@@ -3730,6 +4270,10 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
     () => calendarDays(month, settings?.weekStartsOn ?? 1),
     [month, settings?.weekStartsOn],
   );
+  const monthDates = useMemo(
+    () => days.filter((day) => day.inMonth).map((day) => day.date),
+    [days],
+  );
   const selectDate = (date: string) => {
     setSelected(date);
     setMonth(date.slice(0, 7));
@@ -3751,24 +4295,26 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   };
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      const dates = new Set(days.filter((day) => day.inMonth).map((day) => day.date));
-      const points = await requestAll<TimePointDto>('/time-points?type=DATE');
-      const relevant = points.filter(
-        (candidate) => candidate.localDate && dates.has(candidate.localDate),
-      );
-      const counts = await Promise.all(
-        relevant.map(async (candidate) => {
-          const items = await requestAll<TaskDto>(`/tasks?timePointId=${candidate.id}`);
-          return [candidate.localDate!, items.length] as const;
-        }),
-      );
-      if (!cancelled) setDateCounts(Object.fromEntries(counts));
-    })().catch(() => undefined);
+    setDateCounts({});
+    if (!monthDates.length) return () => undefined;
+    void request<{ items: TimePointPlacementCountDto[] }>(
+      `/time-points/placement-counts?type=DATE&from=${monthDates[0]}&to=${monthDates[monthDates.length - 1]}`,
+    )
+      .then((result) => {
+        if (!cancelled)
+          setDateCounts(
+            Object.fromEntries(
+              result.items
+                .filter((item) => item.localDate)
+                .map((item) => [item.localDate!, item.totalCount]),
+            ),
+          );
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [days]);
+  }, [monthDates]);
   const loadSelected = useCallback(async () => {
     const nextPoint = await createDate(selected);
     const items = await requestAll<PlacementWithTask>(`/time-points/${nextPoint.id}/placements`);
@@ -3917,6 +4463,26 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const tasks = useReloadable(taskLoader, []);
   const projects = useReloadable(projectLoader, []);
   const events = useReloadable(eventLoader, []);
+  const [actionError, setActionError] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const restoreArchived = async (
+    entityId: string,
+    path: string,
+    version: number,
+    reload: () => Promise<void>,
+  ) => {
+    if (busyId) return;
+    setBusyId(entityId);
+    setActionError('');
+    try {
+      await restoreEntity(path, version);
+      await reload();
+    } catch (cause) {
+      setActionError(cause instanceof ApiError ? cause.message : '恢复失败，请重试');
+    } finally {
+      setBusyId(null);
+    }
+  };
   return (
     <div className="page">
       <PageHeader
@@ -3925,6 +4491,15 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         description="归档只影响默认可见性，任务、备注、安排和历史引用仍然保留。"
       />
       {tasks.error && <ErrorState error={tasks.error} onRetry={() => void tasks.reload()} />}
+      {projects.error && (
+        <ErrorState error={projects.error} onRetry={() => void projects.reload()} />
+      )}
+      {events.error && <ErrorState error={events.error} onRetry={() => void events.reload()} />}
+      {actionError && (
+        <div className="inline-error" role="alert">
+          {actionError}
+        </div>
+      )}
       <SectionTitle title="任务" count={tasks.data.length} />
       {tasks.loading ? (
         <SkeletonList />
@@ -3937,52 +4512,73 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           emptyDescription="归档的任务会出现在这里，也可以恢复。"
         />
       )}
-      {projects.data.length > 0 && (
+      {(projects.loading || projects.data.length > 0) && (
         <>
           <SectionTitle title="项目" count={projects.data.length} />
-          <div className="archive-project-list">
-            {projects.data.map((project) => (
-              <div className="archive-project" key={project.id}>
-                <span>
-                  <strong>{project.name}</strong>
-                  <small>{project.taskPrefix}</small>
-                </span>
-                <button
-                  className="secondary-button small"
-                  onClick={() => void restoreEntity(`/projects/${project.id}`, project.version)}
-                >
-                  恢复
-                </button>
-              </div>
-            ))}
-          </div>
+          {projects.loading ? (
+            <SkeletonList />
+          ) : (
+            <div className="archive-project-list">
+              {projects.data.map((project) => (
+                <div className="archive-project" key={project.id}>
+                  <span>
+                    <strong>{project.name}</strong>
+                    <small>{project.taskPrefix} · 已归档</small>
+                  </span>
+                  <button
+                    className="secondary-button small"
+                    disabled={busyId === project.id}
+                    onClick={() =>
+                      void restoreArchived(
+                        project.id,
+                        `/projects/${project.id}`,
+                        project.version,
+                        projects.reload,
+                      )
+                    }
+                  >
+                    {busyId === project.id ? '恢复中…' : '恢复项目'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
-      {events.data.length > 0 && (
+      {(events.loading || events.data.length > 0) && (
         <>
           <SectionTitle title="时间点" count={events.data.length} />
-          <div className="archive-project-list">
-            {events.data.map((event) => (
-              <div className="archive-project" key={event.id}>
-                <span>
-                  <strong>{event.title}</strong>
-                  <small>
-                    {event.reachedAt ? `已到达 · ${formatTime(event.reachedAt)}` : '未到达'}
-                  </small>
-                </span>
-                <button
-                  className="secondary-button small"
-                  onClick={() =>
-                    void restoreEntity(`/time-points/${event.id}`, event.version).then(
-                      () => void events.reload(),
-                    )
-                  }
-                >
-                  恢复
-                </button>
-              </div>
-            ))}
-          </div>
+          {events.loading ? (
+            <SkeletonList />
+          ) : (
+            <div className="archive-project-list">
+              {events.data.map((event) => (
+                <div className="archive-project" key={event.id}>
+                  <span>
+                    <strong>{event.title}</strong>
+                    <small>
+                      已归档 ·{' '}
+                      {event.reachedAt ? `已到达 · ${formatTime(event.reachedAt)}` : '未到达'}
+                    </small>
+                  </span>
+                  <button
+                    className="secondary-button small"
+                    disabled={busyId === event.id}
+                    onClick={() =>
+                      void restoreArchived(
+                        event.id,
+                        `/time-points/${event.id}`,
+                        event.version,
+                        events.reload,
+                      )
+                    }
+                  >
+                    {busyId === event.id ? '恢复中…' : '恢复时间点'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -4440,6 +5036,8 @@ function TaskDetail({
   const [draft, setDraft] = useState('');
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [taskActionBusy, setTaskActionBusy] = useState(false);
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [projects, setProjects] = useState<ProjectDto[]>([]);
@@ -4467,10 +5065,23 @@ function TaskDetail({
     );
   }, [loadDetail]);
   useEffect(() => {
-    void requestAll<ProjectDto>('/projects').then((items) => setProjects(items));
-    void requestAll<TimePointDto>('/time-points?archived=false').then((items) =>
-      setTimePoints(items),
-    );
+    void Promise.all([
+      requestAll<ProjectDto>('/projects?archived=false'),
+      requestAll<ProjectDto>('/projects?archived=true'),
+      requestAll<TimePointDto>('/time-points?archived=false'),
+      requestAll<TimePointDto>('/time-points?archived=true'),
+    ])
+      .then(([activeProjects, archivedProjects, activePoints, archivedPoints]) => {
+        const projectMap = new Map(
+          [...activeProjects, ...archivedProjects].map((project) => [project.id, project]),
+        );
+        const pointMap = new Map(
+          [...activePoints, ...archivedPoints].map((point) => [point.id, point]),
+        );
+        setProjects([...projectMap.values()]);
+        setTimePoints([...pointMap.values()]);
+      })
+      .catch((cause) => setError(cause instanceof ApiError ? cause.message : '关联数据加载失败'));
   }, [taskId]);
   if (!presence.mounted || !taskId || !detail) return null;
   const saveTask = async (patch: Record<string, unknown>) => {
@@ -4510,6 +5121,7 @@ function TaskDetail({
     }
   };
   const saveNote = async () => {
+    if (detail.task.archivedAt) return;
     setSaving(true);
     try {
       const note = (await mutation('PUT', `/tasks/${detail.task.id}/note`, {
@@ -4600,7 +5212,7 @@ function TaskDetail({
     }
   };
   const addPlacement = async () => {
-    if (!placementTarget) return;
+    if (!placementTarget || detail.task.archivedAt) return;
     try {
       await mutation('POST', '/placements', {
         taskId: detail.task.id,
@@ -4614,6 +5226,7 @@ function TaskDetail({
     }
   };
   const removePlacement = async (placement: PlacementDto) => {
+    if (detail.task.archivedAt) return;
     try {
       await mutation('DELETE', `/placements/${placement.id}`, { baseVersion: placement.version });
       await loadDetail();
@@ -4623,6 +5236,7 @@ function TaskDetail({
     }
   };
   const duplicateTask = async () => {
+    if (detail.task.archivedAt) return;
     try {
       await mutation('POST', `/tasks/${detail.task.id}/duplicate`, {});
       setNotice('已复制任务，原任务保持不变');
@@ -4631,18 +5245,30 @@ function TaskDetail({
       setError(cause instanceof ApiError ? cause.message : '复制任务失败');
     }
   };
-  const archiveOrRestore = async () => {
+  const archiveOrRestore = async (): Promise<boolean> => {
+    setTaskActionBusy(true);
     try {
       const action = detail.task.archivedAt ? 'restore' : 'archive';
       await mutation('POST', `/tasks/${detail.task.id}/${action}`, {
         baseVersion: detail.task.version,
       });
-      onChanged();
-      onClose();
+      if (action === 'restore') {
+        await loadDetail();
+        setNotice('任务已恢复');
+        onChanged();
+      } else {
+        onChanged();
+        onClose();
+      }
+      return true;
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '归档操作失败');
+      return false;
+    } finally {
+      setTaskActionBusy(false);
     }
   };
+  const archived = Boolean(detail.task.archivedAt);
   return (
     <aside
       className={`detail-panel presence-${presence.state}`}
@@ -4659,9 +5285,16 @@ function TaskDetail({
         </button>
       </div>
       <div className="detail-scroll">
+        {archived && (
+          <div className="archive-notice" role="status">
+            <Archive size={15} />
+            <span>这是一个已归档任务。恢复后才能编辑任务、备注和安排。</span>
+          </div>
+        )}
         <input
           className="detail-title-input"
           value={detail.task.title}
+          disabled={archived}
           onChange={(event) =>
             setDetail({ ...detail, task: { ...detail.task, title: event.target.value } })
           }
@@ -4672,6 +5305,7 @@ function TaskDetail({
             <span>状态</span>
             <M3Select
               value={detail.task.status}
+              disabled={archived}
               onChange={(event) => void saveTask({ status: event.target.value })}
             >
               <option value="TODO">待开始</option>
@@ -4683,6 +5317,7 @@ function TaskDetail({
             <span>优先级</span>
             <M3Select
               value={detail.task.priority}
+              disabled={archived}
               onChange={(event) => void saveTask({ priority: event.target.value })}
             >
               <option value="NONE">无</option>
@@ -4695,6 +5330,7 @@ function TaskDetail({
             <span>项目</span>
             <M3Select
               value={detail.task.projectId ?? ''}
+              disabled={archived}
               onChange={(event) => {
                 const projectId = event.target.value || null;
                 void saveTask({ projectId, category: projectId ? detail.task.category : 'MISC' });
@@ -4704,6 +5340,7 @@ function TaskDetail({
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
+                  {project.archivedAt ? ' · 已归档' : ''}
                 </option>
               ))}
             </M3Select>
@@ -4712,7 +5349,7 @@ function TaskDetail({
             <span>分类</span>
             <M3Select
               value={detail.task.category}
-              disabled={!detail.task.projectId}
+              disabled={!detail.task.projectId || archived}
               onChange={(event) => void saveTask({ category: event.target.value })}
             >
               <option value="FEATURE">功能</option>
@@ -4749,6 +5386,7 @@ function TaskDetail({
                 value={mergedConflict}
                 onChange={(event) => setMergedConflict(event.target.value)}
                 rows={conflict.kind === 'note' ? 5 : 7}
+                disabled={archived}
               />
             </label>
             <div className="conflict-actions">
@@ -4761,6 +5399,7 @@ function TaskDetail({
               <button
                 className="secondary-button small"
                 onClick={() => void resolveConflict('local')}
+                disabled={archived}
               >
                 保留本地并重试
               </button>
@@ -4775,6 +5414,7 @@ function TaskDetail({
               <button
                 className="primary-button small"
                 onClick={() => void resolveConflict('merged')}
+                disabled={archived}
               >
                 保存合并版本
               </button>
@@ -4794,6 +5434,7 @@ function TaskDetail({
                   setMergedConflict('');
                   setError('已丢弃本地改动，保留服务器版本');
                 }}
+                disabled={archived}
               >
                 丢弃本地改动
               </button>
@@ -4819,6 +5460,7 @@ function TaskDetail({
               onChange={(event) => setDraft(event.target.value)}
               onBlur={() => void saveNote()}
               placeholder="记录上下文、代码片段或下一步…"
+              disabled={archived}
             />
           )}
         </div>
@@ -4842,6 +5484,7 @@ function TaskDetail({
               <button
                 className="text-button danger-text"
                 onClick={() => void removePlacement(placement)}
+                disabled={archived}
               >
                 从此处移除
               </button>
@@ -4852,10 +5495,15 @@ function TaskDetail({
               aria-label="选择安排时间点"
               value={placementTarget}
               onChange={(event) => setPlacementTarget(event.target.value)}
+              disabled={archived}
             >
               <option value="">选择时间点…</option>
               {timePoints
-                .filter((point) => !detail.placements.some((item) => item.timePointId === point.id))
+                .filter(
+                  (point) =>
+                    !point.archivedAt &&
+                    !detail.placements.some((item) => item.timePointId === point.id),
+                )
                 .map((point) => (
                   <option key={point.id} value={point.id}>
                     {point.type === 'DATE' ? point.localDate : point.title}
@@ -4865,7 +5513,7 @@ function TaskDetail({
             <button
               className="secondary-button small"
               onClick={() => void addPlacement()}
-              disabled={!placementTarget}
+              disabled={!placementTarget || archived}
             >
               <Plus size={14} />
               安排
@@ -4875,17 +5523,39 @@ function TaskDetail({
         {error && <div className="form-error">{error}</div>}
         {notice && <div className="save-state">{notice}</div>}
         <div className="detail-actions">
-          <button className="secondary-button" onClick={() => void saveNote()} disabled={saving}>
+          <button
+            className="secondary-button"
+            onClick={() => void saveNote()}
+            disabled={saving || archived}
+          >
             {saving ? '保存中…' : '保存备注'}
           </button>
-          <button className="secondary-button small" onClick={() => void duplicateTask()}>
+          <button
+            className="secondary-button small"
+            onClick={() => void duplicateTask()}
+            disabled={archived}
+          >
             <Copy size={15} />
             复制任务
           </button>
-          <button className="text-button danger-text" onClick={() => void archiveOrRestore()}>
+          <button
+            className="text-button danger-text"
+            onClick={() => (archived ? void archiveOrRestore() : setArchiveConfirmOpen(true))}
+            disabled={taskActionBusy}
+          >
             {detail.task.archivedAt ? '恢复任务' : '归档任务'}
           </button>
         </div>
+        {archiveConfirmOpen && (
+          <ConfirmDialog
+            title="归档任务"
+            description={`确定要归档“${detail.task.title}”吗？任务和已有安排都会保留，之后可以从归档中心恢复。`}
+            confirmLabel="归档任务"
+            error={error}
+            onClose={() => setArchiveConfirmOpen(false)}
+            onConfirm={archiveOrRestore}
+          />
+        )}
       </div>
     </aside>
   );
@@ -4989,7 +5659,8 @@ async function restoreEntity(path: string, baseVersion: number): Promise<void> {
 function timePointLabel(points: TimePointDto[], id: string): string {
   const point = points.find((candidate) => candidate.id === id);
   if (!point) return '未知时间点';
-  return point.type === 'DATE' ? `日期 · ${point.localDate}` : `事件 · ${point.title}`;
+  const label = point.type === 'DATE' ? `日期 · ${point.localDate}` : `事件 · ${point.title}`;
+  return point.archivedAt ? `${label} · 已归档` : label;
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

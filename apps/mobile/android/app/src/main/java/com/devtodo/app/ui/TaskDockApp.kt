@@ -18,6 +18,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -52,7 +53,7 @@ fun TaskDockApp(
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val isLoggedIn = viewModel.authManager.isLoggedIn
+    val isLoggedIn by viewModel.authenticated.collectAsState()
     val isMainDestination = BottomNavScreens.any { it.route == currentRoute }
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -62,6 +63,14 @@ fun TaskDockApp(
         LaunchedEffect(viewModel) {
             viewModel.messages.collectLatest { message ->
                 snackbarHostState.showSnackbar(message)
+            }
+        }
+
+        LaunchedEffect(isLoggedIn, currentRoute) {
+            if (!isLoggedIn && currentRoute != null && currentRoute != Screen.Login.route) {
+                navController.navigate(Screen.Login.route) {
+                    popUpTo(0) { inclusive = true }
+                }
             }
         }
 

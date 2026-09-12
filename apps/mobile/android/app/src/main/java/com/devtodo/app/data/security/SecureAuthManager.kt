@@ -2,9 +2,11 @@ package com.devtodo.app.data.security
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Base64
 import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import org.json.JSONObject
 
 class SecureAuthManager(context: Context) {
     private val masterKey = MasterKey.Builder(context)
@@ -83,7 +85,33 @@ class SecureAuthManager(context: Context) {
         set(value) = plainPrefs.edit { putBoolean(KEY_PURE_BLACK, value) }
 
     val isLoggedIn: Boolean
-        get() = !accessToken.isNullOrEmpty() || !refreshToken.isNullOrEmpty()
+        get() = hasUsableAccessToken || !refreshToken.isNullOrEmpty()
+
+    /**
+     * Access tokens are deliberately short-lived. A persisted access token
+     * alone is not a session, so an old APK must not reopen the workspace and
+     * start syncing with an expired bearer token after an app restart.
+     */
+    val hasUsableAccessToken: Boolean
+        get() = isAccessTokenUsable(accessToken)
+
+    private fun isAccessTokenUsable(token: String?): Boolean {
+        val payload = token
+            ?.split('.')
+            ?.getOrNull(1)
+            ?.takeIf { it.isNotBlank() }
+            ?: return false
+        return try {
+            val decoded = Base64.decode(
+                payload,
+                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+            )
+            val expiresAtSeconds = JSONObject(String(decoded, Charsets.UTF_8)).optLong("exp", 0L)
+            expiresAtSeconds > (System.currentTimeMillis() / 1000L) + 30L
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     fun clearSession() {
         prefs.edit {

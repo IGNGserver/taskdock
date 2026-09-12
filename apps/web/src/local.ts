@@ -926,6 +926,26 @@ async function readLocalInTransaction(db: DevTodoDatabase, path: string): Promis
     };
   }
   if (pathname === '/settings') return db.settings.toCollection().first();
+  if (pathname === '/projects/task-counts') {
+    const archived = params.get('archived') === 'true';
+    const projects = (await db.projects.toArray()).filter((project) =>
+      archived ? Boolean(project.archivedAt) : !project.archivedAt,
+    );
+    const counts = new Map(
+      projects.map((project) => [
+        project.id,
+        { projectId: project.id, openCount: 0, doneCount: 0 },
+      ]),
+    );
+    for (const task of await db.tasks.toArray()) {
+      if (task.archivedAt || !task.projectId) continue;
+      const count = counts.get(task.projectId);
+      if (!count) continue;
+      if (task.status === 'DONE') count.doneCount += 1;
+      else count.openCount += 1;
+    }
+    return { items: projects.map((project) => counts.get(project.id)) };
+  }
   if (pathname === '/projects') {
     const archived = params.get('archived') === 'true';
     const items = (await db.projects.toArray()).filter((project) =>
@@ -1004,6 +1024,41 @@ async function readLocalInTransaction(db: DevTodoDatabase, path: string): Promis
       archived === null ? !point.archivedAt : Boolean(point.archivedAt) === (archived === 'true'),
     );
     return { items: items.sort(timePointSort), nextCursor: null };
+  }
+  if (pathname === '/time-points/placement-counts') {
+    const type = params.get('type');
+    const archived = params.get('archived');
+    const from = params.get('from');
+    const to = params.get('to');
+    const points = (await db.timePoints.toArray()).filter(
+      (point) =>
+        point.type === type &&
+        (archived === null || Boolean(point.archivedAt) === (archived === 'true')) &&
+        (from === null || (point.localDate ?? '') >= from) &&
+        (to === null || (point.localDate ?? '') <= to),
+    );
+    const tasks = new Map((await db.tasks.toArray()).map((task) => [task.id, task]));
+    const counts = new Map(
+      points.map((point) => [
+        point.id,
+        {
+          timePointId: point.id,
+          localDate: point.localDate,
+          totalCount: 0,
+          openCount: 0,
+          doneCount: 0,
+        },
+      ]),
+    );
+    for (const placement of await db.placements.toArray()) {
+      const count = counts.get(placement.timePointId);
+      const task = tasks.get(placement.taskId);
+      if (!count || !task || task.archivedAt) continue;
+      count.totalCount += 1;
+      if (task.status === 'DONE') count.doneCount += 1;
+      else count.openCount += 1;
+    }
+    return { items: points.map((point) => counts.get(point.id)) };
   }
   if (pathname === '/sync/status') {
     const cursor = (await db.syncMeta.get('cursor'))?.value ?? '0';

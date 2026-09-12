@@ -420,11 +420,14 @@ async function requestNetwork<T>(
 function canReadFromLocalFirst(path: string, method: string): boolean {
   if (!['GET', 'HEAD'].includes(method)) return false;
   const pathname = path.split('?')[0] ?? path;
+  const derivedRead =
+    pathname === '/projects/task-counts' || pathname === '/time-points/placement-counts';
   return (
     pathname !== '/me' &&
     !pathname.startsWith('/auth/') &&
     !pathname.startsWith('/sync/') &&
-    pathname !== '/bootstrap/status'
+    pathname !== '/bootstrap/status' &&
+    !derivedRead
   );
 }
 

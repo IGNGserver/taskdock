@@ -394,6 +394,17 @@ export async function buildServer(
           nextCursor: page.nextCursor,
         };
       });
+      api.get('/projects/task-counts', async (request) => {
+        const query = z
+          .object({ archived: z.enum(['true', 'false']).optional() })
+          .parse(request.query);
+        return {
+          items: await store.listProjectTaskCounts(
+            request.auth!.ownerId,
+            query.archived === 'true',
+          ),
+        };
+      });
       api.post('/projects', async (request, reply) => {
         const body = createProjectSchema.parse(request.body);
         const meta = mutationMeta(request);
@@ -656,6 +667,29 @@ export async function buildServer(
           () => store.createEvent(request.auth!.ownerId, body.title, meta.mutationId),
         );
         return reply.code(201).send(result);
+      });
+      api.get('/time-points/placement-counts', async (request) => {
+        const query = z
+          .object({
+            type: z.enum(['DATE', 'EVENT']),
+            archived: z.enum(['true', 'false']).optional(),
+            from: localDateSchema.optional(),
+            to: localDateSchema.optional(),
+          })
+          .parse(request.query);
+        if (query.type === 'EVENT' && (query.from || query.to))
+          throw new DomainError('VALIDATION_FAILED', '事件时间点不支持日期范围筛选');
+        if (query.from && query.to && query.from > query.to)
+          throw new DomainError('VALIDATION_FAILED', '日期范围无效');
+        return {
+          items: await store.listTimePointPlacementCounts(
+            request.auth!.ownerId,
+            query.type,
+            query.archived === undefined ? undefined : query.archived === 'true',
+            query.from,
+            query.to,
+          ),
+        };
       });
       api.get('/time-points/:id', async (request) =>
         store.getTimePoint(request.auth!.ownerId, paramId(request)),
