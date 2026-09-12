@@ -14,6 +14,8 @@ openssl rand -base64 48
 
 生产环境必须设置 `DEV_MEMORY_STORE=false`（Compose 已设置），并使用随机的 `BOOTSTRAP_TOKEN`、`ACCESS_TOKEN_SECRET` 和 `REFRESH_TOKEN_PEPPER`。`APP_ORIGIN` 与允许的 CORS origin 必须是完整的 HTTP 或 HTTPS 地址；使用 HTTP 时页面会显示安全警告，密码和会话信息会明文传输，公网环境建议使用 HTTPS。默认部署直接由 TaskDock 应用提供 HTTP 服务，公开入口是 `TASKDOCK_PORT`（默认 `48731`）；PostgreSQL 不发布到宿主机。需要 Caddy 反向代理时，再使用 `--profile gateway`，不要同时让两个服务占用同一个宿主机端口。
 
+Web 端同时提供 PWA manifest、Service Worker 和离线更新提示。浏览器只有在 HTTPS（或本机 `localhost`）安全上下文中才会启用 Service Worker 和安装能力；因此可信局域网可以继续用 HTTP 访问，但要安装 PWA 或离线打开，需让 `APP_ORIGIN` 使用 HTTPS，并通过反向代理提供有效证书。HTTP 部署不会再把页面资源强制升级到 HTTPS。
+
 TaskDock 允许至少 6 位的密码，6 位纯数字也可以，没有额外的字符种类限制。`BOOTSTRAP_TOKEN` 只在部署中枢时使用，客户端不会显示或要求填写初始化令牌。
 
 ## 首次部署

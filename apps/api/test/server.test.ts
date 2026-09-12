@@ -40,6 +40,11 @@ describe('Fastify API', () => {
     expect(refreshCookie).toContain('devtodo_refresh=');
     expect(refreshCookie).toContain('HttpOnly');
     expect(refreshCookie).not.toContain('Secure');
+    const httpShellHeaders = await app.inject({ method: 'GET', url: '/health/live' });
+    expect(httpShellHeaders.headers['content-security-policy']).not.toContain(
+      'upgrade-insecure-requests',
+    );
+    expect(httpShellHeaders.headers['strict-transport-security']).toBeUndefined();
     await app.close();
   });
 
@@ -103,6 +108,11 @@ describe('Fastify API', () => {
     expect(refreshCookie).toContain('devtodo_refresh=');
     expect(refreshCookie).toContain('HttpOnly');
     expect(refreshCookie).toContain('Secure');
+    const httpsShellHeaders = await app.inject({ method: 'GET', url: '/health/live' });
+    expect(httpsShellHeaders.headers['content-security-policy']).toContain(
+      'upgrade-insecure-requests',
+    );
+    expect(httpsShellHeaders.headers['strict-transport-security']).toContain('max-age=');
     await app.close();
   });
 

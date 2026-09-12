@@ -17,6 +17,55 @@ html,
 body {
   height: 100%;
 }
+
+.pwa-notice {
+  position: fixed;
+  pointer-events: none;
+  z-index: 30;
+  top: calc(16px + var(--dt-safe-top));
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(440px, calc(100vw - 32px));
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-lg);
+  background: var(--m3-surface-container-lowest);
+  color: var(--m3-on-surface);
+  box-shadow: var(--dt-shadow-popover);
+  font-size: 12px;
+}
+
+.pwa-notice > button {
+  pointer-events: auto;
+}
+
+.pwa-notice button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--m3-shape-full);
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pwa-notice .pwa-notice-dismiss {
+  background: transparent;
+  color: var(--m3-primary);
+}
+
+@media (max-width: 767px) {
+  .pwa-notice {
+    top: calc(12px + var(--dt-safe-top));
+    right: 12px;
+    left: 12px;
+    max-width: none;
+  }
+}
 body {
   margin: 0;
   min-width: 320px;

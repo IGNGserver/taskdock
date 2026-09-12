@@ -65,7 +65,10 @@ async function main(): Promise<void> {
   const baseUrl = `http://127.0.0.1:${port}`;
   const bootstrapToken = 'server-smoke-bootstrap-token-change-before-use-123456';
   const child = spawn('node', [apiEntry], {
-    cwd: root,
+    // Exercise the same package-local working directory used by
+    // `pnpm --filter @devtodo/api start`; the API must still find the shared
+    // Web build through its module-relative default webRoot.
+    cwd: join(root, 'apps', 'api'),
     env: {
       ...process.env,
       NODE_ENV: 'development',
@@ -121,6 +124,22 @@ async function main(): Promise<void> {
       }
     }
     assert(indexBody.length > 0, 'SPA index response was empty');
+    const csp =
+      (await fetchWithTimeout(`${baseUrl}/`)).headers.get('content-security-policy') ?? '';
+    assert(
+      !csp.includes('upgrade-insecure-requests'),
+      'HTTP SPA shell must not upgrade relative assets to HTTPS',
+    );
+    const manifest = await fetchWithTimeout(`${baseUrl}/manifest.webmanifest`);
+    assert(manifest.status === 200, 'PWA manifest returned a non-200 response');
+    const manifestBody = (await manifest.json()) as { start_url?: unknown; icons?: unknown };
+    assert(manifestBody.start_url === '/today', 'PWA manifest start_url is incorrect');
+    assert(
+      Array.isArray(manifestBody.icons) && manifestBody.icons.length >= 2,
+      'PWA icons missing',
+    );
+    const serviceWorker = await fetchWithTimeout(`${baseUrl}/sw.js`);
+    assert(serviceWorker.status === 200, 'PWA service worker returned a non-200 response');
     const version = await fetchWithTimeout(`${baseUrl}/version`);
     const versionBody = (await version.json()) as { appVersion?: unknown };
     assert(version.status === 200 && typeof versionBody.appVersion === 'string', 'version failed');

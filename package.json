@@ -25,7 +25,7 @@
     "release:gate": "tsx scripts/release-gate.ts",
     "desktop:package": "pnpm --filter @devtodo/desktop package",
     "desktop:test": "tsx scripts/desktop-security-smoke.ts",
-    "android:assembleRelease": "pnpm --filter @devtodo/web... build && pnpm --filter @devtodo/mobile exec cap sync android && tsx scripts/android-assemble.ts",
+    "android:assembleRelease": "tsx scripts/android-assemble.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "openapi:check": "tsx scripts/openapi-check.ts"
   },
