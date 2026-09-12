@@ -9,6 +9,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.devtodo.app.data.sync.SyncState
 
@@ -18,6 +20,7 @@ fun SettingsScreen(
     viewModel: MainViewModel,
     onLogout: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     val syncState by viewModel.syncState.collectAsState()
     var hubUrl by remember { mutableStateOf(viewModel.authManager.hubOrigin) }
 
@@ -63,7 +66,10 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
-                        onClick = { viewModel.syncNow() },
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.syncNow()
+                        },
                         enabled = syncState != SyncState.SYNCING,
                         shape = RoundedCornerShape(10.dp)
                     ) {
@@ -100,7 +106,10 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     FilledTonalButton(
-                        onClick = { viewModel.authManager.hubOrigin = hubUrl },
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.authManager.hubOrigin = hubUrl
+                        },
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Text("保存中枢地址")
@@ -122,7 +131,10 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedButton(
-                        onClick = onLogout,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onLogout()
+                        },
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.error
                         ),

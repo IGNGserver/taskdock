@@ -13,6 +13,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.devtodo.app.data.local.ProjectEntity
@@ -24,6 +26,7 @@ fun QuickCaptureBottomSheet(
     projects: List<ProjectEntity>,
     onSave: (title: String, projectId: String?, scheduleToday: Boolean) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     var title by remember { mutableStateOf("") }
     var selectedProjectId by remember { mutableStateOf<String?>(null) }
     var scheduleToday by remember { mutableStateOf(false) }
@@ -58,6 +61,7 @@ fun QuickCaptureBottomSheet(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
                     if (title.isNotBlank()) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onSave(title.trim(), selectedProjectId, scheduleToday)
                     }
                 }),
@@ -77,7 +81,10 @@ fun QuickCaptureBottomSheet(
             ) {
                 FilterChip(
                     selected = scheduleToday,
-                    onClick = { scheduleToday = !scheduleToday },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        scheduleToday = !scheduleToday
+                    },
                     label = { Text("今日焦点") },
                     leadingIcon = {
                         Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -88,7 +95,10 @@ fun QuickCaptureBottomSheet(
                     var projectMenuOpen by remember { mutableStateOf(false) }
                     Box {
                         AssistChip(
-                            onClick = { projectMenuOpen = true },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                projectMenuOpen = true
+                            },
                             label = {
                                 Text(projects.find { it.id == selectedProjectId }?.name ?: "无项目 (收集箱)")
                             }
@@ -123,6 +133,7 @@ fun QuickCaptureBottomSheet(
             Button(
                 onClick = {
                     if (title.isNotBlank()) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onSave(title.trim(), selectedProjectId, scheduleToday)
                     }
                 },

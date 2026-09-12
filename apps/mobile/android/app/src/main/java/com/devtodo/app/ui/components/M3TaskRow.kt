@@ -14,6 +14,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,6 +34,7 @@ fun M3TaskRow(
     onStatusToggle: (TaskStatus) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val haptic = LocalHapticFeedback.current
     val nextStatus = when (task.status) {
         TaskStatus.TODO -> TaskStatus.IN_PROGRESS
         TaskStatus.IN_PROGRESS -> TaskStatus.DONE
@@ -41,7 +44,10 @@ fun M3TaskRow(
     val isDone = task.status == TaskStatus.DONE
 
     Surface(
-        onClick = onClick,
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onClick()
+        },
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         modifier = modifier
@@ -59,7 +65,10 @@ fun M3TaskRow(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .clickable { onStatusToggle(nextStatus) }
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onStatusToggle(nextStatus)
+                    }
             ) {
                 when (task.status) {
                     TaskStatus.DONE -> {
