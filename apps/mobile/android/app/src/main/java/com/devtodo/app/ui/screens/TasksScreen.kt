@@ -147,7 +147,7 @@ fun TasksScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                contentPadding = PaddingValues(bottom = 16.dp)
+                contentPadding = PaddingValues(top = 8.dp, bottom = 112.dp)
             ) {
                 items(filtered, key = { it.id }) { task ->
                     val project = projects.find { it.id == task.projectId }

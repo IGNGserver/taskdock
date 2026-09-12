@@ -145,7 +145,7 @@ fun TodayScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 16.dp)
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 112.dp)
                 ) {
                     items(active, key = { it.second.id }) { (task, _) ->
                         val project = projects.find { it.id == task.projectId }
