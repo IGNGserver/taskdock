@@ -1,5 +1,6 @@
 import { access } from 'node:fs/promises';
-import { extname, resolve } from 'node:path';
+import { dirname, extname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   bootstrapSchema,
   createEventSchema,
@@ -31,6 +32,8 @@ import { PostgresStore } from './postgres-store.js';
 import { MemoryStore, type Store } from './store.js';
 
 const pageLimitSchema = z.coerce.number().int().min(1).max(500).default(100);
+const moduleDirectory = dirname(fileURLToPath(import.meta.url));
+const defaultWebRoot = resolve(moduleDirectory, '../../web/dist');
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -88,7 +91,7 @@ const defaultConfig: AppConfig = {
   trustProxy: parseTrustProxy(process.env['TRUST_PROXY'] ?? '0'),
   logLevel: process.env['LOG_LEVEL'] ?? 'info',
   devMemoryStore: process.env['DEV_MEMORY_STORE'] !== 'false',
-  webRoot: resolve(process.cwd(), 'apps/web/dist'),
+  webRoot: process.env['WEB_ROOT'] ? resolve(process.env['WEB_ROOT']) : defaultWebRoot,
   syncChangeRetentionDays: Number(process.env['SYNC_CHANGE_RETENTION_DAYS'] ?? 90),
   mutationReceiptRetentionDays: Number(process.env['MUTATION_RECEIPT_RETENTION_DAYS'] ?? 90),
 };
@@ -118,6 +121,7 @@ export async function buildServer(
       ].filter((origin): origin is string => Boolean(origin)),
     ),
   ];
+  const publicProtocol = protocolForOrigin(config.appOrigin);
   const app = Fastify({
     trustProxy: config.trustProxy,
     logger: {
@@ -164,6 +168,9 @@ export async function buildServer(
     },
   });
   await app.register(helmet, {
+    // Fastify Helmet enables HSTS by default. HTTP/LAN deployments must not
+    // advertise an HTTPS upgrade; the production HTTPS hook below owns HSTS.
+    hsts: false,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -177,6 +184,12 @@ export async function buildServer(
         workerSrc: ["'self'", 'blob:'],
         manifestSrc: ["'self'"],
         connectSrc: ["'self'", ...nativeOrigins],
+        // The deployment docs intentionally support HTTP on trusted LANs.
+        // Helmet enables this directive by default, which upgrades every
+        // relative script/style request to HTTPS and leaves an HTTP-only
+        // deployment blank. Keep it for HTTPS, explicitly disable it for
+        // HTTP.
+        upgradeInsecureRequests: publicProtocol === 'https:' ? [] : null,
       },
     },
     crossOriginEmbedderPolicy: false,
@@ -202,7 +215,7 @@ export async function buildServer(
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     reply.header('X-Frame-Options', 'DENY');
-    if (config.nodeEnv === 'production')
+    if (config.nodeEnv === 'production' && protocolForOrigin(config.appOrigin) === 'https:')
       reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   });
 
@@ -1264,6 +1277,17 @@ async function requireNativeExchange(
 
 function refreshCookieShouldBeSecure(config: AppConfig): boolean {
   return new URL(config.appOrigin).protocol === 'https:';
+}
+
+function protocolForOrigin(value: string): 'http:' | 'https:' {
+  try {
+    return new URL(value).protocol === 'https:' ? 'https:' : 'http:';
+  } catch {
+    // Runtime validation reports malformed production origins. Development
+    // keeps the safe HTTP behavior so a bad local value cannot add an HTTPS
+    // upgrade that makes the SPA shell disappear.
+    return 'http:';
+  }
 }
 
 function setRefreshCookie(reply: FastifyReply, value: string, config: AppConfig): void {

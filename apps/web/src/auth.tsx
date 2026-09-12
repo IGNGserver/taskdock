@@ -55,6 +55,26 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const AUTH_NETWORK_TIMEOUT_MS = 5_000;
+
+function withTimeout<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new Error('认证请求超时，已保留本地工作区')),
+      milliseconds,
+    );
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
@@ -224,14 +244,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (isAuthLocallyLocked()) {
       try {
-        setInitialized((await request<{ initialized: boolean }>('/bootstrap/status')).initialized);
+        setInitialized(
+          (
+            await withTimeout(
+              request<{ initialized: boolean }>('/bootstrap/status'),
+              AUTH_NETWORK_TIMEOUT_MS,
+            )
+          ).initialized,
+        );
       } catch {
         setInitialized(false);
       }
       if (operation === authOperationRef.current) setStatus('anonymous');
       return;
     }
-    if (!(await refreshAccessToken())) {
+    // Restore IndexedDB before touching the network. This keeps a cached PWA
+    // useful during a cold offline start and prevents a dead Hub from holding
+    // the whole shell on the loading screen.
+    const hasLocalSession = await restoreOfflineSession();
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      if (hasLocalSession) return;
+      if (operation === authOperationRef.current) {
+        setInitialized(false);
+        setStatus('anonymous');
+      }
+      return;
+    }
+    const refreshed = await withTimeout(refreshAccessToken(), AUTH_NETWORK_TIMEOUT_MS).catch(
+      () => false,
+    );
+    if (!refreshed) {
       if (operation !== authOperationRef.current) return;
       const failure = getLastRefreshFailure();
       if (failure === 'unauthorized') {
@@ -245,12 +287,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (
         (failure === 'network' || (typeof navigator !== 'undefined' && !navigator.onLine)) &&
-        (await restoreOfflineSession())
+        hasLocalSession
       )
         return;
+      if (hasLocalSession && failure !== 'unauthorized') {
+        setConnection('offline');
+        return;
+      }
       if (operation !== authOperationRef.current) return;
       try {
-        setInitialized((await request<{ initialized: boolean }>('/bootstrap/status')).initialized);
+        setInitialized(
+          (
+            await withTimeout(
+              request<{ initialized: boolean }>('/bootstrap/status'),
+              AUTH_NETWORK_TIMEOUT_MS,
+            )
+          ).initialized,
+        );
       } catch {
         setInitialized(false);
       }
@@ -273,6 +326,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch {
           /* The local lock remains authoritative when storage is available. */
         }
+      }
+      if (hasLocalSession && !(cause instanceof ApiError && cause.status === 401)) {
+        setConnection('offline');
+        return;
       }
       setAccessToken(null);
       setStatus('anonymous');

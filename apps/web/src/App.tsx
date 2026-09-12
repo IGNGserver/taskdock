@@ -86,6 +86,7 @@ import {
 } from './api.js';
 import { useAuth } from './auth.js';
 import { M3Button, M3Chip, M3IconButton, M3Select, M3SegmentedControl } from './components/m3.js';
+import { PwaLifecycleNotice } from './pwa.js';
 import { nextTaskStatus, reorderIds, taskStatusActionLabel } from './task-behavior.js';
 
 type PlacementWithTask = { id: string; task: TaskDto };
@@ -134,7 +135,16 @@ export function App() {
     ) : (
       <AuthenticatedApp />
     );
-  return <DesktopChrome>{content}</DesktopChrome>;
+  const showPwaNotice =
+    !isNativeClient() &&
+    typeof window !== 'undefined' &&
+    (window.location.protocol === 'http:' || window.location.protocol === 'https:');
+  return (
+    <DesktopChrome>
+      {showPwaNotice && <PwaLifecycleNotice />}
+      {content}
+    </DesktopChrome>
+  );
 }
 
 function DesktopChrome({ children }: { children: ReactNode }) {
