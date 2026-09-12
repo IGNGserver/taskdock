@@ -8,8 +8,8 @@
     </style>
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
         <item name="windowSplashScreenBackground">@color/taskdock_brand_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/taskdock_icon</item>
         <item name="postSplashScreenTheme">@style/AppTheme</item>
     </style>
 </resources>
