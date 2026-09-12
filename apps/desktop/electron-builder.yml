@@ -1,5 +1,6 @@
 appId: com.devtodo.app
 productName: TaskDock
+icon: resources/icons
 directories:
   output: release
 files:
@@ -9,6 +10,8 @@ extraResources:
     to: web
     filter:
       - '**/*'
+  - from: resources/icons/taskdock-icon.png
+    to: brand/taskdock-icon.png
 linux:
   target:
     - dir

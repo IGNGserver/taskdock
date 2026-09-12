@@ -85,6 +85,7 @@ import {
   testHubConnection,
 } from './api.js';
 import { useAuth } from './auth.js';
+import { BrandMark } from './components/brand-mark.js';
 import { M3Button, M3Chip, M3IconButton, M3Select, M3SegmentedControl } from './components/m3.js';
 import { PwaLifecycleNotice } from './pwa.js';
 import { nextTaskStatus, reorderIds, taskStatusActionLabel } from './task-behavior.js';
@@ -165,7 +166,7 @@ function DesktopBridgeUnavailableScreen() {
     <main className="auth-page hub-setup-page">
       <div className="auth-panel">
         <div className="brand auth-brand">
-          <span className="brand-mark">D</span>
+          <BrandMark size="lg" />
           <span>TaskDock</span>
         </div>
         <p className="eyebrow">DESKTOP RUNTIME</p>
@@ -364,7 +365,7 @@ function HubSetupScreen({
     <main className="auth-page hub-setup-page">
       <div className="auth-panel">
         <div className="brand auth-brand">
-          <span className="brand-mark">D</span>
+          <BrandMark size="lg" />
           <span>TaskDock</span>
         </div>
         <p className="eyebrow">DESKTOP CONNECTION</p>
@@ -436,7 +437,7 @@ function HubWaitingScreen({
     <main className="auth-page hub-setup-page">
       <div className="auth-panel">
         <div className="brand auth-brand">
-          <span className="brand-mark">D</span>
+          <BrandMark size="lg" />
           <span>TaskDock</span>
         </div>
         <p className="eyebrow">DESKTOP CONNECTION</p>
@@ -554,7 +555,7 @@ function AuthenticatedApp() {
     <div className="app-frame">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark">D</span>
+          <BrandMark />
           <span>TaskDock</span>
         </div>
         <nav aria-label="主导航" className="primary-nav">
@@ -787,7 +788,7 @@ function LoginScreen({
     <main className="auth-page">
       <div className="auth-panel">
         <div className="brand auth-brand">
-          <span className="brand-mark">D</span>
+          <BrandMark size="lg" />
           <span>TaskDock</span>
         </div>
         <p className="eyebrow">PERSONAL DEV WORKSPACE</p>
@@ -970,7 +971,7 @@ function MobileSidebar({
       <aside className="mobile-sidebar" aria-label="移动侧边栏">
         <header className="mobile-sidebar-header">
           <div className="brand">
-            <span className="brand-mark">D</span>
+            <BrandMark />
             <span>TaskDock</span>
           </div>
           <button

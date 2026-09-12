@@ -32,6 +32,9 @@ const windowStateFile = () => join(app.getPath('userData'), 'window-state.json')
 const webRoot = app.isPackaged
   ? join(process.resourcesPath, 'web')
   : resolve(moduleDir, '../../web/dist');
+const appIcon = app.isPackaged
+  ? join(process.resourcesPath, 'brand', 'taskdock-icon.png')
+  : resolve(moduleDir, '../resources/icons/taskdock-icon.png');
 
 const singleInstanceLock = app.requestSingleInstanceLock();
 
@@ -115,6 +118,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 640,
     show: false,
+    icon: appIcon,
     backgroundColor: themeBackground(getSystemTheme()),
     ...(process.platform === 'win32'
       ? {
