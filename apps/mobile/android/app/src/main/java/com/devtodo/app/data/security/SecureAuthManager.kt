@@ -2,6 +2,7 @@ package com.devtodo.app.data.security
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
@@ -32,45 +33,66 @@ class SecureAuthManager(context: Context) {
         private const val KEY_OWNER_ID = "owner_id"
         private const val KEY_USERNAME = "username"
         private const val KEY_CLIENT_ID = "client_id"
+        private const val KEY_THEME_MODE = "theme_mode"
+        private const val KEY_DYNAMIC_COLOR = "dynamic_color"
+        private const val KEY_PURE_BLACK = "pure_black"
         private const val DEFAULT_HUB_ORIGIN = "http://47.95.17.77:48731"
     }
 
     var accessToken: String?
         get() = prefs.getString(KEY_ACCESS_TOKEN, null)
-        set(value) = prefs.edit().putString(KEY_ACCESS_TOKEN, value).apply()
+        set(value) = prefs.edit { putString(KEY_ACCESS_TOKEN, value) }
 
     var refreshToken: String?
         get() = prefs.getString(KEY_REFRESH_TOKEN, null)
-        set(value) = prefs.edit().putString(KEY_REFRESH_TOKEN, value).apply()
+        set(value) = prefs.edit { putString(KEY_REFRESH_TOKEN, value) }
 
     var hubOrigin: String
         get() = plainPrefs.getString(KEY_HUB_ORIGIN, DEFAULT_HUB_ORIGIN) ?: DEFAULT_HUB_ORIGIN
-        set(value) = plainPrefs.edit().putString(KEY_HUB_ORIGIN, value.trimEnd('/')).apply()
+        set(value) = plainPrefs.edit { putString(KEY_HUB_ORIGIN, value.trimEnd('/')) }
 
     var ownerId: String?
         get() = plainPrefs.getString(KEY_OWNER_ID, null)
-        set(value) = plainPrefs.edit().putString(KEY_OWNER_ID, value).apply()
+        set(value) = plainPrefs.edit { putString(KEY_OWNER_ID, value) }
 
     var username: String?
         get() = plainPrefs.getString(KEY_USERNAME, null)
-        set(value) = plainPrefs.edit().putString(KEY_USERNAME, value).apply()
+        set(value) = plainPrefs.edit { putString(KEY_USERNAME, value) }
 
     var clientId: String
         get() {
             var id = plainPrefs.getString(KEY_CLIENT_ID, null)
             if (id == null) {
                 id = java.util.UUID.randomUUID().toString()
-                plainPrefs.edit().putString(KEY_CLIENT_ID, id).apply()
+                plainPrefs.edit { putString(KEY_CLIENT_ID, id) }
             }
             return id
         }
         private set(_) {}
 
+    var themeMode: String
+        get() = plainPrefs.getString(KEY_THEME_MODE, "SYSTEM") ?: "SYSTEM"
+        set(value) = plainPrefs.edit { putString(KEY_THEME_MODE, value) }
+
+    var dynamicColor: Boolean
+        get() = plainPrefs.getBoolean(KEY_DYNAMIC_COLOR, true)
+        set(value) = plainPrefs.edit { putBoolean(KEY_DYNAMIC_COLOR, value) }
+
+    var pureBlack: Boolean
+        get() = plainPrefs.getBoolean(KEY_PURE_BLACK, false)
+        set(value) = plainPrefs.edit { putBoolean(KEY_PURE_BLACK, value) }
+
     val isLoggedIn: Boolean
         get() = !accessToken.isNullOrEmpty() || !refreshToken.isNullOrEmpty()
 
     fun clearSession() {
-        prefs.edit().remove(KEY_ACCESS_TOKEN).remove(KEY_REFRESH_TOKEN).apply()
-        plainPrefs.edit().remove(KEY_OWNER_ID).remove(KEY_USERNAME).apply()
+        prefs.edit {
+            remove(KEY_ACCESS_TOKEN)
+            remove(KEY_REFRESH_TOKEN)
+        }
+        plainPrefs.edit {
+            remove(KEY_OWNER_ID)
+            remove(KEY_USERNAME)
+        }
     }
 }

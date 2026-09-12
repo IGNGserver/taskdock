@@ -2,6 +2,4 @@
 <resources>
     <string name="app_name">TaskDock</string>
     <string name="title_activity_main">TaskDock</string>
-    <string name="package_name">com.devtodo.app</string>
-    <string name="custom_url_scheme">com.devtodo.app</string>
 </resources>

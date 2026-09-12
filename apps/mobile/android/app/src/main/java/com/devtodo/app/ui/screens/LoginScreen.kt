@@ -4,7 +4,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -16,6 +15,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -41,32 +41,50 @@ fun LoginScreen(
     val focusManager = LocalFocusManager.current
     val haptic = LocalHapticFeedback.current
 
-    var hubUrl by remember { mutableStateOf(viewModel.authManager.hubOrigin) }
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var hubUrl by rememberSaveable { mutableStateOf(viewModel.authManager.hubOrigin) }
+    var username by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    var isLoading by rememberSaveable { mutableStateOf(false) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    val isHttpHub = hubUrl.trimStart().startsWith("http://", ignoreCase = true)
+
+    fun submit() {
+        if (isLoading || username.isBlank() || password.isBlank() || hubUrl.isBlank()) return
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        isLoading = true
+        errorMessage = null
+        viewModel.authManager.hubOrigin = hubUrl
+        coroutineScope.launch {
+            val res = viewModel.api.login(username.trim(), password)
+            isLoading = false
+            if (res.isSuccess) {
+                onLoginSuccess()
+            } else {
+                errorMessage = "登录失败，请检查中枢地址、账号和密码"
+            }
+        }
+    }
 
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .windowInsetsPadding(WindowInsets.navigationBars)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .imePadding()
             .padding(horizontal = 24.dp)
             .verticalScroll(rememberScrollState())
     ) {
         ElevatedCard(
-            shape = RoundedCornerShape(28.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             colors = CardDefaults.elevatedCardColors(
                 containerColor = MaterialTheme.colorScheme.surface
             ),
             elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
             modifier = Modifier
                 .fillMaxWidth()
+                .widthIn(max = 480.dp)
                 .padding(vertical = 24.dp)
         ) {
             Column(
@@ -114,8 +132,11 @@ fun LoginScreen(
                     keyboardActions = KeyboardActions(
                         onNext = { focusManager.moveFocus(FocusDirection.Down) }
                     ),
+                    isError = errorMessage != null,
+                    supportingText = if (isHttpHub) {
+                        { Text("当前使用 HTTP，账号和密码会以明文传输，请优先使用 HTTPS") }
+                    } else null,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp)
                 )
 
                 // 2. Username Input
@@ -134,8 +155,8 @@ fun LoginScreen(
                     keyboardActions = KeyboardActions(
                         onNext = { focusManager.moveFocus(FocusDirection.Down) }
                     ),
+                    isError = errorMessage != null,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp)
                 )
 
                 // 3. Password Input with Native Password Keyboard
@@ -161,10 +182,13 @@ fun LoginScreen(
                         imeAction = ImeAction.Done
                     ),
                     keyboardActions = KeyboardActions(
-                        onDone = { focusManager.clearFocus() }
+                        onDone = {
+                            submit()
+                            focusManager.clearFocus()
+                        }
                     ),
+                    isError = errorMessage != null,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp)
                 )
 
                 errorMessage?.let {
@@ -179,28 +203,11 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Button(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        isLoading = true
-                        errorMessage = null
-                        viewModel.authManager.hubOrigin = hubUrl
-                        coroutineScope.launch {
-                            val res = viewModel.api.login(username, password)
-                            isLoading = false
-                            if (res.isSuccess) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.syncNow()
-                                onLoginSuccess()
-                            } else {
-                                errorMessage = res.exceptionOrNull()?.message ?: "登录失败，请检查中枢地址与账号"
-                            }
-                        }
-                    },
+                    onClick = ::submit,
                     enabled = !isLoading && username.isNotBlank() && password.isNotBlank() && hubUrl.isNotBlank(),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(14.dp)
+                        .heightIn(min = 48.dp)
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(

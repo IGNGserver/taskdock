@@ -1,5 +1,6 @@
 package com.devtodo.app.data.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
@@ -135,7 +136,7 @@ data class PushMutationResult(
     val status: String,
     val code: String? = null,
     val message: String? = null,
-    val serverEntity: kotlinx.serialization.json.JsonElement? = null
+    val result: kotlinx.serialization.json.JsonElement? = null
 )
 
 @Serializable
@@ -145,7 +146,7 @@ data class PushResult(
 
 @Serializable
 data class PullResult(
-    val cursor: String,
+    @SerialName("nextCursor") val cursor: String,
     val changes: List<ChangeItem>,
     val hasMore: Boolean
 )
