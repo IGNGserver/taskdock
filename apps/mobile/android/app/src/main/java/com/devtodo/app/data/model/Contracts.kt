@@ -27,9 +27,9 @@ enum class TimePointType {
 data class UserDto(
     val id: String,
     val username: String,
-    val role: String,
-    val createdAt: String,
-    val updatedAt: String
+    val role: String? = "owner",
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Serializable
@@ -38,28 +38,29 @@ data class SettingsDto(
     val timezone: String,
     val defaultCaptureTarget: String = "GLOBAL_MISC",
     val recentProjectId: String? = null,
-    val createdAt: String,
-    val updatedAt: String
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Serializable
 data class ProjectDto(
     val id: String,
-    val ownerId: String,
+    val ownerId: String? = null,
     val name: String,
-    val slug: String,
+    val slug: String? = null,
+    val taskPrefix: String? = null,
     val description: String = "",
     val rank: String,
     val version: Long = 1,
     val archivedAt: String? = null,
-    val createdAt: String,
-    val updatedAt: String
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Serializable
 data class TaskDto(
     val id: String,
-    val ownerId: String,
+    val ownerId: String? = null,
     val projectId: String? = null,
     val referenceId: String? = null,
     val title: String,
@@ -69,25 +70,25 @@ data class TaskDto(
     val rank: String,
     val version: Long = 1,
     val archivedAt: String? = null,
-    val createdAt: String,
-    val updatedAt: String
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Serializable
 data class NoteDto(
     val id: String,
-    val ownerId: String,
+    val ownerId: String? = null,
     val taskId: String,
     val contentMarkdown: String = "",
     val version: Long = 1,
-    val createdAt: String,
-    val updatedAt: String
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Serializable
 data class TimePointDto(
     val id: String,
-    val ownerId: String,
+    val ownerId: String? = null,
     val type: TimePointType,
     val localDate: String? = null,
     val title: String? = null,
@@ -95,20 +96,20 @@ data class TimePointDto(
     val version: Long = 1,
     val reachedAt: String? = null,
     val archivedAt: String? = null,
-    val createdAt: String,
-    val updatedAt: String
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Serializable
 data class PlacementDto(
     val id: String,
-    val ownerId: String,
+    val ownerId: String? = null,
     val taskId: String,
     val timePointId: String,
     val rank: String,
     val version: Long = 1,
-    val createdAt: String,
-    val updatedAt: String
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Serializable

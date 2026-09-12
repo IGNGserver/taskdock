@@ -45,166 +45,164 @@ fun LoginScreen(
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .imePadding()
+            .padding(horizontal = 24.dp)
+            .verticalScroll(rememberScrollState())
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
+        ElevatedCard(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
             modifier = Modifier
-                .fillMaxSize()
-                .imePadding()
-                .padding(horizontal = 24.dp)
-                .verticalScroll(rememberScrollState())
+                .fillMaxWidth()
+                .padding(vertical = 24.dp)
         ) {
-            ElevatedCard(
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.elevatedCardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 24.dp)
+                    .padding(horizontal = 24.dp, vertical = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(
+                // M3 Brand Title
+                Text(
+                    text = "TaskDock",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "离线优先 · 个人开发任务工作台",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // 1. Hub Origin Input
+                OutlinedTextField(
+                    value = hubUrl,
+                    onValueChange = {
+                        hubUrl = it
+                        viewModel.authManager.hubOrigin = it
+                    },
+                    label = { Text("中枢服务器地址 (Hub)") },
+                    placeholder = { Text("http://192.168.x.x:48731") },
+                    singleLine = true,
+                    leadingIcon = {
+                        Icon(Icons.Default.Dns, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                // 2. Username Input
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("用户名") },
+                    singleLine = true,
+                    leadingIcon = {
+                        Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                // 3. Password Input with Native Password Keyboard
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("密码") },
+                    singleLine = true,
+                    leadingIcon = {
+                        Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
+                            )
+                        }
+                    },
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { focusManager.clearFocus() }
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                errorMessage?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Button(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        isLoading = true
+                        errorMessage = null
+                        viewModel.authManager.hubOrigin = hubUrl
+                        coroutineScope.launch {
+                            val res = viewModel.api.login(username, password)
+                            isLoading = false
+                            if (res.isSuccess) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.syncNow()
+                                onLoginSuccess()
+                            } else {
+                                errorMessage = res.exceptionOrNull()?.message ?: "登录失败，请检查中枢地址与账号"
+                            }
+                        }
+                    },
+                    enabled = !isLoading && username.isNotBlank() && password.isNotBlank() && hubUrl.isNotBlank(),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 28.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .height(50.dp),
+                    shape = RoundedCornerShape(14.dp)
                 ) {
-                    // M3 Brand Title
-                    Text(
-                        text = "TaskDock",
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "离线优先 · 个人开发任务工作台",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    // 1. Hub Origin Input
-                    OutlinedTextField(
-                        value = hubUrl,
-                        onValueChange = {
-                            hubUrl = it
-                            viewModel.authManager.hubOrigin = it
-                        },
-                        label = { Text("中枢服务器地址 (Hub)") },
-                        placeholder = { Text("http://192.168.x.x:48731") },
-                        singleLine = true,
-                        leadingIcon = {
-                            Icon(Icons.Default.Dns, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Uri,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp)
-                    )
-
-                    // 2. Username Input
-                    OutlinedTextField(
-                        value = username,
-                        onValueChange = { username = it },
-                        label = { Text("用户名") },
-                        singleLine = true,
-                        leadingIcon = {
-                            Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Text,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp)
-                    )
-
-                    // 3. Password Input with Native Password Keyboard
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = { Text("密码") },
-                        singleLine = true,
-                        leadingIcon = {
-                            Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        },
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(
-                                    imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
-                                )
-                            }
-                        },
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = { focusManager.clearFocus() }
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp)
-                    )
-
-                    errorMessage?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(horizontal = 4.dp)
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.5.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
                         )
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Button(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            isLoading = true
-                            errorMessage = null
-                            viewModel.authManager.hubOrigin = hubUrl
-                            coroutineScope.launch {
-                                val res = viewModel.api.login(username, password)
-                                isLoading = false
-                                if (res.isSuccess) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewModel.syncNow()
-                                    onLoginSuccess()
-                                } else {
-                                    errorMessage = res.exceptionOrNull()?.message ?: "登录失败，请检查中枢地址与账号"
-                                }
-                            }
-                        },
-                        enabled = !isLoading && username.isNotBlank() && password.isNotBlank() && hubUrl.isNotBlank(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.5.dp,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        } else {
-                            Text("登 录", style = MaterialTheme.typography.titleMedium)
-                        }
+                    } else {
+                        Text("登 录", style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }
