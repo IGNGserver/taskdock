@@ -128,11 +128,23 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
         contentType: 'application/json',
         body: JSON.stringify([]),
       });
+    if (route.request().method() === 'GET' && path.endsWith('/projects/task-counts'))
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [{ projectId: project.id, openCount: 0, doneCount: 0 }] }),
+      });
     if (route.request().method() === 'GET' && path.endsWith('/projects'))
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ items: [project] }),
+      });
+    if (route.request().method() === 'GET' && path.endsWith('/time-points/placement-counts'))
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [] }),
       });
     if (route.request().method() === 'GET' && path.endsWith('/tasks'))
       return route.fulfill({

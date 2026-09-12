@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deflateSync, inflateSync } from 'node:zlib';
@@ -132,6 +132,57 @@ function resizeCover(source: Raster, width: number, height: number): Buffer {
   return result;
 }
 
+/**
+ * Android adaptive icons and maskable PWA icons are rendered inside a
+ * launcher-defined mask. Keeping the complete source artwork at 100% makes
+ * the launcher zoom it into the mask and clips the whitespace that is part of
+ * the TaskDock mark. Draw the complete master inside a smaller square instead.
+ */
+function resizeContain(source: Raster, width: number, height: number, contentScale = 0.72): Buffer {
+  const scale = Math.min(
+    (width * contentScale) / source.width,
+    (height * contentScale) / source.height,
+  );
+  const drawWidth = source.width * scale;
+  const drawHeight = source.height * scale;
+  const offsetX = (width - drawWidth) / 2;
+  const offsetY = (height - drawHeight) / 2;
+  const result = Buffer.alloc(width * height * 4);
+  const background = source.rgba.subarray(0, 4);
+
+  for (let offset = 0; offset < result.length; offset += 4) {
+    background.copy(result, offset);
+  }
+
+  const left = Math.max(0, Math.floor(offsetX));
+  const right = Math.min(width, Math.ceil(offsetX + drawWidth));
+  const top = Math.max(0, Math.floor(offsetY));
+  const bottom = Math.min(height, Math.ceil(offsetY + drawHeight));
+  for (let y = top; y < bottom; y += 1) {
+    for (let x = left; x < right; x += 1) {
+      const sourceX = Math.max(0, Math.min(source.width - 1, (x + 0.5 - offsetX) / scale - 0.5));
+      const sourceY = Math.max(0, Math.min(source.height - 1, (y + 0.5 - offsetY) / scale - 0.5));
+      const x0 = Math.floor(sourceX);
+      const y0 = Math.floor(sourceY);
+      const x1 = Math.min(source.width - 1, x0 + 1);
+      const y1 = Math.min(source.height - 1, y0 + 1);
+      const xWeight = sourceX - x0;
+      const yWeight = sourceY - y0;
+      const targetOffset = (y * width + x) * 4;
+      for (let channel = 0; channel < 4; channel += 1) {
+        const topLeft = source.rgba[(y0 * source.width + x0) * 4 + channel]!;
+        const topRight = source.rgba[(y0 * source.width + x1) * 4 + channel]!;
+        const bottomLeft = source.rgba[(y1 * source.width + x0) * 4 + channel]!;
+        const bottomRight = source.rgba[(y1 * source.width + x1) * 4 + channel]!;
+        const topValue = topLeft + (topRight - topLeft) * xWeight;
+        const bottomValue = bottomLeft + (bottomRight - bottomLeft) * xWeight;
+        result[targetOffset + channel] = Math.round(topValue + (bottomValue - topValue) * yWeight);
+      }
+    }
+  }
+  return result;
+}
+
 function crc32(bytes: Uint8Array): number {
   let crc = 0xffffffff;
   for (const byte of bytes) {
@@ -198,43 +249,40 @@ async function writeBinary(path: string, data: Buffer): Promise<void> {
   if (!existing || !existing.equals(data)) await writeFile(path, data);
 }
 
-async function copyExact(source: string, destination: string): Promise<void> {
-  await mkdir(dirname(destination), { recursive: true });
-  await copyFile(source, destination);
-}
-
 async function main(): Promise<void> {
   const sourceBytes = await readFile(masterPng);
   const source = decodePng(sourceBytes);
   const resized = (width: number, height: number) =>
     encodePng(width, height, resizeCover(source, width, height));
+  const resizedIcon = (width: number, height: number) =>
+    encodePng(width, height, resizeContain(source, width, height));
   const webPublic = join(rootDir, 'apps', 'web', 'public');
 
-  await writeBinary(join(webPublic, 'favicon.png'), resized(64, 64));
-  await writeBinary(join(webPublic, 'pwa-180.png'), resized(180, 180));
-  await writeBinary(join(webPublic, 'pwa-192.png'), resized(192, 192));
-  await writeBinary(join(webPublic, 'pwa-512.png'), resized(512, 512));
+  await writeBinary(join(webPublic, 'favicon.png'), resizedIcon(64, 64));
+  await writeBinary(join(webPublic, 'pwa-180.png'), resizedIcon(180, 180));
+  await writeBinary(join(webPublic, 'pwa-192.png'), resizedIcon(192, 192));
+  await writeBinary(join(webPublic, 'pwa-512.png'), resizedIcon(512, 512));
   await writeBinary(join(webPublic, 'brand', 'taskdock-icon.png'), resized(512, 512));
 
   const desktopIcons = join(rootDir, 'apps', 'desktop', 'resources', 'icons');
-  await copyExact(masterPng, join(desktopIcons, 'taskdock-icon.png'));
-  await writeBinary(join(desktopIcons, 'icon.ico'), icoFromPng(resized(256, 256)));
+  await writeBinary(join(desktopIcons, 'taskdock-icon.png'), resizedIcon(512, 512));
+  await writeBinary(join(desktopIcons, 'icon.ico'), icoFromPng(resizedIcon(256, 256)));
 
   const androidRes = join(rootDir, 'apps', 'mobile', 'android', 'app', 'src', 'main', 'res');
-  await copyExact(masterPng, join(androidRes, 'drawable-nodpi', 'taskdock_icon.png'));
+  await writeBinary(join(androidRes, 'drawable-nodpi', 'taskdock_icon.png'), resizedIcon(512, 512));
   const launcherSizes = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 } as const;
   for (const [density, size] of Object.entries(launcherSizes)) {
     await writeBinary(
       join(androidRes, `mipmap-${density}`, 'ic_launcher.png'),
-      resized(size, size),
+      resizedIcon(size, size),
     );
     await writeBinary(
       join(androidRes, `mipmap-${density}`, 'ic_launcher_round.png'),
-      resized(size, size),
+      resizedIcon(size, size),
     );
     await writeBinary(
       join(androidRes, `mipmap-${density}`, 'ic_launcher_foreground.png'),
-      resized(size, size),
+      resizedIcon(size, size),
     );
   }
 

@@ -76,6 +76,9 @@ class MainViewModel(
     private val _dataReady = MutableStateFlow(!authManager.isLoggedIn)
     val dataReady: StateFlow<Boolean> = _dataReady.asStateFlow()
 
+    private val _authenticated = MutableStateFlow(authManager.isLoggedIn)
+    val authenticated: StateFlow<Boolean> = _authenticated.asStateFlow()
+
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 16)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
@@ -90,6 +93,7 @@ class MainViewModel(
 
     private var todayLoadJob: Job? = null
     private var midnightRefreshJob: Job? = null
+    private var sessionRestoreJob: Job? = null
 
     private val todayStr: String
         get() = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
@@ -97,7 +101,21 @@ class MainViewModel(
     init {
         if (authManager.isLoggedIn) {
             loadTodayData()
-            syncEngine.start()
+            sessionRestoreJob = viewModelScope.launch(Dispatchers.IO) {
+                val restored = api.restoreSession()
+                if (!isActive) return@launch
+                when {
+                    restored -> syncEngine.start()
+                    !authManager.isLoggedIn -> withContext(Dispatchers.Main.immediate) {
+                        onLoggedOut()
+                        _messages.tryEmit("登录已失效，请重新登录")
+                    }
+                    else -> withContext(Dispatchers.Main.immediate) {
+                        _dataReady.value = true
+                        _messages.tryEmit("暂时无法恢复中枢连接，登录状态已保留")
+                    }
+                }
+            }
         }
     }
 
@@ -448,6 +466,9 @@ class MainViewModel(
     }
 
     fun onAuthenticated() {
+        sessionRestoreJob?.cancel()
+        sessionRestoreJob = null
+        _authenticated.value = true
         currentOwnerId.value = authManager.ownerId
         _dataReady.value = false
         loadTodayData()
@@ -456,7 +477,10 @@ class MainViewModel(
     }
 
     fun onLoggedOut() {
+        sessionRestoreJob?.cancel()
+        sessionRestoreJob = null
         syncEngine.stop()
+        _authenticated.value = false
         currentOwnerId.value = null
         todayLoadJob?.cancel()
         midnightRefreshJob?.cancel()

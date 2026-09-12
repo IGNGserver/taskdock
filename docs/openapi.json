@@ -123,6 +123,9 @@
       },
       "post": { "responses": { "201": { "description": "project created" } } }
     },
+    "/projects/task-counts": {
+      "get": { "responses": { "200": { "description": "project task counts" } } }
+    },
     "/projects/{id}": {
       "get": { "responses": { "200": { "description": "project" } } },
       "patch": { "responses": { "200": { "description": "project updated" } } }
@@ -186,6 +189,9 @@
     },
     "/time-points/events": {
       "post": { "responses": { "201": { "description": "event time point" } } }
+    },
+    "/time-points/placement-counts": {
+      "get": { "responses": { "200": { "description": "placement counts grouped by time point" } } }
     },
     "/time-points/{id}": {
       "get": { "responses": { "200": { "description": "time point" } } },

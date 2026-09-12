@@ -112,7 +112,7 @@ export function M3SegmentedControl<T extends string>({
     }
   };
   return (
-    <div className="m3-segmented-control" role="tablist" aria-label={label}>
+    <div className="m3-segmented-control" role="radiogroup" aria-label={label}>
       {options.map((option, index) => (
         <button
           key={option.value}
@@ -120,9 +120,9 @@ export function M3SegmentedControl<T extends string>({
             buttonRefs.current[index] = element;
           }}
           type="button"
-          role="tab"
+          role="radio"
           tabIndex={value === option.value ? 0 : -1}
-          aria-selected={value === option.value}
+          aria-checked={value === option.value}
           disabled={option.disabled}
           className={value === option.value ? 'selected' : ''}
           onClick={() => onChange(option.value)}

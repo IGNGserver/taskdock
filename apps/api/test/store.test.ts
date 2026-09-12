@@ -106,6 +106,66 @@ describe('DevTodo store invariants', () => {
     expect(store.eventState(event)).toBe('WAITING');
   });
 
+  it('aggregates project and time-point task counts without counting archived records', () => {
+    const { store, owner } = fixture();
+    const project = store.createProject(owner.id, '统计项目', 'CNT');
+    const openTask = store.createTask(owner.id, {
+      projectId: project.id,
+      category: 'FEATURE',
+      title: '未完成任务',
+      priority: 'NONE',
+    });
+    const doneTask = store.createTask(owner.id, {
+      projectId: project.id,
+      category: 'FEATURE',
+      title: '已完成任务',
+      priority: 'NONE',
+    });
+    const done = store.updateTask(owner.id, doneTask.id, { status: 'DONE' }, doneTask.version);
+    const date = store.createDate(owner.id, '2026-09-04');
+    const event = store.createEvent(owner.id, '统计事件');
+    store.addPlacement(owner.id, openTask.id, date.id);
+    store.addPlacement(owner.id, doneTask.id, date.id);
+    store.addPlacement(owner.id, openTask.id, event.id);
+
+    expect(store.listProjectTaskCounts(owner.id)).toEqual([
+      { projectId: project.id, openCount: 1, doneCount: 1 },
+    ]);
+    expect(store.listTimePointPlacementCounts(owner.id, 'DATE', false)).toEqual([
+      {
+        timePointId: date.id,
+        localDate: '2026-09-04',
+        totalCount: 2,
+        openCount: 1,
+        doneCount: 1,
+      },
+    ]);
+    expect(store.listTimePointPlacementCounts(owner.id, 'EVENT', false)).toEqual([
+      {
+        timePointId: event.id,
+        localDate: null,
+        totalCount: 1,
+        openCount: 1,
+        doneCount: 0,
+      },
+    ]);
+
+    store.archiveTask(owner.id, openTask.id, openTask.version);
+    expect(store.listProjectTaskCounts(owner.id)).toEqual([
+      { projectId: project.id, openCount: 0, doneCount: 1 },
+    ]);
+    expect(store.listTimePointPlacementCounts(owner.id, 'EVENT', false)).toEqual([
+      {
+        timePointId: event.id,
+        localDate: null,
+        totalCount: 0,
+        openCount: 0,
+        doneCount: 0,
+      },
+    ]);
+    expect(done.status).toBe('DONE');
+  });
+
   it('does not duplicate an existing placement and preserves source on copy', () => {
     const { store, owner } = fixture();
     const task = store.createTask(owner.id, {

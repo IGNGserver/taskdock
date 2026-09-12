@@ -9,12 +9,14 @@ import {
   type NoteDto,
   type PlacementDto,
   type ProjectDto,
+  type ProjectTaskCountDto,
   type SettingsDto,
   type TaskCategory,
   type TaskDto,
   type TaskPriority,
   type TaskStatus,
   type TimePointDto,
+  type TimePointPlacementCountDto,
   type TimePointType,
   type UserDto,
 } from '@devtodo/contracts';
@@ -617,6 +619,27 @@ export class PostgresStore implements Store {
       [ownerId],
     );
     return result.rows.map((row) => projectDto(projectRecord(row)));
+  }
+
+  async listProjectTaskCounts(ownerId: string, archived = false): Promise<ProjectTaskCountDto[]> {
+    await this.owner(ownerId);
+    const result = await this.query(
+      'SELECT p.id AS project_id, ' +
+        "COUNT(t.id) FILTER (WHERE t.status <> 'DONE')::int AS open_count, " +
+        "COUNT(t.id) FILTER (WHERE t.status = 'DONE')::int AS done_count " +
+        'FROM projects p ' +
+        'LEFT JOIN tasks t ON t.owner_id = p.owner_id AND t.project_id = p.id ' +
+        'AND t.deleted_at IS NULL AND t.archived_at IS NULL ' +
+        'WHERE p.owner_id = $1 AND p.deleted_at IS NULL AND p.archived_at IS ' +
+        (archived ? 'NOT ' : '') +
+        'NULL GROUP BY p.id, p.rank ORDER BY p.rank, p.id',
+      [ownerId],
+    );
+    return result.rows.map((row) => ({
+      projectId: String(row.project_id),
+      openCount: Number(row.open_count),
+      doneCount: Number(row.done_count),
+    }));
   }
 
   async listProjectsPage(
@@ -1225,6 +1248,51 @@ export class PostgresStore implements Store {
       values,
     );
     return result.rows.map((row) => timePointDto(timePointRecord(row)));
+  }
+
+  async listTimePointPlacementCounts(
+    ownerId: string,
+    type: TimePointType,
+    archived?: boolean,
+    fromDate?: string,
+    toDate?: string,
+  ): Promise<TimePointPlacementCountDto[]> {
+    await this.owner(ownerId);
+    const values: unknown[] = [ownerId, type];
+    const where = ['tp.owner_id = $1', 'tp.type = $2', 'tp.deleted_at IS NULL'];
+    if (archived !== undefined)
+      where.push('tp.archived_at IS ' + (archived ? 'NOT ' : '') + 'NULL');
+    if (fromDate !== undefined) {
+      values.push(fromDate);
+      where.push('tp.local_date >= $' + values.length + '::date');
+    }
+    if (toDate !== undefined) {
+      values.push(toDate);
+      where.push('tp.local_date <= $' + values.length + '::date');
+    }
+    const result = await this.query(
+      'SELECT tp.id AS time_point_id, tp.local_date, ' +
+        'COUNT(t.id)::int AS total_count, ' +
+        "COUNT(t.id) FILTER (WHERE t.status <> 'DONE')::int AS open_count, " +
+        "COUNT(t.id) FILTER (WHERE t.status = 'DONE')::int AS done_count " +
+        'FROM time_points tp ' +
+        'LEFT JOIN placements p ON p.owner_id = tp.owner_id AND p.time_point_id = tp.id ' +
+        'AND p.deleted_at IS NULL ' +
+        'LEFT JOIN tasks t ON t.owner_id = p.owner_id AND t.id = p.task_id ' +
+        'AND t.deleted_at IS NULL AND t.archived_at IS NULL ' +
+        'WHERE ' +
+        where.join(' AND ') +
+        ' GROUP BY tp.id, tp.local_date ' +
+        "ORDER BY CASE WHEN tp.type = 'DATE' THEN 0 ELSE 1 END, tp.local_date NULLS LAST, tp.id",
+      values,
+    );
+    return result.rows.map((row) => ({
+      timePointId: String(row.time_point_id),
+      localDate: localDateValue(row.local_date),
+      totalCount: Number(row.total_count),
+      openCount: Number(row.open_count),
+      doneCount: Number(row.done_count),
+    }));
   }
 
   async listTimePointsPage(

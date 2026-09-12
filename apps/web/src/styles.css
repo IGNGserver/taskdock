@@ -3976,3 +3976,331 @@ body {
     display: none;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Application shell and interaction-state hardening                         */
+/* -------------------------------------------------------------------------- */
+
+.app-frame {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar-scroll,
+.mobile-sidebar-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: color-mix(in srgb, var(--m3-primary) 54%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.sidebar-scroll {
+  flex: 1 1 auto;
+  margin: 0 -8px;
+  padding: 0 8px 14px;
+}
+
+.sidebar-scroll::-webkit-scrollbar,
+.mobile-sidebar-scroll::-webkit-scrollbar,
+.page-wrap::-webkit-scrollbar {
+  width: 7px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track,
+.mobile-sidebar-scroll::-webkit-scrollbar-track,
+.page-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb,
+.mobile-sidebar-scroll::-webkit-scrollbar-thumb,
+.page-wrap::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--m3-primary) 54%, transparent);
+  background-clip: padding-box;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover,
+.mobile-sidebar-scroll::-webkit-scrollbar-thumb:hover,
+.page-wrap::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--m3-primary) 78%, transparent);
+  background-clip: padding-box;
+}
+
+.secondary-nav {
+  margin-top: 20px;
+}
+
+.sidebar-bottom {
+  flex: none;
+  margin-top: 0;
+}
+
+.main-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.topbar {
+  flex: none;
+}
+
+.page-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: color-mix(in srgb, var(--m3-primary) 54%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.modal-open .page-wrap,
+.modal-open .sidebar-scroll,
+.modal-open .mobile-sidebar-scroll {
+  overflow: hidden;
+}
+
+.drawer-open .page-wrap,
+.drawer-open .sidebar-scroll {
+  overflow: hidden;
+}
+
+.modal-layer {
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+
+.modal {
+  max-height: min(720px, calc(100dvh - 40px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: auto;
+}
+
+.confirm-dialog {
+  display: grid;
+  gap: 18px;
+}
+
+.confirm-dialog p {
+  margin: 0;
+  color: var(--m3-on-surface-variant);
+  line-height: 1.65;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.danger-confirm-button {
+  background: var(--m3-error);
+  color: var(--m3-on-error);
+}
+
+.danger-confirm-button:hover {
+  background: color-mix(in srgb, var(--m3-error) 88%, var(--m3-on-error));
+}
+
+.project-card-shell {
+  position: relative;
+}
+
+.project-card-actions {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition:
+    opacity var(--m3-motion-short) ease,
+    transform var(--m3-motion-short) ease;
+}
+
+.project-card-shell:hover .project-card-actions,
+.project-card-shell:focus-within .project-card-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.project-card-actions {
+  right: 12px;
+}
+
+.card-reorder-actions {
+  top: auto;
+  right: 12px;
+  bottom: 12px;
+}
+
+.archive-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--m3-primary) 28%, var(--m3-outline-variant));
+  border-radius: var(--m3-shape-md);
+  background: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.archive-notice svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.event-target-actions,
+.inline-event-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.event-target-actions .field-help {
+  margin: 0;
+}
+
+.inline-event-creator {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-md);
+  background: var(--m3-surface-container);
+}
+
+.inline-event-creator .field {
+  margin: 0;
+}
+
+.inline-error {
+  overflow-wrap: anywhere;
+}
+
+.mobile-sidebar {
+  overflow: hidden;
+}
+
+.mobile-sidebar-scroll {
+  flex: 1 1 auto;
+  margin: 0 -8px;
+  padding: 0 8px 14px;
+}
+
+.mobile-sidebar-scroll .secondary-nav {
+  margin-top: 24px;
+}
+
+@media (max-width: 767px) {
+  html.modal-open .page-wrap {
+    z-index: 100;
+  }
+
+  .project-card-actions,
+  .card-reorder-actions {
+    opacity: 1;
+    transform: none;
+  }
+
+  .page-wrap {
+    scrollbar-width: thin;
+  }
+
+  .page-wrap::-webkit-scrollbar {
+    display: block;
+    width: 5px;
+  }
+
+  .modal {
+    max-height: calc(100dvh - 12px - var(--dt-safe-top));
+  }
+
+  .confirm-actions {
+    justify-content: stretch;
+  }
+
+  .confirm-actions > * {
+    flex: 1;
+  }
+}
+
+html.native-mobile-shell .page-wrap {
+  scrollbar-width: thin !important;
+}
+
+html.native-mobile-shell .page-wrap::-webkit-scrollbar {
+  display: block !important;
+  width: 5px !important;
+}
+
+/*
+ * Mobile shell layout guard: the header must participate in the column
+ * layout, rather than overlaying the scroll viewport. This is intentionally
+ * the final rule so legacy sticky-header declarations cannot cover the first
+ * filter row or page heading on Android WebView/PWA shells.
+ */
+@media (max-width: 767px) {
+  .main-shell,
+  html.native-mobile-shell .main-shell {
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    margin-left: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .topbar,
+  html.native-mobile-shell .topbar {
+    position: relative !important;
+    top: auto !important;
+    z-index: 10 !important;
+    flex: 0 0 auto !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+    height: calc(64px + var(--dt-safe-top)) !important;
+    min-height: calc(64px + var(--dt-safe-top)) !important;
+    padding: var(--dt-safe-top) 16px 0 !important;
+  }
+
+  .page-wrap,
+  html.native-mobile-shell .page-wrap {
+    position: relative !important;
+    z-index: 0 !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    padding-top: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    scroll-padding-top: 16px !important;
+  }
+
+  .page,
+  .narrow-page,
+  html.native-mobile-shell .page,
+  html.native-mobile-shell .narrow-page {
+    margin-top: 0 !important;
+    padding-top: 32px !important;
+  }
+}

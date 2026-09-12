@@ -20,11 +20,21 @@ class ApiClient(private val authManager: SecureAuthManager) {
     }
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    private val refreshLock = Any()
+    private val nativeOrigin = "https://localhost"
 
-    private val okHttpClient = OkHttpClient.Builder()
+    /**
+     * The raw client is intentionally kept free of the bearer interceptor and
+     * authenticator. Refreshing through the same client would recurse when a
+     * revoked refresh token also returns 401.
+     */
+    private val rawHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
+        .build()
+
+    private val okHttpClient = rawHttpClient.newBuilder()
         .addInterceptor { chain ->
             val original = chain.request()
             val builder = original.newBuilder()
@@ -35,6 +45,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
             }
             chain.proceed(builder.build())
         }
+        .authenticator { _, response -> authenticate(response) }
         .build()
 
     private fun baseUrl(): String = "${authManager.hubOrigin}/api/v1"
@@ -61,17 +72,30 @@ class ApiClient(private val authManager: SecureAuthManager) {
 
     suspend fun login(username: String, password: String): Result<LoginResponse> = withContext(Dispatchers.IO) {
         try {
-            val payload = json.encodeToString(mapOf("username" to username, "password" to password))
+            val challenge = requestNativeChallenge()
+                ?: return@withContext Result.failure(IOException("Native auth challenge failed"))
+            val payload = json.encodeToString(
+                mapOf(
+                    "username" to username,
+                    "password" to password,
+                    "deviceName" to "Android",
+                    "platform" to "android",
+                    "nativeChallenge" to challenge
+                )
+            )
             val req = Request.Builder()
                 .url("${baseUrl()}/auth/login")
+                .header("Origin", nativeOrigin)
                 .post(payload.toRequestBody(jsonMediaType))
                 .build()
             okHttpClient.newCall(req).execute().use { resp ->
                 val bodyStr = resp.body?.string() ?: ""
                 if (resp.isSuccessful) {
                     val loginRes = json.decodeFromString<LoginResponse>(bodyStr)
+                    val refreshToken = loginRes.refreshToken
+                        ?: return@use Result.failure(IOException("Login response missing refresh token"))
                     authManager.accessToken = loginRes.accessToken
-                    loginRes.refreshToken?.let { authManager.refreshToken = it }
+                    authManager.refreshToken = refreshToken
                     authManager.ownerId = loginRes.user.id
                     authManager.username = loginRes.user.username
                     Result.success(loginRes)
@@ -82,6 +106,105 @@ class ApiClient(private val authManager: SecureAuthManager) {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /** Restore the short-lived access token from the encrypted native session. */
+    fun restoreSession(): Boolean {
+        if (authManager.hasUsableAccessToken) return true
+        return refreshSession(authManager.accessToken)
+    }
+
+    private fun authenticate(response: Response): Request? {
+        val authorization = response.request.header("Authorization") ?: return null
+        if (responseCount(response) > 1) return null
+        val failedAccessToken = authorization.removePrefix("Bearer ")
+        val currentAccessToken = authManager.accessToken
+        if (!currentAccessToken.isNullOrBlank() && currentAccessToken != failedAccessToken) {
+            return response.request.newBuilder()
+                .header("Authorization", "Bearer $currentAccessToken")
+                .build()
+        }
+        if (!refreshSession(failedAccessToken)) return null
+        val nextAccessToken = authManager.accessToken ?: return null
+        return response.request.newBuilder()
+            .header("Authorization", "Bearer $nextAccessToken")
+            .build()
+    }
+
+    private fun refreshSession(failedAccessToken: String?): Boolean {
+        synchronized(refreshLock) {
+            val currentAccessToken = authManager.accessToken
+            if (
+                failedAccessToken != null &&
+                !currentAccessToken.isNullOrBlank() &&
+                currentAccessToken != failedAccessToken
+            ) {
+                return true
+            }
+            val refreshToken = authManager.refreshToken ?: return false
+            val challenge = requestNativeChallenge() ?: return false
+            val payload = json.encodeToString(
+                mapOf(
+                    "refreshToken" to refreshToken,
+                    "nativeChallenge" to challenge
+                )
+            )
+            val request = Request.Builder()
+                .url("${baseUrl()}/auth/refresh")
+                .header("Origin", nativeOrigin)
+                .header("X-Client-Id", authManager.clientId)
+                .post(payload.toRequestBody(jsonMediaType))
+                .build()
+            return try {
+                rawHttpClient.newCall(request).execute().use { response ->
+                    val body = response.body?.string() ?: ""
+                    if (!response.isSuccessful) {
+                        if (response.code == 401) authManager.clearSession()
+                        false
+                    } else {
+                        val result = json.decodeFromString<LoginResponse>(body)
+                        val nextRefreshToken = result.refreshToken ?: return@use false
+                        authManager.accessToken = result.accessToken
+                        authManager.refreshToken = nextRefreshToken
+                        authManager.ownerId = result.user.id
+                        authManager.username = result.user.username
+                        true
+                    }
+                }
+            } catch (_: IOException) {
+                false
+            } catch (_: Exception) {
+                false
+            }
+        }
+    }
+
+    private fun requestNativeChallenge(): String? {
+        val request = Request.Builder()
+            .url("${baseUrl()}/auth/native/challenge")
+            .header("Origin", nativeOrigin)
+            .header("Accept", "application/json")
+            .post("".toRequestBody(jsonMediaType))
+            .build()
+        return try {
+            rawHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                val body = response.body?.string() ?: return@use null
+                json.decodeFromString<NativeChallengeResponse>(body).challenge
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun responseCount(response: Response): Int {
+        var count = 1
+        var prior = response.priorResponse
+        while (prior != null) {
+            count += 1
+            prior = prior.priorResponse
+        }
+        return count
     }
 
     suspend fun pushSync(mutations: List<Mutation>): Result<PushResult> = withContext(Dispatchers.IO) {
@@ -157,3 +280,6 @@ class ApiClient(private val authManager: SecureAuthManager) {
         return okHttpClient.newWebSocket(req, listener)
     }
 }
+
+@kotlinx.serialization.Serializable
+private data class NativeChallengeResponse(val challenge: String)
