@@ -21,7 +21,9 @@ contextBridge.exposeInMainWorld('devtodoDesktop', {
   authRefresh: (): Promise<DesktopAuthResponse> => ipcRenderer.invoke('devtodo:auth-refresh'),
   authLogout: (): Promise<{ ok: true }> => ipcRenderer.invoke('devtodo:auth-logout'),
   getHubOrigin: (): Promise<string | null> => ipcRenderer.invoke('devtodo:hub-get'),
+  getHubOriginState: (): Promise<DesktopHubOriginState> => ipcRenderer.invoke('devtodo:hub-state'),
   setHubOrigin: (origin: string): Promise<string> => ipcRenderer.invoke('devtodo:hub-set', origin),
+  clearHubOrigin: (): Promise<boolean> => ipcRenderer.invoke('devtodo:hub-clear'),
   testHubConnection: (origin: string): Promise<{ initialized: boolean }> =>
     ipcRenderer.invoke('devtodo:hub-test', origin),
   request: (input: DesktopHubRequest): Promise<DesktopHubResponse> =>
@@ -44,6 +46,12 @@ interface DesktopHubResponse {
   status: number;
   body: string;
   headers: Record<string, string>;
+}
+
+interface DesktopHubOriginState {
+  origin: string | null;
+  status: 'configured' | 'missing' | 'invalid' | 'unreadable';
+  message?: string;
 }
 
 interface DesktopAuthSuccess {

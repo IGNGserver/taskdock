@@ -70,6 +70,7 @@ import {
   createEvent,
   createTask,
   getConfiguredHubOrigin,
+  getHubOriginLoadError,
   isDesktopClient,
   isDesktopShell,
   isNativeClient,
@@ -84,7 +85,7 @@ import {
   testHubConnection,
 } from './api.js';
 import { useAuth } from './auth.js';
-import { M3Button, M3Chip, M3IconButton, M3SegmentedControl } from './components/m3.js';
+import { M3Button, M3Chip, M3IconButton, M3Select, M3SegmentedControl } from './components/m3.js';
 import { nextTaskStatus, reorderIds, taskStatusActionLabel } from './task-behavior.js';
 
 type PlacementWithTask = { id: string; task: TaskDto };
@@ -218,7 +219,11 @@ function DesktopStartup() {
       if (!active) return;
       setOrigin(initialOrigin);
       if (initialOrigin) void verify(initialOrigin);
-      else setPhase('setup');
+      else {
+        const loadError = getHubOriginLoadError();
+        setMessage(loadError?.includes('尚未配置') ? '' : (loadError ?? ''));
+        setPhase('setup');
+      }
     });
     return () => {
       active = false;
@@ -232,6 +237,8 @@ function DesktopStartup() {
         if (!active) return;
         setOrigin(currentOrigin);
         if (!currentOrigin) {
+          const loadError = getHubOriginLoadError();
+          setMessage(loadError?.includes('尚未配置') ? '' : (loadError ?? ''));
           setPhase('setup');
         }
       });
@@ -250,10 +257,9 @@ function DesktopStartup() {
     setPhase('setup');
     setMessage('');
   }, []);
-  const prepareSwitch = useCallback(
-    async (nextOrigin: string) => {
-      const currentOrigin = getConfiguredHubOrigin();
-      if (currentOrigin && currentOrigin !== nextOrigin) await auth.logout();
+  const finishSwitch = useCallback(
+    async (nextOrigin: string, previousOrigin: string | null) => {
+      if (previousOrigin && previousOrigin !== nextOrigin) await auth.logout();
     },
     [auth],
   );
@@ -264,7 +270,7 @@ function DesktopStartup() {
         initialOrigin={origin ?? ''}
         errorMessage={message}
         onConnected={handleConnected}
-        beforeSave={prepareSwitch}
+        afterSave={finishSwitch}
       />
     );
   if (phase === 'checking') return <LoadingScreen label="正在连接中枢" />;
@@ -274,7 +280,7 @@ function DesktopStartup() {
         initialOrigin={origin ?? ''}
         errorMessage={message}
         onConnected={handleConnected}
-        beforeSave={prepareSwitch}
+        afterSave={finishSwitch}
       />
     );
   if (phase === 'waiting')
@@ -295,18 +301,27 @@ function HubSetupScreen({
   initialOrigin,
   errorMessage,
   onConnected,
-  beforeSave,
+  afterSave,
 }: {
   initialOrigin: string;
   errorMessage: string;
   onConnected: (origin: string, initialized: boolean) => void;
-  beforeSave?: (origin: string) => Promise<void>;
+  afterSave?: (origin: string, previousOrigin: string | null) => Promise<void>;
 }) {
   const [origin, setOrigin] = useState(initialOrigin);
-  const [state, setState] = useState<'idle' | 'checking' | 'error'>('idle');
+  const [state, setState] = useState<'idle' | 'checking' | 'error'>(
+    errorMessage ? 'error' : 'idle',
+  );
   const [message, setMessage] = useState(errorMessage);
+  const originEdited = useRef(false);
 
-  useEffect(() => setMessage(errorMessage), [errorMessage]);
+  useEffect(() => {
+    setMessage(errorMessage);
+    if (errorMessage) setState('error');
+  }, [errorMessage]);
+  useEffect(() => {
+    if (!originEdited.current) setOrigin(initialOrigin);
+  }, [initialOrigin]);
 
   const connect = async () => {
     if (state === 'checking' || !origin.trim()) return;
@@ -317,8 +332,9 @@ function HubSetupScreen({
     try {
       const normalized = normalizeHubOrigin(origin);
       const status = await testHubConnection(normalized, controller.signal);
-      await beforeSave?.(normalized);
+      const previousOrigin = getConfiguredHubOrigin();
       const saved = await setHubOrigin(normalized);
+      await afterSave?.(saved, previousOrigin);
       onConnected(saved, status.initialized);
     } catch (cause) {
       setState('error');
@@ -342,7 +358,7 @@ function HubSetupScreen({
           <span>TaskDock</span>
         </div>
         <p className="eyebrow">DESKTOP CONNECTION</p>
-        <h1>{initialOrigin ? '连接中枢' : '配置中枢地址'}</h1>
+        <h1>{origin ? '连接中枢' : '配置中枢地址'}</h1>
         <p className="auth-intro">
           桌面端不会默认绑定网页地址。先连接你的自托管中枢，之后登录、同步和离线数据都会跟随这个地址隔离。
         </p>
@@ -364,13 +380,14 @@ function HubSetupScreen({
             label="中枢 HTTP/HTTPS 地址"
             value={origin}
             onChange={(value) => {
+              originEdited.current = true;
               setOrigin(value);
               setState('idle');
               setMessage('');
             }}
             type="url"
             autoComplete="url"
-            autoFocus={!initialOrigin}
+            autoFocus={!origin}
           />
           <p className="field-help">
             例如 https://todo.example.com、http://47.95.17.77:48731 或 http://localhost:3000。HTTP
@@ -688,8 +705,18 @@ function LoginScreen({
   const [busy, setBusy] = useState(false);
   const [hubCheck, setHubCheck] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
   const [hubCheckMessage, setHubCheckMessage] = useState('');
+  const hubOriginEdited = useRef(false);
 
   useEffect(() => setHubInitialized(initialized), [initialized]);
+  useEffect(() => {
+    let active = true;
+    void loadConfiguredHubOrigin().then((configured) => {
+      if (active && configured && !hubOriginEdited.current) setHubOriginValue(configured);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const checkHub = async (): Promise<boolean | null> => {
     if (!mobileClient || hubCheck === 'checking' || !hubOrigin.trim()) return null;
@@ -787,6 +814,7 @@ function LoginScreen({
                 label="中枢 HTTP/HTTPS 地址"
                 value={hubOrigin}
                 onChange={(value) => {
+                  hubOriginEdited.current = true;
                   setHubOriginValue(value);
                   setHubCheck('idle');
                   setHubCheckMessage('');
@@ -3417,14 +3445,14 @@ function PlacementTargetModal({
         ) : (
           <label className="field">
             <span>选择自定义时间点</span>
-            <select value={targetId} onChange={(event) => setTargetId(event.target.value)}>
+            <M3Select value={targetId} onChange={(event) => setTargetId(event.target.value)}>
               <option value="">选择事件</option>
               {eventPoints.map((point) => (
                 <option key={point.id} value={point.id}>
                   {point.title}
                 </option>
               ))}
-            </select>
+            </M3Select>
             {!eventPoints.length && (
               <small className="field-help">还没有可用的自定义时间点。</small>
             )}
@@ -3558,14 +3586,14 @@ function TaskPlacementTargetModal({
         ) : (
           <label className="field">
             <span>选择自定义时间点</span>
-            <select value={targetId} onChange={(event) => setTargetId(event.target.value)}>
+            <M3Select value={targetId} onChange={(event) => setTargetId(event.target.value)}>
               <option value="">选择事件</option>
               {eventPoints.map((point) => (
                 <option key={point.id} value={point.id}>
                   {point.title}
                 </option>
               ))}
-            </select>
+            </M3Select>
             {!eventPoints.length && (
               <small className="field-help">还没有可用的自定义时间点。</small>
             )}
@@ -4004,32 +4032,32 @@ function SettingsPage() {
           <h2>日期与安排</h2>
           <label className="field">
             <span>时区</span>
-            <select value={timezone} onChange={(event) => setTimezone(event.target.value)}>
+            <M3Select value={timezone} onChange={(event) => setTimezone(event.target.value)}>
               <option>Asia/Shanghai</option>
               <option>Asia/Tokyo</option>
               <option>UTC</option>
               <option>America/Los_Angeles</option>
-            </select>
+            </M3Select>
           </label>
           <label className="field">
             <span>每周起始日</span>
-            <select
+            <M3Select
               value={weekStartsOn}
               onChange={(event) => setWeekStartsOn(Number(event.target.value) as 0 | 1)}
             >
               <option value={1}>周一</option>
               <option value={0}>周日</option>
-            </select>
+            </M3Select>
           </label>
           <label className="field">
             <span>默认新任务位置</span>
-            <select
+            <M3Select
               value={defaultCaptureTarget}
               onChange={(event) => setDefaultCaptureTarget(event.target.value)}
             >
               <option value="GLOBAL_MISC">全局杂项</option>
               <option value="RECENT_CONTEXT">最近打开的项目或页面</option>
-            </select>
+            </M3Select>
           </label>
           <p className="field-help">日期任务使用此时区的本地日期；不会把 UTC 日期直接展示给你。</p>
         </div>
@@ -4073,6 +4101,16 @@ function HubSettingsSection() {
   const [origin, setOrigin] = useState(getConfiguredHubOrigin() ?? '');
   const [state, setState] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
+  const originEdited = useRef(false);
+  useEffect(() => {
+    let active = true;
+    void loadConfiguredHubOrigin().then((configured) => {
+      if (active && configured && !originEdited.current) setOrigin(configured);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
   const save = async () => {
     if (state === 'checking' || !origin.trim()) return;
     setState('checking');
@@ -4083,8 +4121,8 @@ function HubSettingsSection() {
       const nextOrigin = normalizeHubOrigin(origin);
       const status = await testHubConnection(nextOrigin, controller.signal);
       const currentOrigin = getConfiguredHubOrigin();
-      if (currentOrigin !== nextOrigin) await auth.logout();
       await setHubOrigin(nextOrigin);
+      if (currentOrigin !== nextOrigin) await auth.logout();
       setState('success');
       setMessage(status.initialized ? '连接成功，正在切换中枢…' : '连接成功，等待中枢初始化…');
       window.setTimeout(() => window.location.reload(), 250);
@@ -4114,6 +4152,7 @@ function HubSettingsSection() {
           type="url"
           value={origin}
           onChange={(event) => {
+            originEdited.current = true;
             setOrigin(event.target.value);
             setState('idle');
             setMessage('');
@@ -4620,18 +4659,18 @@ function TaskDetail({
         <div className="detail-fields">
           <label className="field">
             <span>状态</span>
-            <select
+            <M3Select
               value={detail.task.status}
               onChange={(event) => void saveTask({ status: event.target.value })}
             >
               <option value="TODO">待开始</option>
               <option value="IN_PROGRESS">进行中</option>
               <option value="DONE">已完成</option>
-            </select>
+            </M3Select>
           </label>
           <label className="field">
             <span>优先级</span>
-            <select
+            <M3Select
               value={detail.task.priority}
               onChange={(event) => void saveTask({ priority: event.target.value })}
             >
@@ -4639,11 +4678,11 @@ function TaskDetail({
               <option value="LOW">低</option>
               <option value="MEDIUM">中</option>
               <option value="HIGH">高</option>
-            </select>
+            </M3Select>
           </label>
           <label className="field">
             <span>项目</span>
-            <select
+            <M3Select
               value={detail.task.projectId ?? ''}
               onChange={(event) => {
                 const projectId = event.target.value || null;
@@ -4656,18 +4695,18 @@ function TaskDetail({
                   {project.name}
                 </option>
               ))}
-            </select>
+            </M3Select>
           </label>
           <label className="field">
             <span>分类</span>
-            <select
+            <M3Select
               value={detail.task.category}
               disabled={!detail.task.projectId}
               onChange={(event) => void saveTask({ category: event.target.value })}
             >
               <option value="FEATURE">功能</option>
               <option value="MISC">杂项</option>
-            </select>
+            </M3Select>
           </label>
         </div>
         {conflict && (
@@ -4798,7 +4837,7 @@ function TaskDetail({
             </div>
           ))}
           <div className="placement-add">
-            <select
+            <M3Select
               aria-label="选择安排时间点"
               value={placementTarget}
               onChange={(event) => setPlacementTarget(event.target.value)}
@@ -4811,7 +4850,7 @@ function TaskDetail({
                     {point.type === 'DATE' ? point.localDate : point.title}
                   </option>
                 ))}
-            </select>
+            </M3Select>
             <button
               className="secondary-button small"
               onClick={() => void addPlacement()}
