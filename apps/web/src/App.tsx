@@ -2069,6 +2069,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         <div
           className="today-progress"
           role="progressbar"
+          aria-label="今日任务完成度"
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={completionPercent}

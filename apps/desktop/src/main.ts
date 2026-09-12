@@ -9,7 +9,7 @@ import {
   safeStorage,
   shell,
 } from 'electron';
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -75,13 +75,13 @@ function getSystemTheme(): SystemTheme {
 }
 
 function themeBackground(theme: SystemTheme): string {
-  return theme === 'dark' ? '#11141a' : '#f5f6f8';
+  return theme === 'dark' ? '#0d0e13' : '#f5f2f9';
 }
 
 function themeTitleBar(theme: SystemTheme): { color: string; symbolColor: string } {
   return theme === 'dark'
     ? { color: '#171b23', symbolColor: '#eef2f7' }
-    : { color: '#f5f6f8', symbolColor: '#1f2430' };
+    : { color: '#f5f2f9', symbolColor: '#1f2430' };
 }
 
 function applyWindowTheme(): void {
@@ -206,14 +206,6 @@ function saveConfiguredHubOrigin(value: string): string {
   if (!origin) throw new Error('Hub origin must be a valid HTTP or HTTPS URL without credentials');
   writeFileSync(hubOriginFile(), JSON.stringify({ origin }), { mode: 0o600 });
   return origin;
-}
-
-function removeConfiguredHubOrigin(): void {
-  try {
-    unlinkSync(hubOriginFile());
-  } catch {
-    /* an absent origin file is already the desired state */
-  }
 }
 
 function assertIpcSender(sender: Electron.WebContents): void {
@@ -508,7 +500,6 @@ async function nativeLogout(): Promise<{ ok: true }> {
     /* local logout must complete even if the Hub or secure storage is unavailable */
   } finally {
     await removeSecureRefreshToken();
-    removeConfiguredHubOrigin();
   }
   return { ok: true };
 }

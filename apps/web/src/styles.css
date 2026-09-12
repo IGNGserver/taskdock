@@ -2733,23 +2733,33 @@ html.native-mobile-shell .m3-segmented-control button {
 /* -------------------------------------------------------------------------- */
 
 html {
-  background: var(--m3-surface-container-low);
+  background: var(--dt-canvas);
 }
 
 body {
   color: var(--m3-on-surface);
-  background: var(--m3-surface-container-low);
+  background: var(--dt-canvas);
 }
 
 .app-frame {
   background: var(--m3-surface-container-low);
 }
 
-.sidebar {
-  width: 256px;
-  padding: 24px 16px 16px;
-  border-right-color: var(--m3-outline-variant);
-  background: var(--m3-surface);
+@media (min-width: 768px) {
+  .sidebar {
+    width: 256px;
+    padding: 24px 16px 16px;
+    border-right-color: var(--m3-outline-variant);
+    background: var(--m3-surface);
+  }
+
+  .main-shell {
+    margin-left: 256px;
+  }
+}
+
+.main-shell {
+  background: var(--m3-surface-container-low);
 }
 
 .brand {
@@ -2817,17 +2827,11 @@ body {
 .nav-section-label {
   margin: 28px 14px 8px;
   color: var(--m3-on-surface-variant);
-  opacity: 0.72;
 }
 
 .secondary-nav,
 .sidebar-bottom {
   border-top-color: var(--m3-outline-variant);
-}
-
-.main-shell {
-  margin-left: 256px;
-  background: var(--m3-surface-container-low);
 }
 
 .topbar {

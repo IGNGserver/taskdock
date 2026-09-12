@@ -68,8 +68,8 @@
   --dt-surface-translucent: color-mix(in srgb, var(--m3-surface) 94%, transparent);
   --dt-ink: var(--m3-on-surface);
   --dt-ink-soft: var(--m3-on-surface-variant);
-  --dt-muted: #686a73;
-  --dt-faint: #777982;
+  --dt-muted: #5a5d68;
+  --dt-faint: #5a5d68;
   --dt-line: var(--m3-outline-variant);
   --dt-line-strong: var(--m3-outline);
   --dt-accent: var(--m3-primary);
