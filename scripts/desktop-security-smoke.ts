@@ -27,6 +27,8 @@ async function main(): Promise<void> {
     "'devtodo:theme-get'",
     "'devtodo:theme-changed'",
     "'devtodo:hub-test'",
+    "'devtodo:hub-state'",
+    "'devtodo:hub-clear'",
     "'devtodo:hub-request'",
   ];
   for (const marker of required)
@@ -42,7 +44,12 @@ async function main(): Promise<void> {
   for (const marker of ['saveRefreshToken', 'readRefreshToken', 'removeRefreshToken'])
     if (preload.includes(marker))
       throw new Error(`raw refresh-token bridge exposure detected: ${marker}`);
-  for (const marker of ['getSystemTheme', 'onSystemThemeChanged'])
+  for (const marker of [
+    'getSystemTheme',
+    'onSystemThemeChanged',
+    'getHubOriginState',
+    'clearHubOrigin',
+  ])
     if (!preload.includes(marker)) throw new Error(`theme bridge marker missing: ${marker}`);
   if (
     preload.includes('ipcRenderer:') ||

@@ -1552,8 +1552,8 @@ a {
 }
 .detail-fields .field input,
 .detail-fields .field select {
-  min-height: 35px;
-  font-size: 11px;
+  min-height: 48px;
+  font-size: 12px;
 }
 .note-editor {
   overflow: hidden;
@@ -1679,13 +1679,13 @@ a {
 .placement-add select {
   flex: 1;
   min-width: 0;
-  min-height: 32px;
-  padding: 0 8px;
-  border: 1px solid var(--dt-line-strong);
-  border-radius: 7px;
-  background: var(--dt-surface);
-  color: var(--dt-ink-soft);
-  font-size: 11px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--m3-outline);
+  border-radius: var(--m3-shape-md);
+  background: var(--m3-surface-container-lowest);
+  color: var(--m3-on-surface);
+  font-size: 12px;
 }
 .calendar-date-jump {
   display: flex;
@@ -2898,7 +2898,9 @@ body {
 
 .primary-button,
 .secondary-button,
+.quick-button,
 .text-button,
+.danger-button,
 .m3-button {
   min-height: 40px;
   border-radius: var(--m3-shape-full);
@@ -2913,6 +2915,7 @@ body {
 }
 
 .primary-button,
+.quick-button,
 .m3-button-filled {
   border: 1px solid var(--m3-primary);
   background: var(--m3-primary);
@@ -2921,6 +2924,7 @@ body {
 }
 
 .primary-button:hover,
+.quick-button:hover,
 .m3-button-filled:hover {
   border-color: var(--m3-primary);
   background: color-mix(in srgb, var(--m3-primary) 88%, var(--m3-on-primary));
@@ -2946,6 +2950,58 @@ body {
 .m3-button-outlined:hover {
   border-color: var(--m3-on-surface);
   background: var(--m3-state-hover);
+}
+
+.danger-button {
+  border: 1px solid var(--m3-error);
+  background: transparent;
+  color: var(--m3-error);
+  box-shadow: none;
+}
+
+.danger-button:hover {
+  border-color: var(--m3-error);
+  background: var(--m3-error-container);
+  color: var(--m3-on-error-container);
+}
+
+.text-button {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: var(--m3-shape-full);
+  color: var(--m3-primary);
+}
+
+.text-button:hover {
+  background: var(--m3-state-hover);
+  text-decoration: none;
+}
+
+.primary-button.small,
+.secondary-button.small,
+.danger-button.small {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.icon-button {
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  color: var(--m3-on-surface-variant);
+  transition:
+    background var(--m3-motion-short) ease,
+    border-color var(--m3-motion-short) ease,
+    color var(--m3-motion-short) ease,
+    transform var(--m3-motion-short) ease;
+}
+
+.icon-button:hover {
+  border-color: transparent;
+  background: var(--m3-state-hover);
+  color: var(--m3-on-surface);
 }
 
 .m3-button {
@@ -3500,6 +3556,57 @@ body {
   background: var(--m3-state-hover);
 }
 
+.command-trigger,
+.more-search-button {
+  min-height: 48px;
+  border-color: var(--m3-outline);
+  border-radius: var(--m3-shape-lg);
+  background: var(--m3-surface-container-lowest);
+  color: var(--m3-on-surface-variant);
+}
+
+.command-trigger:hover,
+.more-search-button:hover {
+  border-color: var(--m3-primary);
+  background: var(--m3-state-hover);
+  color: var(--m3-on-surface);
+}
+
+.note-editor {
+  border-color: var(--m3-outline-variant);
+  border-radius: var(--m3-shape-lg);
+  background: var(--m3-surface-container-lowest);
+}
+
+.editor-tabs {
+  border-bottom-color: var(--m3-outline-variant);
+  background: var(--m3-surface-container);
+}
+
+.editor-tabs button {
+  min-height: 40px;
+  border-radius: var(--m3-shape-full);
+  color: var(--m3-on-surface-variant);
+}
+
+.editor-tabs button:hover,
+.editor-tabs button.selected {
+  background: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+}
+
+.note-editor textarea {
+  background: var(--m3-surface-container-lowest);
+  color: var(--m3-on-surface);
+}
+
+.conflict-merge-field textarea {
+  border-color: color-mix(in srgb, var(--m3-error) 35%, var(--m3-outline));
+  border-radius: var(--m3-shape-md);
+  background: var(--m3-error-container);
+  color: var(--m3-on-error-container);
+}
+
 .field input,
 .field select,
 .search-field {
@@ -3513,6 +3620,59 @@ body {
 .field input,
 .field select {
   padding: 0 14px;
+}
+
+.m3-select {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--m3-outline);
+  border-radius: var(--m3-shape-md);
+  background: var(--m3-surface-container-lowest);
+  color: var(--m3-on-surface);
+  transition:
+    border-color var(--m3-motion-short) ease,
+    box-shadow var(--m3-motion-short) ease,
+    background var(--m3-motion-short) ease;
+}
+
+.m3-select-small {
+  min-height: 40px;
+  font-size: 12px;
+}
+
+.m3-select-large {
+  min-height: 56px;
+}
+
+.placement-add .m3-select {
+  min-height: 40px;
+}
+
+.m3-select:hover:not(:disabled) {
+  background: var(--m3-state-hover);
+}
+
+.m3-select:focus-visible {
+  border-color: var(--m3-primary);
+  box-shadow: 0 0 0 3px var(--m3-state-focus);
+  outline: 0;
+}
+
+.inline-error {
+  margin: 14px 0;
+  padding: 14px 16px;
+  border-color: color-mix(in srgb, var(--m3-error) 34%, var(--m3-outline-variant));
+  border-radius: var(--m3-shape-md);
+  background: var(--m3-error-container);
+  color: var(--m3-on-error-container);
+}
+
+.inline-error .text-button {
+  color: var(--m3-on-error-container);
+}
+
+.form-error {
+  color: var(--m3-error);
 }
 
 .field input:focus,

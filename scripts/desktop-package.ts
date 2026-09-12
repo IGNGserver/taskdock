@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { access, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -49,6 +49,9 @@ function runLinuxLaunchSmoke(): number {
 }
 
 async function main(): Promise<void> {
+  // The release directory is ignored and can contain artifacts from a former
+  // product name or version. Never let stale files look like a fresh package.
+  await rm(releaseDir, { recursive: true, force: true });
   if (!runBuilder('linux', 'dir')) {
     console.error('FAIL: Linux Electron directory package failed.');
     process.exitCode = 1;

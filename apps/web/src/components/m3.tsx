@@ -1,7 +1,28 @@
-import { useRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from 'react';
+import {
+  useRef,
+  type ButtonHTMLAttributes,
+  type HTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+} from 'react';
 
 export type M3ButtonVariant = 'filled' | 'tonal' | 'outlined' | 'text';
 export type M3ButtonSize = 'small' | 'medium' | 'large';
+
+export type M3SelectSize = 'small' | 'medium' | 'large';
+
+export function M3Select({
+  size = 'medium',
+  className,
+  children,
+  ...props
+}: Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> & { size?: M3SelectSize }) {
+  return (
+    <select {...props} className={`m3-select m3-select-${size}${className ? ` ${className}` : ''}`}>
+      {children}
+    </select>
+  );
+}
 
 interface M3ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: M3ButtonVariant;

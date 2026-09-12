@@ -17,6 +17,7 @@ import {
   clearNativeRefreshToken,
   desktopAuthLogin,
   desktopAuthLogout,
+  ensureConfiguredHubOrigin,
   getHubOrigin,
   getAccessToken,
   getLastRefreshFailure,
@@ -63,65 +64,104 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<DevTodoDatabase | null>(null);
   const [engine, setEngine] = useState<SyncEngine | null>(null);
   const [connection, setConnection] = useState<ConnectionStatus>(
-    navigator.onLine ? 'online' : 'offline',
+    navigator.onLine ? 'syncing' : 'offline',
   );
   const socketRef = useRef<WebSocket | null>(null);
   const dbRef = useRef<DevTodoDatabase | null>(null);
   const engineRef = useRef<SyncEngine | null>(null);
+  const unsubscribeEngineRef = useRef<(() => void) | null>(null);
+  const sessionGenerationRef = useRef(0);
   const authOperationRef = useRef(0);
 
-  const initialize = useCallback(async (me: MeResponse, sync = true) => {
-    setUser(me.user);
-    setSettings(me.settings);
-    setStatus('authenticated');
-    setInitialized(true);
-    if (navigator.storage?.persist) void navigator.storage.persist();
-    const localDb = new DevTodoDatabase(getHubOrigin(), me.user.id);
-    await localDb.settings.put(me.settings);
-    await localDb.syncMeta.bulkPut([
-      { key: 'user', value: JSON.stringify(me.user) },
-      { key: 'ownerId', value: me.user.id },
-    ]);
-    try {
-      localStorage.setItem('devtodo.owner-id', me.user.id);
-    } catch {
-      /* private browsing may disable localStorage; IndexedDB remains usable */
-    }
-    const localEngine = createSyncEngine(localDb);
-    localEngine.subscribe((next) => {
-      setConnection(next === 'idle' ? 'online' : next);
-      if (next === 'idle' || next === 'conflict' || next === 'error')
-        window.dispatchEvent(new Event('devtodo:data-changed'));
-    });
-    dbRef.current = localDb;
-    engineRef.current = localEngine;
-    setDb(localDb);
-    setEngine(localEngine);
-    if (!sync) {
-      setConnection('offline');
-      return;
-    }
-    if (navigator.onLine) void localEngine.sync().catch(() => undefined);
+  const disposeLocalSession = useCallback(() => {
+    sessionGenerationRef.current += 1;
     socketRef.current?.close();
-    if (isDesktopClient()) return;
-    try {
-      const socket = new WebSocket(websocketUrl());
-      socketRef.current = socket;
-      socket.onopen = () => {
-        const token = getAccessToken();
-        if (token) socket.send(JSON.stringify({ type: 'auth', accessToken: token }));
-      };
-      socket.onmessage = (event) => {
-        const message = JSON.parse(String(event.data)) as { type?: string };
-        if (message.type === 'sync.required') void localEngine.sync().catch(() => undefined);
-      };
-      socket.onclose = () => {
-        socketRef.current = null;
-      };
-    } catch {
-      /* polling and online/focus events remain the fallback */
+    socketRef.current = null;
+    unsubscribeEngineRef.current?.();
+    unsubscribeEngineRef.current = null;
+    if (dbRef.current) {
+      deactivateLocalCache(dbRef.current);
+      try {
+        dbRef.current.close();
+      } catch {
+        /* Closing an already closed local database is harmless. */
+      }
     }
+    dbRef.current = null;
+    engineRef.current = null;
+    setDb(null);
+    setEngine(null);
   }, []);
+
+  const initialize = useCallback(
+    async (me: MeResponse, sync = true) => {
+      if (isDesktopClient()) await ensureConfiguredHubOrigin();
+      disposeLocalSession();
+      const generation = sessionGenerationRef.current;
+      const localDb = new DevTodoDatabase(getHubOrigin(), me.user.id);
+      try {
+        await localDb.settings.put(me.settings);
+        await localDb.syncMeta.bulkPut([
+          { key: 'user', value: JSON.stringify(me.user) },
+          { key: 'ownerId', value: me.user.id },
+        ]);
+        try {
+          localStorage.setItem('devtodo.owner-id', me.user.id);
+        } catch {
+          /* private browsing may disable localStorage; IndexedDB remains usable */
+        }
+      } catch (error) {
+        deactivateLocalCache(localDb);
+        try {
+          localDb.close();
+        } catch {
+          /* Closing a partially opened local database is harmless. */
+        }
+        throw error;
+      }
+
+      if (navigator.storage?.persist) void navigator.storage.persist();
+      const localEngine = createSyncEngine(localDb);
+      const unsubscribe = localEngine.subscribe((next) => {
+        if (sessionGenerationRef.current !== generation) return;
+        setConnection(next === 'idle' ? 'online' : next);
+        if (next === 'idle' || next === 'conflict' || next === 'error')
+          window.dispatchEvent(new Event('devtodo:data-changed'));
+      });
+      dbRef.current = localDb;
+      engineRef.current = localEngine;
+      unsubscribeEngineRef.current = unsubscribe;
+      setUser(me.user);
+      setSettings(me.settings);
+      setStatus('authenticated');
+      setInitialized(true);
+      setConnection(sync && navigator.onLine ? 'syncing' : 'offline');
+      if (!sync) {
+        return;
+      }
+      if (navigator.onLine) void localEngine.sync().catch(() => undefined);
+      socketRef.current?.close();
+      if (isDesktopClient()) return;
+      try {
+        const socket = new WebSocket(websocketUrl());
+        socketRef.current = socket;
+        socket.onopen = () => {
+          const token = getAccessToken();
+          if (token) socket.send(JSON.stringify({ type: 'auth', accessToken: token }));
+        };
+        socket.onmessage = (event) => {
+          const message = JSON.parse(String(event.data)) as { type?: string };
+          if (message.type === 'sync.required') void localEngine.sync().catch(() => undefined);
+        };
+        socket.onclose = () => {
+          socketRef.current = null;
+        };
+      } catch {
+        /* polling and online/focus events remain the fallback */
+      }
+    },
+    [disposeLocalSession],
+  );
 
   const restoreOfflineSession = useCallback(async (): Promise<boolean> => {
     let ownerId: string | null = null;
@@ -131,8 +171,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false;
     }
     if (!ownerId) return false;
+    let localDb: DevTodoDatabase | null = null;
     try {
-      const localDb = new DevTodoDatabase(getHubOrigin(), ownerId);
+      localDb = new DevTodoDatabase(getHubOrigin(), ownerId);
       const [userMeta, localSettings] = await Promise.all([
         localDb.syncMeta.get('user'),
         localDb.settings.toCollection().first(),
@@ -151,6 +192,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return true;
     } catch {
       return false;
+    } finally {
+      try {
+        localDb?.close();
+      } catch {
+        /* Closing a read-only recovery database is best effort. */
+      }
     }
   }, [initialize]);
 
@@ -162,6 +209,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setInitialized(false);
       }
       return;
+    }
+    if (isDesktopClient()) {
+      try {
+        await ensureConfiguredHubOrigin();
+      } catch {
+        if (operation === authOperationRef.current) {
+          setStatus('anonymous');
+          setInitialized(false);
+          setConnection('offline');
+        }
+        return;
+      }
     }
     if (isAuthLocallyLocked()) {
       try {
@@ -223,26 +282,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void refresh();
-    const onOnline = () => {
-      setConnection('online');
-      void engineRef.current?.sync().catch(() => undefined);
+    const syncCurrent = () => {
+      const currentEngine = engineRef.current;
+      if (!currentEngine) return;
+      if (!navigator.onLine) {
+        setConnection('offline');
+        return;
+      }
+      setConnection('syncing');
+      void currentEngine.sync().catch(() => undefined);
     };
+    const onOnline = () => syncCurrent();
     const onOffline = () => setConnection('offline');
-    const onFocus = () => {
-      if (navigator.onLine) void engineRef.current?.sync().catch(() => undefined);
-    };
+    const onFocus = () => syncCurrent();
     const removeNativeLifecycle = installNativeLifecycle({
-      onForeground: () => void engineRef.current?.sync().catch(() => undefined),
+      onForeground: () => syncCurrent(),
       onNetworkChange: (online) => {
-        setConnection(online ? 'online' : 'offline');
-        if (online) void engineRef.current?.sync().catch(() => undefined);
+        if (online) syncCurrent();
+        else setConnection('offline');
       },
     });
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
     window.addEventListener('focus', onFocus);
     const timer = window.setInterval(() => {
-      if (navigator.onLine) void engineRef.current?.sync().catch(() => undefined);
+      syncCurrent();
     }, 30_000);
     return () => {
       window.removeEventListener('online', onOnline);
@@ -258,6 +322,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (username: string, password: string, deviceName?: string) => {
       authOperationRef.current += 1;
       if (isDesktopClient()) {
+        await ensureConfiguredHubOrigin();
         const result = await desktopAuthLogin(username, password, deviceName ?? '桌面端');
         unlockAuthLocally();
         setAccessToken(result.accessToken);
@@ -302,34 +367,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {}),
       }).catch(() => undefined);
     }
-    socketRef.current?.close();
     try {
       await clearNativeRefreshToken();
     } catch {
       /* token cleanup failure must not leave the UI in an authenticated state */
     }
-    if (dbRef.current) {
-      deactivateLocalCache(dbRef.current);
-      try {
-        dbRef.current.close();
-      } catch {
-        /* closing an already closed local database is harmless */
-      }
-    }
+    disposeLocalSession();
     try {
       localStorage.removeItem('devtodo.owner-id');
     } catch {
       /* The owner marker is only a convenience; the per-owner database remains locked by logout. */
     }
-    dbRef.current = null;
-    engineRef.current = null;
     setAccessToken(null);
     setUser(null);
     setSettings(null);
     setDb(null);
     setEngine(null);
     setStatus('anonymous');
-  }, []);
+  }, [disposeLocalSession]);
   const updateSettings = useCallback((next: SettingsDto) => setSettings(next), []);
 
   const value = useMemo(

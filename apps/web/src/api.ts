@@ -32,6 +32,8 @@ let accessToken: string | null = null;
 let refreshPromise: Promise<boolean> | null = null;
 let secureStorageSetup: Promise<void> | null = null;
 let runtimeHubOrigin: string | null = null;
+let desktopHubOriginLoadPromise: Promise<string | null> | null = null;
+let desktopHubOriginLoadError: string | null = null;
 let lastRefreshFailure: 'network' | 'unauthorized' | 'unknown' | null = null;
 const localRevalidations = new Map<string, Promise<unknown>>();
 
@@ -95,17 +97,23 @@ export function isNativeMobileClient(): boolean {
 export function getHubOrigin(): string {
   if (Capacitor.isNativePlatform()) {
     const configured = getConfiguredHubOrigin();
-    if (!configured) throw new Error('移动端未配置中枢地址');
+    if (!configured)
+      throw new ApiError('HUB_NOT_CONFIGURED', '移动端尚未配置中枢地址。', null, 400);
     return configured;
   }
   if (isDesktopClient()) {
-    const configured =
-      runtimeHubOrigin ?? new URLSearchParams(location.search).get('hubOrigin') ?? undefined;
-    if (!configured) throw new Error('桌面端未配置中枢地址');
-    return normalizeHubOrigin(configured);
+    const configured = getConfiguredHubOrigin();
+    if (!configured)
+      throw new ApiError(
+        'HUB_NOT_CONFIGURED',
+        desktopHubOriginLoadError ?? '桌面端尚未配置中枢地址。',
+        null,
+        400,
+      );
+    return configured;
   }
   if (location.protocol !== 'file:' && location.protocol !== 'devtodo:') return location.origin;
-  throw new Error('桌面端未配置中枢地址');
+  throw new ApiError('HUB_NOT_CONFIGURED', '桌面端尚未配置中枢地址。', null, 400);
 }
 
 export function getConfiguredHubOrigin(): string | null {
@@ -113,7 +121,10 @@ export function getConfiguredHubOrigin(): string | null {
     const configured = runtimeHubOrigin ?? new URLSearchParams(location.search).get('hubOrigin');
     if (!configured) return null;
     try {
-      return normalizeHubOrigin(configured);
+      const normalized = normalizeHubOrigin(configured);
+      runtimeHubOrigin ??= normalized;
+      desktopHubOriginLoadError = null;
+      return normalized;
     } catch {
       return null;
     }
@@ -133,15 +144,56 @@ export async function loadConfiguredHubOrigin(): Promise<string | null> {
   if (!desktop) return getConfiguredHubOrigin();
   const configured = getConfiguredHubOrigin();
   if (configured) return configured;
-  try {
-    const persisted = await desktop.getHubOrigin();
-    if (!persisted) return null;
-    const normalized = normalizeHubOrigin(persisted);
-    runtimeHubOrigin = normalized;
-    return normalized;
-  } catch {
-    return null;
-  }
+  if (desktopHubOriginLoadPromise) return desktopHubOriginLoadPromise;
+  desktopHubOriginLoadPromise = (async () => {
+    try {
+      const state = await desktop.getHubOriginState?.();
+      if (state) {
+        if (state.status !== 'configured' || !state.origin) {
+          desktopHubOriginLoadError = state.message ?? hubOriginStateMessage(state.status);
+          return null;
+        }
+        const normalized = normalizeHubOrigin(state.origin);
+        runtimeHubOrigin = normalized;
+        desktopHubOriginLoadError = null;
+        return normalized;
+      }
+
+      // Keep development compatibility with an older preload while the main
+      // process and renderer are being upgraded together.
+      const persisted = await desktop.getHubOrigin();
+      if (!persisted) {
+        desktopHubOriginLoadError = '桌面端尚未配置中枢地址。';
+        return null;
+      }
+      const normalized = normalizeHubOrigin(persisted);
+      runtimeHubOrigin = normalized;
+      desktopHubOriginLoadError = null;
+      return normalized;
+    } catch (error) {
+      desktopHubOriginLoadError =
+        error instanceof Error ? error.message : '无法读取桌面端中枢配置。';
+      return null;
+    } finally {
+      desktopHubOriginLoadPromise = null;
+    }
+  })();
+  return desktopHubOriginLoadPromise;
+}
+
+export async function ensureConfiguredHubOrigin(): Promise<string> {
+  const configured = await loadConfiguredHubOrigin();
+  if (configured) return configured;
+  throw new ApiError(
+    'HUB_NOT_CONFIGURED',
+    desktopHubOriginLoadError ?? '桌面端尚未配置中枢地址。',
+    null,
+    400,
+  );
+}
+
+export function getHubOriginLoadError(): string | null {
+  return desktopHubOriginLoadError;
 }
 
 export async function setHubOrigin(value: string): Promise<string> {
@@ -150,6 +202,8 @@ export async function setHubOrigin(value: string): Promise<string> {
   if (desktop) {
     await desktop.setHubOrigin(origin);
     runtimeHubOrigin = origin;
+    desktopHubOriginLoadError = null;
+    desktopHubOriginLoadPromise = Promise.resolve(origin);
     if (typeof window !== 'undefined' && window.location.protocol === 'devtodo:') {
       try {
         const nextUrl = new URL(window.location.href);
@@ -168,6 +222,10 @@ export async function setHubOrigin(value: string): Promise<string> {
 
 export async function clearConfiguredHubOrigin(): Promise<void> {
   runtimeHubOrigin = null;
+  desktopHubOriginLoadError = null;
+  desktopHubOriginLoadPromise = Promise.resolve(null);
+  const desktop = desktopBridge();
+  if (desktop) await desktop.clearHubOrigin?.();
   if (typeof window !== 'undefined' && window.location.protocol === 'devtodo:') {
     try {
       const nextUrl = new URL(window.location.href);
@@ -615,7 +673,15 @@ interface DesktopBridge {
   authRefresh: () => Promise<DesktopAuthResponse>;
   authLogout: () => Promise<{ ok: true }>;
   getHubOrigin: () => Promise<string | null>;
+  getHubOriginState?: () => Promise<DesktopHubOriginState>;
   setHubOrigin: (origin: string) => Promise<string>;
+  clearHubOrigin?: () => Promise<boolean>;
+}
+
+interface DesktopHubOriginState {
+  origin: string | null;
+  status: 'configured' | 'missing' | 'invalid' | 'unreadable';
+  message?: string;
 }
 
 interface DesktopAuthSuccess {
@@ -666,4 +732,17 @@ export async function desktopAuthLogout(): Promise<void> {
 function desktopBridge(): DesktopBridge | undefined {
   if (typeof window === 'undefined') return undefined;
   return (window as Window & { devtodoDesktop?: DesktopBridge }).devtodoDesktop;
+}
+
+function hubOriginStateMessage(status: DesktopHubOriginState['status']): string {
+  switch (status) {
+    case 'missing':
+      return '桌面端尚未配置中枢地址。';
+    case 'invalid':
+      return '桌面端中枢配置无效，请重新保存地址。';
+    case 'unreadable':
+      return '无法读取桌面端中枢配置，请检查应用数据目录权限。';
+    default:
+      return '桌面端中枢配置不可用。';
+  }
 }

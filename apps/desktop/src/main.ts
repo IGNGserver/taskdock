@@ -10,10 +10,16 @@ import {
   shell,
 } from 'electron';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { readFile, unlink, writeFile } from 'node:fs/promises';
+import { readFile, unlink } from 'node:fs/promises';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseHubOrigin, validateHubRequest, type HubRequestInput } from './hub-policy.js';
+import {
+  atomicWriteFile,
+  readHubOriginFile,
+  writeHubOriginFile,
+  type HubOriginFileState,
+} from './persistence.js';
 
 const isDevelopment = process.env['NODE_ENV'] === 'development';
 const configuredRendererOrigin = process.env['DEVTODO_APP_ORIGIN'];
@@ -193,19 +199,23 @@ function isAllowedNavigation(url: string): boolean {
 }
 
 function readConfiguredHubOrigin(): string | null {
-  try {
-    const parsed = JSON.parse(readFileSync(hubOriginFile(), 'utf8')) as { origin?: unknown };
-    return typeof parsed.origin === 'string' ? parseHubOrigin(parsed.origin) : null;
-  } catch {
-    return null;
-  }
+  return readHubOriginFile(hubOriginFile()).origin;
+}
+
+function readConfiguredHubOriginState(): HubOriginFileState {
+  return readHubOriginFile(hubOriginFile());
 }
 
 function saveConfiguredHubOrigin(value: string): string {
-  const origin = parseHubOrigin(value);
-  if (!origin) throw new Error('Hub origin must be a valid HTTP or HTTPS URL without credentials');
-  writeFileSync(hubOriginFile(), JSON.stringify({ origin }), { mode: 0o600 });
-  return origin;
+  return writeHubOriginFile(hubOriginFile(), value);
+}
+
+async function clearConfiguredHubOrigin(): Promise<void> {
+  try {
+    await unlink(hubOriginFile());
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
 }
 
 function assertIpcSender(sender: Electron.WebContents): void {
@@ -322,14 +332,14 @@ async function saveSecureRefreshToken(token: string): Promise<void> {
     try {
       const encrypted = safeStorage.encryptString(token);
       const payload = Buffer.concat([SECURE_TOKEN_MAGIC_SAFE, encrypted]);
-      await writeFile(secureFile(), payload, { mode: 0o600 });
+      atomicWriteFile(secureFile(), payload);
       return;
     } catch {
       // safeStorage failed despite being available, fallback to restricted file
     }
   }
   const payload = Buffer.concat([SECURE_TOKEN_MAGIC_PLAIN, Buffer.from(token, 'utf8')]);
-  await writeFile(secureFile(), payload, { mode: 0o600 });
+  atomicWriteFile(secureFile(), payload);
 }
 
 async function readSecureRefreshToken(): Promise<string | null> {
@@ -617,6 +627,10 @@ if (singleInstanceLock) {
         assertIpcSender(event.sender);
         return readConfiguredHubOrigin();
       });
+      ipcMain.handle('devtodo:hub-state', (event) => {
+        assertIpcSender(event.sender);
+        return readConfiguredHubOriginState();
+      });
       ipcMain.handle('devtodo:hub-set', async (event, value: unknown) => {
         assertIpcSender(event.sender);
         if (typeof value !== 'string') throw new Error('invalid request');
@@ -624,6 +638,12 @@ if (singleInstanceLock) {
         const next = saveConfiguredHubOrigin(value);
         if (previous !== next) await removeSecureRefreshToken();
         return next;
+      });
+      ipcMain.handle('devtodo:hub-clear', async (event) => {
+        assertIpcSender(event.sender);
+        await clearConfiguredHubOrigin();
+        await removeSecureRefreshToken();
+        return true;
       });
       ipcMain.handle('devtodo:hub-test', async (event, value: unknown) => {
         assertIpcSender(event.sender);
