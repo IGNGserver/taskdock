@@ -96,6 +96,7 @@ data class OutboxEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val mutationId: String,
     val clientId: String,
+    val ownerId: String,
     val command: String,
     val entityId: String,
     val baseVersion: Long?,
@@ -110,6 +111,7 @@ data class OutboxEntity(
 data class ConflictEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val mutationId: String,
+    val ownerId: String,
     val command: String?,
     val entityType: String,
     val entityId: String,

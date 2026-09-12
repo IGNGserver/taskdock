@@ -22,6 +22,12 @@ def releaseTaskRequested = gradle.startParameter.taskNames.any { it.toLowerCase(
 if (releaseTaskRequested && !releaseSigningAvailable) {
     throw new GradleException('缺少 Android Release 签名配置。请准备 signing/taskdock-release.properties 或 TASKDOCK_ANDROID_* 环境变量。')
 }
+def taskdockVersion = System.getenv("TASKDOCK_VERSION") ?: "0.1.0"
+def taskdockBaseVersion = taskdockVersion.replaceFirst(/-.*/, '')
+def taskdockVersionParts = taskdockBaseVersion.tokenize('.').collect { it as Integer }
+def taskdockVersionCode = taskdockVersionParts[0] * 1_000_000 +
+        taskdockVersionParts[1] * 1_000 +
+        taskdockVersionParts[2]
 
 android {
     namespace = "com.devtodo.app"
@@ -30,8 +36,8 @@ android {
         applicationId "com.devtodo.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName System.getenv("TASKDOCK_VERSION") ?: "0.1.0"
+        versionCode taskdockVersionCode
+        versionName taskdockVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {
@@ -56,8 +62,8 @@ android {
         }
     }
     lint {
-        checkReleaseBuilds = false
-        abortOnError = false
+        checkReleaseBuilds = true
+        abortOnError = true
     }
     buildFeatures {
         compose = true

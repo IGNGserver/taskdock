@@ -24,6 +24,7 @@ fun InboxScreen(
     var showCapture by remember { mutableStateOf(false) }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
@@ -74,7 +75,7 @@ fun InboxScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(bottom = 80.dp)
+                contentPadding = PaddingValues(bottom = 16.dp)
             ) {
                 items(tasks, key = { it.id }) { task ->
                     M3TaskRow(
@@ -91,8 +92,8 @@ fun InboxScreen(
         QuickCaptureBottomSheet(
             onDismiss = { showCapture = false },
             projects = projects,
-            onSave = { title, _, scheduleToday ->
-                viewModel.createTask(title, null, scheduleToday)
+            onSave = { title, projectId, scheduleToday ->
+                viewModel.createTask(title, projectId, scheduleToday)
                 showCapture = false
             }
         )

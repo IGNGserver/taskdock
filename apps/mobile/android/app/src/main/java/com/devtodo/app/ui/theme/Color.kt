@@ -61,8 +61,3 @@ val M3DarkError = Color(0xFFFFB4AB)
 val M3DarkOnError = Color(0xFF690005)
 val M3DarkErrorContainer = Color(0xFF93000A)
 val M3DarkOnErrorContainer = Color(0xFFFFDAD6)
-
-val PriorityHigh = Color(0xFFE53935)
-val PriorityMedium = Color(0xFFFB8C00)
-val PriorityLow = Color(0xFF1E88E5)
-val PriorityNone = Color(0xFF9E9E9E)

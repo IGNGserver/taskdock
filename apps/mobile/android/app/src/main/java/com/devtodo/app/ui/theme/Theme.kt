@@ -9,8 +9,11 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Shapes
 
 private val LightColorScheme = lightColorScheme(
     primary = M3LightPrimary,
@@ -66,6 +69,14 @@ private val DarkColorScheme = darkColorScheme(
     onErrorContainer = M3DarkOnErrorContainer
 )
 
+private val DevTodoShapes = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(24.dp)
+)
+
 enum class ThemeMode {
     SYSTEM, LIGHT, DARK
 }
@@ -104,6 +115,8 @@ fun DevTodoTheme(
 
     MaterialTheme(
         colorScheme = finalScheme,
+        typography = DevTodoTypography,
+        shapes = DevTodoShapes,
         content = content
     )
 }

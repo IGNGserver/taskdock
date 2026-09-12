@@ -13,6 +13,7 @@ import kotlinx.serialization.json.*
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -33,10 +34,13 @@ class SyncEngine(
     val lastSyncError: StateFlow<String?> = _lastSyncError.asStateFlow()
 
     private var activeWebSocket: WebSocket? = null
+    private var started = false
 
     companion object {
         private const val SYNC_CURSOR_KEY = "sync_cursor"
     }
+
+    private fun syncCursorKey(ownerId: String): String = "$SYNC_CURSOR_KEY:$ownerId"
 
     private val isoFormat: SimpleDateFormat
         get() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
@@ -44,6 +48,8 @@ class SyncEngine(
         }
 
     fun start() {
+        if (started) return
+        started = true
         connectWebSocket()
         scope.launch {
             triggerSync()
@@ -51,6 +57,7 @@ class SyncEngine(
     }
 
     fun stop() {
+        started = false
         activeWebSocket?.close(1000, "App closed")
         activeWebSocket = null
     }
@@ -71,7 +78,7 @@ class SyncEngine(
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     scope.launch {
                         delay(15_000)
-                        connectWebSocket()
+                        if (started) connectWebSocket()
                     }
                 }
             })
@@ -80,25 +87,27 @@ class SyncEngine(
 
     suspend fun triggerSync() = withContext(Dispatchers.IO) {
         if (!authManager.isLoggedIn) return@withContext
+        val ownerId = authManager.ownerId ?: return@withContext
         if (_syncState.value == SyncState.SYNCING) return@withContext
         _syncState.value = SyncState.SYNCING
         _lastSyncError.value = null
 
         try {
-            var cursor = db.syncMetaDao().get(SYNC_CURSOR_KEY)
+            val cursorKey = syncCursorKey(ownerId)
+            var cursor = db.syncMetaDao().get(cursorKey)
             if (cursor == null) {
                 val snapshotRes = api.getSnapshot()
                 if (snapshotRes.isSuccess) {
                     val snap = snapshotRes.getOrThrow()
-                    applySnapshot(snap)
+                    applySnapshot(snap, ownerId)
                     cursor = snap.cursor
-                    db.syncMetaDao().set(SyncMetaEntity(SYNC_CURSOR_KEY, cursor))
+                    db.syncMetaDao().set(SyncMetaEntity(cursorKey, cursor))
                 } else {
                     throw snapshotRes.exceptionOrNull() ?: Exception("Failed to fetch snapshot")
                 }
             }
 
-            val pending = db.outboxDao().getPendingItems()
+            val pending = db.outboxDao().getPendingItems(ownerId)
             if (pending.isNotEmpty()) {
                 val mutations = pending.map { out ->
                     Mutation(
@@ -111,44 +120,46 @@ class SyncEngine(
                     )
                 }
                 val pushRes = api.pushSync(mutations)
-                if (pushRes.isSuccess) {
-                    val results = pushRes.getOrThrow().results
-                    for (res in results) {
-                        if (res.status == "applied") {
-                            db.outboxDao().deleteByMutationId(res.mutationId)
-                        } else if (res.status == "conflict") {
-                            db.outboxDao().deleteByMutationId(res.mutationId)
-                            val original = pending.find { it.mutationId == res.mutationId }
-                            db.conflictDao().insert(
-                                ConflictEntity(
-                                    mutationId = res.mutationId,
-                                    command = original?.command,
-                                    entityType = original?.command?.split(".")?.getOrNull(0) ?: "unknown",
-                                    entityId = original?.entityId ?: "",
-                                    localJson = original?.payloadJson ?: "{}",
-                                    serverJson = res.serverEntity?.toString() ?: "{}",
-                                    createdAt = isoFormat.format(Date())
-                                )
+                if (pushRes.isFailure) {
+                    throw pushRes.exceptionOrNull() ?: IOException("Push sync failed")
+                }
+                val results = pushRes.getOrThrow().results
+                for (res in results) {
+                    if (res.status == "applied") {
+                        db.outboxDao().deleteByMutationId(res.mutationId, ownerId)
+                    } else if (res.status == "conflict") {
+                        db.outboxDao().deleteByMutationId(res.mutationId, ownerId)
+                        val original = pending.find { it.mutationId == res.mutationId }
+                        db.conflictDao().insert(
+                            ConflictEntity(
+                                mutationId = res.mutationId,
+                                ownerId = ownerId,
+                                command = original?.command,
+                                entityType = original?.command?.split(".")?.getOrNull(0) ?: "unknown",
+                                entityId = original?.entityId ?: "",
+                                localJson = original?.payloadJson ?: "{}",
+                                serverJson = res.result?.toString() ?: "{}",
+                                createdAt = isoFormat.format(Date())
                             )
-                        } else {
-                            db.outboxDao().deleteByMutationId(res.mutationId)
-                        }
+                        )
+                    } else {
+                        db.outboxDao().deleteByMutationId(res.mutationId, ownerId)
                     }
                 }
             }
 
-            var currentCursor = db.syncMetaDao().get(SYNC_CURSOR_KEY) ?: "0"
+            var currentCursor = db.syncMetaDao().get(cursorKey) ?: "0"
             var hasMore = true
             while (hasMore) {
                 val pullRes = api.pullSync(currentCursor, 100)
                 if (pullRes.isSuccess) {
                     val result = pullRes.getOrThrow()
-                    applyChanges(result.changes)
+                    applyChanges(result.changes, ownerId)
                     currentCursor = result.cursor
-                    db.syncMetaDao().set(SyncMetaEntity(SYNC_CURSOR_KEY, currentCursor))
+                    db.syncMetaDao().set(SyncMetaEntity(cursorKey, currentCursor))
                     hasMore = result.hasMore
                 } else {
-                    hasMore = false
+                    throw pullRes.exceptionOrNull() ?: IOException("Pull sync failed")
                 }
             }
 
@@ -159,13 +170,12 @@ class SyncEngine(
         }
     }
 
-    private suspend fun applySnapshot(snap: SnapshotResult) {
+    private suspend fun applySnapshot(snap: SnapshotResult, ownerId: String) {
         val now = isoFormat.format(Date())
-        val defaultOwner = authManager.ownerId ?: ""
-        db.projectDao().upsertProjects(snap.projects.map { p ->
+        db.projectDao().upsertProjects(snap.projects.filter { it.ownerId == null || it.ownerId == ownerId }.map { p ->
             ProjectEntity(
                 id = p.id,
-                ownerId = p.ownerId ?: defaultOwner,
+                ownerId = p.ownerId ?: ownerId,
                 name = p.name,
                 slug = p.slug ?: p.taskPrefix ?: p.name.lowercase(),
                 description = p.description,
@@ -176,10 +186,10 @@ class SyncEngine(
                 updatedAt = p.updatedAt ?: now
             )
         })
-        db.taskDao().upsertTasks(snap.tasks.map { t ->
+        db.taskDao().upsertTasks(snap.tasks.filter { it.ownerId == null || it.ownerId == ownerId }.map { t ->
             TaskEntity(
                 id = t.id,
-                ownerId = t.ownerId ?: defaultOwner,
+                ownerId = t.ownerId ?: ownerId,
                 projectId = t.projectId,
                 referenceId = t.referenceId,
                 title = t.title,
@@ -193,10 +203,10 @@ class SyncEngine(
                 updatedAt = t.updatedAt ?: now
             )
         })
-        db.noteDao().upsertNotes(snap.notes.map { n ->
+        db.noteDao().upsertNotes(snap.notes.filter { it.ownerId == null || it.ownerId == ownerId }.map { n ->
             NoteEntity(
                 id = n.id,
-                ownerId = n.ownerId ?: defaultOwner,
+                ownerId = n.ownerId ?: ownerId,
                 taskId = n.taskId,
                 contentMarkdown = n.contentMarkdown,
                 version = n.version,
@@ -204,10 +214,10 @@ class SyncEngine(
                 updatedAt = n.updatedAt ?: now
             )
         })
-        db.timePointDao().upsertTimePoints(snap.timePoints.map { tp ->
+        db.timePointDao().upsertTimePoints(snap.timePoints.filter { it.ownerId == null || it.ownerId == ownerId }.map { tp ->
             TimePointEntity(
                 id = tp.id,
-                ownerId = tp.ownerId ?: defaultOwner,
+                ownerId = tp.ownerId ?: ownerId,
                 type = tp.type,
                 localDate = tp.localDate,
                 title = tp.title,
@@ -219,10 +229,10 @@ class SyncEngine(
                 updatedAt = tp.updatedAt ?: now
             )
         })
-        db.placementDao().upsertPlacements(snap.placements.map { pl ->
+        db.placementDao().upsertPlacements(snap.placements.filter { it.ownerId == null || it.ownerId == ownerId }.map { pl ->
             PlacementEntity(
                 id = pl.id,
-                ownerId = pl.ownerId ?: defaultOwner,
+                ownerId = pl.ownerId ?: ownerId,
                 taskId = pl.taskId,
                 timePointId = pl.timePointId,
                 rank = pl.rank,
@@ -231,7 +241,7 @@ class SyncEngine(
                 updatedAt = pl.updatedAt ?: now
             )
         })
-        snap.settings?.let { s ->
+        snap.settings?.takeIf { it.ownerId == ownerId }?.let { s ->
             db.settingsDao().upsertSettings(
                 SettingsEntity(
                     ownerId = s.ownerId,
@@ -245,19 +255,19 @@ class SyncEngine(
         }
     }
 
-    private suspend fun applyChanges(changes: List<ChangeItem>) {
+    private suspend fun applyChanges(changes: List<ChangeItem>, ownerId: String) {
         val now = isoFormat.format(Date())
-        val defaultOwner = authManager.ownerId ?: ""
         for (c in changes) {
             when (c.entityType) {
                 "task" -> {
-                    if (c.operation == "delete") db.taskDao().deleteTask(c.entityId)
+                    if (c.operation == "delete") db.taskDao().deleteTask(c.entityId, ownerId)
                     else c.snapshot?.let {
                         val task = api.json.decodeFromJsonElement<TaskDto>(it)
+                        if (task.ownerId != null && task.ownerId != ownerId) return@let
                         db.taskDao().upsertTask(
                             TaskEntity(
                                 id = task.id,
-                                ownerId = task.ownerId ?: defaultOwner,
+                                ownerId = task.ownerId ?: ownerId,
                                 projectId = task.projectId,
                                 referenceId = task.referenceId,
                                 title = task.title,
@@ -274,13 +284,14 @@ class SyncEngine(
                     }
                 }
                 "placement" -> {
-                    if (c.operation == "delete") db.placementDao().deletePlacement(c.entityId)
+                    if (c.operation == "delete") db.placementDao().deletePlacement(c.entityId, ownerId)
                     else c.snapshot?.let {
                         val pl = api.json.decodeFromJsonElement<PlacementDto>(it)
+                        if (pl.ownerId != null && pl.ownerId != ownerId) return@let
                         db.placementDao().upsertPlacement(
                             PlacementEntity(
                                 id = pl.id,
-                                ownerId = pl.ownerId ?: defaultOwner,
+                                ownerId = pl.ownerId ?: ownerId,
                                 taskId = pl.taskId,
                                 timePointId = pl.timePointId,
                                 rank = pl.rank,
@@ -292,13 +303,14 @@ class SyncEngine(
                     }
                 }
                 "note" -> {
-                    if (c.operation == "delete") db.noteDao().deleteNoteByTaskId(c.entityId)
+                    if (c.operation == "delete") db.noteDao().deleteNoteByTaskId(c.entityId, ownerId)
                     else c.snapshot?.let {
                         val n = api.json.decodeFromJsonElement<NoteDto>(it)
+                        if (n.ownerId != null && n.ownerId != ownerId) return@let
                         db.noteDao().upsertNote(
                             NoteEntity(
                                 id = n.id,
-                                ownerId = n.ownerId ?: defaultOwner,
+                                ownerId = n.ownerId ?: ownerId,
                                 taskId = n.taskId,
                                 contentMarkdown = n.contentMarkdown,
                                 version = n.version,
@@ -309,13 +321,14 @@ class SyncEngine(
                     }
                 }
                 "project" -> {
-                    if (c.operation == "delete") db.projectDao().deleteProject(c.entityId)
+                    if (c.operation == "delete") db.projectDao().deleteProject(c.entityId, ownerId)
                     else c.snapshot?.let {
                         val p = api.json.decodeFromJsonElement<ProjectDto>(it)
+                        if (p.ownerId != null && p.ownerId != ownerId) return@let
                         db.projectDao().upsertProject(
                             ProjectEntity(
                                 id = p.id,
-                                ownerId = p.ownerId ?: defaultOwner,
+                                ownerId = p.ownerId ?: ownerId,
                                 name = p.name,
                                 slug = p.slug ?: p.taskPrefix ?: p.name.lowercase(),
                                 description = p.description,
@@ -350,6 +363,8 @@ class SyncEngine(
         val item = OutboxEntity(
             mutationId = UUID.randomUUID().toString(),
             clientId = authManager.clientId,
+            ownerId = authManager.ownerId
+                ?: throw IllegalStateException("登录状态已失效，请重新登录"),
             command = command,
             entityId = entityId,
             baseVersion = baseVersion,

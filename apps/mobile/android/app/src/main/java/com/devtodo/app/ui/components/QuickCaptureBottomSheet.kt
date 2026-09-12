@@ -1,14 +1,44 @@
 package com.devtodo.app.ui.components
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -16,6 +46,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devtodo.app.data.local.ProjectEntity
 
@@ -24,12 +55,16 @@ import com.devtodo.app.data.local.ProjectEntity
 fun QuickCaptureBottomSheet(
     onDismiss: () -> Unit,
     projects: List<ProjectEntity>,
+    initialProjectId: String? = null,
     onSave: (title: String, projectId: String?, scheduleToday: Boolean) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-    var title by remember { mutableStateOf("") }
-    var selectedProjectId by remember { mutableStateOf<String?>(null) }
-    var scheduleToday by remember { mutableStateOf(false) }
+    var title by rememberSaveable { mutableStateOf("") }
+    var selectedProjectId by rememberSaveable(initialProjectId) {
+        mutableStateOf(initialProjectId)
+    }
+    var scheduleToday by rememberSaveable { mutableStateOf(false) }
+    var projectMenuOpen by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
     ModalBottomSheet(
@@ -40,8 +75,8 @@ fun QuickCaptureBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 12.dp)
-                .navigationBarsPadding()
                 .imePadding()
+                .verticalScroll(rememberScrollState())
         ) {
             Text(
                 text = "快速捕获任务",
@@ -64,8 +99,7 @@ fun QuickCaptureBottomSheet(
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onSave(title.trim(), selectedProjectId, scheduleToday)
                     }
-                }),
-                shape = RoundedCornerShape(12.dp)
+                })
             )
 
             LaunchedEffect(Unit) {
@@ -77,7 +111,9 @@ fun QuickCaptureBottomSheet(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
             ) {
                 FilterChip(
                     selected = scheduleToday,
@@ -87,12 +123,15 @@ fun QuickCaptureBottomSheet(
                     },
                     label = { Text("今日焦点") },
                     leadingIcon = {
-                        Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(
+                            Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 )
 
                 if (projects.isNotEmpty()) {
-                    var projectMenuOpen by remember { mutableStateOf(false) }
                     Box {
                         AssistChip(
                             onClick = {
@@ -100,7 +139,12 @@ fun QuickCaptureBottomSheet(
                                 projectMenuOpen = true
                             },
                             label = {
-                                Text(projects.find { it.id == selectedProjectId }?.name ?: "无项目 (收集箱)")
+                                Text(
+                                    projects.find { it.id == selectedProjectId }?.name
+                                        ?: "无项目 (收集箱)",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         )
                         DropdownMenu(
@@ -114,11 +158,17 @@ fun QuickCaptureBottomSheet(
                                     projectMenuOpen = false
                                 }
                             )
-                            projects.forEach { p ->
+                            projects.forEach { project ->
                                 DropdownMenuItem(
-                                    text = { Text(p.name) },
+                                    text = {
+                                        Text(
+                                            project.name,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    },
                                     onClick = {
-                                        selectedProjectId = p.id
+                                        selectedProjectId = project.id
                                         projectMenuOpen = false
                                     }
                                 )
@@ -138,8 +188,9 @@ fun QuickCaptureBottomSheet(
                     }
                 },
                 enabled = title.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
             ) {
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))

@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import com.devtodo.app.ui.TaskDockApp
 import com.devtodo.app.ui.screens.MainViewModel
 import com.devtodo.app.ui.screens.MainViewModelFactory
@@ -19,7 +21,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            DevTodoTheme {
+            val themeMode by viewModel.themeMode.collectAsState()
+            val dynamicColor by viewModel.dynamicColor.collectAsState()
+            val pureBlack by viewModel.pureBlack.collectAsState()
+            DevTodoTheme(
+                themeMode = themeMode,
+                dynamicColor = dynamicColor,
+                pureBlack = pureBlack
+            ) {
                 TaskDockApp(viewModel = viewModel)
             }
         }

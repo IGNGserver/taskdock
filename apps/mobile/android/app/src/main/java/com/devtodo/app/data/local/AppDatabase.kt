@@ -17,7 +17,7 @@ import androidx.room.RoomDatabase
         ConflictEntity::class,
         SyncMetaEntity::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,8 +42,21 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "devtodo_local.db"
                 )
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .fallbackToDestructiveMigration()
                 .build().also { INSTANCE = it }
+            }
+        }
+
+        private val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE outbox ADD COLUMN ownerId TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        private val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE conflicts ADD COLUMN ownerId TEXT NOT NULL DEFAULT ''")
             }
         }
     }
