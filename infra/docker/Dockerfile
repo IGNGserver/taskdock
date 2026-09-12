@@ -5,6 +5,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc tsconfig.base.json .
 COPY apps ./apps
 COPY packages ./packages
 COPY docs ./docs
+COPY scripts ./scripts
+COPY assets ./assets
 RUN pnpm install --frozen-lockfile
 RUN pnpm -r --if-present build
 
