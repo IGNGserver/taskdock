@@ -10,6 +10,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.devtodo.app.data.local.NoteEntity
 import com.devtodo.app.data.local.TaskEntity
@@ -22,6 +24,7 @@ fun TaskDetailScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     var task by remember { mutableStateOf<TaskEntity?>(null) }
     var title by remember { mutableStateOf("") }
     var markdownContent by remember { mutableStateOf("") }
@@ -36,7 +39,10 @@ fun TaskDetailScreen(
             TopAppBar(
                 title = { Text("任务详情", style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onBack()
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 }
@@ -65,7 +71,10 @@ fun TaskDetailScreen(
                     TaskStatus.values().forEachIndexed { index, status ->
                         SegmentedButton(
                             shape = SegmentedButtonDefaults.itemShape(index = index, count = TaskStatus.values().size),
-                            onClick = { viewModel.updateTaskStatus(currentTask, status) },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.updateTaskStatus(currentTask, status)
+                            },
                             selected = currentTask.status == status
                         ) {
                             Text(
@@ -91,7 +100,10 @@ fun TaskDetailScreen(
                 )
 
                 Button(
-                    onClick = { onBack() },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onBack()
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
