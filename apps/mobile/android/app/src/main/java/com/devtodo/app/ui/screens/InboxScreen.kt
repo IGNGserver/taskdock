@@ -75,7 +75,7 @@ fun InboxScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(bottom = 16.dp)
+                contentPadding = PaddingValues(top = 8.dp, bottom = 112.dp)
             ) {
                 items(tasks, key = { it.id }) { task ->
                     M3TaskRow(
