@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['favicon.svg', 'pwa-192.svg', 'pwa-512.svg'],
+      includeAssets: ['favicon.png', 'pwa-180.png', 'pwa-192.png', 'pwa-512.png'],
       manifest: {
         name: 'TaskDock 开发任务工作台',
         short_name: 'TaskDock',
@@ -23,17 +23,17 @@ export default defineConfig({
         theme_color: '#f5f2f9',
         background_color: '#f5f2f9',
         icons: [
-          { src: '/pwa-192.svg', sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
+          { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           {
-            src: '/pwa-512.svg',
+            src: '/pwa-512.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'any maskable',
           },
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,ico}'],
+        globPatterns: ['**/*.{js,css,html,ico,png}'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api(?:\/|$)/, /^\/health(?:\/|$)/, /^\/version$/],
       },

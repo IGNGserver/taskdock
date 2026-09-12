@@ -1,5 +1,6 @@
 package com.devtodo.app.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,12 +22,14 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.devtodo.app.R
 import kotlinx.coroutines.launch
 
 @Composable
@@ -73,7 +76,11 @@ fun LoginScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // M3 Brand Title
+                Image(
+                    painter = painterResource(id = R.drawable.taskdock_icon),
+                    contentDescription = "TaskDock",
+                    modifier = Modifier.size(56.dp)
+                )
                 Text(
                     text = "TaskDock",
                     style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
