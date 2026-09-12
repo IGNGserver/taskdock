@@ -160,55 +160,172 @@ class SyncEngine(
     }
 
     private suspend fun applySnapshot(snap: SnapshotResult) {
+        val now = isoFormat.format(Date())
+        val defaultOwner = authManager.ownerId ?: ""
         db.projectDao().upsertProjects(snap.projects.map { p ->
-            ProjectEntity(p.id, p.ownerId, p.name, p.slug, p.description, p.rank, p.version, p.archivedAt, p.createdAt, p.updatedAt)
+            ProjectEntity(
+                id = p.id,
+                ownerId = p.ownerId ?: defaultOwner,
+                name = p.name,
+                slug = p.slug ?: p.taskPrefix ?: p.name.lowercase(),
+                description = p.description,
+                rank = p.rank,
+                version = p.version,
+                archivedAt = p.archivedAt,
+                createdAt = p.createdAt ?: now,
+                updatedAt = p.updatedAt ?: now
+            )
         })
         db.taskDao().upsertTasks(snap.tasks.map { t ->
-            TaskEntity(t.id, t.ownerId, t.projectId, t.referenceId, t.title, t.status, t.category, t.priority, t.rank, t.version, t.archivedAt, t.createdAt, t.updatedAt)
+            TaskEntity(
+                id = t.id,
+                ownerId = t.ownerId ?: defaultOwner,
+                projectId = t.projectId,
+                referenceId = t.referenceId,
+                title = t.title,
+                status = t.status,
+                category = t.category,
+                priority = t.priority,
+                rank = t.rank,
+                version = t.version,
+                archivedAt = t.archivedAt,
+                createdAt = t.createdAt ?: now,
+                updatedAt = t.updatedAt ?: now
+            )
         })
         db.noteDao().upsertNotes(snap.notes.map { n ->
-            NoteEntity(n.id, n.ownerId, n.taskId, n.contentMarkdown, n.version, n.createdAt, n.updatedAt)
+            NoteEntity(
+                id = n.id,
+                ownerId = n.ownerId ?: defaultOwner,
+                taskId = n.taskId,
+                contentMarkdown = n.contentMarkdown,
+                version = n.version,
+                createdAt = n.createdAt ?: now,
+                updatedAt = n.updatedAt ?: now
+            )
         })
         db.timePointDao().upsertTimePoints(snap.timePoints.map { tp ->
-            TimePointEntity(tp.id, tp.ownerId, tp.type, tp.localDate, tp.title, tp.rank, tp.version, tp.reachedAt, tp.archivedAt, tp.createdAt, tp.updatedAt)
+            TimePointEntity(
+                id = tp.id,
+                ownerId = tp.ownerId ?: defaultOwner,
+                type = tp.type,
+                localDate = tp.localDate,
+                title = tp.title,
+                rank = tp.rank,
+                version = tp.version,
+                reachedAt = tp.reachedAt,
+                archivedAt = tp.archivedAt,
+                createdAt = tp.createdAt ?: now,
+                updatedAt = tp.updatedAt ?: now
+            )
         })
         db.placementDao().upsertPlacements(snap.placements.map { pl ->
-            PlacementEntity(pl.id, pl.ownerId, pl.taskId, pl.timePointId, pl.rank, pl.version, pl.createdAt, pl.updatedAt)
+            PlacementEntity(
+                id = pl.id,
+                ownerId = pl.ownerId ?: defaultOwner,
+                taskId = pl.taskId,
+                timePointId = pl.timePointId,
+                rank = pl.rank,
+                version = pl.version,
+                createdAt = pl.createdAt ?: now,
+                updatedAt = pl.updatedAt ?: now
+            )
         })
         snap.settings?.let { s ->
-            db.settingsDao().upsertSettings(SettingsEntity(s.ownerId, s.timezone, s.defaultCaptureTarget, s.recentProjectId, s.createdAt, s.updatedAt))
+            db.settingsDao().upsertSettings(
+                SettingsEntity(
+                    ownerId = s.ownerId,
+                    timezone = s.timezone,
+                    defaultCaptureTarget = s.defaultCaptureTarget,
+                    recentProjectId = s.recentProjectId,
+                    createdAt = s.createdAt ?: now,
+                    updatedAt = s.updatedAt ?: now
+                )
+            )
         }
     }
 
     private suspend fun applyChanges(changes: List<ChangeItem>) {
+        val now = isoFormat.format(Date())
+        val defaultOwner = authManager.ownerId ?: ""
         for (c in changes) {
             when (c.entityType) {
                 "task" -> {
                     if (c.operation == "delete") db.taskDao().deleteTask(c.entityId)
                     else c.snapshot?.let {
                         val task = api.json.decodeFromJsonElement<TaskDto>(it)
-                        db.taskDao().upsertTask(TaskEntity(task.id, task.ownerId, task.projectId, task.referenceId, task.title, task.status, task.category, task.priority, task.rank, task.version, task.archivedAt, task.createdAt, task.updatedAt))
+                        db.taskDao().upsertTask(
+                            TaskEntity(
+                                id = task.id,
+                                ownerId = task.ownerId ?: defaultOwner,
+                                projectId = task.projectId,
+                                referenceId = task.referenceId,
+                                title = task.title,
+                                status = task.status,
+                                category = task.category,
+                                priority = task.priority,
+                                rank = task.rank,
+                                version = task.version,
+                                archivedAt = task.archivedAt,
+                                createdAt = task.createdAt ?: now,
+                                updatedAt = task.updatedAt ?: now
+                            )
+                        )
                     }
                 }
                 "placement" -> {
                     if (c.operation == "delete") db.placementDao().deletePlacement(c.entityId)
                     else c.snapshot?.let {
                         val pl = api.json.decodeFromJsonElement<PlacementDto>(it)
-                        db.placementDao().upsertPlacement(PlacementEntity(pl.id, pl.ownerId, pl.taskId, pl.timePointId, pl.rank, pl.version, pl.createdAt, pl.updatedAt))
+                        db.placementDao().upsertPlacement(
+                            PlacementEntity(
+                                id = pl.id,
+                                ownerId = pl.ownerId ?: defaultOwner,
+                                taskId = pl.taskId,
+                                timePointId = pl.timePointId,
+                                rank = pl.rank,
+                                version = pl.version,
+                                createdAt = pl.createdAt ?: now,
+                                updatedAt = pl.updatedAt ?: now
+                            )
+                        )
                     }
                 }
                 "note" -> {
                     if (c.operation == "delete") db.noteDao().deleteNoteByTaskId(c.entityId)
                     else c.snapshot?.let {
                         val n = api.json.decodeFromJsonElement<NoteDto>(it)
-                        db.noteDao().upsertNote(NoteEntity(n.id, n.ownerId, n.taskId, n.contentMarkdown, n.version, n.createdAt, n.updatedAt))
+                        db.noteDao().upsertNote(
+                            NoteEntity(
+                                id = n.id,
+                                ownerId = n.ownerId ?: defaultOwner,
+                                taskId = n.taskId,
+                                contentMarkdown = n.contentMarkdown,
+                                version = n.version,
+                                createdAt = n.createdAt ?: now,
+                                updatedAt = n.updatedAt ?: now
+                            )
+                        )
                     }
                 }
                 "project" -> {
                     if (c.operation == "delete") db.projectDao().deleteProject(c.entityId)
                     else c.snapshot?.let {
                         val p = api.json.decodeFromJsonElement<ProjectDto>(it)
-                        db.projectDao().upsertProject(ProjectEntity(p.id, p.ownerId, p.name, p.slug, p.description, p.rank, p.version, p.archivedAt, p.createdAt, p.updatedAt))
+                        db.projectDao().upsertProject(
+                            ProjectEntity(
+                                id = p.id,
+                                ownerId = p.ownerId ?: defaultOwner,
+                                name = p.name,
+                                slug = p.slug ?: p.taskPrefix ?: p.name.lowercase(),
+                                description = p.description,
+                                rank = p.rank,
+                                version = p.version,
+                                archivedAt = p.archivedAt,
+                                createdAt = p.createdAt ?: now,
+                                updatedAt = p.updatedAt ?: now
+                            )
+                        )
                     }
                 }
             }
