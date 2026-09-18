@@ -43,7 +43,8 @@ fun M3TaskRow(
     onStatusToggle: (TaskStatus) -> Unit,
     modifier: Modifier = Modifier,
     projectName: String? = null,
-    dateBadge: String? = null
+    dateBadge: String? = null,
+    showPriority: Boolean = true
 ) {
     val haptic = LocalHapticFeedback.current
     val nextStatus = when (task.status) {
@@ -114,7 +115,7 @@ fun M3TaskRow(
                 if (
                     !projectName.isNullOrEmpty() ||
                     !dateBadge.isNullOrEmpty() ||
-                    task.priority != TaskPriority.NONE ||
+                    (showPriority && task.priority != TaskPriority.NONE) ||
                     !task.referenceId.isNullOrEmpty()
                 ) {
                     Spacer(modifier = Modifier.size(4.dp))
@@ -147,7 +148,7 @@ fun M3TaskRow(
                             )
                         }
 
-                        if (task.priority != TaskPriority.NONE) {
+                        if (showPriority && task.priority != TaskPriority.NONE) {
                             val (containerColor, labelColor, label) = when (task.priority) {
                                 TaskPriority.HIGH -> Triple(
                                     MaterialTheme.colorScheme.errorContainer,

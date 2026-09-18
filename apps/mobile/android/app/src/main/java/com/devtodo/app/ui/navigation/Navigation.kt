@@ -4,14 +4,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.ui.graphics.vector.ImageVector
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector? = null) {
     data object Today : Screen("today", "今日", Icons.Default.CalendarToday)
-    data object Inbox : Screen("inbox", "收集箱", Icons.Default.Inbox)
-    data object Tasks : Screen("tasks", "任务库", Icons.AutoMirrored.Filled.List)
+    data object Tree : Screen("tree", "目录", Icons.Default.Folder)
+    data object AllTasks : Screen("all_tasks", "所有任务", Icons.AutoMirrored.Filled.List)
+    data object Workflows : Screen("workflows", "流程", Icons.Default.AccountTree)
     data object Time : Screen("time", "时间节点", Icons.Default.DateRange)
     data object More : Screen("more", "更多", Icons.Default.MoreHoriz)
     
@@ -27,8 +29,9 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
 
 val BottomNavScreens = listOf(
     Screen.Today,
-    Screen.Inbox,
-    Screen.Tasks,
+    Screen.Tree,
+    Screen.AllTasks,
+    Screen.Workflows,
     Screen.Time,
     Screen.More
 )

@@ -54,6 +54,21 @@ describe('desktop hub policy', () => {
     expect(request.body).toBe('{}');
   });
 
+  it('allows the v2 API over both HTTP and HTTPS without widening the origin policy', () => {
+    const request = validateHubRequest(
+      {
+        url: 'http://47.95.17.77:48731/api/v2/sync/pull?cursor=0&limit=100',
+        headers: { Authorization: 'Bearer access-token' },
+      },
+      'http://47.95.17.77:48731',
+    );
+
+    expect(request.url.toString()).toBe(
+      'http://47.95.17.77:48731/api/v2/sync/pull?cursor=0&limit=100',
+    );
+    expect(request.headers).toEqual({ authorization: 'Bearer access-token' });
+  });
+
   it('rejects requests outside the configured Hub and API path', () => {
     expect(() =>
       validateHubRequest(

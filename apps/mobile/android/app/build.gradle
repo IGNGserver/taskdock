@@ -65,6 +65,14 @@ android {
         checkReleaseBuilds = true
         abortOnError = true
     }
+    // Room exports its schema JSON into `schemas/`. Migration tests read those
+    // files through the instrumentation assets, so they must be packaged for
+    // androidTest or `MigrationTestHelper` cannot open an old database version.
+    sourceSets {
+        androidTest {
+            assets.srcDirs += files("$projectDir/schemas")
+        }
+    }
     buildFeatures {
         compose = true
     }
@@ -75,6 +83,12 @@ android {
     kotlinOptions {
         jvmTarget = "21"
     }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+    arg("room.incremental", "true")
+    arg("room.generateKotlin", "true")
 }
 
 dependencies {
@@ -118,6 +132,7 @@ dependencies {
 
     // Testing
     testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.room:room-testing:$roomVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     androidTestImplementation 'androidx.compose.ui:ui-test-junit4'

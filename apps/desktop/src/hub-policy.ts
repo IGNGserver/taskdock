@@ -8,6 +8,8 @@ const HUB_REQUEST_HEADERS = new Set([
   'x-client-id',
 ]);
 
+const HUB_API_PATH_PREFIXES = ['/api/v1/', '/api/v2/'];
+
 const MAX_HUB_REQUEST_BODY_BYTES = 1_200_000;
 const MAX_HUB_REQUEST_HEADER_VALUE_BYTES = 16_384;
 
@@ -65,7 +67,8 @@ export function validateHubRequest(
   if (!requestOrigin) throw new Error('invalid request origin');
   if (!allowUnconfiguredOrigin && (!configuredOrigin || requestOrigin !== configuredOrigin))
     throw new Error('request origin does not match configured hub');
-  if (!requested.pathname.startsWith('/api/v1/')) throw new Error('request path is not allowed');
+  if (!HUB_API_PATH_PREFIXES.some((prefix) => requested.pathname.startsWith(prefix)))
+    throw new Error('request path is not allowed');
 
   const headers: Record<string, string> = {};
   const seenHeaders = new Set<string>();

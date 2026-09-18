@@ -30,6 +30,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.devtodo.app.R
+import com.devtodo.app.data.remote.ApiClientException
+import com.devtodo.app.data.remote.ApiFailureCategory
 import kotlinx.coroutines.launch
 
 @Composable
@@ -61,7 +63,17 @@ fun LoginScreen(
             if (res.isSuccess) {
                 onLoginSuccess()
             } else {
-                errorMessage = "登录失败，请检查中枢地址、账号和密码"
+                errorMessage = when (val error = res.exceptionOrNull()) {
+                    is ApiClientException -> when (error.category) {
+                        ApiFailureCategory.AUTH_REQUIRED -> "账号或密码错误，或登录会话已失效"
+                        ApiFailureCategory.INCOMPATIBLE -> "中枢版本不兼容，请升级中枢后重试"
+                        ApiFailureCategory.SERVER_UNAVAILABLE -> "中枢暂不可用，请稍后重试"
+                        ApiFailureCategory.REQUEST_REJECTED -> error.serverMessage
+                        ApiFailureCategory.CURSOR_EXPIRED -> error.serverMessage
+                    }
+                    is java.io.IOException -> "无法连接中枢，请检查网络和服务器地址"
+                    else -> "登录失败，请检查中枢地址、账号和密码"
+                }
             }
         }
     }

@@ -5,12 +5,28 @@ import com.devtodo.app.data.security.SecureAuthManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+
+enum class ApiFailureCategory {
+    AUTH_REQUIRED,
+    INCOMPATIBLE,
+    SERVER_UNAVAILABLE,
+    REQUEST_REJECTED,
+    /** The pull cursor fell outside the server's retention window. */
+    CURSOR_EXPIRED
+}
+
+class ApiClientException(
+    val statusCode: Int,
+    val errorCode: String?,
+    val category: ApiFailureCategory,
+    val serverMessage: String,
+) : IOException("${category.name}: ${errorCode ?: "HTTP_$statusCode"}: $serverMessage")
 
 class ApiClient(private val authManager: SecureAuthManager) {
     val json = Json {
@@ -32,6 +48,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
+        .pingInterval(30, TimeUnit.SECONDS)
         .build()
 
     private val okHttpClient = rawHttpClient.newBuilder()
@@ -49,11 +66,12 @@ class ApiClient(private val authManager: SecureAuthManager) {
         .build()
 
     private fun baseUrl(): String = "${authManager.hubOrigin}/api/v1"
+    private fun baseUrlV2(): String = "${authManager.hubOrigin}/api/v2"
 
     suspend fun checkHubStatus(origin: String): Result<HubStatusResponse> = withContext(Dispatchers.IO) {
         try {
             val req = Request.Builder()
-                .url("${origin.trimEnd('/')}/api/v1/hub/status")
+                .url("${origin.trimEnd('/')}/api/v1/bootstrap/status")
                 .get()
                 .build()
             okHttpClient.newCall(req).execute().use { resp ->
@@ -62,7 +80,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
                     val status = json.decodeFromString<HubStatusResponse>(bodyStr)
                     Result.success(status)
                 } else {
-                    Result.failure(IOException("Server returned ${resp.code}: $bodyStr"))
+                    Result.failure(apiFailure("hub status", resp, bodyStr))
                 }
             }
         } catch (e: Exception) {
@@ -94,13 +112,12 @@ class ApiClient(private val authManager: SecureAuthManager) {
                     val loginRes = json.decodeFromString<LoginResponse>(bodyStr)
                     val refreshToken = loginRes.refreshToken
                         ?: return@use Result.failure(IOException("Login response missing refresh token"))
-                    authManager.accessToken = loginRes.accessToken
-                    authManager.refreshToken = refreshToken
+                    authManager.setSessionTokens(loginRes.accessToken, refreshToken)
                     authManager.ownerId = loginRes.user.id
                     authManager.username = loginRes.user.username
                     Result.success(loginRes)
                 } else {
-                    Result.failure(IOException("Login failed (${resp.code}): $bodyStr"))
+                    Result.failure(apiFailure("login", resp, bodyStr))
                 }
             }
         } catch (e: Exception) {
@@ -164,8 +181,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
                     } else {
                         val result = json.decodeFromString<LoginResponse>(body)
                         val nextRefreshToken = result.refreshToken ?: return@use false
-                        authManager.accessToken = result.accessToken
-                        authManager.refreshToken = nextRefreshToken
+                        authManager.setSessionTokens(result.accessToken, nextRefreshToken)
                         authManager.ownerId = result.user.id
                         authManager.username = result.user.username
                         true
@@ -184,14 +200,17 @@ class ApiClient(private val authManager: SecureAuthManager) {
             .url("${baseUrl()}/auth/native/challenge")
             .header("Origin", nativeOrigin)
             .header("Accept", "application/json")
+            .header("X-Client-Id", authManager.clientId)
             .post("".toRequestBody(jsonMediaType))
             .build()
         return try {
             rawHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@use null
-                val body = response.body?.string() ?: return@use null
+                val body = response.body?.string() ?: ""
+                if (!response.isSuccessful) throw apiFailure("native auth challenge", response, body)
                 json.decodeFromString<NativeChallengeResponse>(body).challenge
             }
+        } catch (e: ApiClientException) {
+            throw e
         } catch (_: Exception) {
             null
         }
@@ -223,7 +242,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
                 if (resp.isSuccessful) {
                     Result.success(json.decodeFromString<PushResult>(bodyStr))
                 } else {
-                    Result.failure(IOException("Push failed: ${resp.code} $bodyStr"))
+                    Result.failure(apiFailure("v1 push", resp, bodyStr))
                 }
             }
         } catch (e: Exception) {
@@ -242,7 +261,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
                 if (resp.isSuccessful) {
                     Result.success(json.decodeFromString<PullResult>(bodyStr))
                 } else {
-                    Result.failure(IOException("Pull failed: ${resp.code} $bodyStr"))
+                    Result.failure(apiFailure("v1 pull", resp, bodyStr))
                 }
             }
         } catch (e: Exception) {
@@ -261,8 +280,95 @@ class ApiClient(private val authManager: SecureAuthManager) {
                 if (resp.isSuccessful) {
                     Result.success(json.decodeFromString<SnapshotResult>(bodyStr))
                 } else {
-                    Result.failure(IOException("Snapshot failed: ${resp.code} $bodyStr"))
+                    Result.failure(apiFailure("v1 snapshot", resp, bodyStr))
                 }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun pushSyncV2(mutations: List<Mutation>): Result<PushResult> = withContext(Dispatchers.IO) {
+        try {
+            val pushReq = V2PushRequest(
+                protocolVersion = 2,
+                clientId = authManager.clientId,
+                mutations = mutations
+            )
+            val req = Request.Builder()
+                .url("${baseUrlV2()}/sync/push")
+                .post(json.encodeToString(pushReq).toRequestBody(jsonMediaType))
+                .build()
+            okHttpClient.newCall(req).execute().use { resp ->
+                val bodyStr = resp.body?.string() ?: ""
+                if (resp.isSuccessful) Result.success(json.decodeFromString<PushResult>(bodyStr))
+                else Result.failure(apiFailure("v2 push", resp, bodyStr))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun pullSyncV2(cursor: String, limit: Int = 100): Result<PullResult> = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder()
+                .url("${baseUrlV2()}/sync/pull?cursor=$cursor&limit=$limit")
+                .get()
+                .build()
+            okHttpClient.newCall(req).execute().use { resp ->
+                val bodyStr = resp.body?.string() ?: ""
+                if (resp.isSuccessful) Result.success(json.decodeFromString<PullResult>(bodyStr))
+                else Result.failure(apiFailure("v2 pull", resp, bodyStr))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getSnapshotV2(): Result<V2SnapshotResult> = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder()
+                .url("${baseUrlV2()}/sync/snapshot")
+                .get()
+                .build()
+            okHttpClient.newCall(req).execute().use { resp ->
+                val bodyStr = resp.body?.string() ?: ""
+                if (resp.isSuccessful) Result.success(json.decodeFromString<V2SnapshotResult>(bodyStr))
+                else Result.failure(apiFailure("v2 snapshot", resp, bodyStr))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getV2DeletePreview(folderId: String): Result<DeletePreviewDto> = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder()
+                .url("${baseUrlV2()}/folders/$folderId/delete-preview")
+                .post("{}".toRequestBody(jsonMediaType))
+                .build()
+            okHttpClient.newCall(req).execute().use { resp ->
+                val bodyStr = resp.body?.string() ?: ""
+                if (resp.isSuccessful) Result.success(json.decodeFromString<DeletePreviewDto>(bodyStr))
+                else Result.failure(apiFailure("v2 delete preview", resp, bodyStr))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteV2Tree(folderId: String, confirmationToken: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder()
+                .url("${baseUrlV2()}/folders/$folderId/tree")
+                .header("X-Client-Id", authManager.clientId)
+                .header("Idempotency-Key", java.util.UUID.randomUUID().toString())
+                .delete("{\"confirmationToken\":\"$confirmationToken\"}".toRequestBody(jsonMediaType))
+                .build()
+            okHttpClient.newCall(req).execute().use { resp ->
+                val bodyStr = resp.body?.string() ?: ""
+                if (resp.isSuccessful) Result.success(Unit)
+                else Result.failure(apiFailure("v2 delete tree", resp, bodyStr))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -278,6 +384,45 @@ class ApiClient(private val authManager: SecureAuthManager) {
             .header("Authorization", "Bearer ${authManager.accessToken ?: ""}")
             .build()
         return okHttpClient.newWebSocket(req, listener)
+    }
+
+    fun createV2WebSocket(listener: WebSocketListener): WebSocket {
+        val wsUrl = authManager.hubOrigin
+            .replace("http://", "ws://")
+            .replace("https://", "wss://") + "/api/v2/ws"
+        val req = Request.Builder()
+            .url(wsUrl)
+            .build()
+        // v2 authenticates with the first WebSocket message. Keep the
+        // handshake free of bearer headers so all clients share one contract.
+        return rawHttpClient.newWebSocket(req, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                val accessToken = authManager.accessToken ?: ""
+                webSocket.send("{\"type\":\"auth\",\"accessToken\":\"$accessToken\"}")
+                listener.onOpen(webSocket, response)
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) = listener.onMessage(webSocket, text)
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) = listener.onClosing(webSocket, code, reason)
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = listener.onClosed(webSocket, code, reason)
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = listener.onFailure(webSocket, t, response)
+        })
+    }
+
+    private fun apiFailure(operation: String, response: Response, body: String): ApiClientException {
+        val payload = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull()
+        val code = payload?.get("code")?.jsonPrimitive?.contentOrNull
+        val message = payload?.get("message")?.jsonPrimitive?.contentOrNull
+            ?: "${operation} failed with HTTP ${response.code}"
+        val category = when {
+            response.code == 401 || response.code == 403 -> ApiFailureCategory.AUTH_REQUIRED
+            code == "SYNC_CURSOR_EXPIRED" -> ApiFailureCategory.CURSOR_EXPIRED
+            response.code == 404 || code == "CLIENT_UPGRADE_REQUIRED" || code == "SYNC_PROTOCOL_UNSUPPORTED" ->
+                ApiFailureCategory.INCOMPATIBLE
+            response.code >= 500 -> ApiFailureCategory.SERVER_UNAVAILABLE
+            else -> ApiFailureCategory.REQUEST_REJECTED
+        }
+        return ApiClientException(response.code, code, category, message)
     }
 }
 

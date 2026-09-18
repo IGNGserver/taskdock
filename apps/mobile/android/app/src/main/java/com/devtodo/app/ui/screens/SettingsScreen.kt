@@ -33,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -65,10 +66,11 @@ fun SettingsScreen(
     val haptic = LocalHapticFeedback.current
     val syncState by viewModel.syncState.collectAsState()
     val lastSyncError by viewModel.lastSyncError.collectAsState()
-    val unresolvedConflicts by viewModel.unresolvedConflicts.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
     val dynamicColor by viewModel.dynamicColor.collectAsState()
     val pureBlack by viewModel.pureBlack.collectAsState()
+    val pendingOutbox by viewModel.pendingOutboxItems.collectAsState()
+    val unresolvedConflicts by viewModel.unresolvedConflicts.collectAsState()
     var hubUrl by rememberSaveable { mutableStateOf(viewModel.authManager.hubOrigin) }
     val isHttpHub = hubUrl.trim().startsWith("http://", ignoreCase = true)
     val cardColors = CardDefaults.cardColors(
@@ -236,6 +238,55 @@ fun SettingsScreen(
                 }
             }
 
+            if (pendingOutbox.isNotEmpty() || unresolvedConflicts.isNotEmpty()) {
+                Card(
+                    shape = MaterialTheme.shapes.large,
+                    colors = cardColors,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("待处理同步 / 冲突队列", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        if (unresolvedConflicts.isNotEmpty()) {
+                            Text("未解决冲突 (${unresolvedConflicts.size})", style = MaterialTheme.typography.labelLarge)
+                            unresolvedConflicts.forEach { conflict ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("${conflict.command ?: conflict.entityType}: ${conflict.entityId.take(8)}")
+                                    }
+                                }
+                            }
+                        }
+                        if (pendingOutbox.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("待提交 / 失败重试项 (${pendingOutbox.size})", style = MaterialTheme.typography.labelLarge)
+                            pendingOutbox.forEach { item ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("${item.command}: ${item.entityId.take(8)}")
+                                        if (item.lastError != null) {
+                                            Text(item.lastError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                    Row {
+                                        TextButton(onClick = { viewModel.retryOutboxItem(item) }) { Text("重试") }
+                                        TextButton(onClick = { viewModel.discardOutboxItem(item) }) { Text("丢弃", color = MaterialTheme.colorScheme.error) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             Card(
                 shape = MaterialTheme.shapes.large,
                 colors = cardColors,
@@ -298,5 +349,8 @@ private fun syncStateLabel(state: SyncState): String = when (state) {
     SyncState.IDLE -> "空闲"
     SyncState.SYNCING -> "同步中"
     SyncState.OFFLINE -> "离线"
+    SyncState.AUTH_REQUIRED -> "需要重新登录"
+    SyncState.INCOMPATIBLE -> "中枢版本不兼容"
+    SyncState.SERVER_UNAVAILABLE -> "中枢暂不可用"
     SyncState.ERROR -> "错误"
 }
