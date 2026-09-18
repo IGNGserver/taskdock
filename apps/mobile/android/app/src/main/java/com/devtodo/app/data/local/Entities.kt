@@ -37,7 +37,99 @@ data class TaskEntity(
     val archivedAt: String?,
     val createdAt: String,
     val updatedAt: String,
+    val parentFolderId: String? = null,
+    val completedAt: String? = null,
+    val archivedByOperationId: String? = null,
+    val deletedAt: String? = null,
     val pendingSync: Boolean = false
+)
+
+@Entity(tableName = "folders")
+data class FolderEntity(
+    @PrimaryKey val id: String,
+    val ownerId: String,
+    val parentFolderId: String?,
+    val title: String,
+    val rank: String,
+    val version: Long,
+    val archivedAt: String?,
+    val archivedByOperationId: String? = null,
+    val createdAt: String,
+    val updatedAt: String,
+    val deletedAt: String? = null,
+    val pendingSync: Boolean = false
+)
+
+@Entity(tableName = "task_steps")
+data class TaskStepEntity(
+    @PrimaryKey val id: String,
+    val ownerId: String,
+    val taskId: String,
+    val title: String,
+    val noteMarkdown: String,
+    val status: TaskStatus,
+    val rank: String,
+    val completedAt: String?,
+    val version: Long,
+    val createdAt: String,
+    val updatedAt: String,
+    val deletedAt: String? = null,
+    val pendingSync: Boolean = false
+)
+
+@Entity(tableName = "workflows")
+data class WorkflowEntity(
+    @PrimaryKey val id: String,
+    val ownerId: String,
+    val name: String,
+    val rank: String,
+    val version: Long,
+    val archivedAt: String?,
+    val createdAt: String,
+    val updatedAt: String,
+    val deletedAt: String? = null,
+    val pendingSync: Boolean = false
+)
+
+@Entity(tableName = "workflow_stages")
+data class WorkflowStageEntity(
+    @PrimaryKey val id: String,
+    val ownerId: String,
+    val workflowId: String,
+    val name: String,
+    val rank: String,
+    val version: Long,
+    val createdAt: String,
+    val updatedAt: String,
+    val deletedAt: String? = null,
+    val pendingSync: Boolean = false
+)
+
+@Entity(tableName = "workflow_task_memberships")
+data class WorkflowTaskMembershipEntity(
+    @PrimaryKey val id: String,
+    val ownerId: String,
+    val workflowId: String,
+    val stageId: String,
+    val taskId: String,
+    val rank: String,
+    val version: Long,
+    val createdAt: String,
+    val updatedAt: String,
+    val deletedAt: String? = null,
+    val pendingSync: Boolean = false
+)
+
+@Entity(tableName = "archive_operations")
+data class ArchiveOperationEntity(
+    @PrimaryKey val id: String,
+    val ownerId: String,
+    val rootFolderId: String,
+    val rootBaseVersion: Long,
+    val folderCount: Int,
+    val taskCount: Int,
+    val createdAt: String,
+    val restoredAt: String? = null
 )
 
 @Entity(tableName = "notes")
@@ -49,6 +141,7 @@ data class NoteEntity(
     val version: Long,
     val createdAt: String,
     val updatedAt: String,
+    val deletedAt: String? = null,
     val pendingSync: Boolean = false
 )
 
@@ -65,6 +158,7 @@ data class TimePointEntity(
     val archivedAt: String?,
     val createdAt: String,
     val updatedAt: String,
+    val deletedAt: String? = null,
     val pendingSync: Boolean = false
 )
 
@@ -78,6 +172,7 @@ data class PlacementEntity(
     val version: Long,
     val createdAt: String,
     val updatedAt: String,
+    val deletedAt: String? = null,
     val pendingSync: Boolean = false
 )
 
@@ -87,6 +182,7 @@ data class SettingsEntity(
     val timezone: String,
     val defaultCaptureTarget: String,
     val recentProjectId: String?,
+    val weekStartsOn: Int = 1,
     val createdAt: String,
     val updatedAt: String
 )

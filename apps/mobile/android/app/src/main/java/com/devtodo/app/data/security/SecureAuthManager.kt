@@ -1,36 +1,16 @@
 package com.devtodo.app.data.security
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.util.Base64
 import androidx.core.content.edit
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import org.json.JSONObject
 
 class SecureAuthManager(context: Context) {
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-
-    private val prefs: SharedPreferences = try {
-        EncryptedSharedPreferences.create(
-            context,
-            "devtodo_secure_auth",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    } catch (e: Exception) {
-        context.getSharedPreferences("devtodo_fallback_auth", Context.MODE_PRIVATE)
-    }
-
-    private val plainPrefs: SharedPreferences =
-        context.getSharedPreferences("devtodo_config", Context.MODE_PRIVATE)
+    private val tokenStore = SecureTokenStore(context)
+    private val plainPrefs = context.applicationContext
+        .getSharedPreferences("devtodo_config", Context.MODE_PRIVATE)
 
     companion object {
-        private const val KEY_ACCESS_TOKEN = "access_token"
-        private const val KEY_REFRESH_TOKEN = "refresh_token"
         private const val KEY_HUB_ORIGIN = "hub_origin"
         private const val KEY_OWNER_ID = "owner_id"
         private const val KEY_USERNAME = "username"
@@ -38,19 +18,33 @@ class SecureAuthManager(context: Context) {
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_DYNAMIC_COLOR = "dynamic_color"
         private const val KEY_PURE_BLACK = "pure_black"
-        private const val DEFAULT_HUB_ORIGIN = "http://47.95.17.77:48731"
     }
 
     var accessToken: String?
-        get() = prefs.getString(KEY_ACCESS_TOKEN, null)
-        set(value) = prefs.edit { putString(KEY_ACCESS_TOKEN, value) }
+        get() = tokenStore.get(AUTH_ACCESS_TOKEN_KEY)
+        set(value) {
+            if (value.isNullOrBlank()) tokenStore.remove(AUTH_ACCESS_TOKEN_KEY)
+            else tokenStore.put(AUTH_ACCESS_TOKEN_KEY, value)
+        }
 
     var refreshToken: String?
-        get() = prefs.getString(KEY_REFRESH_TOKEN, null)
-        set(value) = prefs.edit { putString(KEY_REFRESH_TOKEN, value) }
+        get() = tokenStore.get(AUTH_REFRESH_TOKEN_KEY)
+        set(value) {
+            if (value.isNullOrBlank()) tokenStore.remove(AUTH_REFRESH_TOKEN_KEY)
+            else tokenStore.put(AUTH_REFRESH_TOKEN_KEY, value)
+        }
+
+    fun setSessionTokens(nextAccessToken: String, nextRefreshToken: String) {
+        tokenStore.putAll(
+            mapOf(
+                AUTH_ACCESS_TOKEN_KEY to nextAccessToken,
+                AUTH_REFRESH_TOKEN_KEY to nextRefreshToken,
+            ),
+        )
+    }
 
     var hubOrigin: String
-        get() = plainPrefs.getString(KEY_HUB_ORIGIN, DEFAULT_HUB_ORIGIN) ?: DEFAULT_HUB_ORIGIN
+        get() = plainPrefs.getString(KEY_HUB_ORIGIN, "") ?: ""
         set(value) = plainPrefs.edit { putString(KEY_HUB_ORIGIN, value.trimEnd('/')) }
 
     var ownerId: String?
@@ -114,10 +108,7 @@ class SecureAuthManager(context: Context) {
     }
 
     fun clearSession() {
-        prefs.edit {
-            remove(KEY_ACCESS_TOKEN)
-            remove(KEY_REFRESH_TOKEN)
-        }
+        tokenStore.removeAll(setOf(AUTH_ACCESS_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY))
         plainPrefs.edit {
             remove(KEY_OWNER_ID)
             remove(KEY_USERNAME)

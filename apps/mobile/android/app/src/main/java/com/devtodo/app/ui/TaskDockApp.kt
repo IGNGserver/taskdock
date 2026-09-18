@@ -33,16 +33,16 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.devtodo.app.ui.navigation.BottomNavScreens
 import com.devtodo.app.ui.navigation.Screen
-import com.devtodo.app.ui.screens.InboxScreen
 import com.devtodo.app.ui.screens.LoginScreen
 import com.devtodo.app.ui.screens.MainViewModel
-import com.devtodo.app.ui.screens.ArchivedTasksScreen
-import com.devtodo.app.ui.screens.ProjectsScreen
+import com.devtodo.app.ui.screens.ArchiveCenterV2Screen
 import com.devtodo.app.ui.screens.SettingsScreen
 import com.devtodo.app.ui.screens.TaskDetailScreen
-import com.devtodo.app.ui.screens.TasksScreen
+import com.devtodo.app.ui.screens.AllTasksV2Screen
+import com.devtodo.app.ui.screens.TreeScreen
+import com.devtodo.app.ui.screens.WorkflowsV2Screen
 import com.devtodo.app.ui.screens.TimeScreen
-import com.devtodo.app.ui.screens.TodayScreen
+import com.devtodo.app.ui.screens.TodayV2Screen
 import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -158,37 +158,49 @@ fun TaskDockApp(
                     }
 
                     composable(Screen.Today.route) {
-                        TodayScreen(
-                            viewModel = viewModel,
-                            onNavigateToDetail = { taskId ->
-                                navController.navigate(Screen.TaskDetail.createRoute(taskId))
-                            }
-                        )
-                    }
-
-                    composable(Screen.Inbox.route) {
-                        InboxScreen(
-                            viewModel = viewModel,
-                            onNavigateToDetail = { taskId ->
-                                navController.navigate(Screen.TaskDetail.createRoute(taskId))
-                            }
-                        )
-                    }
-
-                    composable(Screen.Tasks.route) {
-                        TasksScreen(
+                        TodayV2Screen(
                             viewModel = viewModel,
                             onNavigateToDetail = { taskId ->
                                 navController.navigate(Screen.TaskDetail.createRoute(taskId))
                             },
-                            onNavigateToProjects = {
-                                navController.navigate(Screen.Projects.route)
+                            onNavigateToTree = { _, _ ->
+                                navController.navigate(Screen.Tree.route)
                             }
                         )
                     }
 
+                    composable(Screen.Tree.route) {
+                        TreeScreen(
+                            viewModel = viewModel,
+                            onNavigateToDetail = { taskId ->
+                                navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                            }
+                        )
+                    }
+
+                    composable(Screen.AllTasks.route) {
+                        AllTasksV2Screen(
+                            viewModel = viewModel,
+                            onNavigateToDetail = { taskId ->
+                                navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                            }
+                        )
+                    }
+
+                    composable(Screen.Workflows.route) {
+                        WorkflowsV2Screen(viewModel = viewModel)
+                    }
+
                     composable(Screen.Time.route) {
-                        TimeScreen(viewModel = viewModel)
+                        TimeScreen(
+                            viewModel = viewModel,
+                            onNavigateToDetail = { taskId ->
+                                navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                            },
+                            onNavigateToTree = { _, _ ->
+                                navController.navigate(Screen.Tree.route)
+                            }
+                        )
                     }
 
                     composable(Screen.More.route) {
@@ -211,14 +223,7 @@ fun TaskDockApp(
                     }
 
                     composable(Screen.ArchivedTasks.route) {
-                        ArchivedTasksScreen(
-                            viewModel = viewModel,
-                            onBack = { navController.popBackStack() }
-                        )
-                    }
-
-                    composable(Screen.Projects.route) {
-                        ProjectsScreen(
+                        ArchiveCenterV2Screen(
                             viewModel = viewModel,
                             onBack = { navController.popBackStack() }
                         )
