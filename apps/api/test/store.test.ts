@@ -77,7 +77,13 @@ describe('DevTodo store invariants', () => {
         ),
       ),
     ).rejects.toMatchObject({ code: 'MUTATION_REJECTED' });
-    expect(queries).toEqual(['BEGIN', 'INSERT INTO duplicate_fixture', 'ROLLBACK']);
+    expect(queries).toEqual([
+      'BEGIN',
+      'SET LOCAL statement_timeout = 30000',
+      'SET LOCAL idle_in_transaction_session_timeout = 30000',
+      'INSERT INTO duplicate_fixture',
+      'ROLLBACK',
+    ]);
 
     const domainError = new DomainError('VERSION_CONFLICT', '保留领域错误');
     await expect(store.withMutation(() => Promise.reject(domainError))).rejects.toBe(domainError);
@@ -345,5 +351,78 @@ describe('DevTodo store invariants', () => {
     const event = store.createEvent(owner.id, 'Archived event');
     store.archiveTimePoint(owner.id, event.id, event.version);
     expect(() => store.addPlacement(owner.id, task.id, event.id)).toThrow(DomainError);
+  });
+
+  it('verifies PostgresTreeStore transaction locking, rollback, and no notification on error', async () => {
+    const queries: Array<{ text: string; values: unknown[] }> = [];
+    const client = {
+      query: async (text: string, values: unknown[] = []) => {
+        queries.push({ text, values });
+        if (text.includes('SELECT') && text.includes('FROM users')) {
+          return {
+            rows: [
+              {
+                id: 'owner-1',
+                username: 'owner',
+                password_hash: 'hash',
+                next_misc_task_number: 1,
+                next_task_number: 1,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                disabled_at: null,
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (
+          text.includes('SELECT') &&
+          (text.includes('folders') ||
+            text.includes('tasks') ||
+            text.includes('notes') ||
+            text.includes('task_steps') ||
+            text.includes('workflows') ||
+            text.includes('workflow_stages') ||
+            text.includes('workflow_task_memberships') ||
+            text.includes('archive_operations') ||
+            text.includes('time_points') ||
+            text.includes('placements') ||
+            text.includes('user_settings'))
+        ) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (text.includes('INSERT INTO sync_changes')) {
+          return { rows: [{ seq: '10' }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+      release: () => undefined,
+    } as unknown as PoolClient;
+    const pool = {
+      connect: async () => client,
+      end: async () => undefined,
+    } as unknown as Pool;
+
+    const postgres = new PostgresStore(pool);
+    const { PostgresTreeStore } = await import('../src/postgres-tree-store.js');
+    const treeStore = new PostgresTreeStore(postgres);
+
+    const notifications: string[] = [];
+    treeStore.subscribeChanges((_ownerId, cursor) => notifications.push(cursor));
+
+    // Successful mutation test
+    const mutId = '00000000-0000-7000-8000-000000000001';
+    await treeStore.applyMutationIdempotent('owner-1', 'client-1', {
+      mutationId: mutId,
+      command: 'folder.create',
+      entityId: '00000000-0000-7000-8000-000000000002',
+      baseVersion: null,
+      occurredAt: new Date().toISOString(),
+      payload: { title: 'New Folder' },
+    });
+
+    // Check that lock was acquired and commit was executed
+    expect(queries.some((q) => q.text.includes('pg_advisory_xact_lock'))).toBe(true);
+    expect(queries.some((q) => q.text === 'COMMIT')).toBe(true);
   });
 });

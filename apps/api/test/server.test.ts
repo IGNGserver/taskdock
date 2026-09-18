@@ -151,21 +151,17 @@ describe('Fastify API', () => {
       headers: headers(),
       payload: { name: 'DSH Desktop', taskPrefix: 'DSH' },
     });
-    expect(projectResponse.statusCode).toBe(201);
-    const project = projectResponse.json() as { id: string };
-    const taskResponse = await app.inject({
-      method: 'POST',
-      url: '/api/v1/tasks',
-      headers: headers(),
-      payload: {
-        projectId: project.id,
-        category: 'FEATURE',
-        title: '修复移动端连接',
-        priority: 'NONE',
-      },
+    expect(projectResponse.statusCode).toBe(409);
+    expect(projectResponse.json().code).toBe('CLIENT_UPGRADE_REQUIRED');
+
+    // Bootstrap an entity directly via store for remaining read-path compatibility tests
+    const project = store.createProject(user.id, 'DSH Desktop', 'DSH');
+    const task = store.createTask(user.id, {
+      projectId: project.id,
+      category: 'FEATURE',
+      title: '修复移动端连接',
+      priority: 'NONE',
     });
-    expect(taskResponse.statusCode).toBe(201);
-    const task = taskResponse.json() as { id: string; referenceId: string; version: number };
     expect(task.referenceId).toBe('DSH-1');
     const date = await app.inject({
       method: 'POST',
@@ -196,7 +192,11 @@ describe('Fastify API', () => {
       headers: headers(),
       payload: { status: 'DONE', baseVersion: task.version },
     });
-    expect(completed.statusCode).toBe(200);
+    expect(completed.statusCode).toBe(409);
+    expect(completed.json().code).toBe('CLIENT_UPGRADE_REQUIRED');
+
+    // Update the task directly in store for verifying v1 placement read aggregation
+    store.updateTask(user.id, task.id, { status: 'DONE' }, task.version);
     const placements = await app.inject({
       method: 'GET',
       url: `/api/v1/time-points/${eventId}/placements`,
@@ -426,6 +426,44 @@ describe('Fastify API', () => {
     await app.close();
   });
 
+  it('authenticates v2 WebSocket connections with the first message only', async () => {
+    const token = 'test-bootstrap-token-that-is-long-enough-v2-websocket';
+    const { app } = await buildServer({
+      store: new MemoryStore(),
+      config: { webRoot: '/tmp/devtodo-no-web', bootstrapToken: token },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/bootstrap',
+      payload: { token, username: 'v2-ws-user', password: 'correct horse battery staple' },
+    });
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { username: 'v2-ws-user', password: 'correct horse battery staple' },
+    });
+    const { accessToken } = login.json() as { accessToken: string };
+    await app.ready();
+
+    const queryOnly = await app.injectWS(
+      `/api/v2/ws?accessToken=${encodeURIComponent(accessToken)}`,
+    );
+    const queryClose = new Promise<number>((resolve) =>
+      queryOnly.once('close', (code) => resolve(code)),
+    );
+    queryOnly.send(JSON.stringify({ type: 'ping' }));
+    expect(await queryClose).toBe(1008);
+
+    const authenticated = await app.injectWS('/api/v2/ws');
+    const ready = new Promise<string>((resolve) =>
+      authenticated.once('message', (message) => resolve(message.toString())),
+    );
+    authenticated.send(JSON.stringify({ type: 'auth', accessToken }));
+    expect(JSON.parse(await ready)).toEqual({ type: 'ready', protocolVersion: 2 });
+    authenticated.terminate();
+    await app.close();
+  });
+
   it('replays HTTP creates with the same idempotency key without new entities', async () => {
     const token = 'test-bootstrap-token-that-is-long-enough-idempotency';
     const { app, store } = await buildServer({
@@ -442,7 +480,7 @@ describe('Fastify API', () => {
       url: '/api/v1/auth/login',
       payload: { username: 'idempotency-user', password: 'correct horse battery staple' },
     });
-    const { accessToken } = login.json() as { accessToken: string };
+    const { accessToken, user } = login.json() as { accessToken: string; user: { id: string } };
     const headers = {
       authorization: `Bearer ${accessToken}`,
       'x-client-id': uuidv7(),
@@ -454,27 +492,15 @@ describe('Fastify API', () => {
       headers,
       payload: { name: 'Retry-safe', taskPrefix: 'RETRY' },
     });
-    const second = await app.inject({
-      method: 'POST',
-      url: '/api/v1/projects',
-      headers,
-      payload: { name: 'Retry-safe', taskPrefix: 'RETRY' },
-    });
-    expect(first.statusCode).toBe(201);
-    expect(second.statusCode).toBe(201);
-    expect(second.json()).toEqual(first.json());
-    expect(store.state.projects.size).toBe(1);
+    expect(first.statusCode).toBe(409);
+    expect(first.json().code).toBe('CLIENT_UPGRADE_REQUIRED');
 
-    const task = await app.inject({
-      method: 'POST',
-      url: '/api/v1/tasks',
-      headers: { ...headers, 'idempotency-key': uuidv7() },
-      payload: {
-        projectId: (first.json() as { id: string }).id,
-        category: 'FEATURE',
-        title: 'rollover retry',
-        priority: 'NONE',
-      },
+    const project = store.createProject(user.id, 'Retry-safe', 'RETRY');
+    const task = store.createTask(user.id, {
+      projectId: project.id,
+      category: 'FEATURE',
+      title: 'rollover retry',
+      priority: 'NONE',
     });
     const date = await app.inject({
       method: 'POST',
@@ -487,7 +513,7 @@ describe('Fastify API', () => {
       url: '/api/v1/placements',
       headers: { ...headers, 'idempotency-key': uuidv7() },
       payload: {
-        taskId: (task.json() as { id: string }).id,
+        taskId: task.id,
         timePointId: (date.json() as { id: string }).id,
       },
     });
@@ -549,7 +575,7 @@ describe('Fastify API', () => {
       url: '/api/v1/auth/login',
       payload: { username: 'pagination-user', password: 'correct horse battery staple' },
     });
-    const { accessToken } = login.json() as { accessToken: string };
+    const { accessToken, user } = login.json() as { accessToken: string; user: { id: string } };
     const headers = () => ({
       authorization: `Bearer ${accessToken}`,
       'x-client-id': uuidv7(),
@@ -562,7 +588,9 @@ describe('Fastify API', () => {
         headers: headers(),
         payload: { name, taskPrefix: name.replace('Page ', 'PG') },
       });
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(409);
+      expect(response.json().code).toBe('CLIENT_UPGRADE_REQUIRED');
+      store.createProject(user.id, name, name.replace('Page ', 'PG'));
     }
     const first = await app.inject({
       method: 'GET',

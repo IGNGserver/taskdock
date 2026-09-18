@@ -30,6 +30,7 @@ export const users = pgTable(
     username: varchar('username', { length: 64 }).notNull(),
     passwordHash: text('password_hash').notNull(),
     nextMiscTaskNumber: integer('next_misc_task_number').notNull().default(1),
+    nextTaskNumber: integer('next_task_number').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     disabledAt: timestamp('disabled_at', { withTimezone: true }),
@@ -43,7 +44,7 @@ export const userSettings = pgTable('user_settings', {
     .references(() => users.id),
   timezone: text('timezone').notNull().default('Asia/Shanghai'),
   weekStartsOn: smallint('week_starts_on').notNull().default(1),
-  defaultCaptureTarget: text('default_capture_target').notNull().default('GLOBAL_MISC'),
+  defaultCaptureTarget: text('default_capture_target').notNull().default('ROOT'),
   ...timestamps,
 });
 
@@ -68,6 +69,31 @@ export const projects = pgTable(
   ],
 );
 
+export const folders = pgTable(
+  'folders',
+  {
+    id: uuid('id').primaryKey(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id),
+    parentFolderId: uuid('parent_folder_id'),
+    title: varchar('title', { length: 160 }).notNull(),
+    rank: bigint('rank', { mode: 'bigint' }).notNull().default(1024n),
+    ...timestamps,
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    archivedByOperationId: uuid('archived_by_operation_id'),
+  },
+  (table) => [
+    index('folders_owner_parent_active_rank_idx').on(
+      table.ownerId,
+      table.parentFolderId,
+      table.archivedAt,
+      table.rank,
+    ),
+    uniqueIndex('folders_owner_id_uq').on(table.ownerId, table.id),
+  ],
+);
+
 export const tasks = pgTable(
   'tasks',
   {
@@ -76,6 +102,8 @@ export const tasks = pgTable(
       .notNull()
       .references(() => users.id),
     projectId: uuid('project_id'),
+    parentFolderId: uuid('parent_folder_id'),
+    archivedByOperationId: uuid('archived_by_operation_id'),
     category: text('category').notNull(),
     referenceId: varchar('reference_id', { length: 32 }).notNull(),
     title: varchar('title', { length: 500 }).notNull(),
@@ -93,6 +121,11 @@ export const tasks = pgTable(
       name: 'tasks_owner_project_fk',
       columns: [table.ownerId, table.projectId],
       foreignColumns: [projects.ownerId, projects.id],
+    }),
+    foreignKey({
+      name: 'tasks_owner_parent_folder_fk',
+      columns: [table.ownerId, table.parentFolderId],
+      foreignColumns: [folders.ownerId, folders.id],
     }),
     index('tasks_owner_project_category_idx').on(
       table.ownerId,
@@ -183,6 +216,131 @@ export const placements = pgTable(
   ],
 );
 
+export const archiveOperations = pgTable(
+  'archive_operations',
+  {
+    id: uuid('id').primaryKey(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id),
+    rootFolderId: uuid('root_folder_id').notNull(),
+    rootBaseVersion: integer('root_base_version').notNull(),
+    folderCount: integer('folder_count').notNull(),
+    taskCount: integer('task_count').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    restoredAt: timestamp('restored_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('archive_operations_owner_id_uq').on(table.ownerId, table.id),
+    index('archive_operations_owner_root_idx').on(table.ownerId, table.rootFolderId),
+  ],
+);
+
+export const taskSteps = pgTable(
+  'task_steps',
+  {
+    id: uuid('id').primaryKey(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id),
+    taskId: uuid('task_id').notNull(),
+    title: varchar('title', { length: 500 }).notNull(),
+    noteMarkdown: text('note_markdown').notNull().default(''),
+    status: text('status').notNull().default('TODO'),
+    rank: bigint('rank', { mode: 'bigint' }).notNull().default(1024n),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index('task_steps_owner_task_rank_idx').on(table.ownerId, table.taskId, table.rank),
+    uniqueIndex('task_steps_owner_id_uq').on(table.ownerId, table.id),
+    foreignKey({
+      name: 'task_steps_owner_task_fk',
+      columns: [table.ownerId, table.taskId],
+      foreignColumns: [tasks.ownerId, tasks.id],
+    }),
+  ],
+);
+
+export const workflows = pgTable(
+  'workflows',
+  {
+    id: uuid('id').primaryKey(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id),
+    name: varchar('name', { length: 200 }).notNull(),
+    rank: bigint('rank', { mode: 'bigint' }).notNull().default(1024n),
+    ...timestamps,
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('workflows_owner_active_rank_idx').on(table.ownerId, table.archivedAt, table.rank),
+    uniqueIndex('workflows_owner_id_uq').on(table.ownerId, table.id),
+  ],
+);
+
+export const workflowStages = pgTable(
+  'workflow_stages',
+  {
+    id: uuid('id').primaryKey(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id),
+    workflowId: uuid('workflow_id').notNull(),
+    name: varchar('name', { length: 200 }).notNull(),
+    rank: bigint('rank', { mode: 'bigint' }).notNull().default(1024n),
+    ...timestamps,
+  },
+  (table) => [
+    index('workflow_stages_owner_workflow_rank_idx').on(
+      table.ownerId,
+      table.workflowId,
+      table.rank,
+    ),
+    uniqueIndex('workflow_stages_owner_id_uq').on(table.ownerId, table.id),
+    foreignKey({
+      name: 'workflow_stages_owner_workflow_fk',
+      columns: [table.ownerId, table.workflowId],
+      foreignColumns: [workflows.ownerId, workflows.id],
+    }),
+  ],
+);
+
+export const workflowTaskMemberships = pgTable(
+  'workflow_task_memberships',
+  {
+    id: uuid('id').primaryKey(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id),
+    workflowId: uuid('workflow_id').notNull(),
+    stageId: uuid('stage_id').notNull(),
+    taskId: uuid('task_id').notNull(),
+    rank: bigint('rank', { mode: 'bigint' }).notNull().default(1024n),
+    ...timestamps,
+  },
+  (table) => [
+    index('workflow_memberships_owner_stage_rank_idx').on(table.ownerId, table.stageId, table.rank),
+    uniqueIndex('workflow_memberships_owner_id_uq').on(table.ownerId, table.id),
+    foreignKey({
+      name: 'workflow_memberships_owner_workflow_fk',
+      columns: [table.ownerId, table.workflowId],
+      foreignColumns: [workflows.ownerId, workflows.id],
+    }),
+    foreignKey({
+      name: 'workflow_memberships_owner_stage_fk',
+      columns: [table.ownerId, table.stageId],
+      foreignColumns: [workflowStages.ownerId, workflowStages.id],
+    }),
+    foreignKey({
+      name: 'workflow_memberships_owner_task_fk',
+      columns: [table.ownerId, table.taskId],
+      foreignColumns: [tasks.ownerId, tasks.id],
+    }),
+  ],
+);
+
 export const devices = pgTable(
   'devices',
   {
@@ -261,8 +419,16 @@ export const syncChanges = pgTable(
     operation: varchar('operation', { length: 20 }).notNull(),
     snapshot: jsonb('snapshot'),
     committedAt: timestamp('committed_at', { withTimezone: true }).notNull().defaultNow(),
+    protocolVersion: smallint('protocol_version').notNull().default(1),
   },
-  (table) => [index('sync_changes_owner_seq_idx').on(table.ownerId, table.seq)],
+  (table) => [
+    index('sync_changes_owner_seq_idx').on(table.ownerId, table.seq),
+    index('sync_changes_protocol_owner_seq_idx').on(
+      table.protocolVersion,
+      table.ownerId,
+      table.seq,
+    ),
+  ],
 );
 
 export const rolloverOperations = pgTable('rollover_operations', {
@@ -283,3 +449,8 @@ export type TaskRow = typeof tasks.$inferSelect;
 export type NoteRow = typeof notes.$inferSelect;
 export type TimePointRow = typeof timePoints.$inferSelect;
 export type PlacementRow = typeof placements.$inferSelect;
+export type FolderRow = typeof folders.$inferSelect;
+export type TaskStepRow = typeof taskSteps.$inferSelect;
+export type WorkflowRow = typeof workflows.$inferSelect;
+export type WorkflowStageRow = typeof workflowStages.$inferSelect;
+export type WorkflowTaskMembershipRow = typeof workflowTaskMemberships.$inferSelect;

@@ -73,10 +73,12 @@ export class PostgresStore implements Store {
   private readonly clock: () => Date;
   private readonly changeRetentionDays: number;
   private readonly mutationReceiptRetentionDays: number;
+  private readonly transactionTimeoutMs: number;
   private readonly listeners = new Set<(ownerId: string, cursor: string) => void>();
   private listener: PoolClient | null = null;
   private listenerReconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private listenerConnecting = false;
+  private listenerReconnectAttempt = 0;
   private poolErrorHandlerAttached = false;
   private closed = false;
   private ready = false;
@@ -87,11 +89,13 @@ export class PostgresStore implements Store {
       clock?: () => Date;
       changeRetentionDays?: number;
       mutationReceiptRetentionDays?: number;
+      transactionTimeoutMs?: number;
     } = {},
   ) {
     this.clock = options.clock ?? (() => new Date());
     this.changeRetentionDays = options.changeRetentionDays ?? 90;
     this.mutationReceiptRetentionDays = options.mutationReceiptRetentionDays ?? 90;
+    this.transactionTimeoutMs = options.transactionTimeoutMs ?? 30_000;
   }
 
   async init(): Promise<void> {
@@ -162,10 +166,12 @@ export class PostgresStore implements Store {
 
   private scheduleListenerReconnect(): void {
     if (this.closed || this.listener || this.listenerReconnectTimer) return;
+    const delay = Math.min(30_000, 1_000 * 2 ** Math.min(this.listenerReconnectAttempt, 5));
+    this.listenerReconnectAttempt += 1;
     this.listenerReconnectTimer = setTimeout(() => {
       this.listenerReconnectTimer = undefined;
       void this.reconnectListener();
-    }, 1_000);
+    }, delay);
     this.listenerReconnectTimer.unref?.();
   }
 
@@ -185,6 +191,7 @@ export class PostgresStore implements Store {
         throw error;
       }
       this.listener = listener;
+      this.listenerReconnectAttempt = 0;
       this.attachListener(listener);
     } catch (error) {
       console.warn(
@@ -226,6 +233,7 @@ export class PostgresStore implements Store {
       this.listener.release();
       this.listener = null;
     }
+    this.listenerReconnectAttempt = 0;
     this.ready = false;
     if (this.poolErrorHandlerAttached) {
       this.pool.off('error', this.handlePoolError);
@@ -258,6 +266,10 @@ export class PostgresStore implements Store {
     const context: TxContext = { client, pending: new Map() };
     try {
       await client.query('BEGIN');
+      await client.query(`SET LOCAL statement_timeout = ${this.transactionTimeoutMs}`);
+      await client.query(
+        `SET LOCAL idle_in_transaction_session_timeout = ${this.transactionTimeoutMs}`,
+      );
       const value = await this.tx.run(context, async () => {
         const result = await fn();
         const changeCleanup = await client.query(
@@ -272,7 +284,9 @@ export class PostgresStore implements Store {
             'ORDER BY expires_at LIMIT 1000) RETURNING mutation_id',
         );
         const challengeCleanup = await client.query(
-          'DELETE FROM native_auth_challenges WHERE expires_at <= now() ' + 'RETURNING id',
+          'DELETE FROM native_auth_challenges WHERE id IN (' +
+            'SELECT id FROM native_auth_challenges WHERE expires_at <= now() ' +
+            'ORDER BY expires_at LIMIT 1000) RETURNING id',
         );
         const cleanup = {
           syncChanges: changeCleanup.rowCount ?? 0,
@@ -331,6 +345,38 @@ export class PostgresStore implements Store {
   ): Promise<{ rows: Row[]; rowCount: number | null }> {
     const client = this.tx.getStore()?.client ?? this.pool;
     return (await client.query(text, values)) as { rows: Row[]; rowCount: number | null };
+  }
+
+  /** Narrow bridge used by the v2 tree adapter; it still resolves to the
+   * current AsyncLocalStorage transaction and therefore cannot escape the
+   * Store's atomic mutation boundary. */
+  async v2Query(
+    text: string,
+    values: unknown[] = [],
+  ): Promise<{ rows: Row[]; rowCount: number | null }> {
+    return this.query(text, values);
+  }
+
+  async v2LockOwner(ownerId: string): Promise<void> {
+    await this.query("SELECT pg_advisory_xact_lock(hashtextextended('devtodo:owner:' || $1, 0))", [
+      ownerId,
+    ]);
+    await this.lockOwner(ownerId);
+  }
+
+  async v2ReadSnapshot<T>(fn: () => T | Promise<T>): Promise<T> {
+    return this.readSnapshot(fn);
+  }
+
+  async appendV2Change(
+    ownerId: string,
+    entityType: SyncChange['entityType'],
+    entityId: string,
+    entityVersion: number,
+    operation: SyncChange['operation'],
+    snapshot: unknown,
+  ): Promise<string> {
+    return this.appendChange(ownerId, entityType, entityId, entityVersion, operation, snapshot, 2);
   }
 
   private now(): string {
@@ -394,7 +440,7 @@ export class PostgresStore implements Store {
       await this.query(
         'INSERT INTO user_settings ' +
           '(owner_id, timezone, week_starts_on, default_capture_target, version, created_at, updated_at) ' +
-          "VALUES ($1, 'Asia/Shanghai', 1, 'GLOBAL_MISC', 1, $2, $2)",
+          "VALUES ($1, 'Asia/Shanghai', 1, 'ROOT', 1, $2, $2)",
         [id, now],
       );
       await this.appendChange(id, 'settings', id, 1, 'upsert', {
@@ -429,8 +475,14 @@ export class PostgresStore implements Store {
     const weekStartsOn = patch.weekStartsOn ?? current.weekStartsOn;
     if (weekStartsOn !== 0 && weekStartsOn !== 1)
       throw new DomainError('VALIDATION_FAILED', '每周起始日无效');
-    const defaultCaptureTarget = patch.defaultCaptureTarget ?? current.defaultCaptureTarget;
-    if (!['GLOBAL_MISC', 'RECENT_CONTEXT'].includes(defaultCaptureTarget))
+    const requestedCaptureTarget = patch.defaultCaptureTarget ?? current.defaultCaptureTarget;
+    const defaultCaptureTarget =
+      requestedCaptureTarget === 'GLOBAL_MISC'
+        ? 'ROOT'
+        : requestedCaptureTarget === 'RECENT_CONTEXT'
+          ? 'RECENT_FOLDER'
+          : requestedCaptureTarget;
+    if (!['ROOT', 'RECENT_FOLDER'].includes(defaultCaptureTarget))
       throw new DomainError('VALIDATION_FAILED', '默认捕获位置无效');
     const result = await this.query(
       'UPDATE user_settings SET timezone = $2, week_starts_on = $3, default_capture_target = $4, ' +
@@ -987,7 +1039,12 @@ export class PostgresStore implements Store {
     let status = task.status;
     let completedAt = task.completedAt;
     if (patch.status !== undefined && patch.status !== task.status) {
-      const transition = transitionTask(task.status, patch.status, new Date(this.now()));
+      const transition = transitionTask(
+        task.status,
+        patch.status,
+        new Date(this.now()),
+        task.completedAt,
+      );
       status = transition.status;
       completedAt = transition.completedAt?.toISOString() ?? null;
     }
@@ -2043,6 +2100,60 @@ export class PostgresStore implements Store {
     return { cursor, oldestCursor, protocolVersion: 1 };
   }
 
+  async syncPullV2(
+    ownerId: string,
+    cursor: string,
+    limit: number,
+  ): Promise<{ changes: SyncChange[]; nextCursor: string; hasMore: boolean }> {
+    return this.v2ReadSnapshot(async () => {
+      await this.owner(ownerId);
+      if (!/^\d+$/.test(cursor)) throw new DomainError('VALIDATION_FAILED', 'cursor 无效');
+      const requested = BigInt(cursor);
+      const oldest = await this.query(
+        'SELECT seq FROM sync_changes WHERE protocol_version = 2 ORDER BY seq LIMIT 1',
+      );
+      // A v2 client starts at cursor 0 even when older v1 rows occupy the
+      // global sequence range before the first retained v2 change. Treat that
+      // sentinel as valid; non-zero cursors still honor the retention boundary.
+      if (requested > 0n && oldest.rows[0] && requested < BigInt(String(oldest.rows[0].seq)) - 1n)
+        throw new DomainError('SYNC_CURSOR_EXPIRED', '同步游标已超过保留窗口');
+      const result = await this.query(
+        'SELECT seq, owner_id, entity_type, entity_id, entity_version, operation, snapshot, committed_at ' +
+          'FROM sync_changes WHERE owner_id = $1 AND protocol_version = 2 AND seq > $2 ' +
+          'ORDER BY seq LIMIT $3',
+        [ownerId, cursor, Math.min(limit, 500)],
+      );
+      const changes = result.rows.map((row) => syncChange(row));
+      const nextCursor = changes.at(-1)?.seq ?? requested;
+      const more = await this.query(
+        'SELECT 1 FROM sync_changes WHERE owner_id = $1 AND protocol_version = 2 AND seq > $2 LIMIT 1',
+        [ownerId, nextCursor.toString()],
+      );
+      return { changes, nextCursor: nextCursor.toString(), hasMore: more.rowCount === 1 };
+    });
+  }
+
+  async syncStatusV2(
+    ownerId: string,
+  ): Promise<{ cursor: string; oldestCursor: string; protocolVersion: 2 }> {
+    return this.v2ReadSnapshot(async () => {
+      await this.owner(ownerId);
+      const current = await this.query(
+        'SELECT COALESCE(MAX(seq), 0)::text AS cursor FROM sync_changes ' +
+          'WHERE owner_id = $1 AND protocol_version = 2',
+        [ownerId],
+      );
+      const first = await this.query(
+        'SELECT seq FROM sync_changes WHERE protocol_version = 2 ORDER BY seq LIMIT 1',
+      );
+      const cursor = String(current.rows[0]?.cursor ?? '0');
+      const oldestCursor = first.rows[0]
+        ? (BigInt(String(first.rows[0].seq)) - 1n).toString()
+        : cursor;
+      return { cursor, oldestCursor, protocolVersion: 2 };
+    });
+  }
+
   eventState(point: TimePointDto): string | null {
     if (point.type !== 'EVENT') return null;
     if (point.archivedAt) return 'ARCHIVED';
@@ -2071,10 +2182,11 @@ export class PostgresStore implements Store {
     entityVersion: number,
     operation: SyncChange['operation'],
     snapshot: unknown,
-  ): Promise<void> {
+    protocolVersion: 1 | 2 = 1,
+  ): Promise<string> {
     const result = await this.query(
-      'INSERT INTO sync_changes (owner_id, entity_type, entity_id, entity_version, operation, snapshot, committed_at) ' +
-        'VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7) RETURNING seq',
+      'INSERT INTO sync_changes (owner_id, entity_type, entity_id, entity_version, operation, snapshot, committed_at, protocol_version) ' +
+        'VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8) RETURNING seq',
       [
         ownerId,
         entityType,
@@ -2083,12 +2195,14 @@ export class PostgresStore implements Store {
         operation,
         JSON.stringify(snapshot),
         this.now(),
+        protocolVersion,
       ],
     );
     const cursor = String(result.rows[0]!.seq);
     const context = this.tx.getStore();
     if (context) context.pending.set(ownerId, cursor);
     else this.notify(ownerId, cursor);
+    return cursor;
   }
 
   private async settingsRecord(ownerId: string, lock = false): Promise<SettingsRecord> {
@@ -2347,11 +2461,13 @@ function userDto(value: UserRecord): UserDto {
 }
 
 function settingsRecord(row: Row): SettingsRecord {
+  const target = String(row.default_capture_target);
   return {
     ownerId: String(row.owner_id),
     timezone: String(row.timezone),
     weekStartsOn: Number(row.week_starts_on) as 0 | 1,
-    defaultCaptureTarget: String(row.default_capture_target),
+    defaultCaptureTarget:
+      target === 'ROOT' ? 'GLOBAL_MISC' : target === 'RECENT_FOLDER' ? 'RECENT_CONTEXT' : target,
     version: Number(row.version),
     updatedAt: iso(row.updated_at),
     createdAt: iso(row.created_at),
