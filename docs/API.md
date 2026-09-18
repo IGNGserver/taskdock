@@ -1,6 +1,18 @@
 # API 契约
 
-Base URL：`/api/v1`。完整路径清单在 [openapi.json](openapi.json)。JSON 使用 camelCase；PostgreSQL BIGINT 的 `rank` 和同步 `seq` 使用十进制字符串。
+兼容 API Base URL：`/api/v1`；TaskDock v2 Base URL：`/api/v2`。完整路径清单在 [openapi.json](openapi.json)。JSON 使用 camelCase；PostgreSQL BIGINT 的 `rank` 和同步 `seq` 使用十进制字符串。
+
+## v2 资源
+
+v2 不再把 Project/Inbox/category/priority 作为产品模型。`GET /api/v2/tree/children` 返回 Folder 与 Task 的混合直接子项；Folder 的 `aggregate` 由后代 Task 派生，状态顺序为 `IN_PROGRESS → TODO → DONE`。`POST /api/v2/tree/items/move` 使用 `baseVersion`、状态快照和前后锚点保护循环、已归档目标以及并发排序冲突。
+
+目录归档使用 `POST /api/v2/folders/:id/archive-tree`，响应 `ArchiveOperation`；恢复使用原 operationId，保证逐项精确恢复。归档中心通过 `GET /api/v2/archive-operations` 按顶层归档操作分组返回（含 `rootFolderTitle`、后代 Folder/Task 计数、原本已归档而恢复时需保留的计数，以及可展开的嵌套 Folder 列表）；`?includeRestored=true` 才包含已恢复操作，`GET /api/v2/archive-operations/:id` 额外返回该操作的归档 Task 明细与独立归档 Task。整树删除必须先 `POST /api/v2/folders/:id/delete-preview`，再把短时 `confirmationToken` 发送到 `DELETE /api/v2/folders/:id/tree`；预览 fingerprint 变化或令牌过期时拒绝，不物理删除关联 Note、TaskStep、Placement、Workflow Membership 或父级引用。整树删除必须在线执行；离线客户端 fail-closed 并返回 `OFFLINE_TREE_DELETE_FORBIDDEN` 与归档建议，不允许排队执行不可恢复的删除。
+
+批量顺延使用 `POST /api/v2/dates/:localDate/rollover`，只把该日期仍处于活动状态的 Placement 复制到次日，跳过已完成或已归档任务；响应 `{ createdIds, skippedTaskIds, targetDate }`。撤销使用 `POST /api/v2/rollovers/undo`，body 传 `{ placementIds }`。该操作无服务端状态，可跨进程与重启使用；离线时不排队，直接 fail-closed。
+
+Task 详情通过 `GET /api/v2/tasks/:id` 聚合 Note、独立 TaskStep、Placement、Workflow Membership 和 Folder path。日期与 Event/Placement 使用 `/time-points`、`/placements` v2 路由；Workflow、Stage、Membership 使用 `/workflows`、`/workflow-stages` 和 `/workflow-memberships`。同一 Task 可以加入多个 Workflow，但同一 Workflow 只能有一个活动 Membership。
+
+v2 设置通过 `/api/v2/settings` 保存 `ROOT/RECENT_FOLDER` 目标；`GET /api/v2/status` 返回 `schemaVersion: 2`、支持的 API/sync 版本和 `minClientVersion`。v2 写入继续要求 `Idempotency-Key`、`X-Client-Id` 和适用的 `baseVersion`。
 
 ## 认证
 

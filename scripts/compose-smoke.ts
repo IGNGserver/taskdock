@@ -111,29 +111,72 @@ async function main(): Promise<void> {
       }),
     ) as { accessToken?: unknown };
     assert(typeof login.accessToken === 'string', 'login failed after bootstrap');
-    const projectResponse = curl('/api/v1/projects', {
+    const folderId = randomUUID();
+    const taskId = randomUUID();
+    const clientId = randomUUID();
+    const folderResponse = curl('/api/v2/folders', {
       method: 'POST',
       token: login.accessToken,
       mutationId: randomUUID(),
-      clientId: randomUUID(),
-      body: { name: 'Compose smoke', taskPrefix: `SM${process.pid % 10}` },
+      clientId,
+      body: { id: folderId, title: 'Compose smoke' },
     });
-    assert(JSON.parse(projectResponse).name === 'Compose smoke', 'PostgreSQL write failed');
+    assert(
+      JSON.parse(folderResponse).title === 'Compose smoke',
+      'PostgreSQL v2 folder write failed',
+    );
+    const taskResponse = curl('/api/v2/tasks', {
+      method: 'POST',
+      token: login.accessToken,
+      mutationId: randomUUID(),
+      clientId,
+      body: { id: taskId, parentFolderId: folderId, title: 'Compose task' },
+    });
+    assert(JSON.parse(taskResponse).task?.id === taskId, 'PostgreSQL v2 task write failed');
+    const v2Status = JSON.parse(curl('/api/v2/sync/status', { token: login.accessToken })) as {
+      protocolVersion?: unknown;
+      cursor?: unknown;
+    };
+    assert(
+      v2Status.protocolVersion === 2 && typeof v2Status.cursor === 'string',
+      'v2 status failed',
+    );
 
     compose(['restart', 'app']);
     await waitForHealth('/health/live');
     await waitForHealth('/health/ready');
-    const afterAppRestart = JSON.parse(curl('/api/v1/bootstrap/status')) as {
-      initialized?: unknown;
+    const afterAppRestart = JSON.parse(
+      curl('/api/v2/sync/snapshot', { token: login.accessToken }),
+    ) as {
+      folders?: Array<{ id?: string }>;
+      tasks?: Array<{ id?: string }>;
+      cursor?: string;
     };
-    assert(afterAppRestart.initialized === true, 'data did not survive app restart');
+    assert(
+      afterAppRestart.folders?.some((folder) => folder.id === folderId),
+      'v2 folder did not survive app restart',
+    );
+    assert(
+      afterAppRestart.tasks?.some((task) => task.id === taskId),
+      'v2 task did not survive app restart',
+    );
 
     compose(['restart', 'postgres']);
     await waitForHealth('/health/ready');
-    const afterPostgresRestart = JSON.parse(curl('/api/v1/bootstrap/status')) as {
-      initialized?: unknown;
+    const afterPostgresRestart = JSON.parse(
+      curl('/api/v2/sync/snapshot', { token: login.accessToken }),
+    ) as {
+      folders?: Array<{ id?: string }>;
+      tasks?: Array<{ id?: string }>;
     };
-    assert(afterPostgresRestart.initialized === true, 'data did not survive PostgreSQL restart');
+    assert(
+      afterPostgresRestart.folders?.some((folder) => folder.id === folderId),
+      'v2 folder did not survive PostgreSQL restart',
+    );
+    assert(
+      afterPostgresRestart.tasks?.some((task) => task.id === taskId),
+      'v2 task did not survive PostgreSQL restart',
+    );
 
     backupDir = await mkdtemp(join(tmpdir(), 'devtodo-compose-smoke-'));
     const backup = compose(
@@ -173,8 +216,20 @@ async function main(): Promise<void> {
       { input: backup },
     );
     await waitForHealth('/health/ready');
-    const afterRestore = JSON.parse(curl('/api/v1/bootstrap/status')) as { initialized?: unknown };
-    assert(afterRestore.initialized === true, 'backup restore lost the owner');
+    const afterRestore = JSON.parse(
+      curl('/api/v2/sync/snapshot', { token: login.accessToken }),
+    ) as {
+      folders?: Array<{ id?: string }>;
+      tasks?: Array<{ id?: string }>;
+    };
+    assert(
+      afterRestore.folders?.some((folder) => folder.id === folderId),
+      'backup restore lost the v2 folder',
+    );
+    assert(
+      afterRestore.tasks?.some((task) => task.id === taskId),
+      'backup restore lost the v2 task',
+    );
     console.log(
       'PASS: Compose build, migration, health, bootstrap, PostgreSQL writes, app/DB restart, and backup restore.',
     );

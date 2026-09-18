@@ -29,10 +29,9 @@ cp .env.example .env
 # 编辑 .env，填入真实配置
 
 export APP_VERSION=0.1.0
-# 也可以使用 APP_VERSION=latest，但生产环境更建议固定版本号
+# 必须使用不可变的发布版本；不要使用 latest
 
 docker compose pull
-docker compose --profile operations run --rm migrate
 docker compose up -d postgres app
 curl -fsS http://your-host.example:48731/health/ready  # 使用 HTTPS 或自定义端口时按 APP_ORIGIN 修改
 ```
@@ -53,7 +52,7 @@ docker compose --profile operations run --rm bootstrap
 docker compose up -d app
 ```
 
-初始化命令会读取部署环境中的 `BOOTSTRAP_TOKEN`，不会把令牌交给 Web、桌面或手机客户端。初始化成功后，建议从 `.env` 中删除 `OWNER_PASSWORD`，并轮换或移除 `BOOTSTRAP_TOKEN`。
+初始化命令会读取部署环境中的 `BOOTSTRAP_TOKEN`，不会把令牌交给 Web、桌面或手机客户端。初始化成功后，建议从 `.env` 中删除 `OWNER_PASSWORD`，并轮换或移除 `BOOTSTRAP_TOKEN`。`app` 依赖迁移 job 成功后才会进入 ready；`/health/live` 只证明进程存活，不能替代迁移和数据库就绪检查。
 
 ## 升级/回滚
 
@@ -62,7 +61,6 @@ docker compose up -d app
 ```bash
 export APP_VERSION=0.2.0
 docker compose pull
-docker compose --profile operations run --rm migrate
 docker compose up -d app
 curl -fsS http://your-host.example:48731/health/ready  # 使用 HTTPS 或自定义端口时按 APP_ORIGIN 修改
 ```
