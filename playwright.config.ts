@@ -6,6 +6,12 @@ export default defineConfig({
   use: {
     baseURL: process.env['E2E_BASE_URL'] ?? 'http://127.0.0.1:4173',
     trace: 'retain-on-failure',
+    // The PWA service worker intercepts navigations. WebKit does not let
+    // `page.route()` see requests a service worker initiates, so a mocked API
+    // would be bypassed and the page would render empty. No E2E asserts
+    // service-worker behaviour, so disable it and let every request reach the
+    // page-level mocks.
+    serviceWorkers: 'block',
   },
   webServer: {
     command:
