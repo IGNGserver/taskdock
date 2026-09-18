@@ -44,7 +44,7 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
     ownerId: user.id,
     timezone: 'Asia/Shanghai',
     weekStartsOn: 1,
-    defaultCaptureTarget: 'GLOBAL_MISC',
+    defaultCaptureTarget: 'ROOT',
     version: 1,
     updatedAt: user.createdAt,
   };
@@ -60,18 +60,24 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
     createdAt: user.createdAt,
     updatedAt: user.createdAt,
   };
+  let authenticated = false;
   await page.route('**/api/v1/**', async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
     if (path.endsWith('/auth/refresh'))
-      return route.fulfill({ status: 401, contentType: 'application/json', body: '{}' });
+      return route.fulfill({
+        status: authenticated ? 200 : 401,
+        contentType: 'application/json',
+        body: JSON.stringify(authenticated ? { accessToken: 'e2e-access-token' } : {}),
+      });
     if (path.endsWith('/bootstrap/status'))
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ initialized: true }),
       });
-    if (path.endsWith('/auth/login'))
+    if (path.endsWith('/auth/login')) {
+      authenticated = true;
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -88,6 +94,7 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
           },
         }),
       });
+    }
     if (path.endsWith('/me'))
       return route.fulfill({
         status: 200,
@@ -95,7 +102,7 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
         body: JSON.stringify({
           user,
           settings,
-          capabilities: { syncProtocolVersion: 1, websocket: true, offline: true },
+          capabilities: { syncProtocolVersion: 2, websocket: true, offline: true },
         }),
       });
     if (path.endsWith('/sync/pull'))
@@ -161,6 +168,38 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
     return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
   });
 
+  await page.route('**/api/v2/**', async (route) => {
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    const method = route.request().method();
+    const json = (body: unknown, status = 200) =>
+      route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+
+    if (path.endsWith('/sync/snapshot'))
+      return json({
+        folders: [],
+        tasks: [],
+        notes: [],
+        taskSteps: [],
+        timePoints: [],
+        placements: [],
+        workflows: [],
+        workflowStages: [],
+        workflowTaskMemberships: [],
+        archiveOperations: [],
+        settings: { ...settings, defaultCaptureTarget: 'ROOT' },
+        cursor: '0',
+      });
+    if (path.endsWith('/sync/pull')) return json({ changes: [], nextCursor: '0', hasMore: false });
+    if (path.endsWith('/sync/push')) return json({ protocolVersion: 2, results: [] });
+    if (path.endsWith('/tree/children')) return json({ items: [] });
+    if (path.endsWith('/time-points/placement-counts')) return json({ items: [] });
+    if (path.endsWith('/time-points')) return json({ items: [] });
+    if (path.endsWith('/placements')) return json({ items: [] });
+    if (path.endsWith('/tasks') && method === 'GET') return json({ items: [] });
+    return json({});
+  });
+
   await page.goto('/login');
   await page.getByLabel('用户名').fill(user.username);
   await page.getByLabel('密码').fill('correct horse battery staple');
@@ -187,14 +226,10 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
     await expect(drawer).toBeHidden();
     await page
       .getByRole('navigation', { name: '移动导航' })
-      .getByRole('link', { name: '项目' })
+      .getByRole('link', { name: '目录' })
       .click();
-    await expect(page).toHaveURL(/\/projects$/);
-    const projectCard = page.locator('.project-card').first();
-    await expect(projectCard).toBeVisible();
-    const cardBox = await projectCard.boundingBox();
-    expect(cardBox).not.toBeNull();
-    expect(cardBox?.width).toBeGreaterThan(300);
+    await expect(page).toHaveURL(/\/tree$/);
+    await expect(page.getByRole('heading', { name: '目录' })).toBeVisible();
   }
 
   await quickEntry.click();

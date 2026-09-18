@@ -1,5 +1,5 @@
 import type { SettingsDto, UserDto } from '@devtodo/contracts';
-import type { SyncEngine } from '@devtodo/sync-client';
+import type { V2SyncEngine } from '@devtodo/sync-client';
 import { DevTodoDatabase } from '@devtodo/sync-client';
 import {
   createContext,
@@ -26,7 +26,7 @@ import {
   isDesktopShell,
   readNativeRefreshToken,
   refreshAccessToken,
-  request,
+  requestV1,
   requestNativeChallenge,
   saveNativeRefreshToken,
   setAccessToken,
@@ -46,7 +46,7 @@ interface AuthContextValue {
   user: UserDto | null;
   settings: SettingsDto | null;
   db: DevTodoDatabase | null;
-  engine: SyncEngine | null;
+  engine: V2SyncEngine | null;
   connection: ConnectionStatus;
   login: (username: string, password: string, deviceName?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -82,19 +82,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserDto | null>(null);
   const [settings, setSettings] = useState<SettingsDto | null>(null);
   const [db, setDb] = useState<DevTodoDatabase | null>(null);
-  const [engine, setEngine] = useState<SyncEngine | null>(null);
+  const [engine, setEngine] = useState<V2SyncEngine | null>(null);
   const [connection, setConnection] = useState<ConnectionStatus>(
     navigator.onLine ? 'syncing' : 'offline',
   );
   const socketRef = useRef<WebSocket | null>(null);
+  const socketReconnectTimerRef = useRef<number | null>(null);
+  const socketReconnectAttemptRef = useRef(0);
+  const socketConnectRef = useRef<(() => void) | null>(null);
   const dbRef = useRef<DevTodoDatabase | null>(null);
-  const engineRef = useRef<SyncEngine | null>(null);
+  const engineRef = useRef<V2SyncEngine | null>(null);
   const unsubscribeEngineRef = useRef<(() => void) | null>(null);
   const sessionGenerationRef = useRef(0);
   const authOperationRef = useRef(0);
 
   const disposeLocalSession = useCallback(() => {
     sessionGenerationRef.current += 1;
+    if (socketReconnectTimerRef.current !== null) {
+      window.clearTimeout(socketReconnectTimerRef.current);
+      socketReconnectTimerRef.current = null;
+    }
+    socketReconnectAttemptRef.current = 0;
+    socketConnectRef.current = null;
     socketRef.current?.close();
     socketRef.current = null;
     unsubscribeEngineRef.current?.();
@@ -156,29 +165,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStatus('authenticated');
       setInitialized(true);
       setConnection(sync && navigator.onLine ? 'syncing' : 'offline');
-      if (!sync) {
-        return;
-      }
-      if (navigator.onLine) void localEngine.sync().catch(() => undefined);
       socketRef.current?.close();
-      if (isDesktopClient()) return;
-      try {
-        const socket = new WebSocket(websocketUrl());
-        socketRef.current = socket;
-        socket.onopen = () => {
-          const token = getAccessToken();
-          if (token) socket.send(JSON.stringify({ type: 'auth', accessToken: token }));
+      socketRef.current = null;
+      socketReconnectAttemptRef.current = 0;
+      if (!isDesktopClient()) {
+        const scheduleReconnect = (): void => {
+          if (
+            sessionGenerationRef.current !== generation ||
+            !navigator.onLine ||
+            socketReconnectTimerRef.current !== null
+          )
+            return;
+          const attempt = Math.min(socketReconnectAttemptRef.current, 6);
+          socketReconnectAttemptRef.current = Math.min(socketReconnectAttemptRef.current + 1, 7);
+          const delay = Math.min(60_000, 1_000 * 2 ** attempt) + Math.floor(Math.random() * 1_001);
+          socketReconnectTimerRef.current = window.setTimeout(() => {
+            socketReconnectTimerRef.current = null;
+            socketConnectRef.current?.();
+          }, delay);
         };
-        socket.onmessage = (event) => {
-          const message = JSON.parse(String(event.data)) as { type?: string };
-          if (message.type === 'sync.required') void localEngine.sync().catch(() => undefined);
+        const connectSocket = (): void => {
+          if (sessionGenerationRef.current !== generation || !navigator.onLine || socketRef.current)
+            return;
+          try {
+            const socket = new WebSocket(websocketUrl());
+            socketRef.current = socket;
+            socket.onopen = () => {
+              socketReconnectAttemptRef.current = 0;
+              const token = getAccessToken();
+              if (token && socket.readyState === WebSocket.OPEN)
+                socket.send(JSON.stringify({ type: 'auth', accessToken: token }));
+            };
+            socket.onmessage = (event) => {
+              try {
+                const message = JSON.parse(String(event.data)) as { type?: string };
+                if (message.type === 'sync.required')
+                  void localEngine.sync().catch(() => undefined);
+              } catch {
+                // Malformed push data must not break the sync state machine.
+              }
+            };
+            socket.onerror = () => {
+              // close schedules the bounded reconnect; do not create a second loop.
+            };
+            socket.onclose = () => {
+              if (socketRef.current === socket) socketRef.current = null;
+              scheduleReconnect();
+            };
+          } catch {
+            scheduleReconnect();
+          }
         };
-        socket.onclose = () => {
-          socketRef.current = null;
-        };
-      } catch {
-        /* polling and online/focus events remain the fallback */
+        socketConnectRef.current = connectSocket;
+        if (sync && navigator.onLine) connectSocket();
       }
+      if (!sync) return;
+      if (navigator.onLine) void localEngine.sync().catch(() => undefined);
     },
     [disposeLocalSession],
   );
@@ -205,7 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         {
           user: localUser,
           settings: localSettings,
-          capabilities: { syncProtocolVersion: 1, websocket: true, offline: true },
+          capabilities: { syncProtocolVersion: 2, websocket: true, offline: true },
         },
         false,
       );
@@ -247,7 +289,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setInitialized(
           (
             await withTimeout(
-              request<{ initialized: boolean }>('/bootstrap/status'),
+              requestV1<{ initialized: boolean }>('/bootstrap/status'),
               AUTH_NETWORK_TIMEOUT_MS,
             )
           ).initialized,
@@ -299,7 +341,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setInitialized(
           (
             await withTimeout(
-              request<{ initialized: boolean }>('/bootstrap/status'),
+              requestV1<{ initialized: boolean }>('/bootstrap/status'),
               AUTH_NETWORK_TIMEOUT_MS,
             )
           ).initialized,
@@ -313,7 +355,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (operation !== authOperationRef.current) return;
     try {
-      const me = await request<MeResponse>('/me');
+      const me = await requestV1<MeResponse>('/me');
       if (operation !== authOperationRef.current) return;
       await initialize(me);
     } catch (cause) {
@@ -346,6 +388,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setConnection('offline');
         return;
       }
+      socketConnectRef.current?.();
       setConnection('syncing');
       void currentEngine.sync().catch(() => undefined);
     };
@@ -371,6 +414,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', onFocus);
       window.clearInterval(timer);
       removeNativeLifecycle();
+      if (socketReconnectTimerRef.current !== null) {
+        window.clearTimeout(socketReconnectTimerRef.current);
+        socketReconnectTimerRef.current = null;
+      }
+      socketConnectRef.current = null;
       socketRef.current?.close();
     };
   }, [refresh]);
@@ -383,11 +431,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const result = await desktopAuthLogin(username, password, deviceName ?? '桌面端');
         unlockAuthLocally();
         setAccessToken(result.accessToken);
-        await initialize(await request<MeResponse>('/me'));
+        await initialize(await requestV1<MeResponse>('/me'));
         return;
       }
       const nativeChallenge = isNativeClient() ? await requestNativeChallenge() : undefined;
-      const result = await request<{
+      const result = await requestV1<{
         accessToken: string;
         refreshToken?: string;
         user: UserDto;
@@ -407,7 +455,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('native refresh token was not returned');
       if (isNativeClient() && result.refreshToken)
         await saveNativeRefreshToken(result.refreshToken);
-      await initialize(await request<MeResponse>('/me'));
+      await initialize(await requestV1<MeResponse>('/me'));
     },
     [initialize],
   );
@@ -419,7 +467,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await desktopAuthLogout().catch(() => undefined);
     } else {
       const nativeRefreshToken = await readNativeRefreshToken().catch(() => null);
-      await request('/auth/logout', {
+      await requestV1('/auth/logout', {
         method: 'POST',
         body: JSON.stringify(nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {}),
       }).catch(() => undefined);

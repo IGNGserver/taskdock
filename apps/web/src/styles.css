@@ -1404,6 +1404,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   min-height: 55px;
   border-bottom: 1px solid var(--dt-line);
 }
@@ -1415,6 +1416,31 @@ a {
   font-size: 13px;
 }
 .archive-project small {
+  color: var(--dt-muted);
+  font-family: var(--dt-font-mono);
+  font-size: 10px;
+}
+.archive-project-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+.archive-operation-children {
+  flex-basis: 100%;
+  width: 100%;
+  padding: 6px 0 12px 14px;
+  display: grid;
+  gap: 4px;
+}
+.archive-operation-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--dt-text);
+}
+.archive-operation-child small {
   color: var(--dt-muted);
   font-family: var(--dt-font-mono);
   font-size: 10px;
@@ -1844,6 +1870,16 @@ a {
   background: var(--dt-warning-soft);
 }
 .rejected-inbox h2 {
+  color: var(--dt-warning);
+}
+.upgrade-pending-list {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+}
+.upgrade-pending-list h3 {
+  font-size: 12px;
+  font-weight: 600;
   color: var(--dt-warning);
 }
 .rejected-mutation {
@@ -2722,7 +2758,8 @@ html.native-mobile-shell .page,
 html.native-mobile-shell .narrow-page {
   width: calc(100% - 32px) !important;
   padding-top: 24px !important;
-  padding-bottom: calc(96px + var(--dt-safe-bottom)) !important;
+  /* Keep the last row clear of the fixed FAB (see the mobile .page rule). */
+  padding-bottom: calc(160px + var(--dt-safe-bottom)) !important;
 }
 html.native-mobile-shell .detail-panel {
   top: calc(64px + var(--dt-safe-top)) !important;
@@ -3861,7 +3898,9 @@ body {
   .narrow-page {
     width: calc(100% - 32px);
     padding-top: 24px;
-    padding-bottom: calc(96px + var(--dt-safe-bottom));
+    /* Clear the fixed mobile FAB: without enough trailing space a short page
+       cannot scroll and the FAB permanently covers the last interactive row. */
+    padding-bottom: calc(160px + var(--dt-safe-bottom));
   }
 
   .page-header h1 {
@@ -4302,5 +4341,371 @@ html.native-mobile-shell .page-wrap::-webkit-scrollbar {
   html.native-mobile-shell .narrow-page {
     margin-top: 0 !important;
     padding-top: 32px !important;
+  }
+}
+/* TaskDock v2 directory/workflow surface */
+.tree-page,
+.workflows-page,
+.all-tasks-page {
+  position: relative;
+}
+.tree-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.inline-capture {
+  display: flex;
+  gap: 6px;
+}
+.inline-capture input,
+.tree-capture-form input {
+  min-width: 190px;
+  border: 1px solid var(--outline, #c9c9c2);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  padding: 10px 12px;
+  color: inherit;
+}
+.tree-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 16px;
+  color: var(--muted, #696b67);
+  font-size: 13px;
+}
+.tree-breadcrumbs span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.tree-breadcrumbs button {
+  border: 0;
+  background: transparent;
+  padding: 3px 5px;
+  color: inherit;
+  cursor: pointer;
+}
+.tree-breadcrumbs button.active {
+  color: var(--ink, #20211f);
+  font-weight: 700;
+}
+.tree-capture-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 22px;
+  padding: 12px 14px;
+  border: 1px solid var(--outline, #deded7);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, var(--accent, #526b55));
+}
+.tree-capture-form input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  min-width: 0;
+}
+.tree-group {
+  margin: 18px 0 26px;
+}
+.tree-group-heading {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted, #696b67);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.tree-group-empty {
+  color: var(--muted, #8b8d87);
+  border: 1px dashed var(--outline, #deded7);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 13px;
+}
+.tree-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--outline, #deded7) 72%, transparent);
+  min-height: 50px;
+}
+.tree-row.focused-highlight {
+  outline: 2px solid var(--accent, #3b82f6) !important;
+  background-color: rgba(59, 130, 246, 0.12) !important;
+  border-radius: 8px;
+}
+.tree-main-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 12px 8px;
+  cursor: pointer;
+  min-width: 0;
+}
+.tree-main-button:hover {
+  background: color-mix(in srgb, var(--surface, #fff) 88%, var(--accent, #526b55));
+  border-radius: 10px;
+}
+.tree-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.tree-main-button code,
+.workflow-task code {
+  color: var(--muted, #777);
+  font-size: 11px;
+}
+.tree-count {
+  color: var(--muted, #777);
+  font-size: 12px;
+}
+.tree-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 5px;
+}
+.icon-button {
+  border: 0;
+  background: transparent;
+  color: var(--muted, #777);
+  padding: 7px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.icon-button:hover {
+  background: color-mix(in srgb, var(--surface, #fff) 78%, var(--accent, #526b55));
+  color: inherit;
+}
+.icon-button.danger:hover {
+  color: #b64242;
+}
+.status-chip {
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.status-chip.todo {
+  background: #efefe9;
+  color: #6b6e68;
+}
+.status-chip.in-progress {
+  background: #e4eee7;
+  color: #3f664a;
+}
+.status-chip.done {
+  background: #e9e8e4;
+  color: #777872;
+}
+.task-detail-v2 {
+  position: fixed;
+  z-index: 20;
+  inset: 10% 4% auto auto;
+  width: min(460px, 92vw);
+  max-height: 80vh;
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid var(--outline, #d4d4ce);
+  border-radius: 18px;
+  background: var(--surface, #fff);
+  box-shadow: 0 18px 60px #0002;
+}
+.task-detail-v2-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.task-detail-v2-header h2 {
+  margin: 5px 0 0;
+}
+.task-detail-v2-status {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 22px 0;
+}
+.task-detail-v2-status span,
+.task-detail-v2-section h3 {
+  font-size: 12px;
+  color: var(--muted, #777);
+}
+.task-detail-v2-status button {
+  border: 1px solid var(--outline, #d4d4ce);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.task-detail-v2-status button.active {
+  background: #263c2c;
+  color: white;
+  border-color: #263c2c;
+}
+.task-detail-v2-section {
+  border-top: 1px solid var(--outline, #e0e0da);
+  padding-top: 15px;
+  margin-top: 15px;
+}
+.task-detail-v2-section h3 {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 10px;
+  color: inherit;
+}
+.step-row {
+  display: flex;
+  gap: 9px;
+  padding: 8px 0;
+  align-items: center;
+}
+.step-row-editable {
+  align-items: flex-start;
+  border-bottom: 1px solid color-mix(in srgb, var(--outline, #deded7) 58%, transparent);
+}
+.step-editor {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+}
+.step-editor input,
+.step-editor textarea,
+.step-editor select,
+.task-detail-v2-section select,
+.workflow-name-input,
+.workflow-stage-name-input,
+.workflow-add-task input,
+.workflow-add-task select {
+  min-width: 0;
+  border: 1px solid var(--outline, #d4d4ce);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: inherit;
+  padding: 7px 9px;
+}
+.step-editor textarea {
+  resize: vertical;
+}
+.step-actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+.muted {
+  color: var(--muted, #777);
+  font-size: 12px;
+}
+.workflow-card {
+  border: 1px solid var(--outline, #deded7);
+  border-radius: 15px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.workflow-card > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.workflow-card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.workflow-name-input,
+.workflow-stage-name-input {
+  width: 100%;
+  border-color: transparent;
+  background: transparent;
+  padding: 2px 4px;
+  font: inherit;
+  font-weight: 700;
+}
+.workflow-name-input:focus,
+.workflow-stage-name-input:focus {
+  border-color: var(--outline, #d4d4ce);
+  background: var(--surface, #fff);
+  outline: 2px solid var(--focus, #bfd2c2);
+}
+.workflow-stage-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+.workflow-stage-heading > div {
+  display: flex;
+  flex: none;
+}
+.workflow-card header span {
+  color: var(--muted, #777);
+  font-size: 12px;
+}
+.workflow-stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.workflow-stages section {
+  min-height: 90px;
+  padding: 12px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, var(--accent, #526b55));
+}
+.workflow-stages h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.workflow-task {
+  display: flex;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.workflow-add-task {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+@media (max-width: 720px) {
+  .tree-header-actions {
+    width: 100%;
+  }
+  .inline-capture {
+    width: 100%;
+  }
+  .inline-capture input {
+    flex: 1;
+  }
+  .tree-capture-form {
+    margin-top: 10px;
+  }
+  .tree-main-button {
+    gap: 7px;
+    padding-left: 2px;
+  }
+  .tree-main-button code {
+    display: none;
+  }
+  .task-detail-v2 {
+    inset: auto 10px 74px;
+    width: auto;
+    max-height: 70vh;
   }
 }

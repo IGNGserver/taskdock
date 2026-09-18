@@ -1,88 +1,95 @@
 import { expect, test } from '@playwright/test';
 
-test('supports project archive confirmation, recovery, and custom time point creation', async ({
-  page,
-}, testInfo) => {
+test('archives and restores a v2 folder through the tree and archive views', async ({ page }) => {
   const user = {
     id: '00000000-0000-7000-8000-000000000101',
     username: 'archive-e2e-user',
     createdAt: '2026-09-04T10:00:00.000Z',
   };
-  const project = {
+  const folder = {
     id: '00000000-0000-7000-8000-000000000104',
-    name: '归档回归项目',
-    taskPrefix: 'ARCHIVE',
+    parentFolderId: null,
+    title: '归档回归文件夹',
     rank: '1024',
     version: 1,
     archivedAt: null,
+    archivedByOperationId: null,
     createdAt: user.createdAt,
     updatedAt: user.createdAt,
+    deletedAt: null,
   };
   const task = {
     id: '00000000-0000-7000-8000-000000000105',
-    referenceId: 'ARCHIVE-1',
-    projectId: project.id,
-    category: 'FEATURE',
-    title: '验证安排弹窗',
-    status: 'TODO',
-    priority: 'NONE',
+    referenceId: 'TASK-1',
+    parentFolderId: folder.id,
+    title: '归档回归任务',
+    status: 'TODO' as const,
     rank: '1024',
     version: 1,
     completedAt: null,
     archivedAt: null,
+    archivedByOperationId: null,
     createdAt: user.createdAt,
     updatedAt: user.createdAt,
+    deletedAt: null,
   };
   const settings = {
     ownerId: user.id,
     timezone: 'Asia/Shanghai',
-    weekStartsOn: 1,
-    defaultCaptureTarget: 'GLOBAL_MISC',
+    weekStartsOn: 1 as const,
+    defaultCaptureTarget: 'ROOT' as const,
     version: 1,
     updatedAt: user.createdAt,
   };
-  const datePoint = {
-    id: '00000000-0000-7000-8000-000000000102',
-    type: 'DATE',
-    localDate: '2026-09-04',
-    title: null,
-    rank: '1024',
-    version: 1,
-    reachedAt: null,
-    archivedAt: null,
+  const archiveOperation = {
+    id: '00000000-0000-7000-8000-000000000106',
+    rootFolderId: folder.id,
+    rootBaseVersion: 1,
+    folderCount: 1,
+    taskCount: 1,
     createdAt: user.createdAt,
-    updatedAt: user.createdAt,
+    restoredAt: null,
   };
-  const eventPoint = {
-    id: '00000000-0000-7000-8000-000000000103',
-    type: 'EVENT',
-    localDate: null,
-    title: '已有事件',
-    rank: '2048',
-    version: 1,
-    reachedAt: null,
-    archivedAt: null,
-    createdAt: user.createdAt,
-    updatedAt: user.createdAt,
-  };
-  let projectArchived = false;
-  let createdEvent = false;
+  let archived = false;
+
+  const snapshot = () => ({
+    folders: archived
+      ? [{ ...folder, archivedAt: user.createdAt, archivedByOperationId: archiveOperation.id }]
+      : [folder],
+    tasks: archived
+      ? [{ ...task, archivedAt: user.createdAt, archivedByOperationId: archiveOperation.id }]
+      : [task],
+    notes: [],
+    taskSteps: [],
+    timePoints: [],
+    placements: [],
+    workflows: [],
+    workflowStages: [],
+    workflowTaskMemberships: [],
+    archiveOperations: archived ? [archiveOperation] : [],
+    settings,
+    cursor: '0',
+  });
+  let authenticated = false;
 
   await page.route('**/api/v1/**', async (route) => {
-    const url = new URL(route.request().url());
-    const path = url.pathname;
-    const method = route.request().method();
+    const path = new URL(route.request().url()).pathname;
     const json = (body: unknown, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
-    if (path.endsWith('/auth/refresh')) return json({}, 401);
+    if (path.endsWith('/auth/refresh'))
+      return json(
+        authenticated ? { accessToken: 'archive-e2e-access-token' } : {},
+        authenticated ? 200 : 401,
+      );
     if (path.endsWith('/bootstrap/status')) return json({ initialized: true });
-    if (path.endsWith('/auth/login'))
+    if (path.endsWith('/auth/login')) {
+      authenticated = true;
       return json({
         accessToken: 'archive-e2e-access-token',
         user,
         device: {
-          id: '00000000-0000-7000-8000-000000000106',
+          id: '00000000-0000-7000-8000-000000000107',
           name: '浏览器',
           platform: 'web',
           lastSeenAt: user.createdAt,
@@ -90,103 +97,113 @@ test('supports project archive confirmation, recovery, and custom time point cre
           revokedAt: null,
         },
       });
+    }
     if (path.endsWith('/me'))
       return json({
         user,
         settings,
-        capabilities: { syncProtocolVersion: 1, websocket: true, offline: true },
+        capabilities: { syncProtocolVersion: 2, websocket: true, offline: true },
       });
+    return json({});
+  });
+
+  await page.route('**/api/v2/**', async (route) => {
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    const method = route.request().method();
+    const json = (body: unknown, status = 200) =>
+      route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+
+    if (path.endsWith('/sync/snapshot')) return json(snapshot());
     if (path.endsWith('/sync/pull')) return json({ changes: [], nextCursor: '0', hasMore: false });
-    if (path.endsWith('/sync/push')) return json({ protocolVersion: 1, results: [] });
-    if (path.endsWith('/devices')) return json([]);
-    if (path.endsWith('/projects/task-counts') && method === 'GET')
+    if (path.endsWith('/sync/push')) return json({ protocolVersion: 2, results: [] });
+    if (path.endsWith('/tree/children'))
       return json({
-        items: projectArchived ? [] : [{ projectId: project.id, openCount: 1, doneCount: 0 }],
+        items: archived
+          ? []
+          : [
+              {
+                kind: 'FOLDER',
+                folder,
+                aggregate: {
+                  status: 'TODO',
+                  todoCount: 1,
+                  inProgressCount: 0,
+                  doneCount: 0,
+                  totalCount: 1,
+                },
+              },
+            ],
       });
-    if (path.endsWith('/projects') && method === 'GET')
+    if (path.endsWith('/folders') && method === 'GET')
       return json({
         items:
           url.searchParams.get('archived') === 'true'
-            ? projectArchived
-              ? [{ ...project, archivedAt: user.createdAt }]
+            ? archived
+              ? [
+                  {
+                    ...folder,
+                    archivedAt: user.createdAt,
+                    archivedByOperationId: archiveOperation.id,
+                  },
+                ]
               : []
-            : projectArchived
+            : archived
               ? []
-              : [project],
+              : [folder],
       });
-    if (path.endsWith(`/projects/${project.id}`) && method === 'GET')
-      return json({ ...project, archivedAt: projectArchived ? user.createdAt : null });
-    if (path.endsWith(`/projects/${project.id}/archive`) && method === 'POST') {
-      projectArchived = true;
-      return json({ ...project, archivedAt: user.createdAt });
-    }
-    if (path.endsWith(`/projects/${project.id}/restore`) && method === 'POST') {
-      projectArchived = false;
-      return json(project);
-    }
     if (path.endsWith('/tasks') && method === 'GET')
-      return json({ items: url.searchParams.get('archived') === 'true' ? [] : [task] });
-    if (path.endsWith('/time-points/placement-counts') && method === 'GET')
-      return json({ items: [] });
-    if (path.endsWith('/time-points') && method === 'GET')
-      return json({ items: [datePoint, ...(createdEvent ? [eventPoint] : [])] });
-    if (path.endsWith('/time-points/events') && method === 'POST') {
-      createdEvent = true;
-      return json(eventPoint, 201);
+      return json({
+        items:
+          url.searchParams.get('archived') === 'true'
+            ? archived
+              ? [
+                  {
+                    ...task,
+                    archivedAt: user.createdAt,
+                    archivedByOperationId: archiveOperation.id,
+                  },
+                ]
+              : []
+            : archived
+              ? []
+              : [task],
+      });
+    if (path.endsWith('/time-points') && method === 'GET') return json({ items: [] });
+    if (path.endsWith(`/folders/${folder.id}/archive-tree`) && method === 'POST') {
+      archived = true;
+      return json(archiveOperation);
     }
-    if (path.endsWith('/placements') && method === 'GET') return json({ items: [] });
-    if (path.endsWith('/placements') && method === 'POST')
-      return json({ id: 'placement-e2e' }, 201);
-    if (path.endsWith('/time-points/date') && method === 'POST') return json(datePoint, 201);
+    if (path.endsWith(`/folders/${folder.id}/restore-tree`) && method === 'POST') {
+      archived = false;
+      return json({ ...archiveOperation, restoredAt: user.createdAt });
+    }
     return json({});
   });
+
+  page.on('dialog', (dialog) => void dialog.accept());
 
   await page.goto('/login');
   await page.getByLabel('用户名').fill(user.username);
   await page.getByLabel('密码').fill('correct horse battery staple');
   await page.getByRole('button', { name: '登录' }).click();
-  await expect(page.getByRole('button', { name: '快速添加' })).toBeVisible();
+  const quickEntry =
+    test.info().project.name === 'mobile'
+      ? page.getByRole('button', { name: '打开创建菜单' })
+      : page.getByRole('button', { name: '快速添加' });
+  await expect(quickEntry).toBeVisible();
 
-  const openMobileSidebar = async () => {
-    if (testInfo.project.name !== 'mobile') return;
-    await page.getByRole('button', { name: '打开侧边栏' }).click();
-    await expect(page.getByRole('complementary', { name: '移动侧边栏' })).toBeVisible();
-  };
+  await page.goto('/tree');
+  const folderButton = page.getByRole('button', { name: `打开文件夹 ${folder.title}` });
+  await expect(folderButton).toBeVisible();
+  await page.getByRole('button', { name: `归档文件夹 ${folder.title}` }).click();
+  await expect(folderButton).toHaveCount(0);
 
-  await openMobileSidebar();
-  await page.getByRole('link', { name: '新建项目' }).click();
-  await expect(page.getByRole('heading', { name: '项目', exact: true })).toBeVisible();
-  const archiveProjectButton = page.getByRole('button', { name: '归档归档回归项目' });
-  await expect(archiveProjectButton).toHaveCount(1);
-  await archiveProjectButton.click();
-  const archiveDialog = page.getByRole('dialog', { name: '归档项目' });
-  await expect(archiveDialog).toBeVisible();
-  await expect(archiveDialog).toContainText('不会被删除或自动归档');
-  await archiveDialog.getByRole('button', { name: '归档项目', exact: true }).click();
-  await expect(page.getByText('还没有项目')).toBeVisible();
+  await page.goto('/archive');
+  await expect(page.getByText(folder.title, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '恢复文件夹' }).click();
+  await expect(page.getByText(folder.title, { exact: true })).toHaveCount(0);
 
-  await openMobileSidebar();
-  await page.getByRole('link', { name: '归档', exact: true }).click();
-  await expect(page.getByText('归档回归项目')).toBeVisible();
-  await page.getByRole('button', { name: '恢复项目' }).click();
-  await expect(page.getByText('没有归档任务')).toBeVisible();
-
-  await openMobileSidebar();
-  await page.getByRole('link', { name: '任务库' }).click();
-  await page.getByRole('button', { name: '安排到时间点' }).click();
-  const picker = page.getByRole('dialog', { name: '安排到时间点' });
-  await expect(picker).toBeVisible();
-  await picker.getByRole('radio', { name: '自定义时间点' }).evaluate((button) => {
-    (button as HTMLButtonElement).click();
-  });
-  await picker.getByRole('button', { name: '新建时间点' }).evaluate((button) => {
-    (button as HTMLButtonElement).click();
-  });
-  await picker.getByLabel('时间点名称').fill('刚创建的事件');
-  await picker.getByRole('button', { name: '创建并选择' }).evaluate((button) => {
-    (button as HTMLButtonElement).click();
-  });
-  await expect(picker.locator('select')).toHaveValue(eventPoint.id);
-  await page.keyboard.press('Escape');
-  await expect(picker).toBeHidden();
+  await page.goto('/tree');
+  await expect(page.getByRole('button', { name: `打开文件夹 ${folder.title}` })).toBeVisible();
 });
