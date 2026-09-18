@@ -62,10 +62,19 @@ async function main(): Promise<void> {
   if (missing.length) throw new Error(`OpenAPI paths missing: ${missing.join(', ')}`);
 
   const source = await readFile(new URL('../apps/api/src/server.ts', import.meta.url), 'utf8');
+  const v2Start = source.indexOf('function registerV2Routes');
+  const v2End = source.indexOf('\nfunction runV2Mutation', v2Start);
+  const v1Source = v2Start >= 0 ? source.slice(0, v2Start) : source;
+  const v2Source = v2Start >= 0 ? source.slice(v2Start, v2End >= 0 ? v2End : source.length) : '';
   const routePaths = [
-    ...source.matchAll(/api\.(?:get|post|patch|put|delete)\(\s*['"]([^'"]+)['"]/g),
+    ...v1Source.matchAll(/api\.(?:get|post|patch|put|delete)\(\s*['"]([^'"]+)['"]/g),
   ].map((match) =>
     `/api/v1${match[1]!}`.replace(/:([A-Za-z0-9_]+)/g, '{$1}').replace(/^\/api\/v1/, ''),
+  );
+  routePaths.push(
+    ...[...v2Source.matchAll(/api\.(?:get|post|patch|put|delete)\(\s*['"]([^'"]+)['"]/g)].map(
+      (match) => `/v2${match[1]!}`.replace(/:([A-Za-z0-9_]+)/g, '{$1}'),
+    ),
   );
   const missingFromDocument = [...new Set(routePaths)].filter(
     (path) => !actualPaths.includes(path),

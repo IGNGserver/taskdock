@@ -10,6 +10,24 @@ const DATE_COUNT = 5_000;
 const PLACEMENT_COUNT = 250_000;
 const DATES_PER_TASK = 5;
 const PAGE_SIZE = 100;
+const CLEANUP_BATCH_SIZE = 5_000;
+
+const ownerScopedTables = [
+  'placements',
+  'notes',
+  'task_steps',
+  'workflow_task_memberships',
+  'workflow_stages',
+  'workflows',
+  'archive_operations',
+  'time_points',
+  'tasks',
+  'projects',
+  'rollover_operations',
+  'sync_changes',
+  'client_mutations',
+  'user_settings',
+] as const;
 
 type Benchmark = {
   name: string;
@@ -123,6 +141,23 @@ async function countFixture(
     timePoints: values.get('time_points') ?? 0,
     placements: values.get('placements') ?? 0,
   };
+}
+
+async function cleanupOwner(pool: Pool, ownerId: string): Promise<void> {
+  // Cascading from users can hold locks and exceed the normal query timeout
+  // for the 250k-placement fixture. Delete owner-scoped rows in bounded
+  // batches so cleanup itself remains observable and interruptible.
+  for (const table of ownerScopedTables) {
+    for (;;) {
+      const result = await pool.query(
+        `WITH victims AS (SELECT ctid FROM ${table} WHERE owner_id = $1 LIMIT $2)
+         DELETE FROM ${table} WHERE ctid IN (SELECT ctid FROM victims)`,
+        [ownerId, CLEANUP_BATCH_SIZE],
+      );
+      if (!result.rowCount) break;
+    }
+  }
+  await pool.query('DELETE FROM users WHERE id = $1', [ownerId]);
 }
 
 async function walkPages<T>(
@@ -256,7 +291,7 @@ async function main(): Promise<void> {
   } finally {
     if (actualOwnerId) {
       try {
-        await pool.query('DELETE FROM users WHERE id = $1', [actualOwnerId]);
+        await cleanupOwner(pool, actualOwnerId);
       } catch (error) {
         console.error(`FAIL: capacity fixture cleanup failed: ${String(error)}`);
         process.exitCode = 1;

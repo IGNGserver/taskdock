@@ -4,6 +4,8 @@
 
 ## 备份与校验
 
+TaskDock v2 数据升级前必须先完成 PostgreSQL custom dump；本轮新增 migration `0005_v2_structure.sql`、`0006_v2_backfill.sql`、`0007_v2_constraints.sql`。升级顺序是先备份，再让新代码读取旧/新结构，执行 backfill 和约束校验；禁止用 `TRUNCATE`、重建业务表或 destructive migration 替代。必须核对 Project→Folder、Task `reference_id`、Note、Placement、归档边界和用户设置计数后再继续。
+
 ```bash
 BACKUP_DIR="$PWD/backups"
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -62,3 +64,5 @@ docker volume rm "$RESTORE_VOLUME"
 ```
 
 生产回滚先停止新版本并保留原卷，再按新卷恢复流程恢复到单独卷，核对数据不变量后切换 Compose 配置。不要在生产卷上执行 `pg_restore --clean` 或删除卷。
+
+客户端迁移同样是原地、可重试边界：Dexie v3 从 projects 复制 Folder 并保留旧 stores 直到 v1 outbox 已逐项转换或标记为 `CLIENT_UPGRADE_REQUIRED`；Room v4 使用完整 `MIGRATION_3_4`，不允许 `fallbackToDestructiveMigration`。回滚客户端时不得删除本地 outbox、conflict、deferred change 或 v2 tombstone。

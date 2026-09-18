@@ -174,7 +174,7 @@ async function main(): Promise<void> {
       [ownerB, `integration-b-${process.pid}`, 'not-used-in-integration', ownerBNow],
     );
     await cleanupPool.query(
-      "INSERT INTO user_settings (owner_id, timezone, week_starts_on, default_capture_target, version, created_at, updated_at) VALUES ($1, 'Asia/Shanghai', 1, 'GLOBAL_MISC', 1, $2, $2)",
+      "INSERT INTO user_settings (owner_id, timezone, week_starts_on, default_capture_target, version, created_at, updated_at) VALUES ($1, 'Asia/Shanghai', 1, 'ROOT', 1, $2, $2)",
       [ownerB, ownerBNow],
     );
     const projectB = await peer.withMutation(() =>
@@ -353,8 +353,105 @@ async function main(): Promise<void> {
       'placement did not survive restart',
     );
 
+    // Verify v2 PostgresTreeStore invariants: transaction lock, delete preview, cascade deletion
+    const { PostgresTreeStore } = await import('../apps/api/src/postgres-tree-store.js');
+    const v2Store = new PostgresTreeStore(restartStore);
+    const v2FolderId = uuidv7();
+    const v2TaskId = uuidv7();
+    const v2CursorBefore = (await restartStore.syncStatusV2(owner.id)).cursor;
+
+    await v2Store.applyMutationIdempotent(owner.id, clientId, {
+      mutationId: uuidv7(),
+      command: 'folder.create',
+      entityId: v2FolderId,
+      baseVersion: null,
+      occurredAt: new Date().toISOString(),
+      payload: { title: 'v2 集成目录', parentFolderId: null },
+    });
+    await v2Store.applyMutationIdempotent(owner.id, clientId, {
+      mutationId: uuidv7(),
+      command: 'task.create',
+      entityId: v2TaskId,
+      baseVersion: null,
+      occurredAt: new Date().toISOString(),
+      payload: { title: 'v2 集成任务', parentFolderId: v2FolderId },
+    });
+
+    const v2CursorAfterWrite = (await restartStore.syncStatusV2(owner.id)).cursor;
+    assert(
+      v2CursorAfterWrite !== v2CursorBefore,
+      'v2 mutation did not advance the database cursor',
+    );
+    const reloadedV2Store = new PostgresTreeStore(restartStore);
+    const reloadedSnapshot = await reloadedV2Store.snapshot(owner.id);
+    assert(
+      reloadedSnapshot.folders.some((folder) => folder.id === v2FolderId),
+      'v2 folder did not survive a PostgresTreeStore restart',
+    );
+    assert(
+      reloadedSnapshot.tasks.some((task) => task.id === v2TaskId),
+      'v2 task did not survive a PostgresTreeStore restart',
+    );
+    const reloadedPull = await reloadedV2Store.pull(owner.id, v2CursorBefore, 500);
+    assert(
+      reloadedPull.changes.some((change) => change.entityId === v2TaskId),
+      'v2 pull did not read durable changes after a PostgresTreeStore restart',
+    );
+
+    // Section 7.2 invariant: a newly created root Task must not be sorted above
+    // an existing sibling root Folder in the same status group.
+    const rootSiblingTaskId = uuidv7();
+    await v2Store.applyMutationIdempotent(owner.id, clientId, {
+      mutationId: uuidv7(),
+      command: 'task.create',
+      entityId: rootSiblingTaskId,
+      baseVersion: null,
+      occurredAt: new Date().toISOString(),
+      payload: { title: 'v2 根级任务', parentFolderId: null },
+    });
+    const rootChildren = v2Store.listTreeChildren(owner.id, null);
+    const rootFolderIndex = rootChildren.findIndex(
+      (item) => item.kind === 'FOLDER' && item.folder.id === v2FolderId,
+    );
+    const rootTaskIndex = rootChildren.findIndex(
+      (item) => item.kind === 'TASK' && item.task.id === rootSiblingTaskId,
+    );
+    assert(rootFolderIndex >= 0, 'v2 root folder missing from the level listing');
+    assert(rootTaskIndex >= 0, 'v2 root task missing from the level listing');
+    const siblingStatus = (item: (typeof rootChildren)[number]) =>
+      item.kind === 'FOLDER' ? item.aggregate.status : item.task.status;
+    assert(
+      siblingStatus(rootChildren[rootFolderIndex]!) === siblingStatus(rootChildren[rootTaskIndex]!),
+      'root folder and root task unexpectedly differ in status',
+    );
+    assert(
+      rootFolderIndex < rootTaskIndex,
+      'default ordering placed a same-status Task above its sibling Folder',
+    );
+
+    const preview = v2Store.previewDelete(owner.id, v2FolderId);
+    assert(preview.folderCount === 1, 'delete preview folder count mismatch');
+    assert(preview.taskCount === 1, 'delete preview task count mismatch');
+
+    const deleteOutcome = await v2Store.applyMutationIdempotent(owner.id, clientId, {
+      mutationId: uuidv7(),
+      command: 'folder.deleteTree',
+      entityId: v2FolderId,
+      baseVersion: null,
+      occurredAt: new Date().toISOString(),
+      payload: { confirmationToken: preview.confirmationToken },
+    });
+    const deleted = deleteOutcome.result as { folderCount?: number; taskCount?: number };
+    assert(deleted.folderCount === 1, 'delete outcome folder count mismatch');
+    assert(deleted.taskCount === 1, 'delete outcome task count mismatch');
+    const afterDeleteSnapshot = await reloadedV2Store.snapshot(owner.id);
+    assert(
+      !afterDeleteSnapshot.folders.some((folder) => folder.id === v2FolderId),
+      'v2 delete was not persisted for a reloaded store',
+    );
+
     console.log(
-      `PASS: PostgreSQL migration, row-level transaction, owner isolation, two-process concurrency, idempotency, rollback, restart, and multi-placement invariants; cursor ${afterRestart.cursor}`,
+      `PASS: PostgreSQL migration, row-level transaction, owner isolation, two-process concurrency, idempotency, rollback, restart, multi-placement invariants, and PostgresTreeStore v2 delete preview/tree deletion; cursor ${afterRestart.cursor}`,
     );
   } finally {
     for (const store of stores) {

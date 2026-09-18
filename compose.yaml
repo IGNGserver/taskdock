@@ -1,4 +1,4 @@
-x-taskdock-image: &taskdock_image '${TASKDOCK_IMAGE:-ghcr.io/igngserver/taskdock}:${APP_VERSION:-latest}'
+x-taskdock-image: &taskdock_image '${TASKDOCK_IMAGE:-ghcr.io/igngserver/taskdock}:${APP_VERSION:?set APP_VERSION to an immutable image tag}'
 
 services:
   postgres:
@@ -19,10 +19,10 @@ services:
 
   migrate:
     image: *taskdock_image
-    profiles: [operations]
+    restart: 'no'
     environment: &app-env
       NODE_ENV: production
-      APP_VERSION: ${APP_VERSION:-latest}
+      APP_VERSION: ${APP_VERSION:?set APP_VERSION to an immutable image tag}
       APP_PORT: 3000
       APP_ORIGIN: ${APP_ORIGIN:?set the public HTTP or HTTPS origin in .env}
       DATABASE_URL: postgres://${POSTGRES_USER:-devtodo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-devtodo}
@@ -48,6 +48,7 @@ services:
     command: ['node', 'apps/api/dist/bootstrap-owner.js']
     depends_on:
       postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
     networks: [devtodo]
 
   app:
@@ -56,6 +57,7 @@ services:
     environment: *app-env
     depends_on:
       postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
     ports:
       - '${TASKDOCK_PORT:-48731}:3000'
     healthcheck:
@@ -64,7 +66,7 @@ services:
           'CMD',
           'node',
           '-e',
-          "fetch('http://127.0.0.1:3000/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 10s
       timeout: 5s
