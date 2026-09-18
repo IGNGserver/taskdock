@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { DeviceDto, UserDto } from '@devtodo/contracts';
 import { DomainError } from '@devtodo/domain';
 import argon2 from 'argon2';
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import type { Store } from './store.js';
 
 export interface AuthConfig {
@@ -134,22 +134,25 @@ export class AuthService {
   }
 
   async verifyAccessToken(token: string): Promise<{ ownerId: string; deviceId: string }> {
+    let payload: JWTPayload;
     try {
-      const { payload } = await jwtVerify(token, this.secret, { algorithms: ['HS256'] });
-      if (
-        payload.tokenType !== 'access' ||
-        typeof payload.sub !== 'string' ||
-        typeof payload.deviceId !== 'string'
-      )
-        throw new Error('invalid claims');
-      const device = await this.store.getDevice(payload.sub, payload.deviceId);
-      if (device.revokedAt) throw new DomainError('AUTH_SESSION_REVOKED', '设备会话已撤销');
-      await this.store.getUserRecord(payload.sub);
-      return { ownerId: payload.sub, deviceId: payload.deviceId };
-    } catch (error) {
-      if (error instanceof DomainError) throw error;
+      ({ payload } = await jwtVerify(token, this.secret, { algorithms: ['HS256'] }));
+    } catch {
       throw new DomainError('AUTH_REQUIRED', '需要登录');
     }
+    if (
+      payload.tokenType !== 'access' ||
+      typeof payload.sub !== 'string' ||
+      typeof payload.deviceId !== 'string'
+    )
+      throw new DomainError('AUTH_REQUIRED', '需要登录');
+
+    // Keep database failures out of the JWT error boundary. A database outage
+    // is an infrastructure failure (500), not an invalid/expired token (401).
+    const device = await this.store.getDevice(payload.sub, payload.deviceId);
+    if (device.revokedAt) throw new DomainError('AUTH_SESSION_REVOKED', '设备会话已撤销');
+    await this.store.getUserRecord(payload.sub);
+    return { ownerId: payload.sub, deviceId: payload.deviceId };
   }
 
   private hashRefreshToken(value: string): string {

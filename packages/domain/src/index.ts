@@ -1,4 +1,13 @@
-import type { ErrorCode, TaskCategory, TaskStatus, TimePointType } from '@devtodo/contracts';
+import type {
+  ErrorCode,
+  TaskCategory,
+  TaskStatus,
+  TimePointType,
+  FolderAggregateDto,
+  FolderDto,
+  FolderStatus,
+  TreeItemDto,
+} from '@devtodo/contracts';
 import { marked } from 'marked';
 import sanitizeHtml from 'sanitize-html';
 
@@ -35,9 +44,14 @@ export function transitionTask(
   current: TaskStatus,
   next: TaskStatus,
   now: Date,
+  currentCompletedAt?: Date | string | null,
 ): { status: TaskStatus; completedAt: Date | null } {
   if (current === next) {
-    return { status: current, completedAt: current === 'DONE' ? now : null };
+    if (current === 'DONE') {
+      const existing = currentCompletedAt ? new Date(currentCompletedAt) : now;
+      return { status: current, completedAt: Number.isNaN(existing.getTime()) ? now : existing };
+    }
+    return { status: current, completedAt: null };
   }
   if (!['TODO', 'IN_PROGRESS', 'DONE'].includes(next)) {
     throw new DomainError('INVALID_STATE_TRANSITION', '任务状态转换无效');
@@ -191,4 +205,176 @@ export async function renderSafeMarkdown(markdown: string): Promise<string> {
   // scheme as well so a note cannot render a misleading executable-looking
   // URL even when the parser declined to create an anchor.
   return sanitized.replace(/\b(?:javascript|vbscript|data):/gi, '');
+}
+
+export interface FolderTreeNode {
+  id: string;
+  parentFolderId: string | null;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+}
+
+export interface FolderTaskForAggregate {
+  id: string;
+  parentFolderId: string | null;
+  status: TaskStatus;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+}
+
+/**
+ * Computes the v2 folder aggregate from active descendants. It is deliberately
+ * iterative and carries a visited set so malformed imported data cannot blow
+ * the JS stack or loop forever.
+ */
+export function deriveFolderAggregate(
+  folderId: string,
+  folders: readonly FolderTreeNode[],
+  tasks: readonly FolderTaskForAggregate[],
+): FolderAggregateDto {
+  const folderMap = new Map(folders.map((folder) => [folder.id, folder]));
+  const children = new Map<string, string[]>();
+  for (const folder of folders) {
+    if (folder.deletedAt || !folder.parentFolderId) continue;
+    const list = children.get(folder.parentFolderId) ?? [];
+    list.push(folder.id);
+    children.set(folder.parentFolderId, list);
+  }
+  const reachable = new Set<string>();
+  const stack = [folderId];
+  while (stack.length) {
+    const current = stack.pop()!;
+    if (reachable.has(current)) continue;
+    reachable.add(current);
+    for (const child of children.get(current) ?? []) stack.push(child);
+  }
+  const counts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 } as Record<TaskStatus, number>;
+  for (const task of tasks) {
+    if (
+      task.deletedAt ||
+      task.archivedAt ||
+      !task.parentFolderId ||
+      !reachable.has(task.parentFolderId)
+    )
+      continue;
+    // A task is only valid when every folder in its path is active. Walk the
+    // path iteratively and reject cycles/missing parents as invalid descendants.
+    const pathSeen = new Set<string>();
+    let parent: string | null = task.parentFolderId;
+    let valid = true;
+    while (parent) {
+      if (pathSeen.has(parent)) {
+        valid = false;
+        break;
+      }
+      pathSeen.add(parent);
+      const folder = folderMap.get(parent);
+      if (!folder || folder.deletedAt || folder.archivedAt) {
+        valid = false;
+        break;
+      }
+      parent = folder.parentFolderId;
+    }
+    if (valid) counts[task.status] += 1;
+  }
+  const totalCount = counts.TODO + counts.IN_PROGRESS + counts.DONE;
+  const status: FolderStatus =
+    totalCount === 0 || counts.TODO === totalCount
+      ? 'TODO'
+      : counts.DONE === totalCount
+        ? 'DONE'
+        : 'IN_PROGRESS';
+  return {
+    status,
+    todoCount: counts.TODO,
+    inProgressCount: counts.IN_PROGRESS,
+    doneCount: counts.DONE,
+    totalCount,
+  };
+}
+
+export function assertFolderMoveAllowed(
+  folderId: string,
+  targetParentId: string | null,
+  folders: readonly FolderTreeNode[],
+): void {
+  if (targetParentId === folderId) throw new DomainError('TREE_CYCLE', '文件夹不能成为自己的父级');
+  const folderMap = new Map(folders.map((folder) => [folder.id, folder]));
+  if (targetParentId === null) return;
+  if (!folderMap.has(targetParentId))
+    throw new DomainError('PARENT_NOT_FOLDER', '目标父级不是活动文件夹');
+  const seen = new Set<string>();
+  let current: string | null = targetParentId;
+  while (current) {
+    if (seen.has(current)) throw new DomainError('TREE_CYCLE', '目录树存在循环');
+    seen.add(current);
+    if (current === folderId) throw new DomainError('TREE_CYCLE', '不能移动到自己的后代文件夹');
+    current = folderMap.get(current)?.parentFolderId ?? null;
+  }
+}
+
+export function sortTreeItems(items: readonly TreeItemDto[]): TreeItemDto[] {
+  const order: Record<FolderStatus, number> = { IN_PROGRESS: 0, TODO: 1, DONE: 2 };
+  return [...items].sort((left, right) => {
+    const leftStatus = left.kind === 'FOLDER' ? left.aggregate.status : left.task.status;
+    const rightStatus = right.kind === 'FOLDER' ? right.aggregate.status : right.task.status;
+    const group = order[leftStatus] - order[rightStatus];
+    if (group) return group;
+    const leftRank = BigInt(left.kind === 'FOLDER' ? left.folder.rank : left.task.rank);
+    const rightRank = BigInt(right.kind === 'FOLDER' ? right.folder.rank : right.task.rank);
+    if (leftRank !== rightRank) return leftRank < rightRank ? -1 : 1;
+    // P1-4: Folder-first tie-breaking within same status and rank
+    if (left.kind !== right.kind) return left.kind === 'FOLDER' ? -1 : 1;
+    const leftKey = `${left.kind}:${left.kind === 'FOLDER' ? left.folder.id : left.task.id}`;
+    const rightKey = `${right.kind}:${right.kind === 'FOLDER' ? right.folder.id : right.task.id}`;
+    return leftKey.localeCompare(rightKey);
+  });
+}
+
+export function assertTreeParentIsActiveFolder(
+  parentFolderId: string | null,
+  folders: readonly FolderTreeNode[],
+): void {
+  if (parentFolderId === null) return;
+  const folder = folders.find((candidate) => candidate.id === parentFolderId);
+  if (!folder) throw new DomainError('PARENT_NOT_FOLDER', '目标父级不是文件夹');
+  if (folder.deletedAt) throw new DomainError('TARGET_ARCHIVED', '目标文件夹已删除');
+  if (folder.archivedAt) throw new DomainError('TARGET_ARCHIVED', '目标文件夹已归档');
+}
+
+export function stepTransition(
+  current: TaskStatus,
+  next: TaskStatus,
+  now: Date,
+  currentCompletedAt?: Date | string | null,
+): { status: TaskStatus; completedAt: Date | null } {
+  if (current === next) {
+    if (current === 'DONE') {
+      const existing = currentCompletedAt ? new Date(currentCompletedAt) : now;
+      return { status: current, completedAt: Number.isNaN(existing.getTime()) ? now : existing };
+    }
+    return { status: current, completedAt: null };
+  }
+  if (!['TODO', 'IN_PROGRESS', 'DONE'].includes(next))
+    throw new DomainError('INVALID_STATE_TRANSITION', '步骤状态无效');
+  return { status: next, completedAt: next === 'DONE' ? now : null };
+}
+
+export function folderPath(
+  folderId: string | null,
+  folders: readonly Pick<FolderDto, 'id' | 'parentFolderId' | 'title'>[],
+): Array<Pick<FolderDto, 'id' | 'title'>> {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const result: Array<Pick<FolderDto, 'id' | 'title'>> = [];
+  const visited = new Set<string>();
+  let current = folderId;
+  while (current) {
+    if (visited.has(current)) throw new DomainError('TREE_CYCLE', '目录树存在循环');
+    visited.add(current);
+    const folder = byId.get(current);
+    if (!folder) throw new DomainError('ENTITY_NOT_FOUND', '目录路径不存在');
+    result.unshift({ id: folder.id, title: folder.title });
+    current = folder.parentFolderId;
+  }
+  return result;
 }

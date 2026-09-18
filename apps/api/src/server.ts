@@ -4,19 +4,30 @@ import { fileURLToPath } from 'node:url';
 import {
   bootstrapSchema,
   createEventSchema,
+  createFolderSchema,
+  createStepSchema,
+  createWorkflowSchema,
+  createWorkflowStageSchema,
   createPlacementSchema,
-  createProjectSchema,
-  createTaskSchema,
   loginSchema,
   localDateSchema,
-  noteSchema,
   placementTargetSchema,
-  pushSchema,
+  v2MutationSchema,
+  v2PushSchema,
   reorderSchema,
-  updateProjectSchema,
-  updateTaskSchema,
+  updateFolderSchema,
+  updateStepSchema,
   updateTimePointSchema,
+  updateWorkflowSchema,
+  updateWorkflowStageSchema,
+  moveWorkflowStageSchema,
+  updateV2SettingsSchema,
+  treeMoveSchema,
+  stepMoveSchema,
+  addWorkflowTaskSchema,
+  moveWorkflowMembershipSchema,
   uuidSchema,
+  type ErrorCode,
 } from '@devtodo/contracts';
 import { createPool } from '@devtodo/database';
 import { DomainError } from '@devtodo/domain';
@@ -24,12 +35,14 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import fastifyStatic from '@fastify/static';
-import websocket from '@fastify/websocket';
+import websocket, { type WebSocket as HubWebSocket } from '@fastify/websocket';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { z, ZodError } from 'zod';
 import { AuthService, type AuthConfig } from './auth.js';
 import { PostgresStore } from './postgres-store.js';
+import { PostgresTreeStore } from './postgres-tree-store.js';
 import { MemoryStore, type Store } from './store.js';
+import { MemoryTreeStore, type V2TreeStore } from './tree-store.js';
 
 const pageLimitSchema = z.coerce.number().int().min(1).max(500).default(100);
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
@@ -55,11 +68,38 @@ export interface AppConfig extends AuthConfig {
   webRoot: string;
   syncChangeRetentionDays: number;
   mutationReceiptRetentionDays: number;
+  dbConnectionTimeoutMs: number;
+  dbIdleTimeoutMs: number;
+  dbQueryTimeoutMs: number;
+  dbStatementTimeoutMs: number;
+  dbLockTimeoutMs: number;
+  httpRequestTimeoutMs: number;
+  httpConnectionTimeoutMs: number;
 }
 
 export interface BuildServerOptions {
   config?: Partial<AppConfig>;
   store?: Store;
+}
+
+const v2StoreCache = new WeakMap<object, V2TreeStore>();
+const websocketConnections = new Map<string, number>();
+const websocketMaxPerOriginAndIp = 32;
+const websocketMaxBufferedBytes = 1_000_000;
+
+function treeStoreFor(store: Store): V2TreeStore {
+  const cached = v2StoreCache.get(store);
+  if (cached) return cached;
+  // MemoryTreeStore performs the v1 -> v2 projection lazily and keeps the
+  // legacy store untouched. A PostgreSQL adapter is installed below through
+  // the same interface; keeping this boundary here prevents route handlers
+  // from ever reaching across Owner scopes.
+  const tree =
+    store instanceof PostgresStore
+      ? new PostgresTreeStore(store)
+      : new MemoryTreeStore(store instanceof MemoryStore ? store : undefined);
+  v2StoreCache.set(store, tree);
+  return tree;
 }
 
 const defaultConfig: AppConfig = {
@@ -94,6 +134,13 @@ const defaultConfig: AppConfig = {
   webRoot: process.env['WEB_ROOT'] ? resolve(process.env['WEB_ROOT']) : defaultWebRoot,
   syncChangeRetentionDays: Number(process.env['SYNC_CHANGE_RETENTION_DAYS'] ?? 90),
   mutationReceiptRetentionDays: Number(process.env['MUTATION_RECEIPT_RETENTION_DAYS'] ?? 90),
+  dbConnectionTimeoutMs: Number(process.env['DB_CONNECTION_TIMEOUT_MS'] ?? 5_000),
+  dbIdleTimeoutMs: Number(process.env['DB_IDLE_TIMEOUT_MS'] ?? 30_000),
+  dbQueryTimeoutMs: Number(process.env['DB_QUERY_TIMEOUT_MS'] ?? 30_000),
+  dbStatementTimeoutMs: Number(process.env['DB_STATEMENT_TIMEOUT_MS'] ?? 30_000),
+  dbLockTimeoutMs: Number(process.env['DB_LOCK_TIMEOUT_MS'] ?? 5_000),
+  httpRequestTimeoutMs: Number(process.env['HTTP_REQUEST_TIMEOUT_MS'] ?? 30_000),
+  httpConnectionTimeoutMs: Number(process.env['HTTP_CONNECTION_TIMEOUT_MS'] ?? 10_000),
 };
 
 export async function buildServer(
@@ -156,7 +203,13 @@ export async function buildServer(
       },
     },
     bodyLimit: 1_200_000,
+    requestTimeout: config.httpRequestTimeoutMs,
+    connectionTimeout: config.httpConnectionTimeoutMs,
+    keepAliveTimeout: 5_000,
     genReqId: () => cryptoUuid(),
+  });
+  app.addHook('onClose', async () => {
+    websocketConnections.clear();
   });
 
   await app.register(cookie);
@@ -194,7 +247,12 @@ export async function buildServer(
     },
     crossOriginEmbedderPolicy: false,
   });
-  await app.register(websocket);
+  await app.register(websocket, {
+    options: {
+      maxPayload: 1_200_000,
+      perMessageDeflate: false,
+    },
+  });
   let webBuildAvailable = false;
   try {
     await access(config.webRoot);
@@ -248,7 +306,7 @@ export async function buildServer(
     appVersion: config.appVersion,
     commitSha: process.env['COMMIT_SHA'] ?? 'local',
     buildTime: process.env['BUILD_TIME'] ?? null,
-    syncProtocolVersion: 1,
+    syncProtocolVersion: 2,
   }));
 
   app.register(
@@ -321,6 +379,10 @@ export async function buildServer(
       });
 
       api.post('/auth/native/challenge', async (request, reply) => {
+        const clientId = request.headers['x-client-id'];
+        const rateIdentity =
+          typeof clientId === 'string' ? clientId : (request.headers.origin ?? undefined);
+        rateLimiter.check(request, 'native-challenge', rateIdentity, 30, 60_000);
         const origin = requestOrigin(request);
         if (!nativeClient(request, config) || !origin)
           throw new DomainError('AUTH_REQUIRED', '原生客户端来源未获允许');
@@ -340,7 +402,7 @@ export async function buildServer(
         return {
           user,
           settings,
-          capabilities: { syncProtocolVersion: 1, websocket: true, offline: true },
+          capabilities: { syncProtocolVersion: 2, websocket: true, offline: true },
         };
       });
       api.get('/devices', async (request) => store.listDevices(request.auth!.ownerId));
@@ -405,59 +467,37 @@ export async function buildServer(
           ),
         };
       });
-      api.post('/projects', async (request, reply) => {
-        const body = createProjectSchema.parse(request.body);
-        const meta = mutationMeta(request);
-        const result = await mutate(
-          store,
-          request.auth!.ownerId,
-          meta,
-          'project.create',
-          meta.mutationId,
-          body,
-          () =>
-            store.createProject(request.auth!.ownerId, body.name, body.taskPrefix, meta.mutationId),
-        );
-        return reply.code(201).send(result);
-      });
       api.get('/projects/:id', async (request) =>
         store.getProject(request.auth!.ownerId, paramId(request)),
       );
-      api.patch('/projects/:id', async (request) => {
-        const body = updateProjectSchema.parse(request.body);
-        const meta = mutationMeta(request);
-        const { baseVersion, ...patch } = body;
-        return mutate(
-          store,
-          request.auth!.ownerId,
-          meta,
-          'project.update',
-          paramId(request),
-          body,
-          () => store.updateProject(request.auth!.ownerId, paramId(request), patch, baseVersion),
+      api.post('/projects', async () => {
+        throw new DomainError(
+          'CLIENT_UPGRADE_REQUIRED',
+          'v1 项目写入已关闭，请升级到 TaskDock v2 统一目录树协议',
         );
       });
-      api.post('/projects/:id/archive', async (request) =>
-        actionVersioned(store, request, 'project.archive', (id, ownerId, version) =>
-          store.archiveProject(ownerId, id, version),
-        ),
-      );
-      api.post('/projects/:id/restore', async (request) =>
-        actionVersioned(store, request, 'project.restore', (id, ownerId, version) =>
-          store.restoreProject(ownerId, id, version),
-        ),
-      );
-      api.post('/projects/reorder', async (request) => {
-        const body = reorderSchema.parse(request.body);
-        const meta = mutationMeta(request);
-        return mutate(
-          store,
-          request.auth!.ownerId,
-          meta,
-          'project.reorder',
-          request.auth!.ownerId,
-          body,
-          () => store.reorderProjects(request.auth!.ownerId, body.ids),
+      api.patch('/projects/:id', async () => {
+        throw new DomainError(
+          'CLIENT_UPGRADE_REQUIRED',
+          'v1 项目写入已关闭，请升级到 TaskDock v2 统一目录树协议',
+        );
+      });
+      api.post('/projects/:id/archive', async () => {
+        throw new DomainError(
+          'CLIENT_UPGRADE_REQUIRED',
+          'v1 项目写入已关闭，请升级到 TaskDock v2 统一目录树协议',
+        );
+      });
+      api.post('/projects/:id/restore', async () => {
+        throw new DomainError(
+          'CLIENT_UPGRADE_REQUIRED',
+          'v1 项目写入已关闭，请升级到 TaskDock v2 统一目录树协议',
+        );
+      });
+      api.post('/projects/reorder', async () => {
+        throw new DomainError(
+          'CLIENT_UPGRADE_REQUIRED',
+          'v1 项目写入已关闭，请升级到 TaskDock v2 统一目录树协议',
         );
       });
 
@@ -495,93 +535,52 @@ export async function buildServer(
               );
         return { items: page.items, nextCursor: page.nextCursor };
       });
-      api.post('/tasks', async (request, reply) => {
-        const body = createTaskSchema.parse(request.body);
-        const meta = mutationMeta(request);
-        const result = await mutate(
-          store,
-          request.auth!.ownerId,
-          meta,
-          'task.create',
-          body.id ?? meta.mutationId,
-          body,
-          () => store.createTask(request.auth!.ownerId, body),
-        );
-        return reply.code(201).send(result);
-      });
       api.get('/tasks/:id', async (request) =>
         store.getTaskDetails(request.auth!.ownerId, paramId(request)),
       );
-      api.patch('/tasks/:id', async (request) => {
-        const body = updateTaskSchema.parse(request.body);
-        const { baseVersion, ...patch } = body;
-        const meta = mutationMeta(request);
-        return mutate(
-          store,
-          request.auth!.ownerId,
-          meta,
-          'task.update',
-          paramId(request),
-          body,
-          () => store.updateTask(request.auth!.ownerId, paramId(request), patch, baseVersion),
+      api.post('/tasks', async () => {
+        throw new DomainError(
+          'CLIENT_UPGRADE_REQUIRED',
+          'v1 任务写入已关闭，请升级到 TaskDock v2 统一目录树协议',
         );
       });
-      api.post('/tasks/:id/archive', async (request) =>
-        actionVersioned(store, request, 'task.archive', (id, ownerId, version) =>
-          store.archiveTask(ownerId, id, version),
-        ),
-      );
-      api.post('/tasks/:id/restore', async (request) =>
-        actionVersioned(store, request, 'task.restore', (id, ownerId, version) =>
-          store.restoreTask(ownerId, id, version),
-        ),
-      );
-      api.post('/tasks/:id/duplicate', async (request, reply) => {
-        const meta = mutationMeta(request);
-        const result = await mutate(
-          store,
-          request.auth!.ownerId,
-          meta,
-          'task.duplicate',
-          paramId(request),
-          {},
-          () => store.duplicateTask(request.auth!.ownerId, paramId(request)),
+      api.patch('/tasks/:id', async () => {
+        throw new DomainError(
+          'CLIENT_UPGRADE_REQUIRED',
+          'v1 任务写入已关闭，请升级到 TaskDock v2 统一目录树协议',
         );
-        return reply.code(201).send(result);
       });
-      api.post('/tasks/reorder', async (request) => {
-        const body = reorderSchema.parse(request.body);
-        const meta = mutationMeta(request);
-        return mutate(
-          store,
-          request.auth!.ownerId,
-          meta,
-          'task.reorder',
-          request.auth!.ownerId,
-          body,
-          () => store.reorderTasks(request.auth!.ownerId, body.ids),
+      api.post('/tasks/:id/archive', async () => {
+        throw new DomainError(
+          'CLIENT_UPGRADE_REQUIRED',
+          'v1 任务写入已关闭，请升级到 TaskDock v2 统一目录树协议',
+        );
+      });
+      api.post('/tasks/:id/restore', async () => {
+        throw new DomainError(
+          'CLIENT_UPGRADE_REQUIRED',
+          'v1 任务写入已关闭，请升级到 TaskDock v2 统一目录树协议',
+        );
+      });
+      api.post('/tasks/:id/duplicate', async () => {
+        throw new DomainError(
+          'CLIENT_UPGRADE_REQUIRED',
+          'v1 任务写入已关闭，请升级到 TaskDock v2 统一目录树协议',
+        );
+      });
+      api.post('/tasks/reorder', async () => {
+        throw new DomainError(
+          'CLIENT_UPGRADE_REQUIRED',
+          'v1 任务写入已关闭，请升级到 TaskDock v2 统一目录树协议',
         );
       });
       api.get('/tasks/:id/note', async (request) =>
         store.getNote(request.auth!.ownerId, paramId(request)),
       );
-      api.put('/tasks/:id/note', async (request) => {
-        const body = noteSchema.parse(request.body);
-        const meta = mutationMeta(request);
-        return mutate(
-          store,
-          request.auth!.ownerId,
-          meta,
-          'note.update',
-          paramId(request),
-          body,
-          () =>
-            store.updateNote(
-              request.auth!.ownerId,
-              paramId(request),
-              body.contentMarkdown,
-              body.baseVersion,
-            ),
+      api.put('/tasks/:id/note', async () => {
+        throw new DomainError(
+          'CLIENT_UPGRADE_REQUIRED',
+          'v1 备注写入已关闭，请升级到 TaskDock v2 统一目录树协议',
         );
       });
       api.get('/search/tasks', async (request) => {
@@ -887,36 +886,16 @@ export async function buildServer(
         };
       });
       api.get('/sync/status', async (request) => store.syncStatus(request.auth!.ownerId));
-      api.post('/sync/push', async (request) => {
-        const body = pushSchema.parse(request.body);
-        const results: unknown[] = [];
-        for (const mutation of body.mutations) {
-          try {
-            const result = await store.withMutation(async () =>
-              store.applyMutationIdempotent(request.auth!.ownerId, body.clientId, mutation),
-            );
-            results.push({
-              mutationId: mutation.mutationId,
-              status: 'applied',
-              replayed: result.replayed,
-              result: result.result,
-            });
-          } catch (error) {
-            const domain =
-              error instanceof DomainError
-                ? error
-                : new DomainError('MUTATION_REJECTED', 'mutation 被拒绝');
-            results.push({
-              mutationId: mutation.mutationId,
-              status: domain.code === 'VERSION_CONFLICT' ? 'conflict' : 'rejected',
-              error: { code: domain.code, message: domain.message, details: domain.details },
-            });
-          }
-        }
-        return { protocolVersion: 1, results };
+      api.post('/sync/push', async () => {
+        throw new DomainError(
+          'CLIENT_UPGRADE_REQUIRED',
+          'v1 同步写入已关闭，请升级到 TaskDock v2 统一目录树同步协议',
+        );
       });
 
-      api.get('/ws', { websocket: true }, (socket) => {
+      api.get('/ws', { websocket: true }, (socket, request) => {
+        const tracked = trackWebSocket(socket, request);
+        if (!tracked) return;
         let authenticated = false;
         let authenticating = false;
         let unsubscribe: (() => void) | undefined;
@@ -943,10 +922,9 @@ export async function buildServer(
               clearTimeout(authTimeout);
               unsubscribe = store.subscribeChanges((ownerId: string, cursor: string) => {
                 if (ownerId === session.ownerId && socket.readyState === 1)
-                  socket.send(JSON.stringify({ type: 'sync.required', cursor }));
+                  tracked.send({ type: 'sync.required', cursor });
               });
-              if (socket.readyState === 1)
-                socket.send(JSON.stringify({ type: 'ready', protocolVersion: 1 }));
+              if (socket.readyState === 1) tracked.send({ type: 'ready', protocolVersion: 1 });
             } catch {
               clearTimeout(authTimeout);
               if (socket.readyState === 1) socket.close(1008, 'AUTH_REQUIRED');
@@ -961,6 +939,8 @@ export async function buildServer(
     },
     { prefix: '/api/v1' },
   );
+
+  registerV2Routes(app, auth, treeStoreFor(store));
 
   if (webBuildAvailable) {
     app.setNotFoundHandler((request, reply) => {
@@ -989,23 +969,1008 @@ export async function buildServer(
   return { app, store, config };
 }
 
+function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeStore): void {
+  app.register(
+    async (api) => {
+      api.addHook('preHandler', async (request) => {
+        await requireAccessToken(auth)(request);
+        if (request.auth) await tree.prepare?.(request.auth.ownerId);
+      });
+
+      api.get('/status', async (request) => ({
+        serverVersion: '2.0.0',
+        schemaVersion: 2,
+        supportedApiVersions: [2],
+        supportedSyncProtocols: [2],
+        minClientVersion: '2.0.0',
+        sync: await tree.status(request.auth!.ownerId),
+      }));
+      api.get(
+        '/settings',
+        async (request) => (await tree.snapshot(request.auth!.ownerId)).settings,
+      );
+      api.patch('/settings', async (request) => {
+        const body = updateV2SettingsSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        const { baseVersion, ...patch } = body;
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'settings.update',
+          request.auth!.ownerId,
+          baseVersion,
+          patch,
+        );
+      });
+
+      api.get('/tree/children', async (request) => {
+        const query = z
+          .object({
+            parentFolderId: z.union([uuidSchema, z.literal('root')]).optional(),
+            archived: z.enum(['true', 'false']).optional(),
+          })
+          .parse(request.query);
+        return {
+          items: tree.listTreeChildren(
+            request.auth!.ownerId,
+            query.parentFolderId === undefined || query.parentFolderId === 'root'
+              ? null
+              : query.parentFolderId,
+            query.archived === 'true',
+          ),
+          parentFolderId: query.parentFolderId === 'root' ? null : (query.parentFolderId ?? null),
+        };
+      });
+      api.get('/folders/:id', async (request) =>
+        tree.getFolder(request.auth!.ownerId, paramId(request)),
+      );
+      api.get('/folders', async (request) => {
+        const query = z
+          .object({ archived: z.enum(['true', 'false']).optional() })
+          .parse(request.query);
+        return { items: tree.listFolders(request.auth!.ownerId, query.archived === 'true') };
+      });
+      api.get('/folders/:id/path', async (request) => ({
+        items: tree.getFolderPath(request.auth!.ownerId, paramId(request)),
+      }));
+
+      api.get('/archive-operations', async (request) => {
+        const query = z
+          .object({ includeRestored: z.enum(['true', 'false']).optional() })
+          .parse(request.query);
+        return {
+          items: tree.listArchiveOperations(
+            request.auth!.ownerId,
+            query.includeRestored === 'true',
+          ),
+        };
+      });
+      api.get('/archive-operations/:id', async (request) =>
+        tree.getArchiveOperation(request.auth!.ownerId, paramId(request)),
+      );
+
+      api.post('/folders', async (request, reply) => {
+        const body = createFolderSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        const entityId = body.id ?? meta.mutationId;
+        const result = await runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'folder.create',
+          entityId,
+          null,
+          {
+            parentFolderId: body.parentFolderId,
+            title: body.title,
+          },
+        );
+        return reply.code(201).send(result);
+      });
+      api.patch('/folders/:id', async (request) => {
+        const body = updateFolderSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'folder.update',
+          paramId(request),
+          body.baseVersion,
+          { title: body.title },
+        );
+      });
+      api.post('/tree/items/move', async (request) => {
+        const body = treeMoveSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'tree.move',
+          body.item.id,
+          body.baseVersion,
+          body,
+        );
+      });
+      api.post('/folders/:id/archive-tree', async (request) => {
+        const body = z
+          .object({ baseVersion: z.number().int().positive(), operationId: uuidSchema.optional() })
+          .parse(request.body ?? {});
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'folder.archiveTree',
+          paramId(request),
+          body.baseVersion,
+          { operationId: body.operationId },
+        );
+      });
+      api.post('/folders/:id/restore-tree', async (request) => {
+        const body = z.object({ operationId: uuidSchema }).parse(request.body ?? {});
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'folder.restoreTree',
+          paramId(request),
+          null,
+          body,
+        );
+      });
+      api.post('/folders/:id/delete-preview', async (request) => {
+        z.object({}).parse(request.body ?? {});
+        return tree.previewDelete(request.auth!.ownerId, paramId(request));
+      });
+      api.delete('/folders/:id/tree', async (request) => {
+        const body = z.object({ confirmationToken: z.string().min(1) }).parse(request.body ?? {});
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'folder.deleteTree',
+          paramId(request),
+          null,
+          body,
+        );
+      });
+
+      api.get('/tasks', async (request) => {
+        const query = z
+          .object({ archived: z.enum(['true', 'false']).optional() })
+          .parse(request.query);
+        return {
+          items: tree.listTasks(request.auth!.ownerId, query.archived === 'true'),
+          nextCursor: null,
+        };
+      });
+      api.post('/tasks', async (request, reply) => {
+        const body = z
+          .object({
+            id: uuidSchema.optional(),
+            parentFolderId: uuidSchema.nullable().default(null),
+            title: z.string().trim().min(1).max(500),
+          })
+          .strict()
+          .parse(request.body);
+        const meta = mutationMeta(request);
+        const result = await runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'task.create',
+          body.id ?? meta.mutationId,
+          null,
+          { parentFolderId: body.parentFolderId, title: body.title },
+        );
+        return reply.code(201).send(result);
+      });
+      api.get('/tasks/:id', async (request) =>
+        tree.getTaskDetails(request.auth!.ownerId, paramId(request)),
+      );
+      api.patch('/tasks/:id', async (request) => {
+        const body = z
+          .object({
+            title: z.string().trim().min(1).max(500).optional(),
+            status: z.enum(['TODO', 'IN_PROGRESS', 'DONE']).optional(),
+            baseVersion: z.number().int().positive(),
+          })
+          .strict()
+          .parse(request.body);
+        const meta = mutationMeta(request);
+        const { baseVersion, ...patch } = body;
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'task.update',
+          paramId(request),
+          baseVersion,
+          patch,
+        );
+      });
+      api.patch('/tasks/:id/note', async (request) => {
+        const body = z
+          .object({
+            contentMarkdown: z.string().max(1024 * 1024),
+            baseVersion: z.number().int().positive(),
+          })
+          .strict()
+          .parse(request.body);
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'note.update',
+          paramId(request),
+          body.baseVersion,
+          { taskId: paramId(request), contentMarkdown: body.contentMarkdown },
+        );
+      });
+      api.post('/tasks/:id/archive', async (request) => {
+        const body = z
+          .object({ baseVersion: z.number().int().positive() })
+          .parse(request.body ?? {});
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'task.archive',
+          paramId(request),
+          body.baseVersion,
+          {},
+        );
+      });
+      api.post('/tasks/:id/restore', async (request) => {
+        const body = z
+          .object({ baseVersion: z.number().int().positive() })
+          .parse(request.body ?? {});
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'task.restore',
+          paramId(request),
+          body.baseVersion,
+          {},
+        );
+      });
+      api.delete('/tasks/:id', async (request) => {
+        const body = z
+          .object({ baseVersion: z.number().int().positive() })
+          .strict()
+          .parse(request.body ?? {});
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'task.delete',
+          paramId(request),
+          body.baseVersion,
+          {},
+        );
+      });
+      api.post('/tasks/:id/duplicate', async (request, reply) => {
+        const meta = mutationMeta(request);
+        const body = z
+          .object({
+            taskId: uuidSchema.optional(),
+            noteId: uuidSchema.optional(),
+            stepIds: z.array(uuidSchema).optional(),
+          })
+          .strict()
+          .parse(request.body ?? {});
+        const result = await runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'task.duplicate',
+          paramId(request),
+          null,
+          body,
+        );
+        return reply.code(201).send(result);
+      });
+
+      api.get('/time-points', async (request) => {
+        const query = z
+          .object({
+            type: z.enum(['DATE', 'EVENT']).optional(),
+            archived: z.enum(['true', 'false']).optional(),
+          })
+          .parse(request.query);
+        return {
+          items: tree.listTimePoints(
+            request.auth!.ownerId,
+            query.type,
+            query.archived === undefined ? undefined : query.archived === 'true',
+          ),
+        };
+      });
+      api.get('/time-points/placement-counts', async (request) => {
+        const query = z
+          .object({
+            type: z.enum(['DATE', 'EVENT']).optional(),
+            from: localDateSchema.optional(),
+            to: localDateSchema.optional(),
+            archived: z.enum(['true', 'false']).optional(),
+          })
+          .parse(request.query);
+        const points = tree
+          .listTimePoints(
+            request.auth!.ownerId,
+            query.type,
+            query.archived === undefined ? false : query.archived === 'true',
+          )
+          .filter(
+            (point) =>
+              !point.localDate ||
+              ((!query.from || point.localDate >= query.from) &&
+                (!query.to || point.localDate <= query.to)),
+          );
+        return {
+          items: points.map((point) => {
+            const placements = tree.listPlacements(request.auth!.ownerId, point.id);
+            const doneCount = placements.filter(
+              (placement) => placement.task.status === 'DONE',
+            ).length;
+            return {
+              timePointId: point.id,
+              localDate: point.localDate,
+              totalCount: placements.length,
+              openCount: placements.length - doneCount,
+              doneCount,
+            };
+          }),
+        };
+      });
+      api.post('/time-points/date', async (request, reply) => {
+        const body = z
+          .object({ id: uuidSchema.optional(), localDate: localDateSchema })
+          .strict()
+          .parse(request.body);
+        const meta = mutationMeta(request);
+        const result = await runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'timePoint.date.create',
+          body.id ?? meta.mutationId,
+          null,
+          { localDate: body.localDate },
+        );
+        return reply.code(201).send(result);
+      });
+      api.post('/time-points/events', async (request, reply) => {
+        const body = z
+          .object({ id: uuidSchema.optional(), title: z.string().trim().min(1).max(200) })
+          .strict()
+          .parse(request.body);
+        const meta = mutationMeta(request);
+        const result = await runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'timePoint.event.create',
+          body.id ?? meta.mutationId,
+          null,
+          { title: body.title },
+        );
+        return reply.code(201).send(result);
+      });
+      api.post('/time-points/events/reorder', async (request) => {
+        const body = z
+          .object({ ids: z.array(uuidSchema).max(1000) })
+          .strict()
+          .parse(request.body);
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'timePoint.reorder',
+          meta.mutationId,
+          null,
+          { ids: body.ids },
+        );
+      });
+      api.get('/time-points/:id', async (request) =>
+        tree.getTimePoint(request.auth!.ownerId, paramId(request)),
+      );
+      api.patch('/time-points/:id', async (request) => {
+        const body = updateTimePointSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'timePoint.update',
+          paramId(request),
+          body.baseVersion,
+          { title: body.title },
+        );
+      });
+      api.post('/time-points/:id/reach', async (request) =>
+        versionedV2Action(tree, request, 'timePoint.reach'),
+      );
+      api.post('/time-points/:id/archive', async (request) =>
+        versionedV2Action(tree, request, 'timePoint.archive'),
+      );
+      api.post('/time-points/:id/restore', async (request) =>
+        versionedV2Action(tree, request, 'timePoint.restore'),
+      );
+      api.get('/time-points/:id/placements', async (request) => ({
+        items: tree.listPlacements(request.auth!.ownerId, paramId(request)),
+      }));
+      api.post('/placements', async (request, reply) => {
+        const body = z
+          .object({ id: uuidSchema.optional(), taskId: uuidSchema, timePointId: uuidSchema })
+          .strict()
+          .parse(request.body);
+        const meta = mutationMeta(request);
+        const result = await runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'placement.create',
+          body.id ?? meta.mutationId,
+          null,
+          body,
+        );
+        return reply.code(201).send(result);
+      });
+      api.delete('/placements/:id', async (request) => {
+        const body = z
+          .object({ baseVersion: z.number().int().positive() })
+          .parse(request.body ?? {});
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'placement.remove',
+          paramId(request),
+          body.baseVersion,
+          {},
+        );
+      });
+      api.post('/placements/:id/move', async (request) => {
+        const body = z
+          .object({
+            timePointId: uuidSchema,
+            targetPlacementId: uuidSchema.optional(),
+            baseVersion: z.number().int().positive(),
+          })
+          .strict()
+          .parse(request.body);
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'placement.move',
+          paramId(request),
+          body.baseVersion,
+          body,
+        );
+      });
+      api.post('/placements/:id/copy', async (request) => {
+        const body = z
+          .object({ timePointId: uuidSchema, targetPlacementId: uuidSchema.optional() })
+          .strict()
+          .parse(request.body);
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'placement.copy',
+          paramId(request),
+          null,
+          body,
+        );
+      });
+      api.post('/time-points/:id/placements/reorder', async (request) => {
+        const body = z
+          .object({ ids: z.array(uuidSchema).max(1000) })
+          .strict()
+          .parse(request.body);
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'placement.reorder',
+          paramId(request),
+          null,
+          { timePointId: paramId(request), ids: body.ids },
+        );
+      });
+
+      api.post('/dates/:localDate/rollover', async (request) => {
+        const localDate = localDateSchema.parse(
+          (request.params as { localDate: string }).localDate,
+        );
+        z.object({}).parse(request.body ?? {});
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'rollover.create',
+          meta.mutationId,
+          null,
+          { localDate },
+        );
+      });
+      api.post('/rollovers/undo', async (request) => {
+        const body = z
+          .object({ placementIds: z.array(uuidSchema).max(1000) })
+          .strict()
+          .parse(request.body ?? {});
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'rollover.undo',
+          meta.mutationId,
+          null,
+          body,
+        );
+      });
+
+      api.get('/tasks/:taskId/steps', async (request) => ({
+        steps: tree.getTaskDetails(
+          request.auth!.ownerId,
+          uuidSchema.parse((request.params as { taskId: string }).taskId),
+        ).steps,
+      }));
+      api.post('/tasks/:taskId/steps', async (request, reply) => {
+        const body = createStepSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        const taskId = uuidSchema.parse((request.params as { taskId: string }).taskId);
+        const result = await runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'taskStep.create',
+          body.id ?? meta.mutationId,
+          null,
+          { taskId, title: body.title, noteMarkdown: body.noteMarkdown },
+        );
+        return reply.code(201).send(result);
+      });
+      api.patch('/task-steps/:id', async (request) => {
+        const body = updateStepSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        const { baseVersion, ...patch } = body;
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'taskStep.update',
+          paramId(request),
+          baseVersion,
+          patch,
+        );
+      });
+      api.post('/task-steps/:id/move', async (request) => {
+        const body = stepMoveSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        const { baseVersion, ...patch } = body;
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'taskStep.move',
+          paramId(request),
+          baseVersion,
+          patch,
+        );
+      });
+      api.delete('/task-steps/:id', async (request) => {
+        const body = z
+          .object({ baseVersion: z.number().int().positive() })
+          .parse(request.body ?? {});
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'taskStep.delete',
+          paramId(request),
+          body.baseVersion,
+          {},
+        );
+      });
+
+      api.get('/workflows', async (request) => {
+        const query = z
+          .object({ includeArchived: z.enum(['true', 'false']).optional() })
+          .parse(request.query);
+        return {
+          items: tree.listWorkflows(request.auth!.ownerId, query.includeArchived === 'true'),
+        };
+      });
+      api.post('/workflows', async (request, reply) => {
+        const body = createWorkflowSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        const result = await runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'workflow.create',
+          body.id ?? meta.mutationId,
+          null,
+          { name: body.name, defaultStageId: body.defaultStageId },
+        );
+        return reply.code(201).send(result);
+      });
+      api.get('/workflows/:id', async (request) =>
+        tree.getWorkflow(request.auth!.ownerId, paramId(request)),
+      );
+      api.patch('/workflows/:id', async (request) => {
+        const body = updateWorkflowSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'workflow.update',
+          paramId(request),
+          body.baseVersion,
+          { name: body.name },
+        );
+      });
+      api.post('/workflows/:id/archive', async (request) =>
+        versionedV2Action(tree, request, 'workflow.archive'),
+      );
+      api.post('/workflows/:id/restore', async (request) =>
+        versionedV2Action(tree, request, 'workflow.restore'),
+      );
+      api.delete('/workflows/:id', async (request) =>
+        versionedV2Action(tree, request, 'workflow.delete'),
+      );
+      api.post('/workflows/:id/stages', async (request, reply) => {
+        const body = createWorkflowStageSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        const workflowId = paramId(request);
+        const result = await runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'workflowStage.create',
+          body.id ?? meta.mutationId,
+          null,
+          { workflowId, name: body.name },
+        );
+        return reply.code(201).send(result);
+      });
+      api.patch('/workflow-stages/:id', async (request) => {
+        const body = updateWorkflowStageSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'workflowStage.update',
+          paramId(request),
+          body.baseVersion,
+          { name: body.name },
+        );
+      });
+      api.post('/workflow-stages/:id/move', async (request) => {
+        const body = moveWorkflowStageSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'workflowStage.move',
+          paramId(request),
+          body.baseVersion,
+          { beforeId: body.beforeId, afterId: body.afterId },
+        );
+      });
+      api.delete('/workflow-stages/:id', async (request) =>
+        versionedV2Action(tree, request, 'workflowStage.delete'),
+      );
+      api.post('/workflow-stages/:id/tasks', async (request, reply) => {
+        const body = addWorkflowTaskSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        const stageId = paramId(request);
+        const workflow = tree
+          .listWorkflows(request.auth!.ownerId)
+          .find((candidate) => candidate.stages?.some((stage) => stage.id === stageId));
+        if (!workflow) throw new DomainError('ENTITY_NOT_FOUND', '流程阶段不存在');
+        const result = await runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'workflowTask.add',
+          meta.mutationId,
+          null,
+          { workflowId: workflow.id, stageId, taskId: body.taskId },
+        );
+        return reply.code(201).send(result);
+      });
+      api.post('/workflow-memberships/:id/move', async (request) => {
+        const body = moveWorkflowMembershipSchema.parse(request.body);
+        const meta = mutationMeta(request);
+        return runV2Mutation(
+          tree,
+          request.auth!.ownerId,
+          meta,
+          'workflowTask.move',
+          paramId(request),
+          body.baseVersion,
+          { stageId: body.stageId, beforeId: body.beforeId, afterId: body.afterId },
+        );
+      });
+      api.delete('/workflow-memberships/:id', async (request) =>
+        versionedV2Action(tree, request, 'workflowTask.remove'),
+      );
+
+      api.get('/sync/snapshot', async (request) => tree.snapshot(request.auth!.ownerId));
+      api.get('/sync/pull', async (request) => {
+        const query = z
+          .object({
+            cursor: z.string().regex(/^\d+$/).default('0'),
+            limit: z.coerce.number().int().min(1).max(500).default(500),
+          })
+          .parse(request.query);
+        const result = await tree.pull(request.auth!.ownerId, query.cursor, query.limit);
+        return {
+          changes: result.changes.map(changeDto),
+          nextCursor: result.nextCursor,
+          hasMore: result.hasMore,
+          protocolVersion: 2,
+        };
+      });
+      api.get('/sync/status', async (request) => await tree.status(request.auth!.ownerId));
+      api.post('/sync/push', async (request) => {
+        const raw = request.body as { protocolVersion?: unknown };
+        if (raw?.protocolVersion !== 2)
+          throw new DomainError('SYNC_PROTOCOL_UNSUPPORTED', '只支持同步协议 v2');
+        const body = v2PushSchema.parse(request.body);
+        const results: unknown[] = [];
+        for (const mutation of body.mutations) {
+          try {
+            const result = await tree.applyMutationIdempotent(
+              request.auth!.ownerId,
+              body.clientId,
+              mutation,
+            );
+            results.push({
+              mutationId: mutation.mutationId,
+              status: 'applied',
+              replayed: result.replayed,
+              result: result.result,
+            });
+          } catch (error) {
+            const domain =
+              error instanceof DomainError
+                ? error
+                : new DomainError('MUTATION_REJECTED', 'mutation 被拒绝');
+            results.push({
+              mutationId: mutation.mutationId,
+              status: domain.code === 'VERSION_CONFLICT' ? 'conflict' : 'rejected',
+              error: { code: domain.code, message: domain.message, details: domain.details },
+            });
+          }
+        }
+        return { protocolVersion: 2, results };
+      });
+      api.get('/ws', { websocket: true }, (socket, request) => {
+        const tracked = trackWebSocket(socket, request);
+        if (!tracked) return;
+        let authenticated = false;
+        let authenticating = false;
+        let unsubscribe: (() => void) | undefined;
+        const authTimeout = setTimeout(() => {
+          if (!authenticated && socket.readyState === 1) socket.close(1008, 'AUTH_REQUIRED');
+        }, 5_000);
+        socket.on('message', (raw: unknown) => {
+          if (authenticated || authenticating) {
+            socket.close(1008, 'AUTH_REQUIRED');
+            return;
+          }
+          authenticating = true;
+          void (async () => {
+            try {
+              const message = JSON.parse(String(raw)) as { type?: unknown; accessToken?: unknown };
+              if (message.type !== 'auth' || typeof message.accessToken !== 'string')
+                throw new DomainError('AUTH_REQUIRED', '需要登录');
+              const session = await auth.verifyAccessToken(message.accessToken);
+              authenticated = true;
+              clearTimeout(authTimeout);
+              unsubscribe = tree.subscribeChanges?.((ownerId, cursor) => {
+                if (ownerId === session.ownerId && socket.readyState === 1)
+                  tracked.send({ type: 'sync.required', cursor });
+              });
+              if (socket.readyState === 1) tracked.send({ type: 'ready', protocolVersion: 2 });
+            } catch {
+              clearTimeout(authTimeout);
+              if (socket.readyState === 1) socket.close(1008, 'AUTH_REQUIRED');
+            }
+          })();
+        });
+        socket.on('close', () => {
+          clearTimeout(authTimeout);
+          unsubscribe?.();
+        });
+      });
+    },
+    { prefix: '/api/v2' },
+  );
+}
+
+function trackWebSocket(
+  socket: HubWebSocket,
+  request: FastifyRequest,
+): { send: (message: Record<string, unknown>) => boolean } | null {
+  const origin = request.headers.origin ?? '(none)';
+  const key = `${request.ip}|${origin}`;
+  const current = websocketConnections.get(key) ?? 0;
+  if (current >= websocketMaxPerOriginAndIp) {
+    socket.close(1013, 'RATE_LIMITED');
+    return null;
+  }
+  websocketConnections.set(key, current + 1);
+
+  let released = false;
+  let alive = true;
+  const release = (): void => {
+    if (released) return;
+    released = true;
+    const next = (websocketConnections.get(key) ?? 1) - 1;
+    if (next > 0) websocketConnections.set(key, next);
+    else websocketConnections.delete(key);
+  };
+  const heartbeat = setInterval(() => {
+    if (socket.readyState !== 1) {
+      release();
+      return;
+    }
+    if (!alive) {
+      socket.terminate();
+      return;
+    }
+    alive = false;
+    socket.ping();
+  }, 30_000);
+  heartbeat.unref?.();
+  socket.on('pong', () => {
+    alive = true;
+  });
+  socket.on('message', () => {
+    alive = true;
+  });
+  socket.on('close', () => {
+    clearInterval(heartbeat);
+    release();
+  });
+  socket.on('error', () => {
+    clearInterval(heartbeat);
+    release();
+  });
+
+  return {
+    send(message) {
+      if (socket.readyState !== 1 || socket.bufferedAmount > websocketMaxBufferedBytes) {
+        if (socket.readyState === 1) socket.close(1013, 'BACKPRESSURE');
+        return false;
+      }
+      try {
+        socket.send(JSON.stringify(message), (error?: Error) => {
+          if (error && socket.readyState === 1) socket.terminate();
+        });
+        return true;
+      } catch {
+        if (socket.readyState === 1) socket.terminate();
+        return false;
+      }
+    },
+  };
+}
+
+async function runV2Mutation(
+  tree: V2TreeStore,
+  ownerId: string,
+  meta: MutationMeta,
+  command: string,
+  entityId: string,
+  baseVersion: number | null,
+  payload: Record<string, unknown>,
+): Promise<unknown> {
+  const mutation = v2MutationSchema.parse({
+    mutationId: meta.mutationId,
+    command,
+    entityId,
+    baseVersion,
+    occurredAt: new Date().toISOString(),
+    payload,
+  });
+  const result = await tree.applyMutationIdempotent(ownerId, meta.clientId, mutation);
+  return result.result;
+}
+
+async function versionedV2Action(
+  tree: V2TreeStore,
+  request: FastifyRequest,
+  command: string,
+): Promise<unknown> {
+  const body = z.object({ baseVersion: z.number().int().positive() }).parse(request.body ?? {});
+  const meta = mutationMeta(request);
+  return runV2Mutation(
+    tree,
+    request.auth!.ownerId,
+    meta,
+    command,
+    paramId(request),
+    body.baseVersion,
+    {},
+  );
+}
+
 async function createStore(config: AppConfig): Promise<Store> {
   if (config.devMemoryStore || !config.databaseUrl) return new MemoryStore();
-  const pool = createPool(config.databaseUrl);
+  const pool = createPool(config.databaseUrl, {
+    connectionTimeoutMillis: config.dbConnectionTimeoutMs,
+    idleTimeoutMillis: config.dbIdleTimeoutMs,
+    queryTimeoutMillis: config.dbQueryTimeoutMs,
+    statementTimeoutMillis: config.dbStatementTimeoutMs,
+    lockTimeoutMillis: config.dbLockTimeoutMs,
+  });
   return new PostgresStore(pool, {
     changeRetentionDays: config.syncChangeRetentionDays,
     mutationReceiptRetentionDays: config.mutationReceiptRetentionDays,
+    transactionTimeoutMs: config.dbStatementTimeoutMs,
   });
 }
 
 function validateRuntimeConfig(config: AppConfig): void {
+  const boundedTimeouts = [
+    config.dbConnectionTimeoutMs,
+    config.dbIdleTimeoutMs,
+    config.dbQueryTimeoutMs,
+    config.dbStatementTimeoutMs,
+    config.dbLockTimeoutMs,
+    config.httpRequestTimeoutMs,
+    config.httpConnectionTimeoutMs,
+  ];
   if (
     !Number.isInteger(config.syncChangeRetentionDays) ||
     config.syncChangeRetentionDays < 1 ||
     !Number.isInteger(config.mutationReceiptRetentionDays) ||
-    config.mutationReceiptRetentionDays < 1
+    config.mutationReceiptRetentionDays < 1 ||
+    !Number.isInteger(config.dbConnectionTimeoutMs) ||
+    config.dbConnectionTimeoutMs < 1 ||
+    !Number.isInteger(config.dbIdleTimeoutMs) ||
+    config.dbIdleTimeoutMs < 1 ||
+    !Number.isInteger(config.dbQueryTimeoutMs) ||
+    config.dbQueryTimeoutMs < 1 ||
+    !Number.isInteger(config.dbStatementTimeoutMs) ||
+    config.dbStatementTimeoutMs < 1 ||
+    !Number.isInteger(config.dbLockTimeoutMs) ||
+    config.dbLockTimeoutMs < 1 ||
+    !Number.isInteger(config.httpRequestTimeoutMs) ||
+    config.httpRequestTimeoutMs < 1 ||
+    !Number.isInteger(config.httpConnectionTimeoutMs) ||
+    config.httpConnectionTimeoutMs < 1 ||
+    boundedTimeouts.some((value) => value > 120_000)
   )
-    throw new Error('retention windows must be positive integer days');
+    throw new Error('retention windows and timeout values must be integers between 1 and 120000');
   if (config.nodeEnv !== 'production') return;
   const insecureMarkers = ['change-me', 'local-access-secret', 'local-refresh-pepper'];
   if (
@@ -1128,11 +2093,14 @@ const publicApiRoutes = new Set([
   '/ws',
 ]);
 
+const publicWebSocketRoutes = new Set(['/api/v1/ws', '/api/v2/ws']);
+
 function isPublicRoute(request: FastifyRequest): boolean {
   const declaredPath = request.routeOptions.url?.split('?')[0];
   const requestPath = request.url.split('?')[0] ?? '';
   return (
     (declaredPath !== undefined && publicApiRoutes.has(declaredPath)) ||
+    publicWebSocketRoutes.has(requestPath) ||
     [...publicApiRoutes].some((path) => requestPath.endsWith(`/api/v1${path}`))
   );
 }
@@ -1213,23 +2181,7 @@ function changeDto(change: {
 }
 function sendError(
   reply: FastifyReply,
-  code:
-    | 'AUTH_REQUIRED'
-    | 'AUTH_INVALID_CREDENTIALS'
-    | 'AUTH_SESSION_REVOKED'
-    | 'BOOTSTRAP_ALREADY_COMPLETED'
-    | 'BOOTSTRAP_TOKEN_INVALID'
-    | 'VALIDATION_FAILED'
-    | 'ENTITY_NOT_FOUND'
-    | 'ENTITY_ARCHIVED'
-    | 'VERSION_CONFLICT'
-    | 'PLACEMENT_ALREADY_EXISTS'
-    | 'INVALID_STATE_TRANSITION'
-    | 'SYNC_CURSOR_EXPIRED'
-    | 'SYNC_PROTOCOL_UNSUPPORTED'
-    | 'MUTATION_REJECTED'
-    | 'RATE_LIMITED'
-    | 'INTERNAL_ERROR',
+  code: ErrorCode,
   message: string,
   requestId: string,
   details: unknown,
@@ -1245,7 +2197,20 @@ function statusFor(code: string): number {
   )
     return 401;
   if (code === 'VERSION_CONFLICT') return 409;
+  if (
+    code === 'TREE_CYCLE' ||
+    code === 'PARENT_NOT_FOLDER' ||
+    code === 'TARGET_ARCHIVED' ||
+    code === 'ANCESTOR_ARCHIVED' ||
+    code === 'SUBTREE_CHANGED' ||
+    code === 'WORKFLOW_TASK_ALREADY_EXISTS' ||
+    code === 'STAGE_WORKFLOW_MISMATCH' ||
+    code === 'CLIENT_UPGRADE_REQUIRED' ||
+    code === 'MUTATION_REJECTED'
+  )
+    return 409;
   if (code === 'SYNC_CURSOR_EXPIRED') return 410;
+  if (code === 'DELETE_CONFIRMATION_REQUIRED') return 410;
   if (code === 'ENTITY_NOT_FOUND') return 404;
   if (code === 'ENTITY_ARCHIVED') return 410;
   if (code === 'BOOTSTRAP_ALREADY_COMPLETED' || code === 'PLACEMENT_ALREADY_EXISTS') return 409;

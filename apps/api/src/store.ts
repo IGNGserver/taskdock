@@ -86,7 +86,19 @@ export interface MutationReceipt {
 export interface SyncChange {
   seq: bigint;
   ownerId: string;
-  entityType: 'project' | 'task' | 'note' | 'timePoint' | 'placement' | 'settings';
+  entityType:
+    | 'project'
+    | 'task'
+    | 'note'
+    | 'timePoint'
+    | 'placement'
+    | 'settings'
+    | 'folder'
+    | 'taskStep'
+    | 'workflow'
+    | 'workflowStage'
+    | 'workflowTaskMembership'
+    | 'archiveOperation';
   entityId: string;
   entityVersion: number;
   operation: 'upsert' | 'delete';
@@ -736,7 +748,12 @@ export class MemoryStore {
       task.rank = patch.rank;
     }
     if (patch.status !== undefined && patch.status !== task.status) {
-      const transition = transitionTask(task.status, patch.status, new Date(this.now()));
+      const transition = transitionTask(
+        task.status,
+        patch.status,
+        new Date(this.now()),
+        task.completedAt,
+      );
       task.status = transition.status;
       task.completedAt = transition.completedAt?.toISOString() ?? null;
     }

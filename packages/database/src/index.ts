@@ -9,8 +9,29 @@ export type { Pool } from 'pg';
 
 const { Pool } = pg;
 
-export function createPool(connectionString: string): pg.Pool {
-  return new Pool({ connectionString, max: 10, maxUses: 1000, application_name: 'devtodo-api' });
+export interface PoolTimeoutOptions {
+  connectionTimeoutMillis?: number;
+  idleTimeoutMillis?: number;
+  queryTimeoutMillis?: number;
+  statementTimeoutMillis?: number;
+  lockTimeoutMillis?: number;
+}
+
+export function createPool(connectionString: string, options: PoolTimeoutOptions = {}): pg.Pool {
+  const statementTimeoutMillis = options.statementTimeoutMillis ?? 30_000;
+  return new Pool({
+    connectionString,
+    max: 10,
+    maxUses: 1000,
+    application_name: 'devtodo-api',
+    connectionTimeoutMillis: options.connectionTimeoutMillis ?? 5_000,
+    idleTimeoutMillis: options.idleTimeoutMillis ?? 30_000,
+    query_timeout: options.queryTimeoutMillis ?? statementTimeoutMillis,
+    statement_timeout: statementTimeoutMillis,
+    lock_timeout: options.lockTimeoutMillis ?? 5_000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+  });
 }
 
 export interface MigrationOptions {
