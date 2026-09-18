@@ -1399,15 +1399,21 @@ function QuickCaptureDialog({
     setError('');
     try {
       if (kind === 'task') {
-        const task = (await mutationV2('POST', '/tasks', {
+        // POST /api/v2/tasks returns { task, note }; unwrap `task` before
+        // reading the id, otherwise the follow-up placement is rejected with
+        // "taskId: Required" and the task never appears on Today.
+        const created = (await mutationV2('POST', '/tasks', {
           parentFolderId: defaultTaskFolderId ?? null,
           title: title.trim(),
-        })) as TreeTaskDto;
+        })) as { task: TreeTaskDto };
         if (placeTaskOnToday) {
           const point = (await mutationV2('POST', '/time-points/date', {
             localDate: todayInTimezone(settings?.timezone ?? 'Asia/Shanghai'),
           })) as TimePointDto;
-          await mutationV2('POST', '/placements', { taskId: task.id, timePointId: point.id });
+          await mutationV2('POST', '/placements', {
+            taskId: created.task.id,
+            timePointId: point.id,
+          });
         }
       }
       window.dispatchEvent(new Event('devtodo:data-changed'));
