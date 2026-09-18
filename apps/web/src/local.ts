@@ -6,14 +6,26 @@ import type {
   SettingsDto,
   TaskDto,
   TimePointDto,
+  TreeTaskDto,
+  V2SettingsDto,
   UserDto,
 } from '@devtodo/contracts';
 import { uuidSchema, uuidv7 } from '@devtodo/contracts';
 import { isValidIanaTimezone, validateLocalDate } from '@devtodo/domain';
+import { ApiError } from './api.js';
 import {
   captureLocalStateImage,
   type DevTodoDatabase,
+  type LocalArchiveOperation,
+  type LocalFolder,
   type LocalNote,
+  type LocalPlacement,
+  type LocalTaskStep,
+  type LocalTimePoint,
+  type LocalTreeTask,
+  type LocalWorkflow,
+  type LocalWorkflowStage,
+  type LocalWorkflowTaskMembership,
   type OutboxItem,
 } from '@devtodo/sync-client';
 
@@ -36,6 +48,12 @@ const entityTables = (db: DevTodoDatabase) =>
     db.timePoints,
     db.placements,
     db.settings,
+    db.folders,
+    db.taskSteps,
+    db.workflows,
+    db.workflowStages,
+    db.workflowTaskMemberships,
+    db.archiveOperations,
     db.syncMeta,
     db.outbox,
   ] as const;
@@ -100,6 +118,17 @@ export async function applyOfflineWrite(
   const now = new Date().toISOString();
   const timestamp = () => new Date().toISOString();
 
+  if (cleanPath.startsWith('/v2/'))
+    return applyOfflineV2Write(
+      context,
+      mutationId,
+      clientId,
+      cleanPath.slice(3),
+      method,
+      body,
+      now,
+    );
+
   if (method === 'POST' && cleanPath === '/projects') {
     const projectId = uuidv7();
     const name = boundedTrimmedString(body['name'], 160, '项目名称无效');
@@ -139,7 +168,12 @@ export async function applyOfflineWrite(
       if (!project) throw new Error('本地项目不存在');
       if (project.archivedAt) throw new Error('项目已归档');
     }
-    const task = createLocalTask(taskId, body, now, await context.db.tasks.toArray());
+    const task = createLocalTask(
+      taskId,
+      body,
+      now,
+      (await context.db.tasks.toArray()) as LocalTaskDto[],
+    );
     const note: NoteDto = {
       id: uuidv7(),
       taskId,
@@ -759,6 +793,1223 @@ export async function applyOfflineWrite(
   return undefined;
 }
 
+async function applyOfflineV2Write(
+  context: LocalContext,
+  mutationId: string,
+  clientId: string,
+  path: string,
+  method: string,
+  body: Record<string, unknown>,
+  now: string,
+): Promise<OfflineResult | undefined> {
+  const db = context.db;
+  const timestamp = () => new Date().toISOString();
+  const payload = Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'baseVersion'));
+  const task = async (id: string): Promise<LocalTreeTask> => {
+    const row = await db.tasks.get(id);
+    const treeRow = row as LocalTreeTask | undefined;
+    if (!treeRow || treeRow.parentFolderId === undefined) throw new Error('本地 v2 任务不存在');
+    return treeRow;
+  };
+  const folder = async (id: string): Promise<LocalFolder> => {
+    const row = await db.folders.get(id);
+    if (!row) throw new Error('本地 v2 文件夹不存在');
+    return row as LocalFolder;
+  };
+  const baseVersion = typeof body['baseVersion'] === 'number' ? body['baseVersion'] : null;
+  const enqueueV2 = (
+    command: string,
+    entityId: string,
+    version: number | null,
+    commandPayload: Record<string, unknown>,
+    write: () => Promise<unknown>,
+  ) => enqueue(context, mutationId, clientId, command, entityId, version, commandPayload, write);
+
+  if (method === 'POST' && path === '/folders') {
+    const id = typeof body['id'] === 'string' ? body['id'] : uuidv7();
+    const parentFolderId =
+      body['parentFolderId'] === null ? null : requiredString(body['parentFolderId']);
+    if (parentFolderId) {
+      const parent = await folder(parentFolderId);
+      if (parent.archivedAt) throw new Error('目标文件夹已归档');
+    }
+    const title = boundedTrimmedString(body['title'], 160, '文件夹名称无效');
+    const folders = await db.folders.toArray();
+    const created: LocalFolder = {
+      id,
+      parentFolderId,
+      title,
+      rank: nextRank(folders.filter((candidate) => candidate.parentFolderId === parentFolderId)),
+      version: 1,
+      archivedAt: null,
+      archivedByOperationId: null,
+      createdAt: now,
+      updatedAt: now,
+      pendingSync: true,
+    };
+    return enqueueV2('folder.create', id, null, { parentFolderId, title }, async () => {
+      await db.folders.put(created);
+      return created;
+    });
+  }
+
+  const folderUpdate = /^\/folders\/([^/]+)$/.exec(path);
+  if (method === 'PATCH' && folderUpdate) {
+    const current = await folder(folderUpdate[1]!);
+    assertBaseVersion(current.version, baseVersion);
+    const next: LocalFolder = {
+      ...current,
+      title:
+        body['title'] === undefined
+          ? current.title
+          : boundedTrimmedString(body['title'], 160, '文件夹名称无效'),
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'folder.update',
+      current.id,
+      current.version,
+      { title: next.title },
+      async () => {
+        await db.folders.put(next);
+        return next;
+      },
+    );
+  }
+
+  const treeMove = path === '/tree/items/move' && method === 'POST';
+  if (treeMove) {
+    if (!isRecord(body['item'])) throw new Error('目录项无效');
+    const item = body['item'];
+    const kind = item['kind'] === 'FOLDER' || item['kind'] === 'TASK' ? item['kind'] : null;
+    const id = typeof item['id'] === 'string' ? item['id'] : null;
+    if (!kind || !id) throw new Error('目录项无效');
+    const targetParent =
+      body['parentFolderId'] === null ? null : requiredString(body['parentFolderId']);
+    if (targetParent) {
+      const target = await folder(targetParent);
+      if (target.archivedAt) throw new Error('目标文件夹已归档');
+    }
+    const current = kind === 'FOLDER' ? await folder(id) : await task(id);
+    assertBaseVersion(current.version, baseVersion);
+    const nextRankValue = nextRank([
+      ...(await db.folders.toArray())
+        .filter((candidate) => candidate.parentFolderId === targetParent && candidate.id !== id)
+        .map((candidate) => ({ rank: candidate.rank })),
+      ...(await db.tasks.toArray())
+        .map((candidate) => candidate as LocalTreeTask)
+        .filter((candidate) => candidate.parentFolderId === targetParent && candidate.id !== id)
+        .map((candidate) => ({ rank: candidate.rank })),
+    ]);
+    const next = {
+      ...current,
+      parentFolderId: targetParent,
+      rank: nextRankValue,
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'tree.move',
+      id,
+      current.version,
+      { ...payload, item: { kind, id }, parentFolderId: targetParent },
+      async () => {
+        if (kind === 'FOLDER') await db.folders.put(next as LocalFolder);
+        else await db.tasks.put(next as LocalTreeTask);
+        return next;
+      },
+    );
+  }
+
+  const folderArchive = /^\/folders\/([^/]+)\/(archive-tree|restore-tree)$/.exec(path);
+  if (method === 'POST' && folderArchive) {
+    const root = await folder(folderArchive[1]!);
+    if (folderArchive[2] === 'restore-tree') {
+      const operationId = requiredString(body['operationId']);
+      const operation = await db.archiveOperations.get(operationId);
+      if (!operation) throw new Error('本地归档操作不存在');
+      const folders = await db.folders.toArray();
+      const tasks = (await db.tasks.toArray()) as LocalTreeTask[];
+      const restoredAt = timestamp();
+      return enqueueV2('folder.restoreTree', root.id, null, { operationId }, async () => {
+        await db.folders.bulkPut(
+          folders.map((candidate) =>
+            candidate.archivedByOperationId === operationId
+              ? {
+                  ...candidate,
+                  archivedAt: null,
+                  archivedByOperationId: null,
+                  version: candidate.version + 1,
+                  updatedAt: restoredAt,
+                  pendingSync: true,
+                }
+              : candidate,
+          ),
+        );
+        await db.tasks.bulkPut(
+          tasks.map((candidate) =>
+            candidate.archivedByOperationId === operationId
+              ? {
+                  ...candidate,
+                  archivedAt: null,
+                  archivedByOperationId: null,
+                  version: candidate.version + 1,
+                  updatedAt: restoredAt,
+                  pendingSync: true,
+                }
+              : candidate,
+          ),
+        );
+        await db.archiveOperations.put({ ...operation, restoredAt, pendingSync: true });
+        return operation;
+      });
+    }
+    assertBaseVersion(root.version, baseVersion);
+    const operationId = uuidv7();
+    const folders = await db.folders.toArray();
+    const folderIds = new Set<string>();
+    const stack = [root.id];
+    while (stack.length) {
+      const id = stack.pop()!;
+      if (folderIds.has(id)) continue;
+      folderIds.add(id);
+      folders
+        .filter((candidate) => candidate.parentFolderId === id)
+        .forEach((candidate) => stack.push(candidate.id));
+    }
+    const tasks = (await db.tasks.toArray()) as LocalTreeTask[];
+    const affectedFolders = folders.filter(
+      (candidate) => folderIds.has(candidate.id) && !candidate.archivedAt,
+    );
+    const affectedTasks = tasks.filter(
+      (candidate) =>
+        candidate.parentFolderId &&
+        folderIds.has(candidate.parentFolderId) &&
+        !candidate.archivedAt,
+    );
+    const operation = {
+      id: operationId,
+      rootFolderId: root.id,
+      rootBaseVersion: root.version,
+      folderCount: affectedFolders.length,
+      taskCount: affectedTasks.length,
+      createdAt: now,
+      restoredAt: null,
+      pendingSync: true,
+    } satisfies LocalArchiveOperation;
+    return enqueueV2('folder.archiveTree', root.id, root.version, { operationId }, async () => {
+      await db.folders.bulkPut(
+        folders.map((candidate) =>
+          folderIds.has(candidate.id)
+            ? {
+                ...candidate,
+                archivedAt: candidate.archivedAt ?? now,
+                archivedByOperationId: operationId,
+                version: candidate.version + 1,
+                updatedAt: now,
+                pendingSync: true,
+              }
+            : candidate,
+        ),
+      );
+      await db.tasks.bulkPut(
+        tasks.map((candidate) =>
+          candidate.parentFolderId && folderIds.has(candidate.parentFolderId)
+            ? {
+                ...candidate,
+                archivedAt: candidate.archivedAt ?? now,
+                archivedByOperationId: candidate.archivedAt
+                  ? (candidate.archivedByOperationId ?? null)
+                  : operationId,
+                version: candidate.version + 1,
+                updatedAt: now,
+                pendingSync: true,
+              }
+            : candidate,
+        ),
+      );
+      await db.archiveOperations.put(operation);
+      return operation;
+    });
+  }
+  // Deleting a whole folder tree is online-only: it is irreversible and needs a
+  // server-signed preview token. Fail closed here so the user sees the
+  // "archive instead" guidance instead of a generic network error. This must
+  // run before the DELETE guard because the UI previews first.
+  if (method === 'POST' && /^\/folders\/[^/]+\/delete-preview$/.test(path)) {
+    throw new ApiError(
+      'OFFLINE_TREE_DELETE_FORBIDDEN',
+      '离线状态禁止删除整棵目录及其内容；请先递归归档目录，待恢复网络并在线预览后再执行永久删除。',
+      { suggestion: 'ARCHIVE_INSTEAD' },
+      400,
+    );
+  }
+  if (method === 'DELETE' && /^\/folders\/[^/]+\/tree$/.test(path)) {
+    throw new ApiError(
+      'OFFLINE_TREE_DELETE_FORBIDDEN',
+      '离线状态禁止删除整棵目录及其内容；请先递归归档目录，待恢复网络并在线预览后再执行永久删除。',
+      { suggestion: 'ARCHIVE_INSTEAD' },
+      400,
+    );
+  }
+
+  // Batch rollover needs the authoritative set of the source date's active
+  // placements, which offline cache cannot prove is current. Refuse rather than
+  // create a divergent local batch that would later conflict on sync.
+  if (method === 'POST' && /^\/dates\/[^/]+\/rollover$/.test(path)) {
+    throw new ApiError(
+      'OFFLINE_ROLLOVER_FORBIDDEN',
+      '离线状态无法批量安排到明天；请恢复网络后重试。',
+      { suggestion: 'RETRY_ONLINE' },
+      400,
+    );
+  }
+  if (method === 'POST' && path === '/rollovers/undo') {
+    throw new ApiError(
+      'OFFLINE_ROLLOVER_FORBIDDEN',
+      '离线状态无法撤销批量安排；请恢复网络后重试。',
+      { suggestion: 'RETRY_ONLINE' },
+      400,
+    );
+  }
+
+  if (method === 'POST' && path === '/tasks') {
+    const id = typeof body['id'] === 'string' ? body['id'] : uuidv7();
+    const parentFolderId =
+      body['parentFolderId'] === null ? null : requiredString(body['parentFolderId']);
+    if (parentFolderId && (await folder(parentFolderId)).archivedAt)
+      throw new Error('目标文件夹已归档');
+    const title = boundedTrimmedString(body['title'], 500, '任务标题无效');
+    const tasks = (await db.tasks.toArray()).map((candidate) => candidate as LocalTreeTask);
+    const created: LocalTreeTask = {
+      id,
+      referenceId: `TASK-LOCAL-${id.slice(-8)}`,
+      parentFolderId,
+      title,
+      status: 'TODO',
+      rank: nextRank(tasks.filter((candidate) => candidate.parentFolderId === parentFolderId)),
+      version: 1,
+      completedAt: null,
+      archivedAt: null,
+      archivedByOperationId: null,
+      createdAt: now,
+      updatedAt: now,
+      pendingSync: true,
+    };
+    const note: LocalNote = {
+      id: uuidv7(),
+      taskId: id,
+      contentMarkdown: '',
+      version: 1,
+      updatedAt: now,
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'task.create',
+      id,
+      null,
+      { parentFolderId, title, __localNoteId: note.id },
+      async () => {
+        await db.tasks.put(created);
+        await db.notes.put(note);
+        return { task: created, note };
+      },
+    );
+  }
+
+  const taskUpdate = /^\/tasks\/([^/]+)$/.exec(path);
+  if (method === 'PATCH' && taskUpdate) {
+    const current = await task(taskUpdate[1]!);
+    assertBaseVersion(current.version, baseVersion);
+    const nextStatus =
+      body['status'] === 'TODO' || body['status'] === 'IN_PROGRESS' || body['status'] === 'DONE'
+        ? body['status']
+        : current.status;
+    const next: LocalTreeTask = {
+      ...current,
+      title:
+        body['title'] === undefined
+          ? current.title
+          : boundedTrimmedString(body['title'], 500, '任务标题无效'),
+      status: nextStatus,
+      completedAt: nextStatus === 'DONE' ? (current.completedAt ?? timestamp()) : null,
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'task.update',
+      current.id,
+      current.version,
+      { title: next.title, status: next.status },
+      async () => {
+        await db.tasks.put(next);
+        return next;
+      },
+    );
+  }
+  const taskNote = /^\/tasks\/([^/]+)\/note$/.exec(path);
+  if (method === 'PATCH' && taskNote) {
+    const note = await db.notes.where('taskId').equals(taskNote[1]!).first();
+    if (!note) throw new Error('本地备注不存在');
+    assertBaseVersion(note.version, baseVersion);
+    const next: LocalNote = {
+      ...note,
+      contentMarkdown: markdownString(body['contentMarkdown']),
+      version: note.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'note.update',
+      taskNote[1]!,
+      note.version,
+      { taskId: taskNote[1], contentMarkdown: next.contentMarkdown },
+      async () => {
+        await db.notes.put(next);
+        return next;
+      },
+    );
+  }
+  const taskAction = /^\/tasks\/([^/]+)\/(archive|restore)$/.exec(path);
+  if (method === 'POST' && taskAction) {
+    const current = await task(taskAction[1]!);
+    assertBaseVersion(current.version, baseVersion);
+    const next: LocalTreeTask = {
+      ...current,
+      archivedAt: taskAction[2] === 'archive' ? timestamp() : null,
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(`task.${taskAction[2]}`, current.id, current.version, {}, async () => {
+      await db.tasks.put(next);
+      return next;
+    });
+  }
+  const taskDelete = /^\/tasks\/([^/]+)$/.exec(path);
+  if (method === 'DELETE' && taskDelete) {
+    const current = await task(taskDelete[1]!);
+    assertBaseVersion(current.version, baseVersion);
+    const deletedAt = timestamp();
+    const notes = (await db.notes.where('taskId').equals(current.id).toArray()) as LocalNote[];
+    const steps = (await db.taskSteps.where('taskId').equals(current.id).toArray()).filter(
+      (step) => !step.deletedAt,
+    );
+    const placements = (await db.placements.where('taskId').equals(current.id).toArray()).filter(
+      (placement) => !placement.deletedAt,
+    );
+    const memberships = (await db.workflowTaskMemberships.toArray()).filter(
+      (membership) => membership.taskId === current.id && !membership.deletedAt,
+    );
+    const next: LocalTreeTask = {
+      ...current,
+      deletedAt,
+      version: current.version + 1,
+      updatedAt: deletedAt,
+      pendingSync: true,
+    };
+    return enqueueV2('task.delete', current.id, current.version, {}, async () => {
+      await db.tasks.put(next);
+      await db.notes.bulkPut(
+        notes.map((note) => ({
+          ...note,
+          deletedAt,
+          version: note.version + 1,
+          updatedAt: deletedAt,
+          pendingSync: true,
+        })),
+      );
+      await db.taskSteps.bulkPut(
+        steps.map((step) => ({
+          ...step,
+          deletedAt,
+          version: step.version + 1,
+          updatedAt: deletedAt,
+          pendingSync: true,
+        })),
+      );
+      await db.placements.bulkPut(
+        placements.map((placement) => ({
+          ...placement,
+          deletedAt,
+          version: placement.version + 1,
+          updatedAt: deletedAt,
+          pendingSync: true,
+        })),
+      );
+      await db.workflowTaskMemberships.bulkPut(
+        memberships.map((membership) => ({
+          ...membership,
+          deletedAt,
+          version: membership.version + 1,
+          updatedAt: deletedAt,
+          pendingSync: true,
+        })),
+      );
+      return next;
+    });
+  }
+  const taskDuplicate = /^\/tasks\/([^/]+)\/duplicate$/.exec(path);
+  if (method === 'POST' && taskDuplicate) {
+    const source = await task(taskDuplicate[1]!);
+    const sourceNote = await db.notes.where('taskId').equals(source.id).first();
+    const copiedTaskId = uuidv7();
+    const copiedNoteId = uuidv7();
+    const sourceSteps = (await db.taskSteps.where('taskId').equals(source.id).toArray()).filter(
+      (step) => !step.deletedAt,
+    );
+    const copiedStepIds = sourceSteps.map(() => uuidv7());
+    const copiedTask: LocalTreeTask = {
+      ...source,
+      id: copiedTaskId,
+      referenceId: `TASK-LOCAL-${copiedTaskId.slice(-8)}`,
+      title: source.title,
+      status: 'TODO',
+      rank: nextRank(
+        (await db.tasks.toArray())
+          .map((candidate) => candidate as LocalTreeTask)
+          .filter((candidate) => candidate.parentFolderId === source.parentFolderId),
+      ),
+      version: 1,
+      completedAt: null,
+      archivedAt: null,
+      archivedByOperationId: null,
+      createdAt: now,
+      updatedAt: now,
+      pendingSync: true,
+    };
+    const copiedNote: LocalNote = {
+      id: copiedNoteId,
+      taskId: copiedTaskId,
+      contentMarkdown: sourceNote?.contentMarkdown ?? '',
+      version: 1,
+      updatedAt: now,
+      pendingSync: true,
+    };
+    const copiedSteps: LocalTaskStep[] = sourceSteps.map((step, index) => ({
+      ...step,
+      id: copiedStepIds[index]!,
+      taskId: copiedTaskId,
+      status: 'TODO',
+      completedAt: null,
+      rank: String((index + 1) * 1024),
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      pendingSync: true,
+    }));
+    return enqueueV2(
+      'task.duplicate',
+      source.id,
+      null,
+      {
+        taskId: copiedTaskId,
+        noteId: copiedNoteId,
+        stepIds: copiedStepIds,
+        __localTaskId: copiedTaskId,
+        __localNoteId: copiedNoteId,
+      },
+      async () => {
+        await db.tasks.put(copiedTask);
+        await db.notes.put(copiedNote);
+        await db.taskSteps.bulkPut(copiedSteps);
+        return { task: copiedTask, note: copiedNote, steps: copiedSteps };
+      },
+    );
+  }
+
+  const taskSteps = /^\/tasks\/([^/]+)\/steps$/.exec(path);
+  if (method === 'POST' && taskSteps) {
+    const taskRow = await task(taskSteps[1]!);
+    if (taskRow.archivedAt) throw new Error('已归档任务不可添加步骤');
+    const id = typeof body['id'] === 'string' ? body['id'] : uuidv7();
+    const title = boundedTrimmedString(body['title'], 500, '步骤标题无效');
+    const noteMarkdown = markdownString(body['noteMarkdown'] ?? '');
+    const step: LocalTaskStep = {
+      id,
+      taskId: taskRow.id,
+      title,
+      noteMarkdown,
+      status: 'TODO',
+      rank: nextRank(await db.taskSteps.where('taskId').equals(taskRow.id).toArray()),
+      completedAt: null,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'taskStep.create',
+      id,
+      null,
+      { taskId: taskRow.id, title, noteMarkdown },
+      async () => {
+        await db.taskSteps.put(step);
+        return step;
+      },
+    );
+  }
+  const stepUpdate = /^\/task-steps\/([^/]+)$/.exec(path);
+  if (method === 'PATCH' && stepUpdate) {
+    const current = await db.taskSteps.get(stepUpdate[1]!);
+    if (!current || current.deletedAt) throw new Error('本地步骤不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const nextStatus =
+      body['status'] === 'TODO' || body['status'] === 'IN_PROGRESS' || body['status'] === 'DONE'
+        ? body['status']
+        : current.status;
+    const next: LocalTaskStep = {
+      ...current,
+      title:
+        body['title'] === undefined
+          ? current.title
+          : boundedTrimmedString(body['title'], 500, '步骤标题无效'),
+      noteMarkdown:
+        body['noteMarkdown'] === undefined
+          ? current.noteMarkdown
+          : markdownString(body['noteMarkdown']),
+      status: nextStatus,
+      completedAt: nextStatus === 'DONE' ? (current.completedAt ?? timestamp()) : null,
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'taskStep.update',
+      current.id,
+      current.version,
+      { title: next.title, noteMarkdown: next.noteMarkdown, status: next.status },
+      async () => {
+        await db.taskSteps.put(next);
+        return next;
+      },
+    );
+  }
+  const stepMove = /^\/task-steps\/([^/]+)\/move$/.exec(path);
+  if (method === 'POST' && stepMove) {
+    const current = await db.taskSteps.get(stepMove[1]!);
+    if (!current || current.deletedAt) throw new Error('本地步骤不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const beforeId =
+      body['beforeId'] === null
+        ? null
+        : typeof body['beforeId'] === 'string'
+          ? body['beforeId']
+          : undefined;
+    const afterId =
+      body['afterId'] === null
+        ? null
+        : typeof body['afterId'] === 'string'
+          ? body['afterId']
+          : undefined;
+    const siblings = (await db.taskSteps.where('taskId').equals(current.taskId).toArray()).filter(
+      (step) => step.id !== current.id && !step.deletedAt,
+    );
+    const next: LocalTaskStep = {
+      ...current,
+      rank: rankForMove(siblings, beforeId, afterId),
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'taskStep.move',
+      current.id,
+      current.version,
+      { beforeId, afterId },
+      async () => {
+        await db.taskSteps.put(next);
+        return next;
+      },
+    );
+  }
+  const stepDelete = /^\/task-steps\/([^/]+)$/.exec(path);
+  if (method === 'DELETE' && stepDelete) {
+    const current = await db.taskSteps.get(stepDelete[1]!);
+    if (!current || current.deletedAt) throw new Error('本地步骤不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const next: LocalTaskStep = {
+      ...current,
+      deletedAt: timestamp(),
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2('taskStep.delete', current.id, current.version, {}, async () => {
+      await db.taskSteps.put(next);
+      return next;
+    });
+  }
+
+  if (method === 'POST' && path === '/workflows') {
+    const id = typeof body['id'] === 'string' ? body['id'] : uuidv7();
+    const stageId = uuidv7();
+    const name = boundedTrimmedString(body['name'], 200, '流程名称无效');
+    const workflow: LocalWorkflow = {
+      id,
+      name,
+      rank: nextRank(await db.workflows.toArray()),
+      version: 1,
+      archivedAt: null,
+      createdAt: now,
+      updatedAt: now,
+      pendingSync: true,
+    };
+    const stage: LocalWorkflowStage = {
+      id: stageId,
+      workflowId: id,
+      name: '阶段 1',
+      rank: '1024',
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      pendingSync: true,
+    };
+    return enqueueV2('workflow.create', id, null, { name, defaultStageId: stageId }, async () => {
+      await db.workflows.put(workflow);
+      await db.workflowStages.put(stage);
+      return { ...workflow, stages: [{ ...stage, tasks: [] }] };
+    });
+  }
+  const workflowUpdate = /^\/workflows\/([^/]+)$/.exec(path);
+  if (method === 'PATCH' && workflowUpdate) {
+    const current = await db.workflows.get(workflowUpdate[1]!);
+    if (!current || current.deletedAt) throw new Error('本地流程不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const next: LocalWorkflow = {
+      ...current,
+      name: boundedTrimmedString(body['name'], 200, '流程名称无效'),
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'workflow.update',
+      current.id,
+      current.version,
+      { name: next.name },
+      async () => {
+        await db.workflows.put(next);
+        return next;
+      },
+    );
+  }
+  const workflowAction = /^\/workflows\/([^/]+)\/(archive|restore)$/.exec(path);
+  if (method === 'POST' && workflowAction) {
+    const current = await db.workflows.get(workflowAction[1]!);
+    if (!current || current.deletedAt) throw new Error('本地流程不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const next: LocalWorkflow = {
+      ...current,
+      archivedAt: workflowAction[2] === 'archive' ? timestamp() : null,
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(`workflow.${workflowAction[2]}`, current.id, current.version, {}, async () => {
+      await db.workflows.put(next);
+      return next;
+    });
+  }
+  const workflowDelete = /^\/workflows\/([^/]+)$/.exec(path);
+  if (method === 'DELETE' && workflowDelete) {
+    const current = await db.workflows.get(workflowDelete[1]!);
+    if (!current || current.deletedAt) throw new Error('本地流程不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const at = timestamp();
+    const next: LocalWorkflow = {
+      ...current,
+      deletedAt: at,
+      version: current.version + 1,
+      updatedAt: at,
+      pendingSync: true,
+    };
+    return enqueueV2('workflow.delete', current.id, current.version, {}, async () => {
+      await db.workflows.put(next);
+      const stages = await db.workflowStages.where('workflowId').equals(current.id).toArray();
+      const stageIds = new Set(stages.map((stage) => stage.id));
+      await db.workflowStages.bulkPut(
+        stages.map((stage) => ({
+          ...stage,
+          deletedAt: at,
+          version: stage.version + 1,
+          updatedAt: at,
+          pendingSync: true,
+        })),
+      );
+      const memberships = (
+        await db.workflowTaskMemberships.where('workflowId').equals(current.id).toArray()
+      ).filter((membership) => stageIds.has(membership.stageId));
+      await db.workflowTaskMemberships.bulkPut(
+        memberships.map((membership) => ({
+          ...membership,
+          deletedAt: at,
+          version: membership.version + 1,
+          updatedAt: at,
+          pendingSync: true,
+        })),
+      );
+      return next;
+    });
+  }
+  const workflowStages = /^\/workflows\/([^/]+)\/stages$/.exec(path);
+  if (method === 'POST' && workflowStages) {
+    const workflow = await db.workflows.get(workflowStages[1]!);
+    if (!workflow || workflow.deletedAt || workflow.archivedAt) throw new Error('本地流程不可用');
+    const id = typeof body['id'] === 'string' ? body['id'] : uuidv7();
+    const name = boundedTrimmedString(body['name'], 200, '阶段名称无效');
+    const stage: LocalWorkflowStage = {
+      id,
+      workflowId: workflow.id,
+      name,
+      rank: nextRank(await db.workflowStages.where('workflowId').equals(workflow.id).toArray()),
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'workflowStage.create',
+      id,
+      null,
+      { workflowId: workflow.id, name },
+      async () => {
+        await db.workflowStages.put(stage);
+        return stage;
+      },
+    );
+  }
+  const stageUpdate = /^\/workflow-stages\/([^/]+)$/.exec(path);
+  if (method === 'PATCH' && stageUpdate) {
+    const current = await db.workflowStages.get(stageUpdate[1]!);
+    if (!current || current.deletedAt) throw new Error('本地阶段不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const next: LocalWorkflowStage = {
+      ...current,
+      name: boundedTrimmedString(body['name'], 200, '阶段名称无效'),
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'workflowStage.update',
+      current.id,
+      current.version,
+      { name: next.name },
+      async () => {
+        await db.workflowStages.put(next);
+        return next;
+      },
+    );
+  }
+  const stageMove = /^\/workflow-stages\/([^/]+)\/move$/.exec(path);
+  if (method === 'POST' && stageMove) {
+    const current = await db.workflowStages.get(stageMove[1]!);
+    const beforeId =
+      body['beforeId'] === null
+        ? null
+        : typeof body['beforeId'] === 'string'
+          ? body['beforeId']
+          : undefined;
+    const afterId =
+      body['afterId'] === null
+        ? null
+        : typeof body['afterId'] === 'string'
+          ? body['afterId']
+          : undefined;
+    if (!current || current.deletedAt) throw new Error('本地阶段不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const siblings = (
+      await db.workflowStages.where('workflowId').equals(current.workflowId).toArray()
+    ).filter((stage) => stage.id !== current.id && !stage.deletedAt);
+    const next: LocalWorkflowStage = {
+      ...current,
+      rank: rankForMove(siblings, beforeId, afterId),
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'workflowStage.move',
+      current.id,
+      current.version,
+      { beforeId, afterId },
+      async () => {
+        await db.workflowStages.put(next);
+        return next;
+      },
+    );
+  }
+  const stageDelete = /^\/workflow-stages\/([^/]+)$/.exec(path);
+  if (method === 'DELETE' && stageDelete) {
+    const current = await db.workflowStages.get(stageDelete[1]!);
+    if (!current || current.deletedAt) throw new Error('本地阶段不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const at = timestamp();
+    const next: LocalWorkflowStage = {
+      ...current,
+      deletedAt: at,
+      version: current.version + 1,
+      updatedAt: at,
+      pendingSync: true,
+    };
+    return enqueueV2('workflowStage.delete', current.id, current.version, {}, async () => {
+      await db.workflowStages.put(next);
+      const memberships = await db.workflowTaskMemberships
+        .where('stageId')
+        .equals(current.id)
+        .toArray();
+      await db.workflowTaskMemberships.bulkPut(
+        memberships.map((membership) => ({
+          ...membership,
+          deletedAt: at,
+          version: membership.version + 1,
+          updatedAt: at,
+          pendingSync: true,
+        })),
+      );
+      return next;
+    });
+  }
+  const addWorkflowTask = /^\/workflow-stages\/([^/]+)\/tasks$/.exec(path);
+  if (method === 'POST' && addWorkflowTask) {
+    const stage = await db.workflowStages.get(addWorkflowTask[1]!);
+    const taskRow = typeof body['taskId'] === 'string' ? await task(body['taskId']) : null;
+    if (!stage || stage.deletedAt || !taskRow || taskRow.archivedAt)
+      throw new Error('流程阶段或任务不可用');
+    const workflow = await db.workflows.get(stage.workflowId);
+    if (!workflow || workflow.archivedAt || workflow.deletedAt) throw new Error('本地流程不可用');
+    const duplicate = (
+      await db.workflowTaskMemberships.where('workflowId').equals(workflow.id).toArray()
+    ).find((membership) => membership.taskId === taskRow.id && !membership.deletedAt);
+    if (duplicate) return { value: duplicate };
+    const id = typeof body['id'] === 'string' ? body['id'] : uuidv7();
+    const membership: LocalWorkflowTaskMembership = {
+      id,
+      workflowId: workflow.id,
+      stageId: stage.id,
+      taskId: taskRow.id,
+      rank: nextRank(await db.workflowTaskMemberships.where('stageId').equals(stage.id).toArray()),
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'workflowTask.add',
+      id,
+      null,
+      { workflowId: workflow.id, stageId: stage.id, taskId: taskRow.id },
+      async () => {
+        await db.workflowTaskMemberships.put(membership);
+        return membership;
+      },
+    );
+  }
+  const membershipMove = /^\/workflow-memberships\/([^/]+)\/move$/.exec(path);
+  if (method === 'POST' && membershipMove) {
+    const current = await db.workflowTaskMemberships.get(membershipMove[1]!);
+    const stageId = requiredString(body['stageId']);
+    const stage = await db.workflowStages.get(stageId);
+    if (
+      !current ||
+      current.deletedAt ||
+      !stage ||
+      stage.deletedAt ||
+      stage.workflowId !== current.workflowId
+    )
+      throw new Error('目标流程阶段无效');
+    assertBaseVersion(current.version, baseVersion);
+    const beforeId =
+      body['beforeId'] === null
+        ? null
+        : typeof body['beforeId'] === 'string'
+          ? body['beforeId']
+          : undefined;
+    const afterId =
+      body['afterId'] === null
+        ? null
+        : typeof body['afterId'] === 'string'
+          ? body['afterId']
+          : undefined;
+    const siblings = await db.workflowTaskMemberships.where('stageId').equals(stageId).toArray();
+    const next: LocalWorkflowTaskMembership = {
+      ...current,
+      stageId,
+      rank: rankForMove(siblings, beforeId, afterId),
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'workflowTask.move',
+      current.id,
+      current.version,
+      { stageId, beforeId, afterId },
+      async () => {
+        await db.workflowTaskMemberships.put(next);
+        return next;
+      },
+    );
+  }
+  const membershipDelete = /^\/workflow-memberships\/([^/]+)$/.exec(path);
+  if (method === 'DELETE' && membershipDelete) {
+    const current = await db.workflowTaskMemberships.get(membershipDelete[1]!);
+    if (!current || current.deletedAt) throw new Error('本地流程任务不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const next: LocalWorkflowTaskMembership = {
+      ...current,
+      deletedAt: timestamp(),
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2('workflowTask.remove', current.id, current.version, {}, async () => {
+      await db.workflowTaskMemberships.put(next);
+      return next;
+    });
+  }
+
+  if (method === 'POST' && path === '/time-points/date') {
+    const localDate = requiredString(body['localDate']);
+    validateLocalDate(localDate);
+    const existing = (await db.timePoints.toArray()).find(
+      (point) => point.type === 'DATE' && point.localDate === localDate && !point.archivedAt,
+    );
+    if (existing) return { value: existing };
+    const point = createLocalTimePoint(uuidv7(), 'DATE', localDate, undefined, now);
+    return enqueueV2('timePoint.date.create', point.id, null, { localDate }, async () => {
+      await db.timePoints.put({ ...point, pendingSync: true });
+      return point;
+    });
+  }
+  if (method === 'POST' && path === '/time-points/events') {
+    const point = createLocalTimePoint(
+      uuidv7(),
+      'EVENT',
+      undefined,
+      boundedTrimmedString(body['title'], 200, '时间点名称无效'),
+      now,
+    );
+    return enqueueV2('timePoint.event.create', point.id, null, { title: point.title }, async () => {
+      await db.timePoints.put({ ...point, pendingSync: true });
+      return point;
+    });
+  }
+  const pointUpdate = /^\/time-points\/([^/]+)$/.exec(path);
+  if (method === 'PATCH' && pointUpdate) {
+    const current = await db.timePoints.get(pointUpdate[1]!);
+    if (!current || current.type !== 'EVENT') throw new Error('本地事件不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const next: LocalTimePoint = {
+      ...current,
+      title: boundedTrimmedString(body['title'], 200, '时间点名称无效'),
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(
+      'timePoint.update',
+      current.id,
+      current.version,
+      { title: next.title },
+      async () => {
+        await db.timePoints.put(next);
+        return next;
+      },
+    );
+  }
+  const pointAction = /^\/time-points\/([^/]+)\/(reach|archive|restore)$/.exec(path);
+  if (method === 'POST' && pointAction) {
+    const current = await db.timePoints.get(pointAction[1]!);
+    if (!current || current.type !== 'EVENT') throw new Error('本地事件不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const action = pointAction[2]!;
+    const next: LocalTimePoint = {
+      ...current,
+      reachedAt: action === 'reach' ? (current.reachedAt ?? timestamp()) : current.reachedAt,
+      archivedAt:
+        action === 'archive' ? timestamp() : action === 'restore' ? null : current.archivedAt,
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(`timePoint.${action}`, current.id, current.version, {}, async () => {
+      await db.timePoints.put(next);
+      return next;
+    });
+  }
+  if (method === 'POST' && path === '/time-points/events/reorder') {
+    const ids = requiredStringArray(body['ids']);
+    const points = await db.timePoints.toArray();
+    const selected = ids.map((id) => points.find((point) => point.id === id));
+    if (selected.some((point) => !point || point.type !== 'EVENT'))
+      throw new Error('本地事件不存在');
+    return enqueueV2('timePoint.reorder', clientId, null, { ids }, async () => {
+      const updated = selected.map((point, index) => ({
+        ...point!,
+        rank: String((index + 1) * 1024),
+        version: point!.version + 1,
+        updatedAt: timestamp(),
+        pendingSync: true,
+      }));
+      await db.timePoints.bulkPut(updated);
+      return updated;
+    });
+  }
+
+  if (method === 'POST' && path === '/placements') {
+    const taskId = requiredString(body['taskId']);
+    const timePointId = requiredString(body['timePointId']);
+    const taskRow = await task(taskId);
+    const point = await db.timePoints.get(timePointId);
+    if (taskRow.archivedAt || !point || point.archivedAt) throw new Error('任务或时间点不可安排');
+    const existing = (await db.placements.toArray()).find(
+      (candidate) => candidate.taskId === taskId && candidate.timePointId === timePointId,
+    );
+    if (existing) return { value: existing };
+    const placement: LocalPlacement = {
+      id: uuidv7(),
+      taskId,
+      timePointId,
+      rank: nextRank(
+        (await db.placements.toArray()).filter(
+          (candidate) => candidate.timePointId === timePointId,
+        ),
+      ),
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      pendingSync: true,
+    };
+    return enqueueV2('placement.create', placement.id, null, { taskId, timePointId }, async () => {
+      await db.placements.put(placement);
+      return { placement, existed: false };
+    });
+  }
+  const placementDelete = /^\/placements\/([^/]+)$/.exec(path);
+  if (method === 'DELETE' && placementDelete) {
+    const current = await db.placements.get(placementDelete[1]!);
+    if (!current) throw new Error('本地安排不存在');
+    assertBaseVersion(current.version, baseVersion);
+    return enqueueV2('placement.remove', current.id, current.version, {}, async () => {
+      await db.placements.delete(current.id);
+      return current;
+    });
+  }
+  const placementAction = /^\/placements\/([^/]+)\/(move|copy)$/.exec(path);
+  if (method === 'POST' && placementAction) {
+    const current = await db.placements.get(placementAction[1]!);
+    const targetTimePointId = requiredString(body['timePointId']);
+    if (!current) throw new Error('本地安排不存在');
+    const target = await db.timePoints.get(targetTimePointId);
+    if (!target || target.archivedAt) throw new Error('目标时间点不可用');
+    if (placementAction[2] === 'move') assertBaseVersion(current.version, baseVersion);
+    const duplicate = (await db.placements.toArray()).find(
+      (candidate) =>
+        candidate.taskId === current.taskId && candidate.timePointId === targetTimePointId,
+    );
+    if (duplicate && placementAction[2] === 'copy') return { value: duplicate };
+    const next: LocalPlacement = duplicate ?? {
+      id: uuidv7(),
+      taskId: current.taskId,
+      timePointId: targetTimePointId,
+      rank: nextRank(
+        (await db.placements.toArray()).filter(
+          (candidate) => candidate.timePointId === targetTimePointId,
+        ),
+      ),
+      version: 1,
+      createdAt: timestamp(),
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
+    return enqueueV2(
+      `placement.${placementAction[2]}`,
+      current.id,
+      placementAction[2] === 'move' ? current.version : null,
+      { timePointId: targetTimePointId, __localId: next.id },
+      async () => {
+        if (!duplicate) await db.placements.put(next);
+        if (placementAction[2] === 'move') await db.placements.delete(current.id);
+        return { placement: next, existed: Boolean(duplicate) };
+      },
+    );
+  }
+  const placementReorder = /^\/time-points\/([^/]+)\/placements\/reorder$/.exec(path);
+  if (method === 'POST' && placementReorder) {
+    const ids = requiredStringArray(body['ids']);
+    const placements = await db.placements.toArray();
+    const selected = ids.map((id) => placements.find((placement) => placement.id === id));
+    if (selected.some((placement) => !placement || placement.timePointId !== placementReorder[1]))
+      throw new Error('本地安排不存在');
+    return enqueueV2(
+      'placement.reorder',
+      placementReorder[1]!,
+      null,
+      { timePointId: placementReorder[1], ids },
+      async () => {
+        const updated = selected.map((placement, index) => ({
+          ...placement!,
+          rank: String((index + 1) * 1024),
+          version: placement!.version + 1,
+          updatedAt: timestamp(),
+          pendingSync: true,
+        }));
+        await db.placements.bulkPut(updated);
+        return updated;
+      },
+    );
+  }
+
+  if (method === 'PATCH' && path === '/settings') {
+    const current = await db.settings.toCollection().first();
+    if (!current) throw new Error('本地设置不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const target = body['defaultCaptureTarget'];
+    if (target !== undefined && target !== 'ROOT' && target !== 'RECENT_FOLDER')
+      throw new Error('默认捕获位置无效');
+    const next: V2SettingsDto = {
+      ...current,
+      timezone: typeof body['timezone'] === 'string' ? body['timezone'] : current.timezone,
+      weekStartsOn:
+        body['weekStartsOn'] === 0 || body['weekStartsOn'] === 1
+          ? body['weekStartsOn']
+          : current.weekStartsOn,
+      defaultCaptureTarget:
+        target === 'ROOT' || target === 'RECENT_FOLDER'
+          ? target
+          : (current.defaultCaptureTarget as V2SettingsDto['defaultCaptureTarget']),
+      version: current.version + 1,
+      updatedAt: timestamp(),
+    };
+    return enqueueV2(
+      'settings.update',
+      current.ownerId,
+      current.version,
+      {
+        timezone: next.timezone,
+        weekStartsOn: next.weekStartsOn,
+        defaultCaptureTarget: next.defaultCaptureTarget,
+      },
+      async () => {
+        await db.settings.put(next);
+        return next;
+      },
+    );
+  }
+  return undefined;
+}
+
 async function enqueue(
   context: LocalContext,
   mutationId: string,
@@ -797,7 +2048,11 @@ async function cacheResponseInTransaction(
   path: string,
   value: unknown,
 ): Promise<void> {
-  const [pathname] = path.split('?');
+  const [pathname = ''] = path.split('?');
+  if (pathname.startsWith('/v2/')) {
+    await cacheV2ResponseInTransaction(db, pathname, value);
+    return;
+  }
   if (pathname === '/me' && isRecord(value)) {
     const settings = value['settings'];
     const user = value['user'];
@@ -869,6 +2124,10 @@ async function cacheResponseInTransaction(
     await db.tasks.put(value as TaskDto);
     return;
   }
+  if (/^\/tasks\/[^/]+$/.test(pathname ?? '') && isRecord(value) && isTaskDto(value)) {
+    await db.tasks.put(value as TaskDto);
+    return;
+  }
   const taskDuplicate = /^\/tasks\/([^/]+)\/duplicate$/.exec(pathname ?? '');
   if (taskDuplicate && isRecord(value)) {
     if (isRecord(value['task'])) await db.tasks.put(value['task'] as unknown as TaskDto);
@@ -912,9 +2171,134 @@ async function cacheResponseInTransaction(
   }
 }
 
+async function cacheV2ResponseInTransaction(
+  db: DevTodoDatabase,
+  pathname: string,
+  value: unknown,
+): Promise<void> {
+  if (!isRecord(value)) return;
+  if (pathname === '/v2/settings') {
+    await db.settings.put(value as unknown as SettingsDto);
+    return;
+  }
+  if (pathname === '/v2/sync/snapshot') {
+    await putV2Snapshot(db, value);
+    return;
+  }
+  const items = value['items'];
+  if (Array.isArray(items)) {
+    for (const item of items) {
+      if (!isRecord(item)) continue;
+      // Archive operations are cached so the archive centre can still render
+      // its operation groups while offline.
+      if (
+        typeof item['id'] === 'string' &&
+        typeof item['rootFolderId'] === 'string' &&
+        typeof item['folderCount'] === 'number'
+      )
+        await db.archiveOperations.put(item as unknown as LocalArchiveOperation);
+      else if (item['kind'] === 'FOLDER' && isRecord(item['folder']))
+        await db.folders.put(item['folder'] as unknown as LocalFolder);
+      else if (item['kind'] === 'TASK' && isRecord(item['task']))
+        await db.tasks.put(item['task'] as unknown as LocalTreeTask);
+      else if (typeof item['taskId'] === 'string' && typeof item['timePointId'] === 'string')
+        await db.placements.put(item as unknown as LocalPlacement);
+      else if (typeof item['id'] === 'string' && typeof item['type'] === 'string')
+        await db.timePoints.put(item as unknown as LocalTimePoint);
+      else if (
+        typeof item['parentFolderId'] !== 'undefined' &&
+        typeof item['status'] === 'string' &&
+        typeof item['title'] === 'string'
+      )
+        await db.tasks.put(item as unknown as LocalTreeTask);
+      else if (
+        typeof item['parentFolderId'] !== 'undefined' &&
+        typeof item['title'] === 'string' &&
+        typeof item['rank'] === 'string'
+      )
+        await db.folders.put(item as unknown as LocalFolder);
+      else if (typeof item['workflowId'] === 'string' && typeof item['taskId'] === 'string')
+        await db.workflowTaskMemberships.put(item as unknown as LocalWorkflowTaskMembership);
+      else if (typeof item['workflowId'] === 'string' && typeof item['name'] === 'string')
+        await db.workflowStages.put(item as unknown as LocalWorkflowStage);
+      else if (typeof item['name'] === 'string' && typeof item['rank'] === 'string')
+        await db.workflows.put(item as unknown as LocalWorkflow);
+    }
+  }
+  if (isRecord(value['task'])) await db.tasks.put(value['task'] as unknown as LocalTreeTask);
+  if (isRecord(value['note'])) await db.notes.put(value['note'] as unknown as LocalNote);
+  if (Array.isArray(value['steps'])) await db.taskSteps.bulkPut(value['steps'] as LocalTaskStep[]);
+  if (Array.isArray(value['placements']))
+    await db.placements.bulkPut(value['placements'] as LocalPlacement[]);
+  if (isRecord(value['folder'])) await db.folders.put(value['folder'] as unknown as LocalFolder);
+  if (isRecord(value['placement']))
+    await db.placements.put(value['placement'] as unknown as LocalPlacement);
+  if (isRecord(value['workflow']))
+    await db.workflows.put(value['workflow'] as unknown as LocalWorkflow);
+  if (isRecord(value['stage']))
+    await db.workflowStages.put(value['stage'] as unknown as LocalWorkflowStage);
+  if (isRecord(value['membership']))
+    await db.workflowTaskMemberships.put(
+      value['membership'] as unknown as LocalWorkflowTaskMembership,
+    );
+  if (typeof value['id'] === 'string' && typeof value['rootFolderId'] === 'string')
+    await db.archiveOperations.put(value as unknown as LocalArchiveOperation);
+  if (typeof value['id'] === 'string' && typeof value['type'] === 'string' && 'localDate' in value)
+    await db.timePoints.put(value as unknown as LocalTimePoint);
+  if (
+    typeof value['id'] === 'string' &&
+    typeof value['parentFolderId'] !== 'undefined' &&
+    typeof value['title'] === 'string' &&
+    typeof value['status'] === 'string'
+  )
+    await db.tasks.put(value as unknown as LocalTreeTask);
+}
+
+async function putV2Snapshot(db: DevTodoDatabase, value: Record<string, unknown>): Promise<void> {
+  const folders = Array.isArray(value['folders']) ? (value['folders'] as LocalFolder[]) : [];
+  const tasks = Array.isArray(value['tasks']) ? (value['tasks'] as LocalTreeTask[]) : [];
+  const notes = Array.isArray(value['notes']) ? (value['notes'] as LocalNote[]) : [];
+  const taskSteps = Array.isArray(value['taskSteps'])
+    ? (value['taskSteps'] as LocalTaskStep[])
+    : [];
+  const timePoints = Array.isArray(value['timePoints'])
+    ? (value['timePoints'] as LocalTimePoint[])
+    : [];
+  const placements = Array.isArray(value['placements'])
+    ? (value['placements'] as LocalPlacement[])
+    : [];
+  const workflows = Array.isArray(value['workflows'])
+    ? (value['workflows'] as LocalWorkflow[])
+    : [];
+  const workflowStages = Array.isArray(value['workflowStages'])
+    ? (value['workflowStages'] as LocalWorkflowStage[])
+    : [];
+  const workflowTaskMemberships = Array.isArray(value['workflowTaskMemberships'])
+    ? (value['workflowTaskMemberships'] as LocalWorkflowTaskMembership[])
+    : [];
+  const archiveOperations = Array.isArray(value['archiveOperations'])
+    ? (value['archiveOperations'] as LocalArchiveOperation[])
+    : [];
+  await db.folders.bulkPut(folders);
+  await db.tasks.bulkPut(tasks);
+  await db.notes.bulkPut(notes);
+  await db.taskSteps.bulkPut(taskSteps);
+  await db.timePoints.bulkPut(timePoints);
+  await db.placements.bulkPut(placements);
+  await db.workflows.bulkPut(workflows);
+  await db.workflowStages.bulkPut(workflowStages);
+  await db.workflowTaskMemberships.bulkPut(workflowTaskMemberships);
+  await db.archiveOperations.bulkPut(archiveOperations);
+  if (isRecord(value['settings']))
+    await db.settings.put(value['settings'] as unknown as SettingsDto);
+  if (typeof value['cursor'] === 'string')
+    await db.syncMeta.put({ key: 'v2:cursor', value: value['cursor'] });
+}
+
 async function readLocalInTransaction(db: DevTodoDatabase, path: string): Promise<unknown> {
-  const [pathname, query = ''] = path.split('?');
+  const [pathname = '', query = ''] = path.split('?');
   const params = new URLSearchParams(query);
+  if (pathname.startsWith('/v2/')) return readV2LocalInTransaction(db, pathname.slice(3), params);
   if (pathname === '/me') {
     const userMeta = await db.syncMeta.get('user');
     const settings = await db.settings.toCollection().first();
@@ -1114,6 +2498,295 @@ async function readLocalInTransaction(db: DevTodoDatabase, path: string): Promis
   return undefined;
 }
 
+async function readV2LocalInTransaction(
+  db: DevTodoDatabase,
+  pathname: string,
+  params: URLSearchParams,
+): Promise<unknown> {
+  const folders = (await db.folders.toArray()) as LocalFolder[];
+  const tasks = (await db.tasks.toArray())
+    .map((row) => row as LocalTreeTask)
+    .filter((row) => row.parentFolderId !== undefined);
+  const active = params.get('archived') !== 'true';
+  const visibleFolder = (folder: LocalFolder) =>
+    !folder.deletedAt && (active ? !folder.archivedAt : Boolean(folder.archivedAt));
+  const visibleTask = (task: LocalTreeTask) =>
+    !task.deletedAt && (active ? !task.archivedAt : Boolean(task.archivedAt));
+  const descendantFolders = (rootId: string): Set<string> => {
+    const ids = new Set<string>();
+    const stack = [rootId];
+    while (stack.length) {
+      const current = stack.pop()!;
+      if (ids.has(current)) continue;
+      ids.add(current);
+      folders
+        .filter((folder) => folder.parentFolderId === current)
+        .forEach((folder) => stack.push(folder.id));
+    }
+    return ids;
+  };
+  const aggregate = (folderId: string) => {
+    const ids = descendantFolders(folderId);
+    const counts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
+    for (const task of tasks)
+      if (
+        task.parentFolderId &&
+        ids.has(task.parentFolderId) &&
+        !task.deletedAt &&
+        !task.archivedAt
+      ) {
+        let parent: string | null = task.parentFolderId;
+        let valid = true;
+        const seen = new Set<string>();
+        while (parent) {
+          if (seen.has(parent)) {
+            valid = false;
+            break;
+          }
+          seen.add(parent);
+          const ancestor = folders.find((candidate) => candidate.id === parent);
+          if (!ancestor || ancestor.archivedAt) {
+            valid = false;
+            break;
+          }
+          parent = ancestor.parentFolderId;
+        }
+        if (valid) counts[task.status] += 1;
+      }
+    const totalCount = counts.TODO + counts.IN_PROGRESS + counts.DONE;
+    return {
+      status:
+        totalCount === 0 || counts.TODO === totalCount
+          ? 'TODO'
+          : counts.DONE === totalCount
+            ? 'DONE'
+            : 'IN_PROGRESS',
+      todoCount: counts.TODO,
+      inProgressCount: counts.IN_PROGRESS,
+      doneCount: counts.DONE,
+      totalCount,
+    };
+  };
+  if (pathname === '/settings') return db.settings.toCollection().first();
+  if (pathname === '/folders')
+    return { items: sortByRank(folders.filter(visibleFolder)), nextCursor: null };
+  const folderPath = /^\/folders\/([^/]+)\/path$/.exec(pathname);
+  if (folderPath) {
+    const pathItems: Array<{ id: string; title: string }> = [];
+    let current = folders.find((folder) => folder.id === folderPath[1]);
+    const seen = new Set<string>();
+    while (current && !seen.has(current.id)) {
+      seen.add(current.id);
+      pathItems.unshift({ id: current.id, title: current.title });
+      current = current.parentFolderId
+        ? folders.find((folder) => folder.id === current!.parentFolderId)
+        : undefined;
+    }
+    return { items: pathItems };
+  }
+  if (pathname === '/tree/children') {
+    const parentFolderId =
+      params.get('parentFolderId') === 'root' ? null : params.get('parentFolderId');
+    const items = [
+      ...folders
+        .filter((folder) => visibleFolder(folder) && folder.parentFolderId === parentFolderId)
+        .map((folder) => ({ kind: 'FOLDER' as const, folder, aggregate: aggregate(folder.id) })),
+      ...tasks
+        .filter((task) => visibleTask(task) && task.parentFolderId === parentFolderId)
+        .map((task) => ({ kind: 'TASK' as const, task })),
+    ];
+    return {
+      items: items.sort((left, right) =>
+        BigInt(left.kind === 'FOLDER' ? left.folder.rank : left.task.rank) <
+        BigInt(right.kind === 'FOLDER' ? right.folder.rank : right.task.rank)
+          ? -1
+          : 1,
+      ),
+      parentFolderId,
+    };
+  }
+  if (pathname === '/tasks')
+    return { items: sortByRank(tasks.filter(visibleTask)), nextCursor: null };
+  const taskDetail = /^\/tasks\/([^/]+)$/.exec(pathname);
+  if (taskDetail) {
+    const task = tasks.find((candidate) => candidate.id === taskDetail[1]);
+    if (!task) return undefined;
+    const note = await db.notes.where('taskId').equals(task.id).first();
+    const placements = (await db.placements.toArray()).filter(
+      (placement) => placement.taskId === task.id,
+    );
+    const steps = sortByRank(
+      (await db.taskSteps.toArray()).filter((step) => step.taskId === task.id && !step.deletedAt),
+    );
+    const folderItems: Array<{ id: string; title: string }> = [];
+    let current = task.parentFolderId
+      ? folders.find((folder) => folder.id === task.parentFolderId)
+      : undefined;
+    while (current) {
+      folderItems.unshift({ id: current.id, title: current.title });
+      current = current.parentFolderId
+        ? folders.find((folder) => folder.id === current!.parentFolderId)
+        : undefined;
+    }
+    const workflowRows = await db.workflows.toArray();
+    const stageRows = await db.workflowStages.toArray();
+    const workflowMemberships = (await db.workflowTaskMemberships.toArray())
+      .filter((membership) => membership.taskId === task.id && !membership.deletedAt)
+      .flatMap((membership) => {
+        const workflow = workflowRows.find((candidate) => candidate.id === membership.workflowId);
+        const stage = stageRows.find((candidate) => candidate.id === membership.stageId);
+        return workflow && stage
+          ? [
+              {
+                ...membership,
+                workflow: { id: workflow.id, name: workflow.name },
+                stage: { id: stage.id, name: stage.name },
+              },
+            ]
+          : [];
+      });
+    return {
+      task,
+      note: note ?? {
+        id: `local-note-${task.id}`,
+        taskId: task.id,
+        contentMarkdown: '',
+        version: 0,
+        updatedAt: task.updatedAt,
+      },
+      steps,
+      placements,
+      workflowMemberships,
+      folderPath: folderItems,
+    };
+  }
+  if (pathname === '/time-points')
+    return {
+      items: (await db.timePoints.toArray())
+        .filter((point) => params.get('type') === null || point.type === params.get('type'))
+        .filter((point) =>
+          params.get('archived') === null
+            ? !point.archivedAt
+            : Boolean(point.archivedAt) === (params.get('archived') === 'true'),
+        )
+        .sort(timePointSort),
+    };
+  if (pathname === '/time-points/placement-counts') {
+    const points = (await db.timePoints.toArray()).filter(
+      (point) =>
+        (params.get('type') === null || point.type === params.get('type')) &&
+        (params.get('archived') === null ||
+          Boolean(point.archivedAt) === (params.get('archived') === 'true')) &&
+        (!params.get('from') || (point.localDate ?? '') >= params.get('from')!) &&
+        (!params.get('to') || (point.localDate ?? '') <= params.get('to')!),
+    );
+    const taskMap = new Map(tasks.map((task) => [task.id, task]));
+    const allPlacements = await db.placements.toArray();
+    return {
+      items: points.map((point) => {
+        const pointPlacements = allPlacements.filter(
+          (placement) => placement.timePointId === point.id,
+        );
+        const doneCount = pointPlacements.filter(
+          (placement) => taskMap.get(placement.taskId)?.status === 'DONE',
+        ).length;
+        return {
+          timePointId: point.id,
+          localDate: point.localDate,
+          totalCount: pointPlacements.length,
+          openCount: pointPlacements.length - doneCount,
+          doneCount,
+        };
+      }),
+    };
+  }
+  const pointPlacements = /^\/time-points\/([^/]+)\/placements$/.exec(pathname);
+  if (pointPlacements) {
+    const taskMap = new Map(tasks.map((task) => [task.id, task]));
+    const items = (await db.placements.where('timePointId').equals(pointPlacements[1]!).toArray())
+      .map((placement) => ({ ...placement, task: taskMap.get(placement.taskId) }))
+      .filter((item): item is PlacementDto & { task: TreeTaskDto } => Boolean(item.task));
+    return { items };
+  }
+  const pointDetail = /^\/time-points\/([^/]+)$/.exec(pathname);
+  if (pointDetail) return db.timePoints.get(pointDetail[1]!);
+  if (pathname === '/workflows') {
+    const workflows = (await db.workflows.toArray()).filter(
+      (workflow) => !workflow.deletedAt && !workflow.archivedAt,
+    );
+    const stages = (await db.workflowStages.toArray()).filter((stage) => !stage.deletedAt);
+    const memberships = (await db.workflowTaskMemberships.toArray()).filter(
+      (membership) => !membership.deletedAt,
+    );
+    return {
+      items: sortByRank(workflows).map((workflow) => ({
+        ...workflow,
+        stages: sortByRank(stages.filter((stage) => stage.workflowId === workflow.id)).map(
+          (stage) => ({
+            ...stage,
+            memberships: memberships.filter((membership) => membership.stageId === stage.id),
+            tasks: sortByRank(
+              memberships
+                .filter((membership) => membership.stageId === stage.id)
+                .flatMap((membership) => {
+                  const task = tasks.find((candidate) => candidate.id === membership.taskId);
+                  return task ? [task] : [];
+                }),
+            ),
+          }),
+        ),
+      })),
+    };
+  }
+  if (pathname === '/sync/status')
+    return {
+      cursor: (await db.syncMeta.get('v2:cursor'))?.value ?? '0',
+      oldestCursor: '0',
+      protocolVersion: 2,
+    };
+  if (pathname === '/sync/snapshot') {
+    const [
+      notes,
+      taskSteps,
+      timePoints,
+      placements,
+      workflows,
+      workflowStages,
+      workflowTaskMemberships,
+      archiveOperations,
+      settings,
+      cursor,
+    ] = await Promise.all([
+      db.notes.toArray(),
+      db.taskSteps.toArray(),
+      db.timePoints.toArray(),
+      db.placements.toArray(),
+      db.workflows.toArray(),
+      db.workflowStages.toArray(),
+      db.workflowTaskMemberships.toArray(),
+      db.archiveOperations.toArray(),
+      db.settings.toCollection().first(),
+      db.syncMeta.get('v2:cursor'),
+    ]);
+    if (!settings) return undefined;
+    return {
+      folders,
+      tasks,
+      notes,
+      taskSteps,
+      timePoints,
+      placements,
+      workflows,
+      workflowStages,
+      workflowTaskMemberships,
+      archiveOperations,
+      settings: settings as V2SettingsDto,
+      cursor: cursor?.value ?? '0',
+    };
+  }
+  return undefined;
+}
+
 async function putSnapshot(db: DevTodoDatabase, value: Record<string, unknown>): Promise<void> {
   const projects = Array.isArray(value['projects']) ? (value['projects'] as ProjectDto[]) : [];
   const tasks = Array.isArray(value['tasks']) ? (value['tasks'] as TaskDto[]) : [];
@@ -1242,7 +2915,7 @@ function updateLocalTask(
 async function getTask(db: DevTodoDatabase, id: string): Promise<LocalTaskDto> {
   const task = await db.tasks.get(id);
   if (!task) throw new Error('本地任务不存在');
-  return task;
+  return task as LocalTaskDto;
 }
 
 async function getNote(db: DevTodoDatabase, taskId: string): Promise<NoteDto> {
@@ -1319,11 +2992,41 @@ function nextRank(rows: Array<{ rank: string }>): string {
 }
 
 function sortByRank<T extends { rank: string }>(rows: T[]): T[] {
-  return rows.sort((left, right) => {
-    const a = BigInt(left.rank);
-    const b = BigInt(right.rank);
-    return a < b ? -1 : a > b ? 1 : 0;
-  });
+  return rows.sort(compareRank);
+}
+
+function compareRank(left: { rank: string }, right: { rank: string }): number {
+  const a = BigInt(left.rank);
+  const b = BigInt(right.rank);
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function rankForMove(
+  siblings: Array<{ rank: string }>,
+  beforeId: string | null | undefined,
+  afterId: string | null | undefined,
+): string {
+  const ordered = [...siblings].sort(compareRank);
+  const before = beforeId
+    ? ordered.find((row) => (row as { id?: string }).id === beforeId)
+    : undefined;
+  const after = afterId
+    ? ordered.find((row) => (row as { id?: string }).id === afterId)
+    : undefined;
+  const anchor = before ?? after;
+  if (anchor) {
+    const index = ordered.indexOf(anchor);
+    const anchorRank = BigInt(anchor.rank);
+    const lower = before
+      ? BigInt(ordered[index - 1]?.rank ?? (anchorRank - 1024n).toString())
+      : anchorRank;
+    const upper = before
+      ? anchorRank
+      : BigInt(ordered[index + 1]?.rank ?? (anchorRank + 1024n).toString());
+    if (upper > lower + 1n) return ((lower + upper) / 2n).toString();
+    return (before ? upper - 1n : upper + 1n).toString();
+  }
+  return nextRank(ordered);
 }
 
 function timePointSort(left: TimePointDto, right: TimePointDto): number {

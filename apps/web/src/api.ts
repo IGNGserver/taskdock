@@ -12,10 +12,10 @@ import type {
   DeviceDto,
 } from '@devtodo/contracts';
 import {
-  SyncEngine,
+  V2SyncEngine,
   createBrowserSyncId,
   type DevTodoDatabase,
-  type SyncTransport,
+  type V2SyncTransport,
 } from '@devtodo/sync-client';
 import {
   activateLocalCache,
@@ -27,7 +27,13 @@ import {
 import { isAuthLocallyLocked } from './auth-lock.js';
 import { normalizeHubOrigin } from './hub-origin.js';
 
-const API_BASE = '/api/v1';
+/**
+ * v2 is the only product protocol. `/api/v1` is retained solely for the auth,
+ * bootstrap, device and legacy rollover compatibility surface that the server
+ * still exposes; every product read/write goes through `/api/v2`.
+ */
+const API_V1_BASE = '/api/v1';
+const API_V2_BASE = '/api/v2';
 let accessToken: string | null = null;
 let refreshPromise: Promise<boolean> | null = null;
 let secureStorageSetup: Promise<void> | null = null;
@@ -249,7 +255,7 @@ export async function testHubConnection(
   const origin = normalizeHubOrigin(value);
   const desktop = desktopBridge();
   if (desktop) return withAbort(desktop.testHubConnection(origin), signal);
-  const response = await fetch(`${origin}${API_BASE}/bootstrap/status`, {
+  const response = await fetch(`${origin}${API_V1_BASE}/bootstrap/status`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     signal,
@@ -262,9 +268,9 @@ export async function testHubConnection(
 
 export async function requestNativeChallenge(): Promise<string> {
   if (!isNativeClient()) throw new Error('仅原生客户端支持安全令牌交换');
-  const response = await fetch(`${getHubOrigin()}${API_BASE}/auth/native/challenge`, {
+  const response = await fetch(`${getHubOrigin()}${API_V1_BASE}/auth/native/challenge`, {
     method: 'POST',
-    headers: { Accept: 'application/json' },
+    headers: { Accept: 'application/json', 'X-Client-Id': createBrowserSyncId() },
     credentials: 'include',
   });
   const body = (await response.json().catch(() => ({}))) as {
@@ -284,7 +290,7 @@ export async function requestNativeChallenge(): Promise<string> {
   return body.challenge;
 }
 
-export async function request<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+export async function requestV1<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase();
   if (canReadFromLocalFirst(path, method)) {
     const localValue = await readLocal(path).catch(() => undefined);
@@ -339,6 +345,7 @@ async function requestNetwork<T>(
   retry: boolean,
   previousHeaders?: Headers,
   allowLocalFallback = true,
+  apiBase = API_V1_BASE,
 ): Promise<T> {
   const headers = new Headers(init.headers);
   if (previousHeaders) {
@@ -349,6 +356,7 @@ async function requestNetwork<T>(
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   else headers.delete('Authorization');
   const method = (init.method ?? 'GET').toUpperCase();
+  const cachePath = apiBase === API_V2_BASE ? `/v2${path}` : path;
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     headers.set('Idempotency-Key', headers.get('Idempotency-Key') ?? uuidv7());
     headers.set('X-Client-Id', headers.get('X-Client-Id') ?? createBrowserSyncId());
@@ -358,7 +366,7 @@ async function requestNetwork<T>(
     const desktop = desktopBridge();
     if (desktop) {
       const result = await desktop.request({
-        url: `${getHubOrigin()}${API_BASE}${path}`,
+        url: `${getHubOrigin()}${apiBase}${path}`,
         method,
         headers: Object.fromEntries(headers.entries()),
         body: typeof init.body === 'string' ? init.body : null,
@@ -368,7 +376,7 @@ async function requestNetwork<T>(
         headers: result.headers,
       });
     } else {
-      response = await fetch(`${getHubOrigin()}${API_BASE}${path}`, {
+      response = await fetch(`${getHubOrigin()}${apiBase}${path}`, {
         ...init,
         headers,
         credentials: 'include',
@@ -382,10 +390,10 @@ async function requestNetwork<T>(
         ['GET', 'HEAD', 'OPTIONS'].includes(method) &&
         !pathname.startsWith('/sync/')
       ) {
-        const localValue = await readLocal(path);
+        const localValue = await readLocal(cachePath);
         if (localValue !== undefined) return localValue as T;
       } else if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-        const localResult = await applyOfflineWrite(path, method, init, headers);
+        const localResult = await applyOfflineWrite(cachePath, method, init, headers);
         if (localResult) return localResult.value as T;
       }
     }
@@ -393,7 +401,8 @@ async function requestNetwork<T>(
   }
   if (response.status === 401 && retry && !path.startsWith('/auth/')) {
     const refreshed = await refreshAccessToken();
-    if (refreshed) return requestNetwork<T>(path, init, false, headers, allowLocalFallback);
+    if (refreshed)
+      return requestNetwork<T>(path, init, false, headers, allowLocalFallback, apiBase);
   }
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as {
@@ -409,11 +418,11 @@ async function requestNetwork<T>(
     );
   }
   if (response.status === 204) {
-    await cacheMutationSideEffects(path, method);
+    await cacheMutationSideEffects(cachePath, method);
     return undefined as T;
   }
   const value = (await response.json()) as T;
-  await cacheResponse(path, value);
+  await cacheResponse(cachePath, value);
   return value;
 }
 
@@ -453,7 +462,7 @@ export async function refreshAccessToken(): Promise<boolean> {
       }
       const nativeRefreshToken = await readNativeRefreshToken();
       const nativeChallenge = isNativeClient() ? await requestNativeChallenge() : undefined;
-      const result = await request<{ accessToken: string; refreshToken?: string }>(
+      const result = await requestV1<{ accessToken: string; refreshToken?: string }>(
         '/auth/refresh',
         {
           method: 'POST',
@@ -524,36 +533,29 @@ export async function cacheSnapshot(
   );
 }
 
-export function createSyncEngine(db: DevTodoDatabase): SyncEngine {
+export function createSyncEngine(db: DevTodoDatabase): V2SyncEngine {
   const clientId = createBrowserSyncId();
   activateLocalCache(db, clientId);
-  const transport: SyncTransport = {
+  const transport: V2SyncTransport = {
     push: (body) =>
-      request<Awaited<ReturnType<SyncTransport['push']>>>('/sync/push', {
+      requestV2<Awaited<ReturnType<V2SyncTransport['push']>>>('/sync/push', {
         method: 'POST',
         body: JSON.stringify(body),
       }),
     pull: (cursor, limit) =>
-      request<Awaited<ReturnType<SyncTransport['pull']>>>(
+      requestV2<Awaited<ReturnType<V2SyncTransport['pull']>>>(
         `/sync/pull?cursor=${encodeURIComponent(cursor)}&limit=${limit}`,
       ),
     snapshot: async () => {
-      const snapshot = await request<{
-        projects: ProjectDto[];
-        tasks: TaskDto[];
-        notes: NoteDto[];
-        timePoints: TimePointDto[];
-        placements: PlacementDto[];
-        settings: SettingsDto;
-        cursor: string;
-      }>('/sync/snapshot');
+      const snapshot =
+        await requestV2<Awaited<ReturnType<V2SyncTransport['snapshot']>>>('/sync/snapshot');
       return snapshot;
     },
   };
-  return new SyncEngine(db, clientId, transport);
+  return new V2SyncEngine(db, clientId, transport);
 }
 
-export async function hydrateAndSync(db: DevTodoDatabase, engine: SyncEngine): Promise<void> {
+export async function hydrateAndSync(db: DevTodoDatabase, engine: V2SyncEngine): Promise<void> {
   try {
     await engine.sync();
   } catch {
@@ -567,25 +569,28 @@ export async function createTask(input: {
   title: string;
   priority?: string;
 }): Promise<TaskDto> {
-  return request('/tasks', {
+  return requestV1('/tasks', {
     method: 'POST',
     body: JSON.stringify({ ...input, priority: input.priority ?? 'NONE' }),
   });
 }
 
 export async function createDate(localDate: string): Promise<TimePointDto> {
-  return request('/time-points/date', { method: 'POST', body: JSON.stringify({ localDate }) });
+  return requestV1('/time-points/date', { method: 'POST', body: JSON.stringify({ localDate }) });
 }
 export async function createEvent(title: string): Promise<TimePointDto> {
-  return request('/time-points/events', { method: 'POST', body: JSON.stringify({ title }) });
+  return requestV1('/time-points/events', { method: 'POST', body: JSON.stringify({ title }) });
 }
 export async function addPlacement(taskId: string, timePointId: string): Promise<PlacementDto> {
-  return request('/placements', { method: 'POST', body: JSON.stringify({ taskId, timePointId }) });
+  return requestV1('/placements', {
+    method: 'POST',
+    body: JSON.stringify({ taskId, timePointId }),
+  });
 }
 
 export function websocketUrl(): string {
   const parsed = new URL(getHubOrigin());
-  const base = `${parsed.protocol === 'https:' ? 'wss:' : 'ws:'}//${parsed.host}${API_BASE}/ws`;
+  const base = `${parsed.protocol === 'https:' ? 'wss:' : 'ws:'}//${parsed.host}${API_V2_BASE}/ws`;
   return base;
 }
 
@@ -614,15 +619,17 @@ async function ensureNativeStorage(): Promise<void> {
   await secureStorageSetup;
 }
 
-export function mutation<T extends Record<string, unknown>>(
+export function requestV2<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return requestNetwork<T>(path, init, true, undefined, true, API_V2_BASE);
+}
+
+export function mutationV2<T extends Record<string, unknown>>(
   method: string,
   path: string,
   body: T,
 ): Promise<unknown> {
-  return request(path, { method, body: JSON.stringify(body) });
+  return requestV2(path, { method, body: JSON.stringify(body) });
 }
-
-export { API_BASE };
 
 export { isHttpOrigin, normalizeHubOrigin } from './hub-origin.js';
 

@@ -1,16 +1,54 @@
 import type {
+  ArchiveOperationDto,
+  FolderDto,
   LocalTaskDto,
   Mutation,
   NoteDto,
   PlacementDto,
   ProjectDto,
   SettingsDto,
+  TaskStepDto,
+  TaskCategory,
+  TaskPriority,
   TimePointDto,
+  TreeTaskDto,
+  V2Mutation,
+  V2SettingsDto,
+  WorkflowDto,
+  WorkflowStageDto,
+  WorkflowTaskMembershipDto,
 } from '@devtodo/contracts';
 import { uuidv7 } from '@devtodo/contracts';
 import { Dexie, type Table } from 'dexie';
 
 export interface LocalProject extends ProjectDto {
+  pendingSync?: boolean;
+}
+export interface LocalFolder extends FolderDto {
+  pendingSync?: boolean;
+  deletedAt?: string | null;
+}
+export interface LocalTreeTask extends TreeTaskDto {
+  pendingSync?: boolean;
+  deletedAt?: string | null;
+  /** Kept only while v1 local outbox conversion is in progress. */
+  projectId?: string | null;
+  category?: TaskCategory;
+  priority?: TaskPriority;
+}
+export interface LocalTaskStep extends TaskStepDto {
+  pendingSync?: boolean;
+}
+export interface LocalWorkflow extends WorkflowDto {
+  pendingSync?: boolean;
+}
+export interface LocalWorkflowStage extends WorkflowStageDto {
+  pendingSync?: boolean;
+}
+export interface LocalWorkflowTaskMembership extends WorkflowTaskMembershipDto {
+  pendingSync?: boolean;
+}
+export interface LocalArchiveOperation extends ArchiveOperationDto {
   pendingSync?: boolean;
 }
 export interface LocalNote extends NoteDto {
@@ -39,7 +77,18 @@ export interface OutboxItem {
 }
 
 export type LocalImageTable =
-  'projects' | 'tasks' | 'notes' | 'timePoints' | 'placements' | 'settings';
+  | 'projects'
+  | 'folders'
+  | 'tasks'
+  | 'notes'
+  | 'taskSteps'
+  | 'timePoints'
+  | 'placements'
+  | 'workflows'
+  | 'workflowStages'
+  | 'workflowTaskMemberships'
+  | 'archiveOperations'
+  | 'settings';
 
 export interface LocalImageRow {
   table: LocalImageTable;
@@ -79,10 +128,16 @@ export interface DeferredChange {
 
 export class DevTodoDatabase extends Dexie {
   projects!: Table<LocalProject, string>;
-  tasks!: Table<LocalTaskDto, string>;
+  folders!: Table<LocalFolder, string>;
+  tasks!: Table<LocalTaskDto | LocalTreeTask, string>;
   notes!: Table<LocalNote, string>;
+  taskSteps!: Table<LocalTaskStep, string>;
   timePoints!: Table<LocalTimePoint, string>;
   placements!: Table<LocalPlacement, string>;
+  workflows!: Table<LocalWorkflow, string>;
+  workflowStages!: Table<LocalWorkflowStage, string>;
+  workflowTaskMemberships!: Table<LocalWorkflowTaskMembership, string>;
+  archiveOperations!: Table<LocalArchiveOperation, string>;
   settings!: Table<SettingsDto, string>;
   outbox!: Table<OutboxItem, number>;
   conflicts!: Table<ConflictRecord, number>;
@@ -106,6 +161,49 @@ export class DevTodoDatabase extends Dexie {
     this.version(2).stores({
       deferredChanges: '++id, seq, entityType, entityId',
     });
+    this.version(3)
+      .stores({
+        folders: '&id, [parentFolderId+archivedAt], parentFolderId, rank, archivedAt',
+        tasks:
+          '&id, [parentFolderId+status], parentFolderId, status, rank, referenceId, archivedAt, projectId',
+        taskSteps: '&id, taskId, [taskId+rank], status, deletedAt',
+        workflows: '&id, rank, archivedAt',
+        workflowStages: '&id, workflowId, [workflowId+rank], deletedAt',
+        workflowTaskMemberships: '&id, workflowId, stageId, taskId, [workflowId+taskId], deletedAt',
+        archiveOperations: '&id, rootFolderId, createdAt',
+      })
+      .upgrade(async (transaction) => {
+        const projects = transaction.table<LocalProject>('projects');
+        const folders = transaction.table<LocalFolder>('folders');
+        const tasks = transaction.table<LocalTaskDto | LocalTreeTask>('tasks');
+        const legacyProjects = await projects.toArray();
+        if (legacyProjects.length) {
+          await folders.bulkPut(
+            legacyProjects.map((project) => ({
+              id: project.id,
+              parentFolderId: null,
+              title: project.name,
+              rank: project.rank,
+              version: project.version,
+              archivedAt: project.archivedAt,
+              createdAt: project.createdAt,
+              updatedAt: project.updatedAt,
+              pendingSync: project.pendingSync,
+            })),
+          );
+        }
+        const legacyTasks = await tasks.toArray();
+        for (const task of legacyTasks) {
+          if ((task as LocalTreeTask).parentFolderId === undefined) {
+            await tasks.put({
+              ...task,
+              parentFolderId: task.projectId ?? null,
+            });
+          }
+        }
+        await transaction.table<SyncMeta>('syncMeta').put({ key: 'protocolVersion', value: '2' });
+        await transaction.table<SyncMeta>('syncMeta').put({ key: 'schemaVersion', value: '3' });
+      });
   }
 }
 
@@ -159,6 +257,166 @@ const MERGEABLE_CONFLICT_COMMANDS = new Set([
   'timePoint.update',
   'settings.update',
 ]);
+
+export interface V2SnapshotResult {
+  folders: LocalFolder[];
+  tasks: LocalTreeTask[];
+  notes: LocalNote[];
+  taskSteps: LocalTaskStep[];
+  timePoints: LocalTimePoint[];
+  placements: LocalPlacement[];
+  workflows: LocalWorkflow[];
+  workflowStages: LocalWorkflowStage[];
+  workflowTaskMemberships: LocalWorkflowTaskMembership[];
+  archiveOperations: LocalArchiveOperation[];
+  settings: V2SettingsDto;
+  cursor: string;
+}
+
+export interface V2SyncTransport {
+  push(request: {
+    protocolVersion: 2;
+    clientId: string;
+    mutations: V2Mutation[];
+  }): Promise<PushResult>;
+  pull(cursor: string, limit: number): Promise<PullResult>;
+  snapshot(): Promise<V2SnapshotResult>;
+}
+
+export interface UpgradePendingMutation {
+  mutationId: string;
+  command: string;
+  reason: string;
+  payload: Record<string, unknown>;
+}
+
+/**
+ * Converts every known v1 outbox command in-place. Commands that cannot be
+ * represented safely as a relative v2 intent remain in the outbox and are
+ * also returned for a visible/exportable upgrade queue.
+ */
+export async function convertV1OutboxForV2(db: DevTodoDatabase): Promise<UpgradePendingMutation[]> {
+  const pending: UpgradePendingMutation[] = [];
+  await db.transaction('rw', [db.outbox, db.syncMeta], async () => {
+    const items = await db.outbox.orderBy('id').toArray();
+    const archiveOperationByFolder = new Map<string, string>();
+    for (const item of items) {
+      if (item.command !== 'project.archive') continue;
+      const requested = item.payload['operationId'];
+      archiveOperationByFolder.set(
+        item.entityId,
+        typeof requested === 'string' ? requested : item.mutationId,
+      );
+    }
+    for (const item of items) {
+      let command = item.command;
+      let payload = { ...item.payload };
+      let reason: string | null = null;
+      if (item.command === 'project.create') {
+        command = 'folder.create';
+        payload = { parentFolderId: null, title: String(item.payload['name'] ?? '') };
+      } else if (item.command === 'project.update') {
+        command = 'folder.update';
+        payload = { title: item.payload['name'] };
+      } else if (item.command === 'project.archive') {
+        command = 'folder.archiveTree';
+        payload = { operationId: archiveOperationByFolder.get(item.entityId) ?? item.mutationId };
+      } else if (item.command === 'project.restore') {
+        command = 'folder.restoreTree';
+        payload = {
+          operationId:
+            (typeof item.payload['operationId'] === 'string'
+              ? item.payload['operationId']
+              : archiveOperationByFolder.get(item.entityId)) ?? item.entityId,
+        };
+      } else if (item.command === 'project.reorder' || item.command === 'task.reorder') {
+        reason = 'v1 整组重排无法安全猜测 v2 混合状态锚点';
+      } else if (item.command === 'task.create') {
+        command = 'task.create';
+        payload = {
+          parentFolderId: item.payload['projectId'] ?? null,
+          title: item.payload['title'],
+        };
+      } else if (item.command === 'task.update') {
+        command = 'task.update';
+        payload = {
+          title: item.payload['title'],
+          status: item.payload['status'],
+        };
+        if ('projectId' in item.payload) {
+          payload['parentFolderId'] = item.payload['projectId'] ?? null;
+          reason = 'task.update 的目录移动必须在 v2 通过 tree.move 重新确认锚点';
+        }
+      } else if (item.command === 'settings.update') {
+        payload = {
+          ...item.payload,
+          defaultCaptureTarget:
+            item.payload['defaultCaptureTarget'] === 'RECENT_CONTEXT'
+              ? 'RECENT_FOLDER'
+              : item.payload['defaultCaptureTarget'] === 'GLOBAL_MISC'
+                ? 'ROOT'
+                : item.payload['defaultCaptureTarget'],
+        };
+      } else if (
+        item.command.startsWith('folder.') ||
+        item.command === 'tree.move' ||
+        item.command.startsWith('task.') ||
+        item.command.startsWith('taskStep.') ||
+        item.command.startsWith('workflow.') ||
+        item.command.startsWith('workflowStage.') ||
+        item.command.startsWith('workflowTask.')
+      ) {
+        // Already-v2 commands are intentionally kept byte-for-byte.
+      } else if (item.command.startsWith('rollover.')) {
+        reason = 'v1 rollover 操作不支持直接推送到 v2，已归档为升级待处理项';
+      } else if (
+        !item.command.startsWith('note.') &&
+        !item.command.startsWith('timePoint.') &&
+        !item.command.startsWith('placement.') &&
+        !item.command.startsWith('settings.')
+      ) {
+        reason = '未知 v1 mutation，等待用户升级处理';
+      }
+      if (reason) {
+        await db.outbox.update(item.id!, {
+          lastError: `CLIENT_UPGRADE_REQUIRED: ${reason}`,
+          nextAttemptAt: Number.MAX_SAFE_INTEGER,
+        });
+        pending.push({
+          mutationId: item.mutationId,
+          command: item.command,
+          reason,
+          payload: item.payload,
+        });
+        continue;
+      }
+      await db.outbox.update(item.id!, { command, payload });
+    }
+    await db.syncMeta.put({ key: 'v1OutboxConverted', value: new Date().toISOString() });
+    // Persist the typed upgrade queue so the settings UI can render the reason
+    // and payload without re-deriving it from raw outbox rows.
+    await db.syncMeta.put({
+      key: UPGRADE_PENDING_KEY,
+      value: JSON.stringify(pending),
+    });
+  });
+  return pending;
+}
+
+/** syncMeta key holding the serialized `UpgradePendingMutation[]` queue. */
+export const UPGRADE_PENDING_KEY = 'v1UpgradePending';
+
+/** Read the persisted upgrade-pending queue written by convertV1OutboxForV2. */
+export async function readUpgradePending(db: DevTodoDatabase): Promise<UpgradePendingMutation[]> {
+  const row = await db.syncMeta.get(UPGRADE_PENDING_KEY);
+  if (!row?.value) return [];
+  try {
+    const parsed = JSON.parse(row.value) as unknown;
+    return Array.isArray(parsed) ? (parsed as UpgradePendingMutation[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 export function isMergeableConflictCommand(command: string): boolean {
   return MERGEABLE_CONFLICT_COMMANDS.has(command);
@@ -1051,6 +1309,432 @@ export class SyncEngine {
   }
 }
 
+/** v2 sync engine. It deliberately uses the existing outbox table so an
+ * upgrade never drops v1 records; callers can convert commands before handing
+ * them to this engine and leave anything unsafe visible for export. */
+export class V2SyncEngine {
+  private state: SyncState = 'idle';
+  private syncPromise: Promise<void> | null = null;
+  private readonly listeners = new Set<(state: SyncState) => void>();
+
+  constructor(
+    private readonly db: DevTodoDatabase,
+    private readonly clientId: string,
+    private readonly transport: V2SyncTransport,
+  ) {}
+
+  getStatus(): SyncState {
+    return this.state;
+  }
+
+  subscribe(listener: (state: SyncState) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  async queue(
+    mutation: Omit<OutboxItem, 'id' | 'mutationId' | 'clientId' | 'attempts' | 'nextAttemptAt'>,
+  ): Promise<string> {
+    const mutationId = uuidv7();
+    await this.db.outbox.add({
+      ...mutation,
+      mutationId,
+      clientId: this.clientId,
+      attempts: 0,
+      nextAttemptAt: Date.now(),
+    });
+    return mutationId;
+  }
+
+  async sync(): Promise<void> {
+    if (this.syncPromise) return this.syncPromise;
+    this.syncPromise = this.run().finally(() => (this.syncPromise = null));
+    return this.syncPromise;
+  }
+
+  private async run(): Promise<void> {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      this.setState('offline');
+      return;
+    }
+    this.setState('syncing');
+    try {
+      const upgradePending = await convertV1OutboxForV2(this.db);
+      if (upgradePending.length)
+        console.warn(
+          JSON.stringify({
+            event: 'sync.v1_upgrade_pending',
+            count: upgradePending.length,
+            commands: upgradePending.map((item) => item.command),
+          }),
+        );
+      const cursorKey = 'v2:cursor';
+      const storedCursorMeta = await this.db.syncMeta.get(cursorKey);
+      let cursor = storedCursorMeta?.value ?? '0';
+      let resynced = false;
+
+      // P0-5: If no v2 cursor exists yet (initial sync or clean state), actively fetch and apply snapshot first
+      if (storedCursorMeta === undefined) {
+        const snapshot = await this.transport.snapshot();
+        await this.applySnapshot(snapshot);
+        cursor = snapshot.cursor;
+        await this.db.syncMeta.put({ key: cursorKey, value: cursor });
+      }
+
+      await this.pushPendingV2();
+      let hasMore = true;
+      while (hasMore) {
+        try {
+          const pulled = await this.transport.pull(cursor, 500);
+          await this.applyChanges(pulled.changes);
+          cursor = pulled.nextCursor;
+          hasMore = pulled.hasMore;
+        } catch (error) {
+          if (!isCursorExpired(error) || resynced) throw error;
+          const snapshot = await this.transport.snapshot();
+          await this.applySnapshot(snapshot);
+          cursor = snapshot.cursor;
+          await this.pushPendingV2();
+          resynced = true;
+          hasMore = true;
+        }
+      }
+      await this.db.syncMeta.put({ key: cursorKey, value: cursor });
+      const conflicts = (await this.db.conflicts.toArray()).filter((row) => !row.resolvedAt).length;
+      this.setState(conflicts ? 'conflict' : 'idle');
+    } catch (error) {
+      this.setState(
+        error instanceof TypeError ||
+          (error instanceof Error && /network|fetch/i.test(error.message))
+          ? 'offline'
+          : 'error',
+      );
+      throw error;
+    }
+  }
+
+  private async pushPendingV2(): Promise<void> {
+    const pending = (await this.db.outbox.orderBy('id').toArray()).filter(
+      (item) => item.nextAttemptAt <= Date.now() && item.nextAttemptAt !== Number.MAX_SAFE_INTEGER,
+    );
+    if (!pending.length) return;
+    const response = await this.transport.push({
+      protocolVersion: 2,
+      clientId: this.clientId,
+      mutations: pending.map((item) => ({
+        mutationId: item.mutationId,
+        command: item.command,
+        entityId: item.entityId,
+        baseVersion: item.baseVersion,
+        occurredAt: item.occurredAt,
+        payload: item.payload,
+      })),
+    });
+    for (const result of response.results) {
+      const item = pending.find((candidate) => candidate.mutationId === result.mutationId);
+      if (!item?.id) continue;
+      if (result.status === 'applied') await this.db.outbox.delete(item.id);
+      else if (result.status === 'conflict') {
+        await this.db.conflicts.add({
+          mutationId: item.mutationId,
+          command: item.command,
+          entityType: entityTypeForV2Command(item.command, item.payload),
+          entityId: item.entityId,
+          local: item.afterImage ?? item.payload,
+          server: result.error?.details ?? null,
+          createdAt: new Date().toISOString(),
+        });
+        await this.db.outbox.update(item.id, {
+          attempts: item.attempts + 1,
+          nextAttemptAt: Number.MAX_SAFE_INTEGER,
+          lastError: result.error?.code ?? 'VERSION_CONFLICT',
+        });
+      } else
+        await this.db.outbox.update(item.id, {
+          attempts: item.attempts + 1,
+          nextAttemptAt: Number.MAX_SAFE_INTEGER,
+          lastError: result.error?.code ?? 'MUTATION_REJECTED',
+        });
+    }
+  }
+
+  private setState(next: SyncState): void {
+    this.state = next;
+    for (const listener of this.listeners) listener(next);
+  }
+
+  async retryRejectedMutation(mutationId: string): Promise<void> {
+    const item = await this.db.outbox.where('mutationId').equals(mutationId).first();
+    if (!item?.id) return;
+    await this.db.outbox.update(item.id, {
+      attempts: 0,
+      nextAttemptAt: Date.now(),
+      lastError: undefined,
+    });
+  }
+
+  async discardRejectedMutation(mutationId: string): Promise<void> {
+    const item = await this.db.outbox.where('mutationId').equals(mutationId).first();
+    if (!item?.id) return;
+    if (item.beforeImage) await applyLocalStateImage(this.db, item.beforeImage);
+    await this.db.outbox.delete(item.id);
+  }
+
+  async resolveConflict(
+    conflictId: number,
+    strategy: ConflictStrategy,
+    merged?: unknown,
+  ): Promise<void> {
+    const conflict = await this.db.conflicts.get(conflictId);
+    if (!conflict || conflict.resolvedAt) return;
+    const item = await this.db.outbox.where('mutationId').equals(conflict.mutationId).first();
+    if (!item?.id) throw new Error('冲突缺少可重试的 mutation');
+    const server = conflictServerSnapshot(conflict.server);
+    if (strategy === 'restore') {
+      await this.resolveArchivedConflictV2(conflict, item);
+      return;
+    }
+    if (strategy === 'server' || strategy === 'discard') {
+      if (strategy === 'server' && server) {
+        const table = v2EntityTable(this.db, conflict.entityType);
+        if (table) await table.put(server as never);
+      } else if (strategy === 'discard' && item.beforeImage)
+        await applyLocalStateImage(this.db, item.beforeImage);
+      await this.db.outbox.delete(item.id);
+      await this.db.conflicts.update(conflictId, { resolvedAt: new Date().toISOString() });
+      return;
+    }
+    if (!server || typeof server['version'] !== 'number') throw new Error('服务端冲突版本无效');
+    const nextPayload =
+      strategy === 'merged'
+        ? mergedConflictPayload(item, merged)
+        : withoutBaseVersion(item.payload);
+    const next: OutboxItem = {
+      ...item,
+      id: undefined,
+      mutationId: uuidv7(),
+      baseVersion: Number(server['version']),
+      occurredAt: new Date().toISOString(),
+      payload: nextPayload,
+      attempts: 0,
+      nextAttemptAt: Date.now(),
+      lastError: undefined,
+    };
+    await this.db.outbox.delete(item.id);
+    await this.db.outbox.add(next);
+    await this.db.conflicts.update(conflictId, { resolvedAt: new Date().toISOString() });
+  }
+
+  async applySnapshot(snapshot: V2SnapshotResult): Promise<void> {
+    const pending = await this.db.outbox.toArray();
+    await this.db.transaction(
+      'rw',
+      [
+        this.db.folders,
+        this.db.tasks,
+        this.db.notes,
+        this.db.taskSteps,
+        this.db.timePoints,
+        this.db.placements,
+        this.db.workflows,
+        this.db.workflowStages,
+        this.db.workflowTaskMemberships,
+        this.db.archiveOperations,
+        this.db.settings,
+        // v2 has no Project concept; the legacy table is cleared so stale rows
+        // cannot leak back through v1 GET compatibility paths.
+        this.db.projects,
+        this.db.outbox,
+        this.db.syncMeta,
+      ],
+      async () => {
+        await Promise.all([
+          this.db.folders.clear(),
+          this.db.tasks.clear(),
+          this.db.notes.clear(),
+          this.db.taskSteps.clear(),
+          this.db.timePoints.clear(),
+          this.db.placements.clear(),
+          this.db.workflows.clear(),
+          this.db.workflowStages.clear(),
+          this.db.workflowTaskMemberships.clear(),
+          this.db.archiveOperations.clear(),
+          this.db.settings.clear(),
+          // v2 has no Project concept. The legacy table is still declared by the
+          // v1 schema, so clear it too: otherwise stale rows stay readable
+          // through v1 GET compatibility paths after a v2 snapshot.
+          this.db.projects.clear(),
+        ]);
+        await this.db.folders.bulkPut(snapshot.folders);
+        await this.db.tasks.bulkPut(snapshot.tasks);
+        await this.db.notes.bulkPut(snapshot.notes);
+        await this.db.taskSteps.bulkPut(snapshot.taskSteps);
+        await this.db.timePoints.bulkPut(snapshot.timePoints);
+        await this.db.placements.bulkPut(snapshot.placements);
+        await this.db.workflows.bulkPut(snapshot.workflows);
+        await this.db.workflowStages.bulkPut(snapshot.workflowStages);
+        await this.db.workflowTaskMemberships.bulkPut(snapshot.workflowTaskMemberships);
+        await this.db.archiveOperations.bulkPut(snapshot.archiveOperations);
+        await this.db.settings.put(snapshot.settings);
+        await this.db.syncMeta.put({ key: 'v2:cursor', value: snapshot.cursor });
+        for (const item of pending) {
+          if (item.id !== undefined) await this.db.outbox.put(item);
+          if (item.afterImage) await applyLocalStateImage(this.db, item.afterImage);
+        }
+      },
+    );
+  }
+
+  private async applyChanges(changes: PullResult['changes']): Promise<void> {
+    await this.db.transaction(
+      'rw',
+      [
+        this.db.folders,
+        this.db.tasks,
+        this.db.notes,
+        this.db.taskSteps,
+        this.db.timePoints,
+        this.db.placements,
+        this.db.workflows,
+        this.db.workflowStages,
+        this.db.workflowTaskMemberships,
+        this.db.archiveOperations,
+        this.db.settings,
+        this.db.outbox,
+      ],
+      async () => {
+        const pending = await this.db.outbox.orderBy('id').toArray();
+        for (const change of changes) {
+          const table = v2EntityTable(this.db, change.entityType);
+          if (!table) continue;
+          const current = await table.get(change.entityId);
+          // Out-of-order or replayed changes must never roll a newer local row
+          // back. The pull cursor normally prevents this, but a retried or
+          // duplicated response can still deliver an older version.
+          if (
+            isRecord(current) &&
+            typeof current['version'] === 'number' &&
+            Number.isFinite(current['version']) &&
+            current['version'] > change.entityVersion
+          )
+            continue;
+          if (change.operation === 'delete') {
+            if (isRecord(change.snapshot)) {
+              await table.put(change.snapshot as never);
+            } else if (isRecord(current)) {
+              await table.put({
+                ...current,
+                deletedAt: new Date().toISOString(),
+                version: change.entityVersion,
+              } as never);
+            }
+          } else if (isRecord(change.snapshot)) await table.put(change.snapshot as never);
+        }
+        // P1-12: Protect unconfirmed local optimistic state by re-applying active after-images
+        for (const item of pending) {
+          if (item.afterImage) await applyLocalStateImage(this.db, item.afterImage);
+        }
+      },
+    );
+  }
+
+  /**
+   * Restore an archived entity and then re-apply the local intent on top of the
+   * restored version. A v2 `restore` always produces a server-side version bump,
+   * so the retried mutation must target `restoredVersion + 1`.
+   */
+  private async resolveArchivedConflictV2(
+    conflict: ConflictRecord,
+    item: OutboxItem,
+  ): Promise<void> {
+    const server = conflictServerSnapshot(conflict.server);
+    const restoreCommand = v2RestoreCommandForEntity(conflict.entityType);
+    if (
+      !server ||
+      !restoreCommand ||
+      !server['archivedAt'] ||
+      typeof server['version'] !== 'number' ||
+      !Number.isInteger(server['version'])
+    )
+      throw new Error('当前冲突实体不支持恢复后应用');
+    const restoreBaseVersion = server['version'] as number;
+    const retryBaseVersion = restoreBaseVersion + 1;
+    const retryPayload = v2RetryPayload(conflict.entityType, item.payload);
+    const table = v2EntityTable(this.db, conflict.entityType);
+    if (!table) throw new Error('当前冲突实体不支持恢复后应用');
+    await this.db.transaction(
+      'rw',
+      [
+        this.db.folders,
+        this.db.tasks,
+        this.db.notes,
+        this.db.taskSteps,
+        this.db.timePoints,
+        this.db.placements,
+        this.db.workflows,
+        this.db.workflowStages,
+        this.db.workflowTaskMemberships,
+        this.db.archiveOperations,
+        this.db.outbox,
+        this.db.conflicts,
+      ],
+      async () => {
+        // 1. Adopt the archived server row, then optimistically apply the
+        //    restore that the first queued command will perform (the server
+        //    bumps the version by one and clears archivedAt).
+        await table.put({ ...server, pendingSync: false } as never);
+        await table.put({
+          ...server,
+          archivedAt: null,
+          version: retryBaseVersion,
+          updatedAt: new Date().toISOString(),
+          pendingSync: true,
+        } as never);
+        // 2. Queue the restore command first so the ordering is restore -> retry.
+        await this.db.outbox.add({
+          ...item,
+          id: undefined,
+          mutationId: uuidv7(),
+          command: restoreCommand,
+          entityId: conflict.entityId,
+          baseVersion: restoreBaseVersion,
+          occurredAt: new Date().toISOString(),
+          payload: {},
+          attempts: 0,
+          nextAttemptAt: Date.now(),
+          lastError: undefined,
+          beforeImage: undefined,
+          afterImage: undefined,
+        });
+        // 3. Queue the original intent against the post-restore version.
+        const retryItem: OutboxItem = {
+          ...item,
+          id: undefined,
+          mutationId: uuidv7(),
+          baseVersion: retryBaseVersion,
+          occurredAt: new Date().toISOString(),
+          payload: retryPayload,
+          attempts: 0,
+          nextAttemptAt: Date.now(),
+          lastError: undefined,
+          afterImage: item.afterImage
+            ? rebaseStateImage(
+                item.afterImage,
+                conflict.entityType,
+                item.entityId,
+                retryBaseVersion,
+              )
+            : undefined,
+        };
+        await this.db.outbox.delete(item.id!);
+        await this.db.outbox.add(retryItem);
+        if (conflict.id !== undefined)
+          await this.db.conflicts.update(conflict.id, { resolvedAt: new Date().toISOString() });
+      },
+    );
+  }
+}
+
 export async function captureLocalStateImage(
   db: DevTodoDatabase,
   command: string,
@@ -1104,11 +1788,79 @@ async function mutationImageKeys(
   if (command.startsWith('project.')) {
     add(command === 'project.reorder' ? 'projects' : 'projects', entityId);
     if (command === 'project.reorder') addIds('projects');
+  } else if (command.startsWith('folder.')) {
+    add('folders', entityId);
+    if (
+      command === 'folder.deleteTree' ||
+      command === 'folder.archiveTree' ||
+      command === 'folder.restoreTree'
+    ) {
+      const root = await db.folders.get(entityId);
+      if (root) {
+        const folders = await db.folders.toArray();
+        const folderIds = new Set<string>([entityId]);
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (const folder of folders)
+            if (
+              folder.parentFolderId &&
+              folderIds.has(folder.parentFolderId) &&
+              !folderIds.has(folder.id)
+            ) {
+              folderIds.add(folder.id);
+              changed = true;
+            }
+        }
+        folders
+          .filter((folder) => folderIds.has(folder.id))
+          .forEach((folder) => add('folders', folder.id));
+        const tasks = await db.tasks.toArray();
+        for (const task of tasks.filter((candidate) => {
+          const treeTask = candidate as LocalTreeTask;
+          return treeTask.parentFolderId && folderIds.has(treeTask.parentFolderId);
+        })) {
+          add('tasks', task.id);
+          const notes = await db.notes.where('taskId').equals(task.id).toArray();
+          notes.forEach((note) => add('notes', note.id));
+        }
+      }
+    }
+  } else if (command === 'tree.move') {
+    add('folders', entityId);
+    add('tasks', entityId);
+    if (isRecord(payload['before'])) add('folders', payload['before']['id']);
+    if (isRecord(payload['after'])) add('folders', payload['after']['id']);
+  } else if (command.startsWith('taskStep.')) {
+    add('taskSteps', entityId);
+    add('taskSteps', payload['__localId']);
+  } else if (command.startsWith('workflowStage.')) {
+    add('workflowStages', entityId);
+  } else if (command.startsWith('workflowTask.')) {
+    add('workflowTaskMemberships', entityId);
+  } else if (command.startsWith('workflow.')) {
+    add('workflows', entityId);
+    if (command === 'workflow.create') add('workflowStages', payload['defaultStageId']);
   } else if (command.startsWith('task.')) {
     if (command === 'task.reorder') addIds('tasks');
     else add('tasks', entityId);
     add('tasks', payload['__localTaskId']);
     add('notes', payload['__localNoteId']);
+    if (command === 'task.delete') {
+      const notes = await db.notes.where('taskId').equals(entityId).toArray();
+      notes.forEach((note) => add('notes', note.id));
+      const steps = await db.taskSteps.where('taskId').equals(entityId).toArray();
+      steps.forEach((step) => add('taskSteps', step.id));
+      const placements = await db.placements.where('taskId').equals(entityId).toArray();
+      placements.forEach((placement) => add('placements', placement.id));
+      const memberships = await db.workflowTaskMemberships.toArray();
+      memberships
+        .filter((membership) => membership.taskId === entityId)
+        .forEach((membership) => add('workflowTaskMemberships', membership.id));
+    }
+    if (command === 'task.duplicate' && Array.isArray(payload['stepIds'])) {
+      for (const id of payload['stepIds']) add('taskSteps', id);
+    }
   } else if (command === 'note.update') {
     const note = await db.notes.where('taskId').equals(entityId).first();
     add('notes', note?.id);
@@ -1142,6 +1894,69 @@ function imageTable(db: DevTodoDatabase, table: LocalImageTable): Table<unknown,
       return db.placements as unknown as Table<unknown, string>;
     case 'settings':
       return db.settings as unknown as Table<unknown, string>;
+    case 'folders':
+      return db.folders as unknown as Table<unknown, string>;
+    case 'taskSteps':
+      return db.taskSteps as unknown as Table<unknown, string>;
+    case 'workflows':
+      return db.workflows as unknown as Table<unknown, string>;
+    case 'workflowStages':
+      return db.workflowStages as unknown as Table<unknown, string>;
+    case 'workflowTaskMemberships':
+      return db.workflowTaskMemberships as unknown as Table<unknown, string>;
+    case 'archiveOperations':
+      return db.archiveOperations as unknown as Table<unknown, string>;
+  }
+}
+
+function entityTypeForV2Command(command: string, payload?: unknown): string {
+  if (command.startsWith('folder.')) return 'folder';
+  if (command === 'tree.move') {
+    if (payload && typeof payload === 'object' && 'item' in payload) {
+      const item = (payload as { item?: { kind?: unknown } }).item;
+      if (item?.kind === 'TASK') return 'task';
+      if (item?.kind === 'FOLDER') return 'folder';
+    }
+    return 'folder';
+  }
+  if (command.startsWith('taskStep.')) return 'taskStep';
+  if (command.startsWith('workflowStage.')) return 'workflowStage';
+  if (command.startsWith('workflowTask.')) return 'workflowTaskMembership';
+  if (command.startsWith('workflow.')) return 'workflow';
+  if (command.startsWith('task.')) return 'task';
+  if (command.startsWith('note.')) return 'note';
+  if (command.startsWith('timePoint.')) return 'timePoint';
+  if (command.startsWith('placement.')) return 'placement';
+  if (command.startsWith('settings.')) return 'settings';
+  return 'unknown';
+}
+
+function v2EntityTable(db: DevTodoDatabase, entityType: string): Table<unknown, string> | null {
+  switch (entityType) {
+    case 'folder':
+      return db.folders as unknown as Table<unknown, string>;
+    case 'task':
+      return db.tasks as unknown as Table<unknown, string>;
+    case 'note':
+      return db.notes as unknown as Table<unknown, string>;
+    case 'taskStep':
+      return db.taskSteps as unknown as Table<unknown, string>;
+    case 'timePoint':
+      return db.timePoints as unknown as Table<unknown, string>;
+    case 'placement':
+      return db.placements as unknown as Table<unknown, string>;
+    case 'workflow':
+      return db.workflows as unknown as Table<unknown, string>;
+    case 'workflowStage':
+      return db.workflowStages as unknown as Table<unknown, string>;
+    case 'workflowTaskMembership':
+      return db.workflowTaskMemberships as unknown as Table<unknown, string>;
+    case 'archiveOperation':
+      return db.archiveOperations as unknown as Table<unknown, string>;
+    case 'settings':
+      return db.settings as unknown as Table<unknown, string>;
+    default:
+      return null;
   }
 }
 
@@ -1149,6 +1964,33 @@ function withoutBaseVersion(payload: Record<string, unknown>): Record<string, un
   const next = { ...payload };
   delete next['baseVersion'];
   return next;
+}
+
+/** v2 restore command for an entity type, or null when it has no restore path. */
+function v2RestoreCommandForEntity(entityType: string): string | null {
+  switch (entityType) {
+    case 'folder':
+      // Folders restore through their cascade operation, never a bare restore.
+      return null;
+    case 'task':
+      return 'task.restore';
+    case 'timePoint':
+      return 'timePoint.restore';
+    case 'workflow':
+      return 'workflow.restore';
+    default:
+      return null;
+  }
+}
+
+/** Strip fields the v2 mutation contract validates itself. */
+function v2RetryPayload(
+  _entityType: string,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  // Matches the plain `server`/`local` retry path: the fresh base version is
+  // supplied through the mutation envelope, not the payload.
+  return withoutBaseVersion(payload);
 }
 
 function mergedConflictPayload(item: OutboxItem, merged: unknown): Record<string, unknown> {
