@@ -1,0 +1,179 @@
+/*
+ * M3E motion layer.
+ *
+ * Two rules govern everything here:
+ *   1. Anything that moves, resizes or changes shape uses a `--m3-spring-spatial*`
+ *      token (allowed to overshoot).
+ *   2. Anything that fades, recolours or changes elevation uses a
+ *      `--m3-spring-effects*` token (critically damped, never bounces).
+ *
+ * Reduced motion keeps the *meaning* of the transition (something appeared,
+ * something was selected) but drops the travel and the overshoot: spatial
+ * springs fall back to a short fade, and shape morphs become cross-fades.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Shared overlay transitions used by the shell                              */
+/* -------------------------------------------------------------------------- */
+
+@keyframes m3e-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes m3e-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes m3e-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes m3e-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Staggered list entry. Only the first paint of a list opts in; re-sorting must
+   not replay it, so the class is applied by the page, not by the list itself. */
+.m3e-stagger > * {
+  animation: m3e-rise-in var(--m3-spring-spatial-duration) var(--m3-spring-spatial) both;
+}
+.m3e-stagger > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.m3e-stagger > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+.m3e-stagger > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+.m3e-stagger > *:nth-child(4) {
+  animation-delay: 120ms;
+}
+.m3e-stagger > *:nth-child(5) {
+  animation-delay: 160ms;
+}
+.m3e-stagger > *:nth-child(6) {
+  animation-delay: 200ms;
+}
+.m3e-stagger > *:nth-child(n + 7) {
+  animation-delay: 240ms;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reduced motion                                                             */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Note this block is intentionally *not* the blanket `animation-duration: 0.01ms`
+ * reset. Springs become short fades, and travel is removed while the element
+ * still cross-fades, so state changes remain perceptible.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --m3-spring-spatial-fast: linear(0 0%, 1 100%);
+    --m3-spring-spatial: linear(0 0%, 1 100%);
+    --m3-spring-spatial-slow: linear(0 0%, 1 100%);
+    --m3-spring-expressive-spatial-fast: linear(0 0%, 1 100%);
+    --m3-spring-expressive-spatial: linear(0 0%, 1 100%);
+    --m3-spring-expressive-spatial-slow: linear(0 0%, 1 100%);
+    --m3-spring-spatial-fast-duration: 120ms;
+    --m3-spring-spatial-duration: 150ms;
+    --m3-spring-spatial-slow-duration: 180ms;
+    --m3-spring-expressive-spatial-fast-duration: 120ms;
+    --m3-spring-expressive-spatial-duration: 150ms;
+    --m3-spring-expressive-spatial-slow-duration: 180ms;
+  }
+
+  /* Kill travel and overshoot but keep the fade. */
+  .m3e-fab:active,
+  .m3e-button:active:not(:disabled),
+  .m3e-chip.is-interactive:active:not(:disabled),
+  .m3e-card.is-interactive:active,
+  .m3e-navigation-bar__item.is-active .m3e-navigation-bar__icon,
+  .m3e-navigation-rail__item.is-active .m3e-navigation-rail__icon {
+    scale: 1;
+  }
+
+  .m3e-stagger > * {
+    animation-name: m3e-fade-in;
+  }
+
+  .m3e-sheet,
+  .m3e-side-sheet {
+    animation-name: m3e-fade-in;
+  }
+
+  .m3e-sheet-layer.presence-exiting .m3e-sheet,
+  .m3e-side-sheet-layer.presence-exiting .m3e-side-sheet {
+    animation-name: m3e-fade-out;
+  }
+
+  .m3e-dialog {
+    animation-name: m3e-fade-in;
+  }
+
+  .m3e-dialog-layer.presence-exiting .m3e-dialog {
+    animation-name: m3e-fade-out;
+  }
+
+  .m3e-menu,
+  .m3e-select__popup {
+    animation-name: m3e-fade-in;
+  }
+
+  .m3e-fab-menu__row {
+    transform: none;
+  }
+
+  /* The switch thumb still moves (it conveys state) but without overshoot. */
+  .m3e-switch__thumb {
+    transition-duration: var(--m3-spring-spatial-fast-duration);
+  }
+
+  .m3e-split-button__toggle svg {
+    transition-duration: var(--m3-motion-short3);
+  }
+
+  .m3e-loading-indicator__shape {
+    animation: none;
+    block-size: 12px;
+    opacity: 0.85;
+  }
+
+  /*
+   * The one `!important` in the stylesheet, and it is load-bearing:
+   * `scroll-behavior: smooth` may be set anywhere (including a user-agent or
+   * extension stylesheet), and an animated scroll is exactly what this media
+   * query exists to suppress. A specificity-based override cannot guarantee
+   * that, so the declaration is forced.
+   */
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}

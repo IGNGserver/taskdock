@@ -1,0 +1,512 @@
+/*
+ * M3E navigation: bar (compact), rail (medium) and drawer (expanded/overflow).
+ * All three share one active-indicator treatment so a destination looks the
+ * same whichever shell renders it.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Navigation bar (compact)                                                   */
+/* -------------------------------------------------------------------------- */
+
+.m3e-navigation-bar {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: stretch;
+  block-size: calc(80px + var(--dt-safe-bottom, 0px));
+  padding-block: 8px var(--dt-safe-bottom, 0px);
+  border-block-start: 1px solid var(--m3-outline-variant);
+  background-color: color-mix(in srgb, var(--m3-surface) 94%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.m3e-navigation-bar__item {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--m3-on-surface-variant);
+  font-family: inherit;
+  font-size: inherit;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.m3e-navigation-bar__indicator {
+  position: absolute;
+  inset-block-start: 2px;
+  inline-size: 64px;
+  block-size: 32px;
+  border-radius: var(--m3-shape-full);
+  background-color: transparent;
+  transition:
+    inline-size var(--m3-spring-spatial-duration) var(--m3-spring-expressive-spatial),
+    background-color var(--m3-motion-short3) var(--m3-easing-standard);
+}
+
+.m3e-navigation-bar__item.is-active .m3e-navigation-bar__indicator {
+  background-color: var(--m3-secondary-container);
+}
+
+.m3e-navigation-bar__icon {
+  position: relative;
+  display: inline-flex;
+  block-size: 24px;
+  align-items: center;
+  transition: scale var(--m3-spring-spatial-duration) var(--m3-spring-expressive-spatial);
+}
+
+/* The active destination icon springs slightly larger — the expressive cue. */
+.m3e-navigation-bar__item.is-active .m3e-navigation-bar__icon {
+  scale: 1.08;
+}
+
+.m3e-navigation-bar__label {
+  position: relative;
+  font-size: var(--m3-type-label-medium-size);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.m3e-navigation-bar__item.is-active .m3e-navigation-bar__label {
+  color: var(--m3-on-surface);
+  font-weight: 700;
+}
+
+.m3e-navigation-bar__badge {
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline-start: 50%;
+  translate: 16px 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Navigation rail (medium)                                                   */
+/* -------------------------------------------------------------------------- */
+
+.m3e-navigation-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  inline-size: 88px;
+  block-size: 100%;
+  padding: 16px 0;
+  border-inline-end: 1px solid var(--m3-outline-variant);
+  background-color: var(--m3-surface);
+}
+
+.m3e-navigation-rail__header,
+.m3e-navigation-rail__footer {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+}
+
+.m3e-navigation-rail__list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.m3e-navigation-rail__item {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  inline-size: 80px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--m3-on-surface-variant);
+  font-family: inherit;
+  font-size: inherit;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.m3e-navigation-rail__indicator {
+  position: absolute;
+  inset-block-start: 0;
+  inline-size: 56px;
+  block-size: 32px;
+  border-radius: var(--m3-shape-full);
+  background-color: transparent;
+  transition: background-color var(--m3-motion-short3) var(--m3-easing-standard);
+}
+
+.m3e-navigation-rail__item.is-active .m3e-navigation-rail__indicator {
+  background-color: var(--m3-secondary-container);
+}
+
+.m3e-navigation-rail__icon {
+  position: relative;
+  display: inline-flex;
+  block-size: 24px;
+  align-items: center;
+  transition: scale var(--m3-spring-spatial-duration) var(--m3-spring-expressive-spatial);
+}
+
+.m3e-navigation-rail__item.is-active .m3e-navigation-rail__icon {
+  scale: 1.08;
+}
+
+.m3e-navigation-rail__label {
+  position: relative;
+  font-size: var(--m3-type-label-medium-size);
+  font-weight: 500;
+  text-align: center;
+}
+
+.m3e-navigation-rail__item.is-active .m3e-navigation-rail__label {
+  color: var(--m3-on-surface);
+  font-weight: 700;
+}
+
+.m3e-navigation-rail__badge {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 50%;
+  translate: 12px 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Navigation drawer                                                          */
+/* -------------------------------------------------------------------------- */
+
+.m3e-drawer-layer {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  display: flex;
+  justify-content: flex-start;
+}
+
+/*
+ * Persistent drawer (expanded widths): it participates in the app-frame flex
+ * layout instead of floating over the content, so it must not intercept
+ * pointer events across the viewport.
+ */
+.m3e-drawer-layer--persistent {
+  position: static;
+  z-index: auto;
+  inset: auto;
+  flex: none;
+  block-size: 100dvh;
+}
+
+.m3e-drawer-layer--persistent .m3e-drawer {
+  translate: 0 0;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+
+.m3e-drawer-layer--end {
+  justify-content: flex-end;
+}
+
+.m3e-drawer-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background-color: var(--m3-scrim);
+  opacity: 0;
+  transition: opacity var(--m3-spring-effects-duration) var(--m3-spring-effects);
+}
+
+.m3e-drawer-layer.presence-present .m3e-drawer-scrim,
+.m3e-drawer-layer.presence-entering .m3e-drawer-scrim {
+  opacity: 1;
+}
+
+.m3e-drawer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  inline-size: min(360px, calc(100vw - 56px));
+  block-size: 100%;
+  padding: 12px;
+  border-start-end-radius: var(--m3-shape-xl);
+  border-end-end-radius: var(--m3-shape-xl);
+  background-color: var(--m3-surface-container-low);
+  color: var(--m3-on-surface);
+  box-shadow: var(--m3-elevation-2);
+  animation: m3e-drawer-in var(--m3-spring-spatial-slow-duration) var(--m3-spring-spatial-slow) both;
+}
+
+@keyframes m3e-drawer-in {
+  from {
+    translate: -100% 0;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+@keyframes m3e-drawer-out {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: -100% 0;
+  }
+}
+
+.m3e-drawer-layer.presence-exiting .m3e-drawer {
+  animation: m3e-drawer-out var(--m3-spring-spatial-duration) var(--m3-easing-standard-accelerate)
+    both;
+}
+.m3e-drawer-layer.presence-exiting .m3e-drawer-scrim {
+  opacity: 0;
+  transition: opacity var(--m3-spring-effects-fast-duration) var(--m3-spring-effects-fast);
+}
+
+.m3e-drawer-layer--end .m3e-drawer {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+  border-start-start-radius: var(--m3-shape-xl);
+  border-end-start-radius: var(--m3-shape-xl);
+  animation-name: m3e-drawer-in-end;
+}
+
+@keyframes m3e-drawer-in-end {
+  from {
+    translate: 100% 0;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+@keyframes m3e-drawer-out-end {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: 100% 0;
+  }
+}
+
+.m3e-drawer-layer--end.presence-exiting .m3e-drawer {
+  animation-name: m3e-drawer-out-end;
+}
+
+.m3e-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+  min-block-size: 56px;
+  padding-inline: 8px 4px;
+}
+
+.m3e-drawer__nav {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.m3e-drawer__nav ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.m3e-drawer__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  inline-size: 100%;
+  min-block-size: 56px;
+  padding: 0 16px 0 20px;
+  text-decoration: none;
+  border: 0;
+  border-radius: var(--m3-shape-full);
+  background: transparent;
+  color: var(--m3-on-surface-variant);
+  font-family: inherit;
+  font-size: var(--m3-type-label-large-size);
+  font-weight: 500;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--m3-motion-short3) var(--m3-easing-standard);
+}
+
+.m3e-drawer__item:hover {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+
+.m3e-drawer__item.is-active {
+  background-color: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+  font-weight: 700;
+}
+
+.m3e-drawer__icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.m3e-drawer__label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m3e-drawer__badge {
+  flex: none;
+}
+
+.m3e-drawer__footer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--m3-outline-variant);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Top app bar                                                                */
+/* -------------------------------------------------------------------------- */
+
+.m3e-app-bar {
+  flex: none;
+  background-color: var(--m3-surface-container-low);
+}
+
+.m3e-app-bar__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-block-size: 64px;
+  padding-inline: 16px;
+}
+
+.m3e-app-bar__leading,
+.m3e-app-bar__actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.m3e-app-bar__titles {
+  display: flex;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.m3e-app-bar__eyebrow {
+  color: var(--m3-primary);
+  text-transform: uppercase;
+}
+
+.m3e-app-bar__title {
+  margin: 0;
+  color: var(--m3-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Medium and large app bars stack the headline under the row so the title can
+   run to two lines without colliding with the actions. */
+.m3e-app-bar--medium .m3e-app-bar__row,
+.m3e-app-bar--large .m3e-app-bar__row {
+  flex-wrap: wrap;
+  padding-block-end: 12px;
+}
+
+.m3e-app-bar--large .m3e-app-bar__titles {
+  flex-basis: 100%;
+  order: 3;
+  padding-inline: 0;
+}
+
+.m3e-app-bar--large .m3e-app-bar__title {
+  font-size: var(--m3-type-headline-medium-size);
+  white-space: normal;
+}
+
+.m3e-app-bar--medium .m3e-app-bar__title {
+  white-space: normal;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Search bar                                                                 */
+/* -------------------------------------------------------------------------- */
+
+.m3e-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  inline-size: 100%;
+  min-block-size: 56px;
+  padding-inline: 16px;
+  border: 1px solid transparent;
+  border-radius: var(--m3-shape-full);
+  background-color: var(--m3-surface-container-high);
+  color: var(--m3-on-surface);
+  transition: box-shadow var(--m3-motion-short3) var(--m3-easing-standard);
+}
+
+.m3e-search-bar--docked {
+  min-block-size: 48px;
+  max-inline-size: 420px;
+}
+
+.m3e-search-bar:focus-within {
+  box-shadow: var(--m3-elevation-2);
+  border-color: var(--m3-primary);
+}
+
+.m3e-search-bar__leading,
+.m3e-search-bar__trailing {
+  display: inline-flex;
+  flex: none;
+  color: var(--m3-on-surface-variant);
+}
+
+.m3e-search-bar__input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: var(--m3-type-body-large-size);
+  outline: 0;
+}
+
+.m3e-search-bar__input::placeholder {
+  color: var(--m3-on-surface-variant);
+}
+
+.m3e-search-bar__input::-webkit-search-cancel-button {
+  display: none;
+}

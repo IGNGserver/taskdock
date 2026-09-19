@@ -7,7 +7,7 @@ import type {
   TreeTaskDto,
   WorkflowDto,
 } from '@devtodo/contracts';
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Archive,
@@ -23,6 +23,13 @@ import {
 } from 'lucide-react';
 import { ApiError, mutationV2, requestV2 } from './api.js';
 import { useAuth } from './auth.js';
+import {
+  BottomSheet,
+  Button,
+  IconButton,
+  SideSheet,
+  useWindowSizeClass,
+} from './components/m3e/index.js';
 import { recordLastFolderId, resolveCaptureFolder } from './folder-preference.js';
 
 function statusLabel(status: string): string {
@@ -318,9 +325,9 @@ export function TreePage() {
               value={newFolderTitle}
               onChange={(event) => setNewFolderTitle(event.target.value)}
             />
-            <button type="submit" className="secondary-button" title="新建文件夹">
+            <Button variant="tonal" type="submit" title="新建文件夹">
               <FolderPlus size={16} />
-            </button>
+            </Button>
           </form>
         </div>
       </div>
@@ -334,7 +341,7 @@ export function TreePage() {
         </button>
         {path.map((crumb) => (
           <span key={crumb.id}>
-            <ChevronRight size={14} />
+            <ChevronRight size={16} />
             <button
               type="button"
               onClick={() => openFolder(crumb.id)}
@@ -346,16 +353,16 @@ export function TreePage() {
         ))}
       </div>
       <form onSubmit={createTask} className="tree-capture-form">
-        <Plus size={17} aria-hidden="true" />
+        <Plus size={18} aria-hidden="true" />
         <input
           aria-label="新建任务"
           placeholder={folderId ? '在当前文件夹新建任务…' : '在根目录新建任务…'}
           value={newTitle}
           onChange={(event) => setNewTitle(event.target.value)}
         />
-        <button type="submit" className="primary-button">
+        <Button variant="filled" type="submit">
           添加任务
-        </button>
+        </Button>
       </form>
       {error && (
         <div className="error-banner" role="alert">
@@ -387,7 +394,7 @@ export function TreePage() {
                       onClick={() => openFolder(item.folder.id)}
                       aria-label={`打开文件夹 ${item.folder.title}`}
                     >
-                      <Folder size={18} />
+                      <Folder size={20} />
                       <span className="tree-item-title">{item.folder.title}</span>
                       <span className={`status-chip ${statusClass(item.aggregate.status)}`}>
                         {statusLabel(item.aggregate.status)}
@@ -398,48 +405,49 @@ export function TreePage() {
                       <ChevronRight size={16} />
                     </button>
                     <div className="tree-row-actions">
-                      <button
+                      <IconButton
+                        label="操作"
                         type="button"
-                        className="icon-button"
                         onClick={() => void moveWithinStatus(item, 'up')}
                         disabled={index === 0}
                         aria-label={`上移文件夹 ${item.folder.title}`}
                       >
-                        <ChevronUp size={15} />
-                      </button>
-                      <button
+                        <ChevronUp size={16} />
+                      </IconButton>
+                      <IconButton
+                        label="操作"
                         type="button"
-                        className="icon-button"
                         onClick={() => void moveWithinStatus(item, 'down')}
                         disabled={index === group.items.length - 1}
                         aria-label={`下移文件夹 ${item.folder.title}`}
                       >
-                        <ChevronDown size={15} />
-                      </button>
-                      <button
+                        <ChevronDown size={16} />
+                      </IconButton>
+                      <IconButton
+                        label="操作"
                         type="button"
-                        className="icon-button"
                         onClick={() => void openMove(item)}
                         aria-label={`移动文件夹 ${item.folder.title}`}
                       >
-                        <FolderPlus size={15} />
-                      </button>
-                      <button
+                        <FolderPlus size={16} />
+                      </IconButton>
+                      <IconButton
+                        label="操作"
                         type="button"
-                        className="icon-button"
                         onClick={() => void archiveFolder(item)}
                         aria-label={`归档文件夹 ${item.folder.title}`}
                       >
-                        <Archive size={15} />
-                      </button>
-                      <button
+                        <Archive size={16} />
+                      </IconButton>
+                      <IconButton
+                        label="操作"
+                        className="m3e-icon-button--danger"
                         type="button"
-                        className="icon-button danger"
                         onClick={() => void deleteFolder(item)}
                         aria-label={`删除文件夹 ${item.folder.title}`}
                       >
-                        <Trash2 size={15} />
-                      </button>
+                        <Trash2 size={16} />
+                      </IconButton>
                     </div>
                   </article>
                 ) : (
@@ -454,7 +462,7 @@ export function TreePage() {
                       onClick={() => setSelectedTaskId(item.task.id)}
                       aria-label={`打开任务 ${item.task.title}`}
                     >
-                      <ListChecks size={18} />
+                      <ListChecks size={20} />
                       <span className="tree-item-title">{item.task.title}</span>
                       <code>{item.task.referenceId}</code>
                       <span className={`status-chip ${statusClass(item.task.status)}`}>
@@ -462,35 +470,35 @@ export function TreePage() {
                       </span>
                     </button>
                     <div className="tree-row-actions">
-                      <button
+                      <IconButton
+                        label="操作"
                         type="button"
-                        className="icon-button"
                         onClick={() => void moveWithinStatus(item, 'up')}
                         disabled={index === 0}
                         aria-label={`上移任务 ${item.task.title}`}
                       >
-                        <ChevronUp size={15} />
-                      </button>
-                      <button
+                        <ChevronUp size={16} />
+                      </IconButton>
+                      <IconButton
+                        label="操作"
                         type="button"
-                        className="icon-button"
                         onClick={() => void moveWithinStatus(item, 'down')}
                         disabled={index === group.items.length - 1}
                         aria-label={`下移任务 ${item.task.title}`}
                       >
-                        <ChevronDown size={15} />
-                      </button>
-                      <button
+                        <ChevronDown size={16} />
+                      </IconButton>
+                      <IconButton
+                        label="操作"
                         type="button"
-                        className="icon-button"
                         onClick={() => void openMove(item)}
                         aria-label={`移动任务 ${item.task.title}`}
                       >
-                        <FolderPlus size={15} />
-                      </button>
-                      <button
+                        <FolderPlus size={16} />
+                      </IconButton>
+                      <IconButton
+                        label="操作"
                         type="button"
-                        className="icon-button"
                         onClick={() =>
                           void mutationV2('POST', `/tasks/${item.task.id}/archive`, {
                             baseVersion: item.task.version,
@@ -498,8 +506,8 @@ export function TreePage() {
                         }
                         aria-label={`归档任务 ${item.task.title}`}
                       >
-                        <Archive size={15} />
-                      </button>
+                        <Archive size={16} />
+                      </IconButton>
                       <MoreHorizontal size={16} />
                     </div>
                   </article>
@@ -530,16 +538,12 @@ export function TreePage() {
               </select>
             </label>
             <div className="header-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setMoveTarget(null)}
-              >
+              <Button variant="tonal" type="button" onClick={() => setMoveTarget(null)}>
                 取消
-              </button>
-              <button type="submit" className="primary-button" disabled={moveBusy}>
+              </Button>
+              <Button variant="filled" type="submit" disabled={moveBusy}>
                 {moveBusy ? '移动中…' : '移动'}
-              </button>
+              </Button>
             </div>
           </form>
         </div>
@@ -582,14 +586,46 @@ export function TaskDetailV2Overlay({
       </div>
     ) : null;
   return (
-    <TaskDetailV2
-      detail={detail}
-      onClose={onClose}
-      onChanged={async () => {
-        await load();
-        onChanged();
-      }}
-    />
+    <TaskDetailSurface open onClose={onClose} title={detail.task.title || '任务详情'}>
+      <TaskDetailV2
+        detail={detail}
+        onClose={onClose}
+        onChanged={async () => {
+          await load();
+          onChanged();
+        }}
+      />
+    </TaskDetailSurface>
+  );
+}
+
+/**
+ * Task detail presentation. The M3E spec puts a secondary task surface in a
+ * side sheet on expanded widths and a bottom sheet on compact/medium, instead
+ * of the previous viewport-anchored floating panel.
+ */
+function TaskDetailSurface({
+  open,
+  onClose,
+  title,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+}) {
+  const sizeClass = useWindowSizeClass();
+  if (sizeClass === 'compact' || sizeClass === 'medium')
+    return (
+      <BottomSheet open={open} onClose={onClose} title={title} size="full">
+        {children}
+      </BottomSheet>
+    );
+  return (
+    <SideSheet open={open} onClose={onClose} title={title}>
+      {children}
+    </SideSheet>
   );
 }
 
@@ -784,7 +820,7 @@ function TaskDetailV2({
     }
   };
   return (
-    <div className="task-detail-v2" role="dialog" aria-label="任务详情">
+    <div className="task-detail-v2">
       <div className="task-detail-v2-header">
         <div>
           <span className="eyebrow">{taskRecord.referenceId}</span>
@@ -799,17 +835,18 @@ function TaskDetailV2({
           />
         </div>
         <div className="header-actions">
-          <button
+          <Button
+            variant="tonal"
+            size="s"
             type="button"
-            className="secondary-button small"
             disabled={archived}
             onClick={() => void duplicate()}
           >
             复制任务
-          </button>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="关闭任务详情">
+          </Button>
+          <IconButton label="关闭任务详情" type="button" onClick={onClose}>
             ×
-          </button>
+          </IconButton>
         </div>
       </div>
       {error && (
@@ -903,33 +940,32 @@ function TaskDetailV2({
                 </select>
               </div>
               <div className="step-actions">
-                <button
+                <IconButton
+                  label="步骤上移"
                   type="button"
-                  className="icon-button"
-                  aria-label="步骤上移"
                   disabled={archived || index === 0}
                   onClick={() => void moveStep(step, 'up')}
                 >
                   ↑
-                </button>
-                <button
+                </IconButton>
+                <IconButton
+                  label="步骤下移"
                   type="button"
-                  className="icon-button"
-                  aria-label="步骤下移"
                   disabled={archived || index === steps.length - 1}
                   onClick={() => void moveStep(step, 'down')}
                 >
                   ↓
-                </button>
-                <button
+                </IconButton>
+                <IconButton
+                  label="操作"
+                  className="m3e-icon-button--danger"
                   type="button"
-                  className="icon-button danger-text"
                   aria-label={`删除步骤 ${step.title}`}
                   disabled={archived}
                   onClick={() => void deleteStep(step)}
                 >
                   ×
-                </button>
+                </IconButton>
               </div>
             </div>
           );
@@ -942,9 +978,9 @@ function TaskDetailV2({
             onChange={(event) => setNewStep(event.target.value)}
             disabled={archived}
           />
-          <button type="submit" className="secondary-button" disabled={archived || !newStep.trim()}>
+          <Button variant="tonal" type="submit" disabled={archived || !newStep.trim()}>
             添加
-          </button>
+          </Button>
         </form>
         <span className="muted">步骤状态独立于任务状态，不会自动完成任务。</span>
       </div>
@@ -966,14 +1002,15 @@ function TaskDetailV2({
               </option>
             ))}
           </select>
-          <button
+          <Button
+            variant="tonal"
+            size="s"
             type="button"
-            className="secondary-button small"
             disabled={archived || folderBusy || moveFolderId === (taskRecord.parentFolderId ?? '')}
             onClick={() => void moveTask()}
           >
             {folderBusy ? '移动中…' : '移动'}
-          </button>
+          </Button>
         </div>
       </div>
       <div className="task-detail-v2-section">
@@ -982,14 +1019,15 @@ function TaskDetailV2({
           detail.placements.map((placement) => (
             <div className="step-row" key={placement.id}>
               <span>{placement.timePointId}</span>
-              <button
+              <Button
+                variant="tonal"
+                size="s"
                 type="button"
-                className="secondary-button small"
                 disabled={archived}
                 onClick={() => void updatePlacement(placement)}
               >
                 移除
-              </button>
+              </Button>
             </div>
           ))
         ) : (
@@ -1011,9 +1049,9 @@ function TaskDetailV2({
         )}
       </div>
       <div className="header-actions">
-        <button
+        <Button
+          variant="tonal"
           type="button"
-          className="secondary-button"
           onClick={() => {
             void mutationV2('POST', `/tasks/${taskRecord.id}/${archived ? 'restore' : 'archive'}`, {
               baseVersion: taskRecord.version,
@@ -1026,10 +1064,15 @@ function TaskDetailV2({
           }}
         >
           {archived ? '恢复任务' : '归档任务'}
-        </button>
-        <button type="button" className="danger-button" onClick={() => void deleteTask()}>
+        </Button>
+        <Button
+          variant="filled"
+          className="m3e-button--danger"
+          type="button"
+          onClick={() => void deleteTask()}
+        >
           删除任务及全部内容
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -1127,9 +1170,9 @@ export function WorkflowsPage() {
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
-        <button type="submit" className="primary-button">
+        <Button variant="filled" type="submit">
           创建流程
-        </button>
+        </Button>
       </form>
       {workflows.map((workflow) => {
         const stages = workflow.stages ?? [];
@@ -1166,9 +1209,10 @@ export function WorkflowsPage() {
                 </span>
               </div>
               <div className="header-actions">
-                <button
+                <Button
+                  variant="tonal"
+                  size="s"
                   type="button"
-                  className="secondary-button small"
                   onClick={() =>
                     void run(() =>
                       mutationV2(
@@ -1180,10 +1224,12 @@ export function WorkflowsPage() {
                   }
                 >
                   {workflow.archivedAt ? '恢复流程' : '归档流程'}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="filled"
+                  size="s"
+                  className="m3e-button--danger"
                   type="button"
-                  className="danger-button small"
                   onClick={() => {
                     if (window.confirm('删除流程结构？不会删除任务。'))
                       void run(() =>
@@ -1194,7 +1240,7 @@ export function WorkflowsPage() {
                   }}
                 >
                   删除
-                </button>
+                </Button>
               </div>
             </header>
             <div className="workflow-stages">
@@ -1227,10 +1273,9 @@ export function WorkflowsPage() {
                       <span className="muted">{stage.hiddenTaskCount} 个已归档任务已隐藏</span>
                     ) : null}
                     <div>
-                      <button
+                      <IconButton
+                        label="阶段上移"
                         type="button"
-                        className="icon-button"
-                        aria-label="阶段上移"
                         disabled={index === 0}
                         onClick={() =>
                           void run(() =>
@@ -1243,11 +1288,10 @@ export function WorkflowsPage() {
                         }
                       >
                         ↑
-                      </button>
-                      <button
+                      </IconButton>
+                      <IconButton
+                        label="阶段下移"
                         type="button"
-                        className="icon-button"
-                        aria-label="阶段下移"
                         disabled={index === stages.length - 1}
                         onClick={() =>
                           void run(() =>
@@ -1260,10 +1304,11 @@ export function WorkflowsPage() {
                         }
                       >
                         ↓
-                      </button>
-                      <button
+                      </IconButton>
+                      <IconButton
+                        label="操作"
+                        className="m3e-icon-button--danger"
                         type="button"
-                        className="icon-button danger-text"
                         aria-label={`删除阶段 ${stage.name}`}
                         disabled={Boolean(workflow.archivedAt)}
                         onClick={() => {
@@ -1276,7 +1321,7 @@ export function WorkflowsPage() {
                         }}
                       >
                         ×
-                      </button>
+                      </IconButton>
                     </div>
                   </div>
                   {stage.tasks.map((task, taskIndex) => {
@@ -1319,15 +1364,15 @@ export function WorkflowsPage() {
                                   ? '进行中'
                                   : '待办'}
                             </button>
-                            <button
+                            <Button
+                              variant="text"
                               type="button"
-                              className="text-button"
                               title="打开任务详情"
                               onClick={() => setSelectedTaskId(task.id)}
                               style={{ fontWeight: 500 }}
                             >
                               {task.title}
-                            </button>
+                            </Button>
                           </div>
                           <div
                             style={{
@@ -1344,9 +1389,9 @@ export function WorkflowsPage() {
                         </div>
                         <div className="header-actions">
                           {taskIndex > 0 && membership && prevMember && (
-                            <button
+                            <Button
+                              variant="text"
                               type="button"
-                              className="text-button"
                               title="阶段内上移"
                               onClick={() =>
                                 void run(() =>
@@ -1365,12 +1410,12 @@ export function WorkflowsPage() {
                               }
                             >
                               ↑
-                            </button>
+                            </Button>
                           )}
                           {taskIndex < stage.tasks.length - 1 && membership && nextMember && (
-                            <button
+                            <Button
+                              variant="text"
                               type="button"
-                              className="text-button"
                               title="阶段内下移"
                               onClick={() =>
                                 void run(() =>
@@ -1389,12 +1434,12 @@ export function WorkflowsPage() {
                               }
                             >
                               ↓
-                            </button>
+                            </Button>
                           )}
                           {index > 0 && membership && (
-                            <button
+                            <Button
+                              variant="text"
                               type="button"
-                              className="text-button"
                               title="移到上一阶段"
                               onClick={() =>
                                 void run(() =>
@@ -1410,12 +1455,12 @@ export function WorkflowsPage() {
                               }
                             >
                               ←
-                            </button>
+                            </Button>
                           )}
                           {index < stages.length - 1 && membership && (
-                            <button
+                            <Button
+                              variant="text"
                               type="button"
-                              className="text-button"
                               title="移到下一阶段"
                               onClick={() =>
                                 void run(() =>
@@ -1431,12 +1476,13 @@ export function WorkflowsPage() {
                               }
                             >
                               →
-                            </button>
+                            </Button>
                           )}
                           {membership && (
-                            <button
+                            <Button
+                              variant="text"
+                              className="danger-text"
                               type="button"
-                              className="text-button danger-text"
                               onClick={() =>
                                 void run(() =>
                                   mutationV2('DELETE', `/workflow-memberships/${membership.id}`, {
@@ -1446,7 +1492,7 @@ export function WorkflowsPage() {
                               }
                             >
                               移除
-                            </button>
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -1467,9 +1513,10 @@ export function WorkflowsPage() {
                         </option>
                       ))}
                     </select>
-                    <button
+                    <Button
+                      variant="tonal"
+                      size="s"
                       type="button"
-                      className="secondary-button small"
                       disabled={!taskDrafts[stage.id]}
                       onClick={() =>
                         void run(() =>
@@ -1482,7 +1529,7 @@ export function WorkflowsPage() {
                       }
                     >
                       添加
-                    </button>
+                    </Button>
                     <input
                       aria-label={`在${stage.name}中新建任务`}
                       placeholder="新建任务…"
@@ -1498,14 +1545,15 @@ export function WorkflowsPage() {
                         if (event.key === 'Enter') void createTaskInStage(stage);
                       }}
                     />
-                    <button
+                    <Button
+                      variant="tonal"
+                      size="s"
                       type="button"
-                      className="secondary-button small"
                       disabled={Boolean(workflow.archivedAt) || !newTaskDrafts[stage.id]?.trim()}
                       onClick={() => void createTaskInStage(stage)}
                     >
                       新建并加入
-                    </button>
+                    </Button>
                   </div>
                 </section>
               ))}
@@ -1519,9 +1567,10 @@ export function WorkflowsPage() {
                   setStageDrafts((current) => ({ ...current, [workflow.id]: event.target.value }))
                 }
               />
-              <button
+              <Button
+                variant="tonal"
+                size="s"
                 type="button"
-                className="secondary-button small"
                 disabled={!stageDrafts[workflow.id]?.trim()}
                 onClick={() =>
                   void run(() =>
@@ -1532,7 +1581,7 @@ export function WorkflowsPage() {
                 }
               >
                 新增阶段
-              </button>
+              </Button>
             </div>
           </article>
         );
@@ -1586,16 +1635,16 @@ export function AllTasksV2Page() {
               onClick={() => setSelectedTaskId(task.id)}
               aria-label={`打开任务 ${task.title}`}
             >
-              <ListChecks size={18} />
+              <ListChecks size={20} />
               <span className="tree-item-title">{task.title}</span>
               <code>{task.referenceId}</code>
               <span className={`status-chip ${statusClass(task.status)}`}>
                 {statusLabel(task.status)}
               </span>
             </button>
-            <button
+            <IconButton
+              label="操作"
               type="button"
-              className="icon-button"
               onClick={() =>
                 void mutationV2('POST', `/tasks/${task.id}/archive`, {
                   baseVersion: task.version,
@@ -1603,8 +1652,8 @@ export function AllTasksV2Page() {
               }
               aria-label={`归档任务 ${task.title}`}
             >
-              <Archive size={15} />
-            </button>
+              <Archive size={16} />
+            </IconButton>
           </article>
         ))}
       </div>

@@ -1,0 +1,248 @@
+/*
+ * M3E adaptive layer.
+ *
+ * Breakpoints are the M3 window size classes, not component-specific magic
+ * numbers:
+ *   compact   < 600px   — navigation bar, single pane, sheets
+ *   medium    600–839px — navigation rail, single pane widened
+ *   expanded  840–1199  — navigation drawer, list-detail where useful
+ *   large     1200–1599
+ *   xlarge    >= 1600
+ *
+ * Each tier is declared once. The previous stylesheet stacked four separate
+ * max-width blocks that fought each other and needed `!important` to settle.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Compact: < 600px                                                           */
+/* -------------------------------------------------------------------------- */
+
+@media (max-width: 599.98px) {
+  html,
+  body,
+  #root {
+    block-size: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* Compact shell stacks: main content on top, navigation bar beneath it. */
+  .app-frame {
+    flex-direction: column;
+  }
+
+  .main-shell {
+    flex: 1 1 auto;
+    min-block-size: 0;
+  }
+
+  .m3e-navigation-bar {
+    flex: none;
+  }
+
+  html.native-mobile-shell *,
+  body {
+    scrollbar-width: none;
+  }
+  html.native-mobile-shell *::-webkit-scrollbar {
+    display: none;
+  }
+
+  .page,
+  .narrow-page {
+    inline-size: calc(100% - 32px);
+    padding-block-start: 20px;
+    /* Clear the fixed FAB menu so it cannot permanently cover the last row. */
+    padding-block-end: calc(176px + var(--dt-safe-bottom));
+  }
+
+  .page-header h1 {
+    font-size: var(--m3-type-headline-medium-size);
+  }
+
+  .page-header-line {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    inline-size: 100%;
+  }
+
+  .header-actions > * {
+    inline-size: 100%;
+  }
+
+  .more-grid,
+  .calendar-layout,
+  .conflict-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .today-overview {
+    grid-template-columns: 1fr auto;
+    gap: 14px;
+  }
+
+  .today-progress {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
+  .calendar-panel,
+  .calendar-detail {
+    padding: 14px;
+  }
+
+  .calendar-day {
+    min-block-size: 40px;
+  }
+
+  .task-row {
+    min-block-size: 64px;
+    padding-inline-end: 6px;
+  }
+
+  .task-title {
+    font-size: var(--m3-type-body-medium-size);
+  }
+
+  /* Reorder buttons are unreachable by hover on touch; keep them visible. */
+  .task-reorder-actions,
+  .card-reorder-actions,
+  .timeline-actions,
+  .archived-timeline-actions {
+    opacity: 1;
+  }
+
+  .conflict-actions > *,
+  .rejected-actions > *,
+  .confirm-actions > * {
+    flex: 1 1 auto;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Below medium: no side navigation                                           */
+/* -------------------------------------------------------------------------- */
+
+@media (max-width: 839.98px) {
+  .breadcrumbs {
+    display: none;
+  }
+
+  .command-trigger {
+    max-inline-size: none;
+  }
+
+  .m3e-drawer {
+    inline-size: min(320px, calc(100vw - 48px));
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Medium and up: rail or drawer replaces the navigation bar                  */
+/* -------------------------------------------------------------------------- */
+
+@media (min-width: 600px) {
+  .m3e-navigation-bar {
+    display: none;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Expanded and up: persistent navigation drawer, two-column detail           */
+/* -------------------------------------------------------------------------- */
+
+@media (min-width: 840px) {
+  .breadcrumbs {
+    display: block;
+  }
+
+  .calendar-layout {
+    grid-template-columns: minmax(360px, 1fr) minmax(320px, 1fr);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Large and up: wider gutters, roomier calendar                              */
+/* -------------------------------------------------------------------------- */
+
+@media (min-width: 1200px) {
+  .page,
+  .narrow-page {
+    inline-size: min(1120px, calc(100% - 96px));
+  }
+
+  .calendar-layout {
+    grid-template-columns: minmax(480px, 1.15fr) minmax(360px, 0.85fr);
+  }
+
+  .more-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Orientation and input modality                                             */
+/* -------------------------------------------------------------------------- */
+
+/* Coarse pointers get larger list rows and always-visible row actions. */
+@media (pointer: coarse) {
+  .task-reorder-actions,
+  .card-reorder-actions,
+  .timeline-actions {
+    opacity: 1;
+  }
+
+  .m3e-list-item,
+  .task-row,
+  .timeline-item {
+    min-block-size: 64px;
+  }
+}
+
+/* Landscape phones: keep the sheet from consuming the whole viewport. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .m3e-sheet {
+    max-block-size: calc(100dvh - 12px);
+  }
+
+  .m3e-dialog {
+    max-block-size: calc(100dvh - 24px);
+  }
+}
+
+/* Text zoom: nothing may clip when the user enlarges type. */
+@media (max-width: 599.98px) {
+  .m3e-button,
+  .task-title,
+  .more-link-card strong,
+  .timeline-copy strong {
+    overflow-wrap: anywhere;
+  }
+
+  .m3e-button {
+    white-space: normal;
+    text-align: center;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Logical-property support for RTL                                           */
+/* -------------------------------------------------------------------------- */
+
+/* The M3E components already use logical properties, so switching direction
+   only needs the few page-level exceptions below. */
+[dir='rtl'] .m3e-drawer {
+  border-start-end-radius: var(--m3-shape-xl);
+  border-end-end-radius: var(--m3-shape-xl);
+}
+
+[dir='rtl'] .m3e-sheet__label,
+[dir='rtl'] .m3e-field__label {
+  transform-origin: right center;
+}

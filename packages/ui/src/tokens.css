@@ -1,24 +1,55 @@
 /*
- * TaskDock's Material 3 semantic color roles.
- * Keep the legacy --dt-* aliases below so the existing surfaces can migrate
- * incrementally without duplicating color decisions in page CSS.
+ * TaskDock Material 3 Expressive semantic tokens.
+ *
+ * Every colour, radius, duration, spring and type style used by the clients
+ * comes from this file. Page CSS must never hardcode a hex value, a radius or
+ * a timing — that rule is what keeps the light, dark and high-contrast schemes
+ * in sync across Web, PWA, Electron and the Android WebView.
+ *
+ * Layers, in order:
+ *   1. colour roles          (M3 role names, never raw tones in components)
+ *   2. state layers          (per-container overlays, layered with background-image)
+ *   3. shape scale           (M3E corner radius scale)
+ *   4. motion                (generated spring block, see scripts/motion-tokens.ts)
+ *   5. type scale            (M3 15-role scale + M3E emphasized weights)
+ *   6. elevation             (M3E level 0-5)
+ *   7. legacy --dt-* aliases (compatibility only; do not extend)
  */
 :root {
   color-scheme: light;
 
-  /* Material 3 light scheme: calm blue primary, warm neutral surfaces. */
+  /* ---------------------------------------------------------------------- */
+  /* 1. Colour roles — light scheme                                         */
+  /* ---------------------------------------------------------------------- */
   --m3-primary: #4f5f90;
   --m3-on-primary: #ffffff;
   --m3-primary-container: #dce2ff;
   --m3-on-primary-container: #081943;
+  --m3-primary-fixed: #dce2ff;
+  --m3-primary-fixed-dim: #b6c4f8;
+  --m3-on-primary-fixed: #081943;
+  --m3-on-primary-fixed-variant: #374777;
+
   --m3-secondary: #5a5f71;
   --m3-on-secondary: #ffffff;
   --m3-secondary-container: #dee2f3;
   --m3-on-secondary-container: #171b2c;
+  --m3-secondary-fixed: #dee2f3;
+  --m3-secondary-fixed-dim: #c2c6da;
+  --m3-on-secondary-fixed: #171b2c;
+  --m3-on-secondary-fixed-variant: #414659;
+
   --m3-tertiary: #76546f;
   --m3-on-tertiary: #ffffff;
   --m3-tertiary-container: #ffd7f5;
   --m3-on-tertiary-container: #2d122a;
+  --m3-tertiary-fixed: #ffd7f5;
+  --m3-tertiary-fixed-dim: #e6b9dc;
+  --m3-on-tertiary-fixed: #2d122a;
+  --m3-on-tertiary-fixed-variant: #5b3c55;
+
+  /* Application canvas: the surface the shell and scrolling pages sit on. */
+  --m3-canvas: var(--m3-surface-container-low);
   --m3-surface: #fbf8ff;
   --m3-surface-dim: #dbd9e0;
   --m3-surface-bright: #fbf8ff;
@@ -27,40 +58,686 @@
   --m3-surface-container: #efedf4;
   --m3-surface-container-high: #e9e7ee;
   --m3-surface-container-highest: #e3e1e8;
+  --m3-surface-variant: #e3e1e8;
+  --m3-surface-tint: var(--m3-primary);
   --m3-on-surface: #1a1b20;
   --m3-on-surface-variant: #45464f;
+  --m3-inverse-surface: #2f3036;
+  --m3-inverse-on-surface: #f1eff7;
+  --m3-inverse-primary: #b9c5ff;
+
   --m3-outline: #767780;
   --m3-outline-variant: #c6c6d0;
+  --m3-scrim: rgba(26, 27, 32, 0.32);
+  --m3-shadow: #000000;
+
   --m3-error: #ba1a1a;
   --m3-on-error: #ffffff;
   --m3-error-container: #ffdad6;
   --m3-on-error-container: #410002;
+
+  /* TaskDock domain status roles (M3 has no success/warning role). */
   --m3-success: #356a4b;
   --m3-on-success: #ffffff;
   --m3-success-container: #b9f1c9;
   --m3-on-success-container: #00210e;
   --m3-warning: #765900;
+  --m3-on-warning: #ffffff;
   --m3-warning-container: #ffe08a;
   --m3-on-warning-container: #251a00;
 
-  --m3-state-hover: rgba(79, 95, 144, 0.08);
-  --m3-state-focus: rgba(79, 95, 144, 0.12);
-  --m3-state-pressed: rgba(79, 95, 144, 0.12);
-  --m3-state-dragged: rgba(79, 95, 144, 0.16);
-  --m3-scrim: rgba(26, 27, 32, 0.32);
+  /* ---------------------------------------------------------------------- */
+  /* 2. State layers                                                        */
+  /*                                                                        */
+  /* M3 overlays the container's "on" colour instead of swapping the fill,  */
+  /* so a filled primary button lifts with on-primary and an outlined       */
+  /* button lifts with on-surface. Components layer these with              */
+  /* `background-image` so the base fill survives underneath.               */
+  /* ---------------------------------------------------------------------- */
+  --m3-state-hover: color-mix(in srgb, var(--m3-on-surface) 8%, transparent);
+  --m3-state-focus: color-mix(in srgb, var(--m3-on-surface) 10%, transparent);
+  --m3-state-pressed: color-mix(in srgb, var(--m3-on-surface) 10%, transparent);
+  --m3-state-dragged: color-mix(in srgb, var(--m3-on-surface) 16%, transparent);
+  --m3-state-hover-primary: color-mix(in srgb, var(--m3-on-primary) 8%, transparent);
+  --m3-state-focus-primary: color-mix(in srgb, var(--m3-on-primary) 10%, transparent);
+  --m3-state-pressed-primary: color-mix(in srgb, var(--m3-on-primary) 10%, transparent);
+  --m3-state-hover-error: color-mix(in srgb, var(--m3-on-error) 8%, transparent);
+  --m3-state-pressed-error: color-mix(in srgb, var(--m3-on-error) 10%, transparent);
+  --m3-state-disabled-container: color-mix(in srgb, var(--m3-on-surface) 12%, transparent);
+  --m3-state-disabled-content: color-mix(in srgb, var(--m3-on-surface) 38%, transparent);
+  --m3-focus-ring: var(--m3-primary);
+  --m3-elevation-overlay: transparent;
 
+  /* ---------------------------------------------------------------------- */
+  /* 3. Shape scale (M3E corner radius tokens)                              */
+  /* ---------------------------------------------------------------------- */
+  --m3-shape-none: 0px;
   --m3-shape-xs: 4px;
   --m3-shape-sm: 8px;
   --m3-shape-md: 12px;
   --m3-shape-lg: 16px;
+  --m3-shape-lg-increased: 20px;
   --m3-shape-xl: 28px;
+  --m3-shape-xl-increased: 32px;
+  --m3-shape-xxl: 48px;
   --m3-shape-full: 999px;
-  --m3-motion-short: 120ms;
-  --m3-motion-medium: 220ms;
-  --m3-motion-long: 360ms;
 
-  /* Legacy aliases used by the current application. */
-  --dt-canvas: var(--m3-surface-container-low);
+  /* ---------------------------------------------------------------------- */
+  /* 4. Motion                                                              */
+  /* ---------------------------------------------------------------------- */
+  /* Legacy standard easing tokens are kept for the cubic-bezier fallback    */
+  /* path used by browsers without `linear()` support.                      */
+  --m3-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --m3-easing-standard-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --m3-easing-standard-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --m3-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --m3-easing-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --m3-easing-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+
+  --m3-motion-short: 150ms;
+  --m3-motion-medium: 250ms;
+  --m3-motion-long: 400ms;
+  --m3-motion-short1: 50ms;
+  --m3-motion-short2: 100ms;
+  --m3-motion-short3: 150ms;
+  --m3-motion-short4: 200ms;
+  --m3-motion-medium1: 250ms;
+  --m3-motion-medium2: 300ms;
+  --m3-motion-medium3: 350ms;
+  --m3-motion-medium4: 400ms;
+  --m3-motion-long1: 450ms;
+  --m3-motion-long2: 500ms;
+
+  /* >>> motion-tokens: start (generated) */
+  /* M3E spring physics, sampled to CSS linear() easings. Do not hand-edit. */
+  /* standard/spatial/fast — damping 0.9, stiffness 1400 */
+  --m3-spring-spatial-fast: linear(
+    0 0%,
+    0.0138 2.08%,
+    0.0499 4.17%,
+    0.1012 6.25%,
+    0.1622 8.33%,
+    0.2288 10.42%,
+    0.2976 12.5%,
+    0.3663 14.58%,
+    0.4331 16.67%,
+    0.4967 18.75%,
+    0.5563 20.83%,
+    0.6115 22.92%,
+    0.6619 25%,
+    0.7076 27.08%,
+    0.7486 29.17%,
+    0.7851 31.25%,
+    0.8174 33.33%,
+    0.8458 35.42%,
+    0.8705 37.5%,
+    0.892 39.58%,
+    0.9104 41.67%,
+    0.9263 43.75%,
+    0.9398 45.83%,
+    0.9512 47.92%,
+    0.9608 50%,
+    0.9688 52.08%,
+    0.9755 54.17%,
+    0.981 56.25%,
+    0.9856 58.33%,
+    0.9892 60.42%,
+    0.9922 62.5%,
+    0.9946 64.58%,
+    0.9965 66.67%,
+    0.9979 68.75%,
+    0.999 70.83%,
+    0.9999 72.92%,
+    1.0005 75%,
+    1.0009 77.08%,
+    1.0012 79.17%,
+    1.0014 81.25%,
+    1.0015 83.33%,
+    1.0015 85.42%,
+    1.0015 87.5%,
+    1.0015 89.58%,
+    1.0014 91.67%,
+    1.0013 93.75%,
+    1.0012 95.83%,
+    1.0011 97.92%,
+    1 100%
+  );
+  --m3-spring-spatial-fast-duration: 225ms;
+  /* standard/spatial/default — damping 0.9, stiffness 700 */
+  --m3-spring-spatial: linear(
+    0 0%,
+    0.0137 2.08%,
+    0.0495 4.17%,
+    0.1004 6.25%,
+    0.161 8.33%,
+    0.2272 10.42%,
+    0.2956 12.5%,
+    0.364 14.58%,
+    0.4306 16.67%,
+    0.494 18.75%,
+    0.5535 20.83%,
+    0.6087 22.92%,
+    0.6591 25%,
+    0.7049 27.08%,
+    0.746 29.17%,
+    0.7826 31.25%,
+    0.8151 33.33%,
+    0.8436 35.42%,
+    0.8685 37.5%,
+    0.8901 39.58%,
+    0.9088 41.67%,
+    0.9248 43.75%,
+    0.9384 45.83%,
+    0.95 47.92%,
+    0.9598 50%,
+    0.9679 52.08%,
+    0.9748 54.17%,
+    0.9804 56.25%,
+    0.985 58.33%,
+    0.9888 60.42%,
+    0.9918 62.5%,
+    0.9943 64.58%,
+    0.9962 66.67%,
+    0.9977 68.75%,
+    0.9989 70.83%,
+    0.9997 72.92%,
+    1.0004 75%,
+    1.0009 77.08%,
+    1.0012 79.17%,
+    1.0014 81.25%,
+    1.0015 83.33%,
+    1.0015 85.42%,
+    1.0015 87.5%,
+    1.0015 89.58%,
+    1.0014 91.67%,
+    1.0013 93.75%,
+    1.0012 95.83%,
+    1.0011 97.92%,
+    1 100%
+  );
+  --m3-spring-spatial-duration: 317ms;
+  /* standard/spatial/slow — damping 0.9, stiffness 300 */
+  --m3-spring-spatial-slow: linear(
+    0 0%,
+    0.0139 2.08%,
+    0.0502 4.17%,
+    0.1017 6.25%,
+    0.163 8.33%,
+    0.2298 10.42%,
+    0.2989 12.5%,
+    0.3677 14.58%,
+    0.4346 16.67%,
+    0.4983 18.75%,
+    0.558 20.83%,
+    0.6132 22.92%,
+    0.6636 25%,
+    0.7093 27.08%,
+    0.7502 29.17%,
+    0.7867 31.25%,
+    0.8189 33.33%,
+    0.8471 35.42%,
+    0.8717 37.5%,
+    0.8931 39.58%,
+    0.9115 41.67%,
+    0.9272 43.75%,
+    0.9406 45.83%,
+    0.9519 47.92%,
+    0.9614 50%,
+    0.9694 52.08%,
+    0.976 54.17%,
+    0.9814 56.25%,
+    0.9859 58.33%,
+    0.9895 60.42%,
+    0.9924 62.5%,
+    0.9948 64.58%,
+    0.9966 66.67%,
+    0.998 68.75%,
+    0.9991 70.83%,
+    0.9999 72.92%,
+    1.0005 75%,
+    1.001 77.08%,
+    1.0012 79.17%,
+    1.0014 81.25%,
+    1.0015 83.33%,
+    1.0015 85.42%,
+    1.0015 87.5%,
+    1.0014 89.58%,
+    1.0014 91.67%,
+    1.0013 93.75%,
+    1.0012 95.83%,
+    1.0011 97.92%,
+    1 100%
+  );
+  --m3-spring-spatial-slow-duration: 487ms;
+  /* standard/effects/fast — damping 1, stiffness 3800 */
+  --m3-spring-effects-fast: linear(
+    0 0%,
+    0.0163 2.08%,
+    0.0576 4.17%,
+    0.1147 6.25%,
+    0.1807 8.33%,
+    0.2507 10.42%,
+    0.3214 12.5%,
+    0.3902 14.58%,
+    0.4558 16.67%,
+    0.5172 18.75%,
+    0.5737 20.83%,
+    0.6253 22.92%,
+    0.6718 25%,
+    0.7136 27.08%,
+    0.7508 29.17%,
+    0.7837 31.25%,
+    0.8128 33.33%,
+    0.8383 35.42%,
+    0.8606 37.5%,
+    0.8801 39.58%,
+    0.897 41.67%,
+    0.9117 43.75%,
+    0.9244 45.83%,
+    0.9353 47.92%,
+    0.9448 50%,
+    0.9529 52.08%,
+    0.9599 54.17%,
+    0.9658 56.25%,
+    0.9709 58.33%,
+    0.9753 60.42%,
+    0.979 62.5%,
+    0.9822 64.58%,
+    0.9849 66.67%,
+    0.9872 68.75%,
+    0.9892 70.83%,
+    0.9909 72.92%,
+    0.9923 75%,
+    0.9935 77.08%,
+    0.9945 79.17%,
+    0.9954 81.25%,
+    0.9961 83.33%,
+    0.9967 85.42%,
+    0.9972 87.5%,
+    0.9977 89.58%,
+    0.998 91.67%,
+    0.9983 93.75%,
+    0.9986 95.83%,
+    0.9988 97.92%,
+    1 100%
+  );
+  --m3-spring-effects-fast-duration: 150ms;
+  /* standard/effects/default — damping 1, stiffness 1600 */
+  --m3-spring-effects: linear(
+    0 0%,
+    0.0166 2.08%,
+    0.0586 4.17%,
+    0.1164 6.25%,
+    0.1832 8.33%,
+    0.254 10.42%,
+    0.3253 12.5%,
+    0.3947 14.58%,
+    0.4606 16.67%,
+    0.5221 18.75%,
+    0.5787 20.83%,
+    0.6303 22.92%,
+    0.6768 25%,
+    0.7184 27.08%,
+    0.7553 29.17%,
+    0.7881 31.25%,
+    0.8168 33.33%,
+    0.8421 35.42%,
+    0.8641 37.5%,
+    0.8833 39.58%,
+    0.8999 41.67%,
+    0.9143 43.75%,
+    0.9268 45.83%,
+    0.9375 47.92%,
+    0.9467 50%,
+    0.9546 52.08%,
+    0.9614 54.17%,
+    0.9672 56.25%,
+    0.9722 58.33%,
+    0.9764 60.42%,
+    0.98 62.5%,
+    0.9831 64.58%,
+    0.9857 66.67%,
+    0.9879 68.75%,
+    0.9898 70.83%,
+    0.9914 72.92%,
+    0.9927 75%,
+    0.9938 77.08%,
+    0.9948 79.17%,
+    0.9956 81.25%,
+    0.9963 83.33%,
+    0.9969 85.42%,
+    0.9974 87.5%,
+    0.9978 89.58%,
+    0.9982 91.67%,
+    0.9985 93.75%,
+    0.9987 95.83%,
+    0.9989 97.92%,
+    1 100%
+  );
+  --m3-spring-effects-duration: 233ms;
+  /* standard/effects/slow — damping 1, stiffness 800 */
+  --m3-spring-effects-slow: linear(
+    0 0%,
+    0.0165 2.08%,
+    0.0583 4.17%,
+    0.116 6.25%,
+    0.1826 8.33%,
+    0.2531 10.42%,
+    0.3242 12.5%,
+    0.3935 14.58%,
+    0.4593 16.67%,
+    0.5208 18.75%,
+    0.5774 20.83%,
+    0.6289 22.92%,
+    0.6755 25%,
+    0.7171 27.08%,
+    0.7541 29.17%,
+    0.7869 31.25%,
+    0.8158 33.33%,
+    0.8411 35.42%,
+    0.8632 37.5%,
+    0.8824 39.58%,
+    0.8992 41.67%,
+    0.9136 43.75%,
+    0.9261 45.83%,
+    0.9369 47.92%,
+    0.9462 50%,
+    0.9542 52.08%,
+    0.961 54.17%,
+    0.9668 56.25%,
+    0.9718 58.33%,
+    0.9761 60.42%,
+    0.9797 62.5%,
+    0.9828 64.58%,
+    0.9855 66.67%,
+    0.9877 68.75%,
+    0.9896 70.83%,
+    0.9912 72.92%,
+    0.9926 75%,
+    0.9938 77.08%,
+    0.9947 79.17%,
+    0.9956 81.25%,
+    0.9963 83.33%,
+    0.9969 85.42%,
+    0.9973 87.5%,
+    0.9978 89.58%,
+    0.9981 91.67%,
+    0.9984 93.75%,
+    0.9987 95.83%,
+    0.9989 97.92%,
+    1 100%
+  );
+  --m3-spring-effects-slow-duration: 329ms;
+  /* expressive/spatial/fast — damping 0.6, stiffness 800 */
+  --m3-spring-expressive-spatial-fast: linear(
+    0 0%,
+    0.0209 2.08%,
+    0.0763 4.17%,
+    0.1563 6.25%,
+    0.252 8.33%,
+    0.356 10.42%,
+    0.4624 12.5%,
+    0.5662 14.58%,
+    0.664 16.67%,
+    0.7531 18.75%,
+    0.832 20.83%,
+    0.8998 22.92%,
+    0.9562 25%,
+    1.0017 27.08%,
+    1.0368 29.17%,
+    1.0625 31.25%,
+    1.0799 33.33%,
+    1.0901 35.42%,
+    1.0945 37.5%,
+    1.094 39.58%,
+    1.0899 41.67%,
+    1.0831 43.75%,
+    1.0745 45.83%,
+    1.0649 47.92%,
+    1.0548 50%,
+    1.0448 52.08%,
+    1.0353 54.17%,
+    1.0265 56.25%,
+    1.0187 58.33%,
+    1.0118 60.42%,
+    1.0061 62.5%,
+    1.0014 64.58%,
+    0.9977 66.67%,
+    0.9949 68.75%,
+    0.993 70.83%,
+    0.9918 72.92%,
+    0.9911 75%,
+    0.991 77.08%,
+    0.9913 79.17%,
+    0.9919 81.25%,
+    0.9926 83.33%,
+    0.9935 85.42%,
+    0.9944 87.5%,
+    0.9954 89.58%,
+    0.9963 91.67%,
+    0.9972 93.75%,
+    0.998 95.83%,
+    0.9986 97.92%,
+    1 100%
+  );
+  --m3-spring-expressive-spatial-fast-duration: 362ms;
+  /* expressive/spatial/default — damping 0.6, stiffness 380 */
+  --m3-spring-expressive-spatial: linear(
+    0 0%,
+    0.0208 2.08%,
+    0.0761 4.17%,
+    0.1558 6.25%,
+    0.2512 8.33%,
+    0.355 10.42%,
+    0.4612 12.5%,
+    0.5649 14.58%,
+    0.6626 16.67%,
+    0.7517 18.75%,
+    0.8306 20.83%,
+    0.8985 22.92%,
+    0.9551 25%,
+    1.0007 27.08%,
+    1.036 29.17%,
+    1.0619 31.25%,
+    1.0795 33.33%,
+    1.0899 35.42%,
+    1.0944 37.5%,
+    1.0941 39.58%,
+    1.0901 41.67%,
+    1.0834 43.75%,
+    1.0749 45.83%,
+    1.0653 47.92%,
+    1.0553 50%,
+    1.0453 52.08%,
+    1.0358 54.17%,
+    1.027 56.25%,
+    1.0191 58.33%,
+    1.0122 60.42%,
+    1.0064 62.5%,
+    1.0016 64.58%,
+    0.9979 66.67%,
+    0.9951 68.75%,
+    0.9931 70.83%,
+    0.9918 72.92%,
+    0.9912 75%,
+    0.991 77.08%,
+    0.9913 79.17%,
+    0.9918 81.25%,
+    0.9925 83.33%,
+    0.9934 85.42%,
+    0.9944 87.5%,
+    0.9953 89.58%,
+    0.9962 91.67%,
+    0.9971 93.75%,
+    0.9979 95.83%,
+    0.9986 97.92%,
+    1 100%
+  );
+  --m3-spring-expressive-spatial-duration: 525ms;
+  /* expressive/spatial/slow — damping 0.6, stiffness 200 */
+  --m3-spring-expressive-spatial-slow: linear(
+    0 0%,
+    0.0207 2.08%,
+    0.0755 4.17%,
+    0.1547 6.25%,
+    0.2496 8.33%,
+    0.353 10.42%,
+    0.4587 12.5%,
+    0.5621 14.58%,
+    0.6597 16.67%,
+    0.7487 18.75%,
+    0.8278 20.83%,
+    0.8958 22.92%,
+    0.9527 25%,
+    0.9987 27.08%,
+    1.0343 29.17%,
+    1.0606 31.25%,
+    1.0786 33.33%,
+    1.0894 35.42%,
+    1.0942 37.5%,
+    1.0942 39.58%,
+    1.0905 41.67%,
+    1.084 43.75%,
+    1.0757 45.83%,
+    1.0662 47.92%,
+    1.0562 50%,
+    1.0463 52.08%,
+    1.0367 54.17%,
+    1.0278 56.25%,
+    1.0199 58.33%,
+    1.0129 60.42%,
+    1.007 62.5%,
+    1.0021 64.58%,
+    0.9983 66.67%,
+    0.9954 68.75%,
+    0.9933 70.83%,
+    0.992 72.92%,
+    0.9912 75%,
+    0.991 77.08%,
+    0.9912 79.17%,
+    0.9917 81.25%,
+    0.9924 83.33%,
+    0.9933 85.42%,
+    0.9942 87.5%,
+    0.9952 89.58%,
+    0.9961 91.67%,
+    0.997 93.75%,
+    0.9978 95.83%,
+    0.9985 97.92%,
+    1 100%
+  );
+  --m3-spring-expressive-spatial-slow-duration: 721ms;
+  /* <<< motion-tokens: end */
+
+  /* ---------------------------------------------------------------------- */
+  /* 5. Type scale                                                          */
+  /*                                                                        */
+  /* M3's 15 roles plus the M3E emphasized weight/tracking overrides.       */
+  /* Use `.m3-type-*` utility classes rather than repeating the four        */
+  /* properties per selector.                                               */
+  /* ---------------------------------------------------------------------- */
+  --m3-font-sans:
+    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', 'Microsoft YaHei',
+    sans-serif;
+  --m3-font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+
+  --m3-type-display-large-size: 57px;
+  --m3-type-display-large-line: 64px;
+  --m3-type-display-large-weight: 400;
+  --m3-type-display-large-tracking: -0.0156em;
+  --m3-type-display-medium-size: 45px;
+  --m3-type-display-medium-line: 52px;
+  --m3-type-display-medium-weight: 400;
+  --m3-type-display-medium-tracking: 0em;
+  --m3-type-display-small-size: 36px;
+  --m3-type-display-small-line: 44px;
+  --m3-type-display-small-weight: 400;
+  --m3-type-display-small-tracking: 0em;
+
+  --m3-type-headline-large-size: 32px;
+  --m3-type-headline-large-line: 40px;
+  --m3-type-headline-large-weight: 400;
+  --m3-type-headline-large-tracking: 0em;
+  --m3-type-headline-medium-size: 28px;
+  --m3-type-headline-medium-line: 36px;
+  --m3-type-headline-medium-weight: 400;
+  --m3-type-headline-medium-tracking: 0em;
+  --m3-type-headline-small-size: 24px;
+  --m3-type-headline-small-line: 32px;
+  --m3-type-headline-small-weight: 400;
+  --m3-type-headline-small-tracking: 0em;
+
+  --m3-type-title-large-size: 22px;
+  --m3-type-title-large-line: 28px;
+  --m3-type-title-large-weight: 400;
+  --m3-type-title-large-tracking: 0em;
+  --m3-type-title-medium-size: 16px;
+  --m3-type-title-medium-line: 24px;
+  --m3-type-title-medium-weight: 500;
+  --m3-type-title-medium-tracking: 0.0094em;
+  --m3-type-title-small-size: 14px;
+  --m3-type-title-small-line: 20px;
+  --m3-type-title-small-weight: 500;
+  --m3-type-title-small-tracking: 0.0071em;
+
+  --m3-type-body-large-size: 16px;
+  --m3-type-body-large-line: 24px;
+  --m3-type-body-large-weight: 400;
+  --m3-type-body-large-tracking: 0.0313em;
+  --m3-type-body-medium-size: 14px;
+  --m3-type-body-medium-line: 20px;
+  --m3-type-body-medium-weight: 400;
+  --m3-type-body-medium-tracking: 0.0179em;
+  --m3-type-body-small-size: 12px;
+  --m3-type-body-small-line: 16px;
+  --m3-type-body-small-weight: 400;
+  --m3-type-body-small-tracking: 0.0333em;
+
+  --m3-type-label-large-size: 14px;
+  --m3-type-label-large-line: 20px;
+  --m3-type-label-large-weight: 500;
+  --m3-type-label-large-tracking: 0.0071em;
+  --m3-type-label-medium-size: 12px;
+  --m3-type-label-medium-line: 16px;
+  --m3-type-label-medium-weight: 500;
+  --m3-type-label-medium-tracking: 0.0417em;
+  --m3-type-label-small-size: 11px;
+  --m3-type-label-small-line: 16px;
+  --m3-type-label-small-weight: 500;
+  --m3-type-label-small-tracking: 0.0455em;
+
+  /* M3E emphasized styles: heavier weight, tighter tracking, for hero text. */
+  --m3-type-emphasized-weight: 700;
+  --m3-type-emphasized-weight-strong: 800;
+  --m3-type-display-emphasized-tracking: -0.02em;
+  --m3-type-headline-emphasized-tracking: -0.015em;
+  --m3-type-title-emphasized-tracking: -0.005em;
+
+  /* ---------------------------------------------------------------------- */
+  /* 6. Elevation (M3E levels 0-5)                                          */
+  /* ---------------------------------------------------------------------- */
+  --m3-elevation-0: none;
+  --m3-elevation-1:
+    0 1px 2px color-mix(in srgb, var(--m3-shadow) 30%, transparent),
+    0 1px 3px 1px color-mix(in srgb, var(--m3-shadow) 15%, transparent);
+  --m3-elevation-2:
+    0 1px 2px color-mix(in srgb, var(--m3-shadow) 30%, transparent),
+    0 2px 6px 2px color-mix(in srgb, var(--m3-shadow) 15%, transparent);
+  --m3-elevation-3:
+    0 1px 3px color-mix(in srgb, var(--m3-shadow) 30%, transparent),
+    0 4px 8px 3px color-mix(in srgb, var(--m3-shadow) 15%, transparent);
+  --m3-elevation-4:
+    0 2px 3px color-mix(in srgb, var(--m3-shadow) 30%, transparent),
+    0 6px 10px 4px color-mix(in srgb, var(--m3-shadow) 15%, transparent);
+  --m3-elevation-5:
+    0 4px 4px color-mix(in srgb, var(--m3-shadow) 30%, transparent),
+    0 8px 12px 6px color-mix(in srgb, var(--m3-shadow) 15%, transparent);
+
+  /* ---------------------------------------------------------------------- */
+  /* 7. Legacy --dt-* aliases (compatibility only; do not extend)           */
+  /* ---------------------------------------------------------------------- */
+  --dt-canvas: var(--m3-canvas);
   --dt-surface: var(--m3-surface-container-lowest);
   --dt-surface-subtle: var(--m3-surface-container-low);
   --dt-surface-raised: var(--m3-surface-container);
@@ -68,45 +745,43 @@
   --dt-surface-translucent: color-mix(in srgb, var(--m3-surface) 94%, transparent);
   --dt-ink: var(--m3-on-surface);
   --dt-ink-soft: var(--m3-on-surface-variant);
-  --dt-muted: #5a5d68;
-  --dt-faint: #5a5d68;
+  --dt-text: var(--m3-on-surface);
+  --dt-muted: color-mix(in srgb, var(--m3-on-surface-variant) 92%, transparent);
+  --dt-faint: color-mix(in srgb, var(--m3-on-surface-variant) 82%, transparent);
   --dt-line: var(--m3-outline-variant);
   --dt-line-strong: var(--m3-outline);
   --dt-accent: var(--m3-primary);
   --dt-accent-soft: var(--m3-primary-container);
-  --dt-accent-hover: #3d4d7b;
-  --dt-accent-border: #7d8bb8;
+  --dt-accent-hover: color-mix(in srgb, var(--m3-primary) 86%, var(--m3-on-primary));
+  --dt-accent-border: color-mix(in srgb, var(--m3-primary) 62%, var(--m3-outline));
   --dt-on-accent: var(--m3-on-primary);
-  --dt-info: #3e638f;
-  --dt-info-soft: #e2efff;
-  --dt-info-border: #bdcce2;
-  --dt-warning-border: #d0ae42;
-  --dt-warning-ink: #5d4700;
-  --dt-danger-border: #dfaaa5;
-  --dt-skeleton-start: rgba(198, 198, 208, 0.44);
-  --dt-skeleton-mid: rgba(245, 242, 249, 0.9);
-  --dt-accent-line: rgba(79, 95, 144, 0.2);
+  --dt-info: var(--m3-tertiary);
+  --dt-info-soft: var(--m3-tertiary-container);
+  --dt-info-border: color-mix(in srgb, var(--m3-tertiary) 42%, var(--m3-outline-variant));
+  --dt-warning-border: color-mix(in srgb, var(--m3-warning) 52%, var(--m3-outline-variant));
+  --dt-warning-ink: var(--m3-on-warning-container);
+  --dt-danger-border: color-mix(in srgb, var(--m3-error) 42%, var(--m3-outline-variant));
+  --dt-skeleton-start: color-mix(in srgb, var(--m3-on-surface) 12%, transparent);
+  --dt-skeleton-mid: color-mix(in srgb, var(--m3-surface-container-highest) 90%, transparent);
+  --dt-accent-line: color-mix(in srgb, var(--m3-primary) 24%, transparent);
   --dt-success: var(--m3-success);
   --dt-success-soft: var(--m3-success-container);
   --dt-warning: var(--m3-warning);
   --dt-warning-soft: var(--m3-warning-container);
   --dt-danger: var(--m3-error);
   --dt-danger-soft: var(--m3-error-container);
-  --dt-focus: rgba(79, 95, 144, 0.42);
+  --dt-focus: color-mix(in srgb, var(--m3-primary) 48%, transparent);
   --dt-overlay: var(--m3-scrim);
-  --dt-code-surface: #e9e7ee;
-  --dt-shadow-detail: rgba(26, 27, 32, 0.06);
-  --dt-shadow-card: rgba(26, 27, 32, 0.08);
-  --dt-shadow-drawer: rgba(26, 27, 32, 0.16);
-  --dt-shadow-accent: rgba(79, 95, 144, 0.24);
+  --dt-code-surface: var(--m3-surface-container-high);
+  --dt-shadow-detail: color-mix(in srgb, var(--m3-shadow) 8%, transparent);
+  --dt-shadow-card: color-mix(in srgb, var(--m3-shadow) 10%, transparent);
+  --dt-shadow-drawer: color-mix(in srgb, var(--m3-shadow) 18%, transparent);
+  --dt-shadow-accent: color-mix(in srgb, var(--m3-primary) 26%, transparent);
+  --dt-shadow-popover: var(--m3-elevation-3);
   --dt-radius: var(--m3-shape-lg);
   --dt-radius-small: var(--m3-shape-md);
-  --dt-shadow-popover: 0 16px 36px rgba(26, 27, 32, 0.14), 0 3px 10px rgba(26, 27, 32, 0.08);
-  --dt-font-sans:
-    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', 'Microsoft YaHei',
-    sans-serif;
-  --dt-font-mono:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  --dt-font-sans: var(--m3-font-sans);
+  --dt-font-mono: var(--m3-font-mono);
 }
 
 [data-theme='dark'] {
@@ -116,14 +791,30 @@
   --m3-on-primary: #1f2f60;
   --m3-primary-container: #374777;
   --m3-on-primary-container: #dce2ff;
+  --m3-primary-fixed: #dce2ff;
+  --m3-primary-fixed-dim: #b6c4f8;
+  --m3-on-primary-fixed: #081943;
+  --m3-on-primary-fixed-variant: #374777;
+
   --m3-secondary: #c2c6da;
   --m3-on-secondary: #2b2f40;
   --m3-secondary-container: #414659;
   --m3-on-secondary-container: #dee2f3;
+  --m3-secondary-fixed: #dee2f3;
+  --m3-secondary-fixed-dim: #c2c6da;
+  --m3-on-secondary-fixed: #171b2c;
+  --m3-on-secondary-fixed-variant: #414659;
+
   --m3-tertiary: #e6b9dc;
   --m3-on-tertiary: #43263f;
   --m3-tertiary-container: #5b3c55;
   --m3-on-tertiary-container: #ffd7f5;
+  --m3-tertiary-fixed: #ffd7f5;
+  --m3-tertiary-fixed-dim: #e6b9dc;
+  --m3-on-tertiary-fixed: #2d122a;
+  --m3-on-tertiary-fixed-variant: #5b3c55;
+
+  --m3-canvas: var(--m3-surface-container-lowest);
   --m3-surface: #121318;
   --m3-surface-dim: #121318;
   --m3-surface-bright: #38393f;
@@ -132,66 +823,67 @@
   --m3-surface-container: #1e1f25;
   --m3-surface-container-high: #292a2f;
   --m3-surface-container-highest: #34343a;
+  --m3-surface-variant: #45464f;
+  --m3-surface-tint: var(--m3-primary);
   --m3-on-surface: #e3e1e8;
   --m3-on-surface-variant: #c6c6d0;
+  --m3-inverse-surface: #e3e1e8;
+  --m3-inverse-on-surface: #2f3036;
+  --m3-inverse-primary: #4f5f90;
+
   --m3-outline: #90909a;
   --m3-outline-variant: #45464f;
+  --m3-scrim: rgba(0, 0, 0, 0.58);
+  --m3-shadow: #000000;
+
   --m3-error: #ffb4ab;
   --m3-on-error: #690005;
   --m3-error-container: #93000a;
   --m3-on-error-container: #ffdad6;
+
   --m3-success: #9ed5ad;
   --m3-on-success: #0b3920;
   --m3-success-container: #205332;
   --m3-on-success-container: #b9f1c9;
   --m3-warning: #e7c34f;
+  --m3-on-warning: #3c2f00;
   --m3-warning-container: #574500;
   --m3-on-warning-container: #ffe08a;
 
-  --m3-state-hover: rgba(185, 197, 255, 0.08);
-  --m3-state-focus: rgba(185, 197, 255, 0.12);
-  --m3-state-pressed: rgba(185, 197, 255, 0.12);
-  --m3-state-dragged: rgba(185, 197, 255, 0.16);
-  --m3-scrim: rgba(0, 0, 0, 0.58);
+  /* In dark theme M3E prefers tonal surfaces over drop shadows. */
+  --m3-elevation-overlay: color-mix(in srgb, var(--m3-primary) 5%, transparent);
+  --m3-elevation-1: 0 1px 2px color-mix(in srgb, var(--m3-shadow) 60%, transparent);
+  --m3-elevation-2: 0 1px 3px 1px color-mix(in srgb, var(--m3-shadow) 62%, transparent);
+  --m3-elevation-3: 0 2px 6px 2px color-mix(in srgb, var(--m3-shadow) 64%, transparent);
+  --m3-elevation-4: 0 2px 8px 3px color-mix(in srgb, var(--m3-shadow) 66%, transparent);
+  --m3-elevation-5: 0 4px 10px 4px color-mix(in srgb, var(--m3-shadow) 70%, transparent);
 
-  --dt-canvas: var(--m3-surface-container-lowest);
+  --dt-canvas: var(--m3-canvas);
   --dt-surface: var(--m3-surface-container);
   --dt-surface-subtle: var(--m3-surface-container-low);
   --dt-surface-raised: var(--m3-surface-container-high);
   --dt-surface-hover: var(--m3-surface-container-highest);
-  --dt-surface-translucent: color-mix(in srgb, var(--m3-surface) 94%, transparent);
-  --dt-ink: var(--m3-on-surface);
-  --dt-ink-soft: var(--m3-on-surface-variant);
-  --dt-muted: #adb0ba;
-  --dt-faint: #9a9ca6;
-  --dt-line: var(--m3-outline-variant);
-  --dt-line-strong: var(--m3-outline);
-  --dt-accent: var(--m3-primary);
-  --dt-accent-soft: var(--m3-primary-container);
-  --dt-accent-hover: #cbd3ff;
-  --dt-accent-border: #8290c2;
-  --dt-on-accent: var(--m3-on-primary);
-  --dt-info: #a8c7f1;
-  --dt-info-soft: #1c314a;
-  --dt-info-border: #3c5879;
-  --dt-warning-border: #927a2e;
-  --dt-warning-ink: #f0d66b;
-  --dt-danger-border: #a35a56;
-  --dt-skeleton-start: rgba(69, 70, 79, 0.42);
-  --dt-skeleton-mid: rgba(30, 31, 37, 0.84);
-  --dt-accent-line: rgba(185, 197, 255, 0.28);
-  --dt-success: var(--m3-success);
-  --dt-success-soft: var(--m3-success-container);
-  --dt-warning: var(--m3-warning);
-  --dt-warning-soft: var(--m3-warning-container);
-  --dt-danger: var(--m3-error);
-  --dt-danger-soft: var(--m3-error-container);
-  --dt-focus: rgba(185, 197, 255, 0.56);
-  --dt-overlay: var(--m3-scrim);
-  --dt-code-surface: var(--m3-surface-container-lowest);
-  --dt-shadow-detail: rgba(0, 0, 0, 0.24);
-  --dt-shadow-card: rgba(0, 0, 0, 0.32);
-  --dt-shadow-drawer: rgba(0, 0, 0, 0.44);
-  --dt-shadow-accent: rgba(0, 0, 0, 0.42);
-  --dt-shadow-popover: 0 16px 36px rgba(0, 0, 0, 0.44), 0 3px 10px rgba(0, 0, 0, 0.26);
+}
+
+/*
+ * Contrast preferences. `prefers-contrast: more` moves the outline and
+ * on-surface-variant roles to their higher-contrast tones and thickens the
+ * focus ring, so the high-contrast scheme is a token change rather than a
+ * separate stylesheet.
+ */
+@media (prefers-contrast: more) {
+  :root {
+    --m3-on-surface-variant: #2b2c33;
+    --m3-outline: #45464f;
+    --m3-outline-variant: #767780;
+    --m3-state-hover: color-mix(in srgb, var(--m3-on-surface) 14%, transparent);
+    --m3-state-focus: color-mix(in srgb, var(--m3-on-surface) 18%, transparent);
+    --m3-state-pressed: color-mix(in srgb, var(--m3-on-surface) 18%, transparent);
+  }
+
+  [data-theme='dark'] {
+    --m3-on-surface-variant: #e3e1e8;
+    --m3-outline: #c6c6d0;
+    --m3-outline-variant: #90909a;
+  }
 }

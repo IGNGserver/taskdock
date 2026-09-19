@@ -59,6 +59,40 @@ Docker Compose build/up/重启/卷恢复                                 NOT RUN
 | 移动端 FAB 遮挡最后一行                 | 已修复 | 移动端 `.page` 底部留白提升至 160px（含 native shell `!important` 规则）                                                                                    |
 | 后台刷新替换可交互内容                  | 已修复 | `useReloadable` 增加 `initialLoading`，归档页仅在首次加载显示骨架屏                                                                                         |
 
+## Material 3 Expressive 迁移（2026-09-19，未发布）
+
+界面已从 Material 3 基础配色迁移到 Material 3 Expressive，覆盖外观语言、页面结构、组件、交互、动效、适配六个维度。设计决策见 [ADR 0003](adr/0003-material-3-expressive.md)，全量清单见 [UI_EXPRESSIVE_MIGRATION.md](UI_EXPRESSIVE_MIGRATION.md)。
+
+本轮验证命令与结果：
+
+```text
+pnpm format:check                                                 PASS
+pnpm lint                                                         PASS（0 warning）
+pnpm typecheck                                                    PASS
+pnpm test                                                         PASS（18 files / 154 tests）
+pnpm tokens:check                                                 PASS（9 弹簧 + 6 处派生主题色）
+pnpm desktop:test                                                 PASS
+pnpm test:e2e --project=chromium --project=firefox --project=mobile  PASS（51 passed / 15 skipped；跳过项为 a11y 路由矩阵在 firefox/webkit 上的按设计跳过）
+./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin PASS
+```
+
+结构性变化：
+
+- `styles.css`（4711 行）删除，拆为 `styles/{type,base,tasks,pages,motion,responsive}.css` + `components/m3e/*.css`；导入顺序即层叠契约。`!important` 由 102 处降至 1 处（仅保留减弱动效下的 `scroll-behavior: auto` 强制覆盖，见 `styles/motion.css`），约 54 个死选择器删除。
+- 新增 30 个 M3E 组件（`apps/web/src/components/m3e/`，另有 6 个图标/工具导出），替换全部 `primary-button`/`secondary-button`/`text-button`/`danger-button`/`icon-button` 调用点（约 85 处）。
+- 弹簧动效令牌由 `scripts/motion-tokens.ts` 从阻尼比/刚度生成；调色板由 `scripts/theme-tokens.ts` 派生并校验六处硬编码点。两者接入 `pnpm build`。
+- 修复 `today-overview-label` 对比度（4.29:1）、`calendar-day.muted` 对比度（2.37:1）、`EmptyState` 标题层级跳级、`LoadingScreen` 缺 main landmark、`IconButton` 的 `aria-label` 被覆盖、FAB menu 关闭时拦截点击、紧凑外壳底栏覆盖内容等缺陷。
+- a11y 门禁从 2 个用例扩展到 12 个：新增 10 条主路由与打开态弹层的 axe 审计（在 chromium 与 mobile 两个外壳变体上运行）。
+
+仍未运行的门禁（环境缺失，与迁移前一致）：
+
+```text
+WebKit E2E                 NOT RUN（当前 Linux 缺少 WebKit 图形依赖；已在迁移前基线上复现同样失败）
+Android 真机 / 仪器测试     NOT RUN（无 adb 设备/AVD）
+Electron GUI 启动验收       NOT RUN（chrome-sandbox 非 root-owned 4755）
+Docker Compose             NOT RUN（当前环境无 Docker）
+```
+
 ## 历史 v1 阶段快照（保留参考）
 
 | 阶段                    | 状态                                                       | 边界                                                              |
