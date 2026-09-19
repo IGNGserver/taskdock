@@ -234,9 +234,11 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
 
   await quickEntry.click();
   if (testInfo.project.name === 'mobile') {
-    const actionSheet = page.getByRole('dialog', { name: '创建' });
-    await expect(actionSheet).toBeVisible();
-    await actionSheet.getByRole('button', { name: '新建任务' }).click();
+    // M3E replaced the modal action sheet with a FAB menu: the FAB expands its
+    // actions in place, and the close button is a contrasting secondary FAB.
+    const fabMenu = page.locator('.m3e-fab-menu');
+    await expect(fabMenu).toHaveClass(/is-open/);
+    await page.getByRole('menuitem', { name: '新建任务' }).click();
   }
   const dialog = page.getByRole('dialog', { name: '快速添加' });
   await expect(dialog).toBeVisible();

@@ -20,6 +20,7 @@ private val LightColorScheme = lightColorScheme(
     onPrimary = M3LightOnPrimary,
     primaryContainer = M3LightPrimaryContainer,
     onPrimaryContainer = M3LightOnPrimaryContainer,
+    inversePrimary = M3LightInversePrimary,
     secondary = M3LightSecondary,
     onSecondary = M3LightOnSecondary,
     secondaryContainer = M3LightSecondaryContainer,
@@ -34,6 +35,16 @@ private val LightColorScheme = lightColorScheme(
     onSurface = M3LightOnSurface,
     surfaceVariant = M3LightSurfaceVariant,
     onSurfaceVariant = M3LightOnSurfaceVariant,
+    surfaceTint = M3LightSurfaceTint,
+    inverseSurface = M3LightInverseSurface,
+    inverseOnSurface = M3LightInverseOnSurface,
+    surfaceDim = M3LightSurfaceDim,
+    surfaceBright = M3LightSurfaceBright,
+    surfaceContainerLowest = M3LightSurfaceContainerLowest,
+    surfaceContainerLow = M3LightSurfaceContainerLow,
+    surfaceContainer = M3LightSurfaceContainer,
+    surfaceContainerHigh = M3LightSurfaceContainerHigh,
+    surfaceContainerHighest = M3LightSurfaceContainerHighest,
     outline = M3LightOutline,
     outlineVariant = M3LightOutlineVariant,
     error = M3LightError,
@@ -47,6 +58,7 @@ private val DarkColorScheme = darkColorScheme(
     onPrimary = M3DarkOnPrimary,
     primaryContainer = M3DarkPrimaryContainer,
     onPrimaryContainer = M3DarkOnPrimaryContainer,
+    inversePrimary = M3DarkInversePrimary,
     secondary = M3DarkSecondary,
     onSecondary = M3DarkOnSecondary,
     secondaryContainer = M3DarkSecondaryContainer,
@@ -61,6 +73,16 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = M3DarkOnSurface,
     surfaceVariant = M3DarkSurfaceVariant,
     onSurfaceVariant = M3DarkOnSurfaceVariant,
+    surfaceTint = M3DarkSurfaceTint,
+    inverseSurface = M3DarkInverseSurface,
+    inverseOnSurface = M3DarkInverseOnSurface,
+    surfaceDim = M3DarkSurfaceDim,
+    surfaceBright = M3DarkSurfaceBright,
+    surfaceContainerLowest = M3DarkSurfaceContainerLowest,
+    surfaceContainerLow = M3DarkSurfaceContainerLow,
+    surfaceContainer = M3DarkSurfaceContainer,
+    surfaceContainerHigh = M3DarkSurfaceContainerHigh,
+    surfaceContainerHighest = M3DarkSurfaceContainerHighest,
     outline = M3DarkOutline,
     outlineVariant = M3DarkOutlineVariant,
     error = M3DarkError,
@@ -69,12 +91,21 @@ private val DarkColorScheme = darkColorScheme(
     onErrorContainer = M3DarkOnErrorContainer
 )
 
+/*
+ * Material 3 Expressive corner scale.
+ *
+ * The full M3E scale (none/xs/sm/md/lg/lg-increased/xl/xl-increased/xxl)
+ * lives in `packages/ui/src/tokens.css`; it is the canonical source. Compose's
+ * `Shapes` class only exposes five slots (extraSmall, small, medium, large,
+ * extraLarge), so the increased/xxl steps cannot be expressed here without
+ * subclassing — the nearest M3E step is mapped into each available slot.
+ */
 private val DevTodoShapes = Shapes(
     extraSmall = RoundedCornerShape(4.dp),
     small = RoundedCornerShape(8.dp),
     medium = RoundedCornerShape(12.dp),
     large = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(24.dp)
+    extraLarge = RoundedCornerShape(28.dp)
 )
 
 enum class ThemeMode {

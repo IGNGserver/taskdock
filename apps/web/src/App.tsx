@@ -43,12 +43,10 @@ import {
   Trash2,
   Undo2,
   Workflow as WorkflowIcon,
-  X,
 } from 'lucide-react';
 import {
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
@@ -68,7 +66,6 @@ import {
   useNavigate,
   useSearchParams,
 } from 'react-router-dom';
-import { createPortal } from 'react-dom';
 import {
   ApiError,
   getConfiguredHubOrigin,
@@ -88,7 +85,28 @@ import {
 } from './api.js';
 import { useAuth } from './auth.js';
 import { BrandMark } from './components/brand-mark.js';
-import { M3Button, M3Chip, M3IconButton, M3Select, M3SegmentedControl } from './components/m3.js';
+import {
+  Button,
+  ButtonGroup,
+  Chip,
+  ConfirmDialog,
+  Dialog as M3eDialog,
+  FabMenu,
+  IconButton,
+  NavigationBar,
+  NavigationDrawer,
+  NavigationRail,
+  SearchBar,
+  Select,
+  Snackbar,
+  TextField,
+  TopAppBar,
+  SPRING_DURATION,
+  isCompactShell,
+  useWindowSizeClass,
+  type NavigationDestination,
+} from './components/m3e/index.js';
+import { useDismissibleMenu } from './components/m3e/behavior.js';
 import { PwaLifecycleNotice } from './pwa.js';
 import { AllTasksV2Page, TaskDetailV2Overlay, TreePage, WorkflowsPage } from './TreePage.js';
 import { readRecentCaptureFolder } from './folder-preference.js';
@@ -97,7 +115,12 @@ import { nextTaskStatus, taskStatusActionLabel } from './task-behavior.js';
 type PlacementWithTask = PlacementDto & { task: TreeTaskDto };
 type PresenceState = 'entering' | 'present' | 'exiting';
 
-function usePresence(open: boolean, exitDuration = 220) {
+/**
+ * Overlay lifecycle helper. The exit duration comes from the M3E spring tokens
+ * (see `scripts/motion-tokens.ts`) so a component can never unmount before its
+ * close transition has visually finished.
+ */
+function usePresence(open: boolean, exitDuration: number = SPRING_DURATION.effects) {
   const [mounted, setMounted] = useState(open);
   const [state, setState] = useState<PresenceState>(open ? 'present' : 'exiting');
   const duration =
@@ -123,29 +146,6 @@ function usePresence(open: boolean, exitDuration = 220) {
   }, [duration, mounted, open]);
 
   return { mounted, state };
-}
-
-function useDismissibleMenu(open: boolean, onClose: () => void) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: globalThis.PointerEvent) => {
-      if (event.target instanceof Node && !containerRef.current?.contains(event.target)) onClose();
-    };
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-      }
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [onClose, open]);
-  return containerRef;
 }
 
 export function App() {
@@ -204,13 +204,14 @@ function DesktopBridgeUnavailableScreen() {
         <div className="form-error" role="alert">
           请完全退出 TaskDock 后重试；如果问题持续，请重新安装最新桌面版本。
         </div>
-        <button
+        <Button
+          variant="filled"
+          className="m3e-button--wide"
           type="button"
-          className="primary-button wide"
           onClick={() => window.location.reload()}
         >
           重新加载客户端
-        </button>
+        </Button>
       </div>
       <aside className="auth-aside">
         <span className="aside-number">00</span>
@@ -431,14 +432,15 @@ function HubSetupScreen({
             例如 https://todo.example.com、http://your-hub.example:48731 或
             http://localhost:3000。HTTP 地址会显示安全提示。
           </p>
-          <button
+          <Button
+            variant="filled"
+            className="m3e-button--wide"
             type="button"
-            className="primary-button wide"
             onClick={() => void connect()}
             disabled={state === 'checking' || !origin.trim()}
           >
-            {state === 'checking' ? <LoaderCircle className="spin" size={17} /> : '测试并连接'}
-          </button>
+            {state === 'checking' ? <LoaderCircle className="spin" size={18} /> : '测试并连接'}
+          </Button>
         </div>
       </div>
       <aside className="auth-aside">
@@ -482,12 +484,12 @@ function HubWaitingScreen({
           <code>{origin}</code>
         </div>
         <div className="hub-check-row">
-          <button type="button" className="primary-button" onClick={onRetry}>
+          <Button variant="filled" type="button" onClick={onRetry}>
             重新检查
-          </button>
-          <button type="button" className="secondary-button" onClick={onChangeOrigin}>
+          </Button>
+          <Button variant="tonal" type="button" onClick={onChangeOrigin}>
             更换中枢
-          </button>
+          </Button>
         </div>
       </div>
       <aside className="auth-aside">
@@ -503,6 +505,8 @@ function HubWaitingScreen({
 function AuthenticatedApp() {
   const auth = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const sizeClass = useWindowSizeClass();
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickKind, setQuickKind] = useState<'task'>('task');
   const [commandOpen, setCommandOpen] = useState(false);
@@ -557,87 +561,176 @@ function AuthenticatedApp() {
     window.addEventListener('devtodo:native-back', listener);
     return () => window.removeEventListener('devtodo:native-back', listener);
   }, [closeTask, commandOpen, mobileActionOpen, mobileSidebarOpen, quickOpen, selectedTask]);
-  const navItems = useMemo(
+  const navItems = useMemo<NavigationDestination[]>(
     () => [
-      { to: '/today', label: '今日', icon: Target },
-      { to: '/tree', label: '目录', icon: LayoutList },
-      { to: '/tasks', label: '所有任务', icon: ListChecksIcon },
-      { to: '/workflows', label: '流程', icon: WorkflowIcon },
-      { to: '/time/calendar', label: '日历', icon: CalendarDays },
-      { to: '/time/events', label: '时间点', icon: Clock3 },
+      { to: '/today', label: '今日', icon: <Target size={20} /> },
+      { to: '/tree', label: '目录', icon: <LayoutList size={20} /> },
+      { to: '/tasks', label: '所有任务', icon: <ListChecksIcon size={20} /> },
+      { to: '/workflows', label: '流程', icon: <WorkflowIcon size={20} /> },
+      { to: '/time/calendar', label: '日历', icon: <CalendarDays size={20} /> },
+      { to: '/time/events', label: '时间点', icon: <Clock3 size={20} /> },
+      { to: '/archive', label: '归档', icon: <Archive size={20} /> },
+      { to: '/settings', label: '设置', icon: <Settings size={20} /> },
     ],
     [],
   );
-  const mobileNavItems = useMemo(
+  /* The compact shell keeps five destinations; the rest live under /more. */
+  const compactNavItems = useMemo<NavigationDestination[]>(
     () => [
-      { to: '/today', label: '今日', icon: Target },
-      { to: '/tree', label: '目录', icon: LayoutList },
-      { to: '/workflows', label: '流程', icon: WorkflowIcon },
-      { to: '/time', label: '时间', icon: Clock3 },
-      { to: '/more', label: '更多', icon: MoreHorizontal },
+      { to: '/today', label: '今日', icon: <Target size={22} /> },
+      { to: '/tree', label: '目录', icon: <LayoutList size={22} /> },
+      { to: '/workflows', label: '流程', icon: <WorkflowIcon size={22} /> },
+      { to: '/time', label: '时间', icon: <Clock3 size={22} /> },
+      { to: '/more', label: '更多', icon: <MoreHorizontal size={22} /> },
     ],
     [],
   );
+  const activeRoot = useMemo(() => {
+    const path = location.pathname;
+    return (
+      compactNavItems.find((item) => path === item.to || path.startsWith(`${item.to}/`))?.to ??
+      compactNavItems[0]!.to
+    );
+  }, [compactNavItems, location.pathname]);
+  const activeExpanded = useMemo(() => {
+    const path = location.pathname;
+    return navItems.find((item) => path === item.to || path.startsWith(`${item.to}/`))?.to ?? '';
+  }, [location.pathname, navItems]);
+  /** Navigating to a folder detail should still highlight 目录. */
+  const activeForExpanded = activeExpanded || '/tree';
+
+  /*
+   * Navigation destinations are rendered as router links so middle-click and
+   * "open in new tab" keep working and assistive tech announces a link.
+   */
+  const navLinkComponent = useMemo(
+    () =>
+      function NavDestinationLink({
+        to,
+        className,
+        children,
+        'aria-current': ariaCurrent,
+        tabIndex,
+        onClick,
+      }: {
+        to: string;
+        className?: string;
+        children: ReactNode;
+        'aria-current'?: 'page' | undefined;
+        tabIndex?: number;
+        onClick?: () => void;
+      }) {
+        return (
+          <NavLink
+            to={to}
+            className={className}
+            aria-current={ariaCurrent}
+            tabIndex={tabIndex}
+            onClick={onClick}
+          >
+            {children}
+          </NavLink>
+        );
+      },
+    [],
+  );
+
+  const drawerHeader = (
+    <div className="brand">
+      <BrandMark />
+      <span>TaskDock</span>
+    </div>
+  );
+  const drawerFooter = (
+    <>
+      <ConnectionStatus />
+      <button className="user-chip" onClick={() => void auth.logout()} title="退出当前设备">
+        <span className="avatar">{auth.user?.username?.slice(0, 1).toUpperCase() ?? '?'}</span>
+        <span className="user-name">{auth.user?.username}</span>
+        <LogOut size={16} />
+      </button>
+    </>
+  );
+
   return (
     <div className="app-frame">
-      <aside className="sidebar">
-        <div className="brand">
-          <BrandMark />
-          <span>TaskDock</span>
-        </div>
-        <div className="sidebar-scroll">
-          <nav aria-label="主导航" className="primary-nav">
-            {navItems.map(({ to, label, icon: Icon }) => (
-              <NavItem key={to} to={to} label={label} icon={<Icon size={17} />} />
-            ))}
-          </nav>
-          <nav aria-label="更多导航" className="secondary-nav">
-            <NavItem to="/archive" label="归档" icon={<Archive size={17} />} />
-            <NavItem to="/settings" label="设置" icon={<Settings size={17} />} />
-          </nav>
-        </div>
-        <div className="sidebar-bottom">
-          <ConnectionStatus />
-          <button className="user-chip" onClick={() => void auth.logout()} title="退出当前设备">
-            <span className="avatar">{auth.user?.username?.slice(0, 1).toUpperCase() ?? '?'}</span>
-            <span className="user-name">{auth.user?.username}</span>
-            <LogOut size={15} />
-          </button>
-        </div>
-      </aside>
+      {sizeClass === 'medium' && (
+        <NavigationRail
+          label="主导航"
+          destinations={navItems}
+          activeTo={activeForExpanded}
+          onNavigate={navigate}
+          linkAs={navLinkComponent}
+          header={<BrandMark size="sm" />}
+          footer={<ConnectionStatus />}
+        />
+      )}
+      {!isCompactShell(sizeClass) && sizeClass !== 'medium' && (
+        /* Expanded and up: the drawer is persistent, so it is never modal. */
+        <NavigationDrawer
+          open
+          onClose={() => undefined}
+          modal={false}
+          side="start"
+          label="主导航"
+          destinations={navItems}
+          activeTo={activeForExpanded}
+          onNavigate={navigate}
+          linkAs={navLinkComponent}
+          header={drawerHeader}
+          footer={drawerFooter}
+          className="m3e-drawer-layer--persistent"
+        />
+      )}
       <main className="main-shell">
-        <header className="topbar">
-          <button
-            className="mobile-menu"
-            aria-label="打开侧边栏"
-            aria-expanded={mobileSidebarOpen}
-            onClick={() => setMobileSidebarOpen(true)}
-          >
-            <Menu size={19} />
-          </button>
-          <div className="breadcrumbs">{breadcrumb(location.pathname)}</div>
-          <button
-            className="command-trigger"
-            aria-label="搜索任务和备注"
-            onClick={() => setCommandOpen(true)}
-          >
-            <Search size={16} />
-            <span>搜索任务、备注…</span>
-            {!isNativeMobileClient() && <kbd>⌘ K</kbd>}
-          </button>
-          <ConnectionStatus />
-          <M3Button
-            className="quick-button"
-            leadingIcon={<Plus size={17} />}
-            aria-label="快速添加"
-            onClick={() => {
-              setQuickKind('task');
-              setQuickOpen(true);
-            }}
-          >
-            快速添加
-          </M3Button>
-        </header>
+        <TopAppBar
+          variant={sizeClass === 'compact' ? 'small' : 'large'}
+          title={breadcrumb(location.pathname)}
+          leading={
+            isCompactShell(sizeClass) ? (
+              <IconButton
+                label="打开侧边栏"
+                aria-expanded={mobileSidebarOpen}
+                onClick={() => setMobileSidebarOpen(true)}
+              >
+                <Menu size={22} />
+              </IconButton>
+            ) : undefined
+          }
+          actions={
+            <>
+              {sizeClass !== 'compact' && (
+                <button
+                  className="command-trigger"
+                  aria-label="搜索任务和备注"
+                  onClick={() => setCommandOpen(true)}
+                >
+                  <Search size={20} />
+                  <span>搜索任务、备注…</span>
+                  {!isNativeMobileClient() && <kbd>⌘ K</kbd>}
+                </button>
+              )}
+              {sizeClass === 'compact' && (
+                <IconButton label="搜索任务和备注" onClick={() => setCommandOpen(true)}>
+                  <Search size={22} />
+                </IconButton>
+              )}
+              {sizeClass !== 'compact' && <ConnectionStatus />}
+              {sizeClass !== 'compact' && (
+                <Button
+                  leadingIcon={<Plus size={20} />}
+                  aria-label="快速添加"
+                  onClick={() => {
+                    setQuickKind('task');
+                    setQuickOpen(true);
+                  }}
+                >
+                  快速添加
+                </Button>
+              )}
+            </>
+          }
+        />
         <div className="page-wrap">
           <Routes>
             <Route path="/" element={<Navigate to="/today" replace />} />
@@ -665,39 +758,53 @@ function AuthenticatedApp() {
           </Routes>
         </div>
       </main>
-      <MobileSidebar
-        open={mobileSidebarOpen}
-        navItems={navItems}
-        onClose={() => setMobileSidebarOpen(false)}
-      />
-      <nav className="mobile-bottom-nav" aria-label="移动导航">
-        {mobileNavItems.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
-          >
-            <Icon size={18} />
-            <span>{label}</span>
-          </NavLink>
-        ))}
-      </nav>
-      <button
-        className="mobile-fab"
-        aria-label="打开创建菜单"
-        onClick={() => setMobileActionOpen(true)}
-      >
-        <Plus size={23} />
-      </button>
-      <MobileActionSheet
-        open={mobileActionOpen}
-        onClose={() => setMobileActionOpen(false)}
-        onSelect={(kind) => {
-          setMobileActionOpen(false);
-          setQuickKind(kind);
-          setQuickOpen(true);
-        }}
-      />
+      {isCompactShell(sizeClass) && (
+        <NavigationDrawer
+          open={mobileSidebarOpen}
+          onClose={() => setMobileSidebarOpen(false)}
+          label="移动侧边栏"
+          destinations={navItems}
+          activeTo={activeForExpanded}
+          onNavigate={(to) => {
+            navigate(to);
+            setMobileSidebarOpen(false);
+          }}
+          linkAs={navLinkComponent}
+          header={drawerHeader}
+          footer={drawerFooter}
+        />
+      )}
+      {sizeClass === 'compact' && (
+        <NavigationBar
+          label="移动导航"
+          destinations={compactNavItems}
+          activeTo={activeRoot}
+          onNavigate={navigate}
+          linkAs={navLinkComponent}
+          className="mobile-bottom-nav"
+        />
+      )}
+      {sizeClass === 'compact' && (
+        <div role="region" aria-label="创建" className="app-float-layer">
+          <FabMenu
+            label="打开创建菜单"
+            open={mobileActionOpen}
+            onOpenChange={setMobileActionOpen}
+            icon={<Plus size={24} />}
+            items={[
+              { id: 'task', label: '新建任务', icon: <Check size={20} /> },
+              { id: 'search', label: '搜索任务', icon: <Search size={20} /> },
+            ]}
+            onSelect={(id) => {
+              if (id === 'search') setCommandOpen(true);
+              else {
+                setQuickKind('task');
+                setQuickOpen(true);
+              }
+            }}
+          />
+        </div>
+      )}
       <QuickCaptureDialog
         open={quickOpen}
         initialKind={quickKind}
@@ -828,9 +935,9 @@ function LoginScreen({
           <div className="hub-origin-card login-hub-origin">
             <span>当前中枢</span>
             <code>{hubOrigin}</code>
-            <button type="button" className="text-button" onClick={onChangeHub}>
+            <Button variant="text" type="button" onClick={onChangeHub}>
               更换中枢
-            </button>
+            </Button>
           </div>
         )}
         {!hubInitialized && (
@@ -864,14 +971,14 @@ function LoginScreen({
                 autoComplete="url"
               />
               <div className="hub-check-row">
-                <button
+                <Button
+                  variant="tonal"
                   type="button"
-                  className="secondary-button"
                   onClick={() => void checkHub()}
                   disabled={busy || hubCheck === 'checking' || !hubOrigin.trim()}
                 >
                   {hubCheck === 'checking' ? '测试中…' : '测试连接'}
-                </button>
+                </Button>
                 {hubCheckMessage && (
                   <span className={`hub-check-message ${hubCheck}`} role="status">
                     {hubCheckMessage}
@@ -900,9 +1007,14 @@ function LoginScreen({
               {error}
             </div>
           )}
-          <button className="primary-button wide" disabled={busy || !hubInitialized}>
-            {busy ? <LoaderCircle className="spin" size={17} /> : '登录'}
-          </button>
+          <Button
+            variant="filled"
+            className="m3e-button--wide"
+            type="submit"
+            disabled={busy || !hubInitialized}
+          >
+            {busy ? <LoaderCircle className="spin" size={18} /> : '登录'}
+          </Button>
         </form>
       </div>
       <aside className="auth-aside">
@@ -922,6 +1034,7 @@ function Field({
   type = 'text',
   autoComplete,
   autoFocus = false,
+  error,
 }: {
   label: string;
   value: string;
@@ -929,177 +1042,22 @@ function Field({
   type?: string;
   autoComplete?: string;
   autoFocus?: boolean;
+  error?: string;
 }) {
   return (
-    <label className="field">
-      <span>{label}</span>
-      <input
-        required
-        type={type}
-        value={value}
-        autoComplete={autoComplete}
-        autoFocus={autoFocus}
-        data-modal-autofocus={autoFocus ? 'true' : undefined}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
-  );
-}
-
-function NavItem({
-  to,
-  label,
-  icon,
-  onClick,
-}: {
-  to: string;
-  label: string;
-  icon: ReactNode;
-  onClick?: () => void;
-}) {
-  return (
-    <NavLink
-      to={to}
-      onClick={onClick}
-      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-    >
-      {icon}
-      <span>{label}</span>
-    </NavLink>
-  );
-}
-
-function MobileSidebar({
-  open,
-  navItems,
-  onClose,
-}: {
-  open: boolean;
-  navItems: Array<{ to: string; label: string; icon: typeof Target }>;
-  onClose: () => void;
-}) {
-  const presence = usePresence(open);
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const drawerRef = useRef<HTMLElement>(null);
-  const previousFocus = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    if (!open) return;
-    previousFocus.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    closeRef.current?.focus();
-    document.documentElement.classList.add('drawer-open');
-    const previousOverflow = document.body.style.overflow;
-    const previousTouchAction = document.body.style.touchAction;
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const focusable = drawerRef.current?.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])',
-      );
-      if (!focusable?.length) return;
-      const first = focusable[0]!;
-      const last = focusable[focusable.length - 1]!;
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.documentElement.classList.remove('drawer-open');
-      document.body.style.overflow = previousOverflow;
-      document.body.style.touchAction = previousTouchAction;
-      previousFocus.current?.focus();
-    };
-  }, [onClose, open]);
-  if (!presence.mounted) return null;
-  const interactive = presence.state !== 'exiting';
-  return (
-    <div className={`mobile-sidebar-layer presence-${presence.state}`} aria-hidden={!interactive}>
-      <button
-        className="mobile-sidebar-backdrop"
-        aria-label="关闭侧边栏"
-        tabIndex={interactive ? 0 : -1}
-        onClick={onClose}
-      />
-      <aside ref={drawerRef} className="mobile-sidebar" aria-label="移动侧边栏">
-        <header className="mobile-sidebar-header">
-          <div className="brand">
-            <BrandMark />
-            <span>TaskDock</span>
-          </div>
-          <button
-            ref={closeRef}
-            className="sidebar-close"
-            aria-label="关闭侧边栏"
-            onClick={onClose}
-            tabIndex={interactive ? 0 : -1}
-          >
-            <X size={19} />
-          </button>
-        </header>
-        <div className="mobile-sidebar-scroll">
-          <nav aria-label="移动主导航" className="primary-nav">
-            {navItems.map(({ to, label, icon: Icon }) => (
-              <NavItem key={to} to={to} label={label} icon={<Icon size={17} />} onClick={onClose} />
-            ))}
-          </nav>
-          <nav aria-label="移动更多导航" className="secondary-nav">
-            <NavItem to="/archive" label="归档" icon={<Archive size={17} />} onClick={onClose} />
-            <NavItem to="/settings" label="设置" icon={<Settings size={17} />} onClick={onClose} />
-          </nav>
-        </div>
-      </aside>
-    </div>
-  );
-}
-
-function MobileActionSheet({
-  open,
-  onClose,
-  onSelect,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (kind: 'task') => void;
-}) {
-  const presence = usePresence(open);
-  if (!presence.mounted) return null;
-  const actions = [
-    {
-      kind: 'task' as const,
-      label: '新建任务',
-      description: '先记下下一步，再决定安排在哪里。',
-      icon: Check,
-    },
-  ];
-  return (
-    <Modal title="创建" onClose={onClose} state={presence.state}>
-      <div className="mobile-action-sheet">
-        {actions.map(({ kind, label, description, icon: Icon }) => (
-          <button key={kind} className="mobile-action-item" onClick={() => onSelect(kind)}>
-            <span className="mobile-action-icon">
-              <Icon size={18} />
-            </span>
-            <span>
-              <strong>{label}</strong>
-              <small>{description}</small>
-            </span>
-            <ChevronRight size={16} />
-          </button>
-        ))}
-      </div>
-    </Modal>
+    <TextField
+      label={label}
+      required
+      type={type}
+      value={value}
+      autoComplete={autoComplete}
+      autoFocus={autoFocus}
+      error={error}
+      /* The overlay focus trap looks for this marker; without it the dialog
+         would focus its close button instead of the first field. */
+      data-modal-autofocus={autoFocus ? 'true' : undefined}
+      onChange={(event) => onChange(event.target.value)}
+    />
   );
 }
 
@@ -1116,7 +1074,7 @@ function TimeHubPage() {
       <div className="more-grid time-hub-grid">
         <NavLink to={`/time/calendar/${localDate}`} className="more-link-card">
           <span className="more-link-icon">
-            <CalendarDays size={18} />
+            <CalendarDays size={20} />
           </span>
           <span>
             <strong>日期日历</strong>
@@ -1126,7 +1084,7 @@ function TimeHubPage() {
         </NavLink>
         <NavLink to="/time/events" className="more-link-card">
           <span className="more-link-icon">
-            <Clock3 size={18} />
+            <Clock3 size={20} />
           </span>
           <span>
             <strong>自定义时间点</strong>
@@ -1163,14 +1121,14 @@ function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
         description="次要入口集中在这里，底部导航保持专注于今天、目录和时间。"
       />
       <button className="more-search-button" onClick={onOpenSearch}>
-        <Search size={17} />
+        <Search size={18} />
         搜索任务、备注和引用 ID
       </button>
       <div className="more-grid">
         {links.map(({ to, label, description, icon: Icon }) => (
           <NavLink key={to} to={to} className="more-link-card">
             <span className="more-link-icon">
-              <Icon size={18} />
+              <Icon size={20} />
             </span>
             <span>
               <strong>{label}</strong>
@@ -1204,10 +1162,11 @@ function ConnectionStatus() {
 
 function LoadingScreen({ label }: { label: string }) {
   return (
-    <div className="loading-screen">
-      <LoaderCircle className="spin" size={22} />
-      <span>{label}</span>
-    </div>
+    <main className="loading-screen" aria-busy="true">
+      <LoaderCircle className="spin" size={22} aria-hidden="true" />
+      <h1 className="m3e-visually-hidden">{label}</h1>
+      <span aria-hidden="true">{label}</span>
+    </main>
   );
 }
 
@@ -1270,7 +1229,7 @@ function EmptyState({
   return (
     <div className="empty-state">
       <div className="empty-icon">{icon}</div>
-      <h3>{title}</h3>
+      <h2>{title}</h2>
       <p>{description}</p>
       {action}
     </div>
@@ -1281,9 +1240,9 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
   return (
     <div className="inline-error">
       <span>{error}</span>
-      <button className="text-button" onClick={onRetry}>
+      <Button variant="text" type="submit" onClick={onRetry}>
         重试
-      </button>
+      </Button>
     </div>
   );
 }
@@ -1348,9 +1307,12 @@ function QuickCapture({
     }
   };
   return (
-    <form className="quick-capture" onSubmit={submit}>
-      <Plus size={17} />
+    <form className="quick-capture m3e-search-bar" onSubmit={submit}>
+      <span className="m3e-search-bar__leading">
+        <Plus size={20} />
+      </span>
       <input
+        className="m3e-search-bar__input"
         aria-label="快速创建任务"
         value={title}
         onChange={(event) => setTitle(event.target.value)}
@@ -1440,172 +1402,39 @@ function QuickCaptureDialog({
             {error}
           </div>
         )}
-        <button className="primary-button wide" disabled={busy || !title.trim()}>
+        <Button
+          variant="filled"
+          className="m3e-button--wide"
+          type="submit"
+          disabled={busy || !title.trim()}
+        >
           {busy ? '保存中…' : '创建'}
-        </button>
+        </Button>
       </form>
     </Modal>
   );
 }
 
+/**
+ * Dialog adapter kept for the existing call sites that drive the presence
+ * lifecycle themselves. It forwards to the M3E `Dialog`, which owns the scrim,
+ * focus trap and scroll lock.
+ */
 function Modal({
   title,
   onClose,
   children,
-  state = 'present',
+  state,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   state?: PresenceState;
 }) {
-  const interactive = state !== 'exiting';
-  const titleId = useId();
-  const modalRef = useRef<HTMLElement | null>(null);
-  const previousFocus = useRef<HTMLElement | null>(
-    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null,
-  );
-  useEffect(() => {
-    const modal = modalRef.current;
-    if (!modal || !interactive) return;
-    const focusToRestore = previousFocus.current;
-    const focusable = () =>
-      Array.from(
-        modal.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      );
-    const first = modal.querySelector<HTMLElement>('[data-modal-autofocus]') ?? focusable()[0];
-    first?.focus();
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      if (!modal.contains(document.activeElement)) return;
-      const elements = focusable();
-      if (!elements.length) return;
-      const firstElement = elements[0]!;
-      const lastElement = elements[elements.length - 1]!;
-      if (event.shiftKey && document.activeElement === firstElement) {
-        event.preventDefault();
-        lastElement.focus();
-      } else if (!event.shiftKey && document.activeElement === lastElement) {
-        event.preventDefault();
-        firstElement.focus();
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      focusToRestore?.focus();
-    };
-  }, [interactive, onClose]);
-  useEffect(() => {
-    if (!interactive) return;
-    document.documentElement.classList.add('modal-open');
-    const previousOverflow = document.body.style.overflow;
-    const previousTouchAction = document.body.style.touchAction;
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-    return () => {
-      document.documentElement.classList.remove('modal-open');
-      document.body.style.overflow = previousOverflow;
-      document.body.style.touchAction = previousTouchAction;
-    };
-  }, [interactive]);
-  const content = (
-    <div
-      className={`modal-layer presence-${state}`}
-      aria-hidden={!interactive}
-      role="presentation"
-      onMouseDown={(event) => {
-        if (interactive && event.target === event.currentTarget) onClose();
-      }}
-    >
-      <section
-        ref={modalRef}
-        className={`modal presence-${state}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="modal-header">
-          <h2 id={titleId}>{title}</h2>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="关闭">
-            <X size={18} />
-          </button>
-        </div>
-        {children}
-      </section>
-    </div>
-  );
-  return typeof document === 'undefined' ? content : createPortal(content, document.body);
-}
-
-function ConfirmDialog({
-  title,
-  description,
-  confirmLabel,
-  cancelLabel = '取消',
-  danger = true,
-  error,
-  onClose,
-  onConfirm,
-}: {
-  title: string;
-  description: ReactNode;
-  confirmLabel: string;
-  cancelLabel?: string;
-  danger?: boolean;
-  error?: string;
-  onClose: () => void;
-  onConfirm: () => Promise<boolean | void> | boolean | void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [localError, setLocalError] = useState('');
-  const confirm = async () => {
-    if (busy) return;
-    setBusy(true);
-    setLocalError('');
-    try {
-      const result = await onConfirm();
-      if (result !== false) onClose();
-    } catch (cause) {
-      setLocalError(cause instanceof ApiError ? cause.message : '操作失败，请重试');
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
-    <Modal title={title} onClose={busy ? () => undefined : onClose}>
-      <div className="confirm-dialog">
-        <p>{description}</p>
-        {(error || localError) && (
-          <div className="form-error" role="alert">
-            {error || localError}
-          </div>
-        )}
-        <div className="confirm-actions">
-          <M3Button variant="text" onClick={onClose} disabled={busy}>
-            {cancelLabel}
-          </M3Button>
-          <M3Button
-            variant={danger ? 'filled' : 'tonal'}
-            className={danger ? 'danger-confirm-button' : undefined}
-            onClick={() => void confirm()}
-            disabled={busy}
-          >
-            {busy ? '处理中…' : confirmLabel}
-          </M3Button>
-        </div>
-      </div>
-    </Modal>
+    <M3eDialog title={title} onClose={onClose} open state={state}>
+      {children}
+    </M3eDialog>
   );
 }
 
@@ -1673,7 +1502,7 @@ function CommandPalette({
   if (!presence.mounted) return null;
   return (
     <div
-      className={`modal-layer command-layer presence-${presence.state}`}
+      className={`command-layer presence-${presence.state}`}
       aria-hidden={presence.state === 'exiting'}
       onMouseDown={(event) => {
         if (presence.state !== 'exiting' && event.target === event.currentTarget) onClose();
@@ -1686,7 +1515,7 @@ function CommandPalette({
         aria-label="搜索和命令面板"
       >
         <div className="command-input">
-          <Search size={18} />
+          <Search size={20} />
           <input
             ref={inputRef}
             value={query}
@@ -1740,7 +1569,7 @@ function CommandPalette({
         ) : (
           <div className="command-hints">
             <span>
-              <Command size={15} /> 输入关键词开始搜索
+              <Command size={16} /> 输入关键词开始搜索
             </span>
             <span>搜索任务标题和引用 ID</span>
             <div className="command-actions">
@@ -1765,7 +1594,7 @@ function StatusIcon({ status }: { status: TaskDto['status'] }) {
   if (status === 'DONE')
     return (
       <span className="task-check done">
-        <Check size={13} />
+        <Check size={14} />
       </span>
     );
   if (status === 'IN_PROGRESS')
@@ -1776,7 +1605,7 @@ function StatusIcon({ status }: { status: TaskDto['status'] }) {
     );
   return (
     <span className="task-check">
-      <Circle size={15} />
+      <Circle size={16} />
     </span>
   );
 }
@@ -1877,22 +1706,22 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         description="把今天要处理的内容放在眼前，完成状态会同步到每一个安排位置。"
         action={
           <div className="header-actions">
-            <M3Button
+            <Button
               variant="tonal"
               leadingIcon={<Plus size={16} />}
               onClick={() => setShowTaskPicker(true)}
               disabled={!data.point}
             >
               从任务库加入
-            </M3Button>
-            <M3Button
+            </Button>
+            <Button
               variant="outlined"
               leadingIcon={<Copy size={16} />}
               onClick={() => void doRollover()}
               disabled={!data.point || active.length === 0}
             >
               安排未完成到明天
-            </M3Button>
+            </Button>
           </div>
         }
       />
@@ -1914,13 +1743,10 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         <span className="today-overview-percent">{completionPercent}%</span>
       </section>
       {rollover && (
-        <div className="undo-banner">
-          <span>已安排 {rollover.count} 项到明天</span>
-          <button className="text-button" onClick={() => void undo()}>
-            <Undo2 size={15} />
-            撤销
-          </button>
-        </div>
+        <Snackbar
+          message={`已安排 ${rollover.count} 项到明天`}
+          action={{ label: '撤销', onAction: () => void undo() }}
+        />
       )}
       {rolloverError && (
         <ErrorState error={rolloverError} onRetry={() => void (rollover ? undo() : doRollover())} />
@@ -1973,13 +1799,13 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             emptyDescription="可以从所有任务中安排内容，或先捕获一个位于最近目录的任务。"
             emptyAction={
               data.point ? (
-                <M3Button
+                <Button
                   variant="filled"
                   leadingIcon={<Plus size={16} />}
                   onClick={() => setShowTaskPicker(true)}
                 >
                   从任务库加入
-                </M3Button>
+                </Button>
               ) : undefined
             }
           />
@@ -1988,13 +1814,14 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             count={done.length}
             action={
               done.length > 0 ? (
-                <button
-                  className="text-button"
+                <Button
+                  variant="text"
+                  type="submit"
                   onClick={() => setCompletedOpen((current) => !current)}
                   aria-expanded={completedOpen}
                 >
                   {completedOpen ? '收起' : '展开'}
-                </button>
+                </Button>
               ) : undefined
             }
           />
@@ -2116,29 +1943,30 @@ function EventsPage() {
           <ChevronRight size={16} />
         </NavLink>
         <div className="timeline-actions" aria-label="时间点操作">
-          <button
-            className="icon-button"
-            aria-label="上移时间点"
+          <IconButton
+            label="上移时间点"
+            type="submit"
             onClick={() => void moveEvent(point.id, 'up')}
             disabled={index <= 0}
           >
-            <ChevronUp size={15} />
-          </button>
-          <button
-            className="icon-button"
-            aria-label="下移时间点"
+            <ChevronUp size={16} />
+          </IconButton>
+          <IconButton
+            label="下移时间点"
+            type="submit"
             onClick={() => void moveEvent(point.id, 'down')}
             disabled={index < 0 || index >= data.active.length - 1}
           >
-            <ChevronDown size={15} />
-          </button>
-          <button
-            className="icon-button"
+            <ChevronDown size={16} />
+          </IconButton>
+          <IconButton
+            label="操作"
+            type="submit"
             aria-label={`编辑${point.title}`}
             onClick={() => setEdit(point)}
           >
-            <Pencil size={15} />
-          </button>
+            <Pencil size={16} />
+          </IconButton>
         </div>
       </div>
     );
@@ -2150,9 +1978,9 @@ function EventsPage() {
         title="时间点"
         description="事件有自己的生命周期，不会自动完成或移动其中的任务。"
         action={
-          <M3Button leadingIcon={<Plus size={16} />} onClick={() => setOpen(true)}>
+          <Button leadingIcon={<Plus size={16} />} onClick={() => setOpen(true)}>
             新建时间点
-          </M3Button>
+          </Button>
         }
       />
       {error && <ErrorState error={error} onRetry={() => void reload()} />}
@@ -2191,13 +2019,15 @@ function EventsPage() {
                     <ChevronRight size={16} />
                   </NavLink>
                   <div className="timeline-actions archived-timeline-actions">
-                    <button
-                      className="secondary-button small"
+                    <Button
+                      variant="tonal"
+                      size="s"
+                      type="submit"
                       disabled={restoreBusyId === point.id}
                       onClick={() => void restoreEvent(point)}
                     >
                       {restoreBusyId === point.id ? '恢复中…' : '恢复时间点'}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -2210,9 +2040,9 @@ function EventsPage() {
           title="还没有自定义时间点"
           description="例如“Codex 额度重置后”或下一次发布窗口。"
           action={
-            <M3Button leadingIcon={<Plus size={16} />} onClick={() => setOpen(true)}>
+            <Button leadingIcon={<Plus size={16} />} onClick={() => setOpen(true)}>
               创建时间点
-            </M3Button>
+            </Button>
           }
         />
       )}
@@ -2267,9 +2097,14 @@ function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreat
           这是一个事件节点，不是截止日期；它的到达状态与任务完成状态独立。
         </p>
         {error && <div className="form-error">{error}</div>}
-        <button className="primary-button wide" disabled={busy || !title.trim()}>
+        <Button
+          variant="filled"
+          className="m3e-button--wide"
+          type="submit"
+          disabled={busy || !title.trim()}
+        >
           {busy ? '创建中…' : '创建时间点'}
-        </button>
+        </Button>
       </form>
     </Modal>
   );
@@ -2313,9 +2148,14 @@ function EditEventModal({
             {error}
           </div>
         )}
-        <button className="primary-button wide" disabled={busy || !title.trim()}>
+        <Button
+          variant="filled"
+          className="m3e-button--wide"
+          type="submit"
+          disabled={busy || !title.trim()}
+        >
           {busy ? '保存中…' : '保存时间点'}
-        </button>
+        </Button>
       </form>
     </Modal>
   );
@@ -2417,15 +2257,15 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         description={`${items.length} 项安排 · ${items.filter(({ task }) => task.status === 'DONE').length} 项已完成`}
         action={
           <div className="header-actions">
-            <M3Button
+            <Button
               variant="outlined"
               leadingIcon={<Pencil size={16} />}
               disabled={Boolean(point.archivedAt) || actionBusy}
               onClick={() => setEditOpen(true)}
             >
               编辑时间点
-            </M3Button>
-            <M3Button
+            </Button>
+            <Button
               variant="outlined"
               leadingIcon={
                 point.archivedAt ? (
@@ -2444,7 +2284,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               }
             >
               {point.archivedAt ? '恢复时间点' : point.reachedAt ? '归档时间点' : '标记已到达'}
-            </M3Button>
+            </Button>
           </div>
         }
       />
@@ -2458,15 +2298,15 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         title="安排在这里"
         count={items.length}
         action={
-          <M3Button
-            size="small"
+          <Button
+            size="s"
             variant="tonal"
-            leadingIcon={<Plus size={15} />}
+            leadingIcon={<Plus size={16} />}
             onClick={() => setShowAdd(true)}
             disabled={Boolean(point.archivedAt)}
           >
             从任务库加入
-          </M3Button>
+          </Button>
         }
       />
       <PlacementList
@@ -2479,9 +2319,9 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         emptyTitle="这个时间点还没有安排"
         emptyDescription="从任务库加入已有任务；它不会创建新的 Task。"
         emptyAction={
-          <M3Button leadingIcon={<Plus size={16} />} onClick={() => setShowAdd(true)}>
+          <Button leadingIcon={<Plus size={16} />} onClick={() => setShowAdd(true)}>
             加入任务
-          </M3Button>
+          </Button>
         }
       />
       {showAdd && (
@@ -2649,22 +2489,22 @@ function PlacementRow({
       </button>
       {onMove && !readOnly && (
         <div className="task-reorder-actions" aria-label="调整安排顺序">
-          <button
-            className="icon-button"
-            aria-label="上移安排"
+          <IconButton
+            label="上移安排"
+            type="submit"
             onClick={() => void move('up')}
             disabled={busy || !canMoveUp}
           >
-            <ChevronUp size={15} />
-          </button>
-          <button
-            className="icon-button"
-            aria-label="下移安排"
+            <ChevronUp size={16} />
+          </IconButton>
+          <IconButton
+            label="下移安排"
+            type="submit"
             onClick={() => void move('down')}
             disabled={busy || !canMoveDown}
           >
-            <ChevronDown size={15} />
-          </button>
+            <ChevronDown size={16} />
+          </IconButton>
         </div>
       )}
       <button className="task-main" onClick={() => onOpen(task.id)}>
@@ -2675,15 +2515,15 @@ function PlacementRow({
       </button>
       {!readOnly && (
         <div ref={menuRef} className="task-actions">
-          <button
-            className="icon-button"
-            aria-label="安排操作（也可长按安排行）"
+          <IconButton
+            label="安排操作（也可长按安排行）"
+            type="submit"
             aria-expanded={menu}
             aria-haspopup="menu"
             onClick={() => setMenu(!menu)}
           >
-            <MoreHorizontal size={17} />
-          </button>
+            <MoreHorizontal size={18} />
+          </IconButton>
           {menu && (
             <div className="row-menu" role="menu">
               <button
@@ -2696,11 +2536,11 @@ function PlacementRow({
                   navigate(dest);
                 }}
               >
-                <Folder size={15} />
+                <Folder size={16} />
                 在目录中显示
               </button>
               <button role="menuitem" onClick={() => void remove()}>
-                <Trash2 size={15} />
+                <Trash2 size={16} />
                 从此处移除
               </button>
               <button
@@ -2710,7 +2550,7 @@ function PlacementRow({
                   setTargetMode('move');
                 }}
               >
-                <Target size={15} />
+                <Target size={16} />
                 移动到其他时间点
               </button>
               <button
@@ -2720,7 +2560,7 @@ function PlacementRow({
                   setTargetMode('copy');
                 }}
               >
-                <Copy size={15} />
+                <Copy size={16} />
                 再安排到其他时间点
               </button>
             </div>
@@ -2893,22 +2733,26 @@ function EventTargetField({
         />
       ) : (
         <>
-          <M3Select value={value} onChange={(event) => onChange(event.target.value)}>
-            <option value="">选择事件</option>
-            {eventPoints.map((point) => (
-              <option key={point.id} value={point.id}>
-                {point.title}
-              </option>
-            ))}
-          </M3Select>
+          <Select
+            label="选择自定义时间点"
+            value={value}
+            onChange={onChange}
+            options={[
+              { value: '', label: '选择事件' },
+              ...eventPoints.map((point) => ({
+                value: point.id,
+                label: point.title ?? '未命名事件',
+              })),
+            ]}
+          />
           <div className="event-target-actions">
             <small className="field-help">
               {eventPoints.length ? '也可以新建一个自定义时间点。' : '还没有可用的自定义时间点。'}
             </small>
-            <button type="button" className="text-button" onClick={() => setCreateOpen(true)}>
-              <Plus size={14} />
+            <Button variant="text" type="button" onClick={() => setCreateOpen(true)}>
+              <Plus size={16} />
               新建时间点
-            </button>
+            </Button>
           </div>
         </>
       )}
@@ -2949,17 +2793,17 @@ function InlineEventCreator({
         </div>
       )}
       <div className="inline-event-actions">
-        <button type="button" className="text-button" onClick={onCancel} disabled={busy}>
+        <Button variant="text" type="button" onClick={onCancel} disabled={busy}>
           返回选择
-        </button>
-        <M3Button
-          size="small"
+        </Button>
+        <Button
+          size="s"
           type="button"
           onClick={() => void create()}
           disabled={busy || !title.trim()}
         >
           {busy ? '创建中…' : '创建并选择'}
-        </M3Button>
+        </Button>
       </div>
     </div>
   );
@@ -3034,12 +2878,12 @@ function PlacementTargetModal({
             ? '移动会改变当前安排的位置，任务本体和其他安排不受影响。'
             : '再安排会保留当前安排，并为同一个任务创建一个新的安排位置。'}
         </p>
-        <M3SegmentedControl
+        <ButtonGroup
           label="目标类型"
           value={targetKind}
           options={[
-            { value: 'date', label: '日期' },
-            { value: 'event', label: '自定义时间点' },
+            { value: 'date' as const, label: '日期' },
+            { value: 'event' as const, label: '自定义时间点' },
           ]}
           onChange={(nextMode) => {
             setTargetKind(nextMode);
@@ -3050,12 +2894,18 @@ function PlacementTargetModal({
         {targetKind === 'date' ? (
           <>
             <div className="date-shortcuts" aria-label="快速选择日期">
-              <M3Chip selected={localDate === today} onClick={() => setLocalDate(today)}>
-                今天
-              </M3Chip>
-              <M3Chip selected={localDate === tomorrow} onClick={() => setLocalDate(tomorrow)}>
-                明天
-              </M3Chip>
+              <Chip
+                kind="filter"
+                label="今天"
+                selected={localDate === today}
+                onClick={() => setLocalDate(today)}
+              />
+              <Chip
+                kind="filter"
+                label="明天"
+                selected={localDate === tomorrow}
+                onClick={() => setLocalDate(tomorrow)}
+              />
             </div>
             <label className="field">
               <span>选择日期</span>
@@ -3082,12 +2932,12 @@ function PlacementTargetModal({
             {error}
           </div>
         )}
-        <M3Button
+        <Button
           className="wide"
           disabled={busy || (targetKind === 'event' ? !targetId : !localDate)}
         >
           {busy ? '处理中…' : mode === 'move' ? '移动安排' : '创建副本安排'}
-        </M3Button>
+        </Button>
       </form>
     </Modal>
   );
@@ -3198,30 +3048,16 @@ function AddTaskModal({
   };
   return (
     <Modal title="安排任务" onClose={onClose}>
-      <div
-        style={{
-          display: 'flex',
-          gap: '8px',
-          marginBottom: '16px',
-          borderBottom: '1px solid #eee',
-          paddingBottom: '8px',
-        }}
-      >
-        <button
-          type="button"
-          className={`text-button ${activeTab === 'create' ? 'primary-button small' : ''}`}
-          onClick={() => setActiveTab('create')}
-        >
-          新建任务并安排
-        </button>
-        <button
-          type="button"
-          className={`text-button ${activeTab === 'existing' ? 'primary-button small' : ''}`}
-          onClick={() => setActiveTab('existing')}
-        >
-          从任务库加入已有
-        </button>
-      </div>
+      <ButtonGroup
+        label="安排方式"
+        value={activeTab}
+        options={[
+          { value: 'create' as const, label: '新建任务并安排' },
+          { value: 'existing' as const, label: '从任务库加入已有' },
+        ]}
+        onChange={setActiveTab}
+        className="add-task-mode"
+      />
 
       {activeTab === 'create' ? (
         <form
@@ -3244,25 +3080,21 @@ function AddTaskModal({
               {error}
             </div>
           )}
-          <button
-            type="submit"
-            className="primary-button"
-            disabled={creating || !createTitle.trim()}
-          >
+          <Button variant="filled" type="submit" disabled={creating || !createTitle.trim()}>
             {creating ? '创建中…' : '立即创建并安排'}
-          </button>
+          </Button>
         </form>
       ) : (
         <>
-          <label className="search-field">
-            <Search size={16} />
-            <input
-              autoFocus
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="输入标题或引用 ID"
-            />
-          </label>
+          <SearchBar
+            label="搜索任务"
+            variant="view"
+            autoFocus
+            value={query}
+            onChange={setQuery}
+            placeholder="输入标题或引用 ID"
+            leadingIcon={<Search size={20} />}
+          />
           {error && (
             <div className="form-error" role="alert">
               {error}
@@ -3401,7 +3233,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         title="日历"
         description="按本地日期安排任务，不把日期当成截止日期。"
         action={
-          <M3Button
+          <Button
             variant="outlined"
             leadingIcon={<Target size={16} />}
             onClick={() => {
@@ -3411,27 +3243,27 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             }}
           >
             回到今天
-          </M3Button>
+          </Button>
         }
       />
       <div className="calendar-layout">
         <section className="calendar-panel">
           <div className="calendar-head">
-            <M3IconButton
+            <IconButton
               label="上个月"
               aria-label="上个月"
               onClick={() => setMonth(shiftMonth(month, -1))}
             >
-              <ChevronLeft size={18} />
-            </M3IconButton>
+              <ChevronLeft size={20} />
+            </IconButton>
             <h2>{formatMonth(month)}</h2>
-            <M3IconButton
+            <IconButton
               label="下个月"
               aria-label="下个月"
               onClick={() => setMonth(shiftMonth(month, 1))}
             >
-              <ChevronRight size={18} />
-            </M3IconButton>
+              <ChevronRight size={20} />
+            </IconButton>
           </div>
           <label className="calendar-date-jump">
             <span>跳转到日期</span>
@@ -3469,14 +3301,14 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               <span className="eyebrow">SELECTED DATE</span>
               <h2>{formatDate(selected)}</h2>
             </div>
-            <M3Button
-              size="small"
+            <Button
+              size="s"
               variant="tonal"
-              leadingIcon={<Plus size={15} />}
+              leadingIcon={<Plus size={16} />}
               onClick={() => setShowAdd(true)}
             >
               加入任务
-            </M3Button>
+            </Button>
           </div>
           {detailError && <ErrorState error={detailError} onRetry={() => void loadSelected()} />}
           <PlacementList
@@ -3624,16 +3456,19 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                   <small>归档于 {formatTime(operation.createdAt)}</small>
                 </span>
                 <div className="archive-project-actions">
-                  <button
+                  <Button
+                    variant="tonal"
+                    size="s"
                     type="button"
-                    className="secondary-button small"
                     aria-expanded={expanded}
                     onClick={() => setExpandedId(expanded ? null : operation.id)}
                   >
                     {expanded ? '收起明细' : '查看明细'}
-                  </button>
-                  <button
-                    className="secondary-button small"
+                  </Button>
+                  <Button
+                    variant="tonal"
+                    size="s"
+                    type="submit"
                     disabled={busy}
                     onClick={() =>
                       void runAction(operation.id, async () => {
@@ -3646,7 +3481,7 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                     }
                   >
                     {busy ? '恢复中…' : '恢复整棵目录'}
-                  </button>
+                  </Button>
                 </div>
                 {expanded && (
                   <div className="archive-operation-children">
@@ -3691,8 +3526,10 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                     <span className="status-label">已归档</span>
                   </span>
                 </button>
-                <button
-                  className="secondary-button small"
+                <Button
+                  variant="tonal"
+                  size="s"
+                  type="submit"
                   disabled={busyId === task.id}
                   onClick={() =>
                     void runAction(task.id, async () => {
@@ -3703,7 +3540,7 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                   }
                 >
                   {busyId === task.id ? '恢复中…' : '恢复任务'}
-                </button>
+                </Button>
               </div>
             ))
           )}
@@ -3726,8 +3563,10 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                         : '独立归档（需先恢复父目录）'}
                     </small>
                   </span>
-                  <button
-                    className="secondary-button small"
+                  <Button
+                    variant="tonal"
+                    size="s"
+                    type="submit"
                     disabled={busyId === folder.id || !folder.archivedByOperationId}
                     title={
                       folder.archivedByOperationId ? undefined : '独立归档文件夹不能按归档操作恢复'
@@ -3735,7 +3574,7 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                     onClick={() => void restoreFolder(folder)}
                   >
                     {busyId === folder.id ? '恢复中…' : '恢复文件夹'}
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -3758,8 +3597,10 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                       {event.reachedAt ? `已到达 · ${formatTime(event.reachedAt)}` : '未到达'}
                     </small>
                   </span>
-                  <button
-                    className="secondary-button small"
+                  <Button
+                    variant="tonal"
+                    size="s"
+                    type="submit"
                     disabled={busyId === event.id}
                     onClick={() =>
                       void runAction(event.id, async () => {
@@ -3770,7 +3611,7 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                     }
                   >
                     {busyId === event.id ? '恢复中…' : '恢复时间点'}
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -3835,35 +3676,43 @@ function SettingsPage() {
           <h2>日期与安排</h2>
           <label className="field">
             <span>时区</span>
-            <M3Select value={timezone} onChange={(event) => setTimezone(event.target.value)}>
-              <option>Asia/Shanghai</option>
-              <option>Asia/Tokyo</option>
-              <option>UTC</option>
-              <option>America/Los_Angeles</option>
-            </M3Select>
+            <Select
+              label="时区"
+              value={timezone}
+              onChange={setTimezone}
+              options={[
+                { value: 'Asia/Shanghai', label: 'Asia/Shanghai' },
+                { value: 'Asia/Tokyo', label: 'Asia/Tokyo' },
+                { value: 'UTC', label: 'UTC' },
+                { value: 'America/Los_Angeles', label: 'America/Los_Angeles' },
+              ]}
+            />
           </label>
           <label className="field">
             <span>每周起始日</span>
-            <M3Select
-              value={weekStartsOn}
-              onChange={(event) => setWeekStartsOn(Number(event.target.value) as 0 | 1)}
-            >
-              <option value={1}>周一</option>
-              <option value={0}>周日</option>
-            </M3Select>
+            <Select
+              label="每周起始日"
+              value={String(weekStartsOn)}
+              onChange={(next) => setWeekStartsOn(Number(next) as 0 | 1)}
+              options={[
+                { value: '1', label: '周一' },
+                { value: '0', label: '周日' },
+              ]}
+            />
           </label>
           <label className="field">
             <span>默认新任务位置</span>
-            <M3Select
+            <Select
+              label="默认新任务位置"
               value={defaultCaptureTarget}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (value === 'ROOT' || value === 'RECENT_FOLDER') setDefaultCaptureTarget(value);
+              onChange={(next) => {
+                if (next === 'ROOT' || next === 'RECENT_FOLDER') setDefaultCaptureTarget(next);
               }}
-            >
-              <option value="ROOT">根目录</option>
-              <option value="RECENT_FOLDER">最近文件夹</option>
-            </M3Select>
+              options={[
+                { value: 'ROOT', label: '根目录' },
+                { value: 'RECENT_FOLDER', label: '最近文件夹' },
+              ]}
+            />
           </label>
           <p className="field-help">日期任务使用此时区的本地日期；不会把 UTC 日期直接展示给你。</p>
         </div>
@@ -3886,12 +3735,12 @@ function SettingsPage() {
         <ConflictSection />
         <RejectedMutationSection />
         <div className="settings-actions">
-          <button type="submit" className="primary-button">
+          <Button variant="filled" type="submit">
             保存设置
-          </button>
+          </Button>
           {saved && (
             <span className="save-state">
-              <Check size={15} />
+              <Check size={16} />
               {saved}
             </span>
           )}
@@ -3974,14 +3823,14 @@ function HubSettingsSection() {
         </div>
       )}
       <div className="hub-check-row">
-        <button
+        <Button
+          variant="tonal"
           type="button"
-          className="secondary-button"
           onClick={() => void save()}
           disabled={state === 'checking' || !origin.trim()}
         >
           {state === 'checking' ? '测试中…' : '测试并保存'}
-        </button>
+        </Button>
         {message && (
           <span className={`hub-check-message ${state}`} role="status">
             {message}
@@ -4115,45 +3964,31 @@ function ConflictInboxItem({
         </div>
       )}
       <div className="conflict-actions">
-        <button
-          type="button"
-          className="secondary-button small"
-          onClick={() => void resolve('server')}
-        >
+        <Button variant="tonal" size="s" type="button" onClick={() => void resolve('server')}>
           采用服务器版本
-        </button>
-        <button
-          type="button"
-          className="secondary-button small"
-          onClick={() => void resolve('local')}
-        >
+        </Button>
+        <Button variant="tonal" size="s" type="button" onClick={() => void resolve('local')}>
           保留本地并重试
-        </button>
+        </Button>
         {restoreAvailable && (
-          <button
-            type="button"
-            className="secondary-button small"
-            onClick={() => void resolve('restore')}
-          >
+          <Button variant="tonal" size="s" type="button" onClick={() => void resolve('restore')}>
             恢复后应用本地
-          </button>
+          </Button>
         )}
         {mergeSupported && (
-          <button
-            type="button"
-            className="primary-button small"
-            onClick={() => void resolve('merged')}
-          >
+          <Button variant="filled" size="s" type="button" onClick={() => void resolve('merged')}>
             保存合并版本
-          </button>
+          </Button>
         )}
-        <button
+        <Button
+          variant="filled"
+          size="s"
+          className="m3e-button--danger"
           type="button"
-          className="danger-button small"
           onClick={() => void resolve('discard')}
         >
           丢弃本地改动
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -4189,9 +4024,10 @@ function RejectedMutationSection() {
     <div className="settings-section rejected-inbox">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>待重试的失败操作 / 升级待处理项</h2>
-        <button
+        <Button
+          variant="tonal"
+          size="s"
           type="button"
-          className="secondary-button small"
           onClick={() => {
             const blob = new Blob([JSON.stringify({ upgradePending, rejected: items }, null, 2)], {
               type: 'application/json',
@@ -4205,7 +4041,7 @@ function RejectedMutationSection() {
           }}
         >
           导出待处理项
-        </button>
+        </Button>
       </div>
       <p className="field-help">
         服务器拒绝的本地操作或未完成协议升级项已暂停，不会在后台无限重复提交。
@@ -4234,9 +4070,10 @@ function RejectedMutationSection() {
             </small>
           </span>
           <div className="rejected-actions">
-            <button
+            <Button
+              variant="tonal"
+              size="s"
               type="button"
-              className="secondary-button small"
               onClick={() =>
                 void engine?.retryRejectedMutation(item.mutationId).then(() => {
                   void reload();
@@ -4245,16 +4082,17 @@ function RejectedMutationSection() {
               }
             >
               重试
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="text"
+              className="danger-text"
               type="button"
-              className="text-button danger-text"
               onClick={() =>
                 void engine?.discardRejectedMutation(item.mutationId).then(() => void reload())
               }
             >
               丢弃
-            </button>
+            </Button>
           </div>
         </div>
       ))}

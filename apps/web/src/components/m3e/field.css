@@ -1,0 +1,416 @@
+/*
+ * M3E text fields, exposed dropdowns, chips and switches.
+ *
+ * The floating label is CSS-driven so it stays correct for values set outside
+ * React: an empty `placeholder=" "` plus `:placeholder-shown` distinguishes the
+ * empty state without reading the DOM.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Text field                                                                 */
+/* -------------------------------------------------------------------------- */
+
+.m3e-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  inline-size: 100%;
+}
+
+.m3e-field__box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-block-size: 56px;
+  border: 1px solid var(--m3-outline);
+  background-color: transparent;
+  transition:
+    border-color var(--m3-motion-short2) var(--m3-easing-standard),
+    background-color var(--m3-motion-short2) var(--m3-easing-standard);
+}
+
+.m3e-field--outlined .m3e-field__box {
+  border-radius: var(--m3-shape-xs);
+}
+
+.m3e-field--filled .m3e-field__box {
+  border: 0;
+  border-block-end: 1px solid var(--m3-outline);
+  border-start-start-radius: var(--m3-shape-xs);
+  border-start-end-radius: var(--m3-shape-xs);
+  background-color: var(--m3-surface-container-highest);
+}
+
+.m3e-field__box:hover {
+  border-color: var(--m3-on-surface);
+}
+.m3e-field--filled .m3e-field__box:hover {
+  border-block-end-color: var(--m3-on-surface);
+}
+
+.m3e-field__box:focus-within {
+  border-color: var(--m3-primary);
+  box-shadow: inset 0 0 0 1px var(--m3-primary);
+}
+.m3e-field--filled .m3e-field__box:focus-within {
+  border-block-end: 2px solid var(--m3-primary);
+  box-shadow: none;
+}
+
+.m3e-field--error .m3e-field__box {
+  border-color: var(--m3-error);
+}
+.m3e-field--error .m3e-field__box:focus-within {
+  border-color: var(--m3-error);
+  box-shadow: inset 0 0 0 1px var(--m3-error);
+}
+
+.m3e-field--disabled .m3e-field__box {
+  border-color: var(--m3-state-disabled-container);
+  background-color: var(--m3-state-disabled-container);
+}
+
+.m3e-field__input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: 56px;
+  padding: 20px 16px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--m3-on-surface);
+  font-family: inherit;
+  font-size: var(--m3-type-body-large-size);
+  line-height: var(--m3-type-body-large-line);
+  outline: 0;
+}
+
+.m3e-field__input::placeholder {
+  color: transparent;
+}
+
+.m3e-field--multiline .m3e-field__input--multiline {
+  min-block-size: 120px;
+  padding-block-start: 24px;
+  resize: vertical;
+}
+
+.m3e-field__label {
+  position: absolute;
+  inset-inline-start: 16px;
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-large-size);
+  pointer-events: none;
+  transform-origin: left center;
+  transition:
+    translate var(--m3-motion-short3) var(--m3-easing-standard),
+    font-size var(--m3-motion-short3) var(--m3-easing-standard),
+    color var(--m3-motion-short3) var(--m3-easing-standard);
+}
+
+/* Float the label on focus or when the field holds a value. */
+.m3e-field:focus-within .m3e-field__label,
+.m3e-field.has-value .m3e-field__label {
+  translate: 0 -170%;
+  font-size: var(--m3-type-body-small-size);
+}
+
+.m3e-field:focus-within .m3e-field__label {
+  color: var(--m3-primary);
+}
+.m3e-field--error .m3e-field__label {
+  color: var(--m3-error);
+}
+
+/* Multiline labels sit at the top rather than centred. */
+.m3e-field--multiline .m3e-field__label {
+  inset-block-start: 20px;
+  translate: 0 0;
+}
+.m3e-field--multiline:focus-within .m3e-field__label,
+.m3e-field--multiline.has-value .m3e-field__label {
+  translate: 0 -0.6em;
+  font-size: var(--m3-type-body-small-size);
+}
+
+.m3e-field__icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--m3-on-surface-variant);
+}
+.m3e-field__icon--leading {
+  padding-inline-start: 12px;
+}
+.m3e-field__icon--trailing {
+  padding-inline-end: 12px;
+}
+
+.m3e-field__helper {
+  margin: 0;
+  padding-inline: 16px;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+  line-height: var(--m3-type-body-small-line);
+}
+.m3e-field--error .m3e-field__helper {
+  color: var(--m3-error);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Exposed dropdown                                                           */
+/* -------------------------------------------------------------------------- */
+
+.m3e-select {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  inline-size: 100%;
+}
+
+.m3e-select__label {
+  padding-inline: 4px;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+}
+
+.m3e-select__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-block-size: 56px;
+  padding: 0 12px 0 16px;
+  border: 1px solid var(--m3-outline);
+  border-radius: var(--m3-shape-xs);
+  background-color: transparent;
+  color: var(--m3-on-surface);
+  font-family: inherit;
+  font-size: var(--m3-type-body-large-size);
+  text-align: start;
+  cursor: pointer;
+  transition:
+    border-color var(--m3-motion-short2) var(--m3-easing-standard),
+    background-color var(--m3-motion-short2) var(--m3-easing-standard);
+}
+
+.m3e-select__trigger:hover:not(:disabled) {
+  border-color: var(--m3-on-surface);
+}
+.m3e-select__trigger:focus-visible {
+  border-color: var(--m3-primary);
+  box-shadow: inset 0 0 0 1px var(--m3-primary);
+}
+.m3e-select--disabled .m3e-select__trigger {
+  border-color: var(--m3-state-disabled-container);
+  color: var(--m3-state-disabled-content);
+}
+.m3e-select__value {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m3e-select__popup {
+  position: absolute;
+  z-index: 8;
+  inset-block-start: calc(100% + 6px);
+  inset-inline: 0;
+  max-block-size: min(320px, 50vh);
+  margin: 0;
+  padding-block: 8px;
+  overflow-y: auto;
+  list-style: none;
+  border-radius: var(--m3-shape-md);
+  background-color: var(--m3-surface-container);
+  box-shadow: var(--m3-elevation-2);
+  animation: m3e-menu-in var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast) both;
+}
+
+.m3e-select__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 48px;
+  padding-inline: 12px;
+  color: var(--m3-on-surface);
+  font-size: var(--m3-type-body-large-size);
+  cursor: pointer;
+}
+.m3e-select__option:hover {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+.m3e-select__option.is-selected {
+  background-color: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+}
+.m3e-select__option[aria-disabled='true'] {
+  color: var(--m3-state-disabled-content);
+  pointer-events: none;
+}
+.m3e-select__check {
+  display: inline-flex;
+  inline-size: 20px;
+  color: var(--m3-primary);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Chip                                                                       */
+/* -------------------------------------------------------------------------- */
+
+.m3e-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 32px;
+  padding-inline: 12px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-sm);
+  background-color: transparent;
+  color: var(--m3-on-surface-variant);
+  font-family: inherit;
+  font-size: var(--m3-type-label-large-size);
+  font-weight: var(--m3-type-label-large-weight);
+  white-space: nowrap;
+  transition:
+    border-radius var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast),
+    background-color var(--m3-motion-short2) var(--m3-easing-standard),
+    color var(--m3-motion-short2) var(--m3-easing-standard),
+    scale var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast);
+}
+
+.m3e-chip.is-interactive {
+  cursor: pointer;
+}
+.m3e-chip.is-interactive:hover:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+  color: var(--m3-on-surface);
+}
+.m3e-chip.is-interactive:active:not(:disabled) {
+  scale: 0.96;
+  border-radius: var(--m3-shape-lg);
+}
+
+.m3e-chip--filter.is-selected,
+.m3e-chip.is-selected {
+  border-color: transparent;
+  border-radius: var(--m3-shape-sm);
+  background-color: var(--m3-secondary-container);
+  background-image: none;
+  color: var(--m3-on-secondary-container);
+}
+
+.m3e-chip--assist {
+  border-color: var(--m3-outline);
+}
+
+.m3e-chip__check {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 0;
+  overflow: hidden;
+  color: var(--m3-on-secondary-container);
+  transition: inline-size var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast);
+}
+.m3e-chip--filter.is-selected .m3e-chip__check {
+  inline-size: 18px;
+}
+
+.m3e-chip__icon,
+.m3e-chip__remove {
+  display: inline-flex;
+  flex: none;
+}
+.m3e-chip__remove {
+  border-radius: 50%;
+  cursor: pointer;
+}
+.m3e-chip__remove:hover {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+
+.m3e-chip:disabled {
+  border-color: var(--m3-state-disabled-container);
+  color: var(--m3-state-disabled-content);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Switch                                                                     */
+/* -------------------------------------------------------------------------- */
+
+.m3e-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.m3e-switch__track {
+  position: relative;
+  flex: none;
+  inline-size: 52px;
+  block-size: 32px;
+  padding: 0;
+  border: 2px solid var(--m3-outline);
+  border-radius: var(--m3-shape-full);
+  background-color: var(--m3-surface-container-highest);
+  cursor: pointer;
+  transition:
+    background-color var(--m3-motion-short3) var(--m3-easing-standard),
+    border-color var(--m3-motion-short3) var(--m3-easing-standard);
+}
+
+.m3e-switch__track[aria-checked='true'] {
+  border-color: var(--m3-primary);
+  background-color: var(--m3-primary);
+}
+
+.m3e-switch__thumb {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 4px;
+  inline-size: 16px;
+  block-size: 16px;
+  translate: 0 -50%;
+  border-radius: 50%;
+  background-color: var(--m3-outline);
+  transition:
+    inline-size var(--m3-spring-spatial-duration) var(--m3-spring-expressive-spatial),
+    block-size var(--m3-spring-spatial-duration) var(--m3-spring-expressive-spatial),
+    translate var(--m3-spring-spatial-duration) var(--m3-spring-expressive-spatial),
+    background-color var(--m3-motion-short3) var(--m3-easing-standard);
+}
+
+.m3e-switch__track[aria-checked='true'] .m3e-switch__thumb {
+  inline-size: 24px;
+  block-size: 24px;
+  inset-inline-start: 2px;
+  translate: 20px -50%;
+  background-color: var(--m3-on-primary);
+}
+
+.m3e-switch__track:active .m3e-switch__thumb {
+  inline-size: 28px;
+}
+.m3e-switch__track[aria-checked='true']:active .m3e-switch__thumb {
+  inline-size: 28px;
+  translate: 16px -50%;
+}
+
+.m3e-switch__label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--m3-on-surface);
+  font-size: var(--m3-type-body-large-size);
+  cursor: pointer;
+}
+.m3e-switch__helper {
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+}
+.m3e-switch.is-disabled {
+  opacity: 0.6;
+}

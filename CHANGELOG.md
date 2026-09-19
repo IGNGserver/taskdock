@@ -1,5 +1,47 @@
 # Changelog
 
+## Unreleased · 2026-09-19
+
+### 新增
+
+- Material 3 → Material 3 Expressive 迁移，覆盖外观语言、页面结构、组件、交互、动效、适配六个维度；决策与取舍记录在 `docs/adr/0003-material-3-expressive.md`，清单见 `docs/UI_EXPRESSIVE_MIGRATION.md`。
+- 新增 30 个 M3E 组件（`apps/web/src/components/m3e/`，另有 `ChevronGlyph`/`CloseGlyph`/`CheckGlyph`/`ChevronDown`/`joinClasses` 等工具导出）：Button、IconButton、ButtonGroup、SplitButton、Menu、Fab、FabMenu、TextField、TextArea、Select、Chip、Switch、Card、List、ListItem、Badge、LinearProgress、LoadingIndicator、Snackbar、Dialog、ConfirmDialog、BottomSheet、SideSheet、Tooltip、Toolbar、NavigationBar、NavigationRail、NavigationDrawer、TopAppBar、SearchBar。
+- 新增 `scripts/motion-tokens.ts`：把 M3E 弹簧物理（阻尼比 + 刚度）采样为 CSS `linear()` 缓动写入 `tokens.css`；`pnpm tokens:motion` 在漂移时失败。
+- 新增 `scripts/theme-tokens.ts`：从 `tokens.css` 派生并校验六处硬编码主题色（HTML meta、theme-preload、theme.ts、PWA manifest、Electron、Android 资源）；`pnpm tokens:theme` 在漂移时失败。两者接入 `pnpm build` 与 `pnpm tokens:check`。
+- 新增样式分层：`styles/{type,base,tasks,pages,motion,responsive}.css` 取代 4711 行的单文件 `styles.css`，导入顺序即层叠契约。
+- 新增 M3 窗口尺寸类（compact/medium/expanded/large/xlarge）：compact 用导航栏 + FAB menu，medium 用导航轨，expanded 及以上用常驻导航抽屉。
+- 新增 `apps/web/test/m3e-behavior.test.ts` 与 `apps/web/e2e/a11y.spec.ts` 覆盖的令牌/尺寸类契约测试。
+
+### 变更
+
+- 圆角标尺由 6 级扩展为 10 级；动效由「时长 + 缓动」改为 spatial/effects × fast/default/slow 弹簧令牌；类型建立 15 个角色 + emphasized 变体；新增高度 0–5 令牌。
+- 状态层改为按角色计算（`on-surface` / `on-primary` / `on-error`），修复「危险按钮 hover 出现蓝色叠加」。
+- 任务详情从 `position: fixed` 的自制浮层改为 M3E sheet：展开宽度用 side sheet，compact/medium 用 bottom sheet，获得焦点陷阱、presence 动效与深色适配。
+- 移动端创建入口从模态动作表改为 M3E FAB menu。
+- 导航目的地改为真实链接（router `NavLink`），修复丢失中键点击与「在新标签页打开」，并消除 `aria-required-parent` 违规。
+- `usePresence` 的退出时长改为从弹簧令牌读取，避免组件在关闭动画结束前卸载。
+- 减弱动效降级保留语义：spatial 弹簧变短淡入淡出、去掉位移与过冲，不再全局 `0.01ms` 一刀切。
+
+### 修复
+
+- 删除 v2 目录/流程层使用的 6 个从未定义的 CSS 变量（`--outline/--surface/--muted/--accent/--ink/--focus`），该区域此前永远走 fallback 色且深色模式失效。
+- 补齐 TSX 使用但 CSS 缺失的类：`error-banner`、`page-subtitle`、`page-section`、`tree-move-sheet`、`status-icon`、`form-input`。
+- 删除约 54 个未使用选择器与重复覆盖声明；`!important` 由 102 处降至 1 处（仅保留减弱动效下的 `scroll-behavior: auto` 强制覆盖，见 `styles/motion.css`）。
+- 修复 `--dt-text` 未定义导致颜色回退。
+- 修复移动底部导航列数冲突（4 列 vs 5 列规则互相覆盖）。
+- 修复 `today-overview-label` 对比度 4.29:1，低于 WCAG AA 4.5:1（axe 门禁曾失败）。
+- 修复紧凑外壳 `.app-frame` 为 `flex-direction: row` 导致底部导航覆盖内容并拦截点击。
+- 修复导航抽屉关闭依赖 `transitionend` 偶发不触发，改为显式 presence 生命周期。
+- 修复 `IconButton` 显式传入的 `aria-label` 被 `label` 属性覆盖，导致转换后的调用点丢失可访问名称。
+- 修复 FAB menu 关闭时其容器拦截整片区域的指针事件。
+- 修复触摸设备上仍显示 ↵ 键盘提示。
+- Android：补齐 M3E 颜色角色常量（含 fixed 组与 success/warning），修正 background 为 `#FBF8FF` / `#121318`；`Shapes` 的 `extraLarge` 由 24dp 调整为 28dp。
+
+### 验证
+
+- 本地门禁：`format:check`、`lint`（0 warning）、`typecheck`、`test`（18 files / 154 tests）、`tokens:check`、`desktop:test`、Playwright E2E（chromium/firefox/mobile 51 passed / 15 skipped）、Android `testDebugUnitTest` + `compileDebugAndroidTestKotlin` 全部 PASS。
+- WebKit E2E 仍为 NOT RUN（当前 Linux 缺少 WebKit 图形依赖）；已在迁移前的基线上复现同样失败，确认为环境缺失而非本次改动引入。
+
 ## Unreleased · 2026-09-18
 
 ### 新增

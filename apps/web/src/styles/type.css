@@ -1,0 +1,131 @@
+/*
+ * Material 3 type scale utilities.
+ *
+ * The token values live in `tokens.css`; these classes are the only sanctioned
+ * way to apply them. Page CSS should use `.m3-type-*` instead of writing
+ * font-size / line-height / font-weight / letter-spacing by hand, which is how
+ * the previous 403 ad-hoc font sizes accumulated.
+ *
+ * `.m3-type-*-emphasized` applies the M3E emphasized weight and tighter
+ * tracking on top of the base role, for hero text only.
+ */
+
+.m3-type-display-large {
+  font-size: var(--m3-type-display-large-size);
+  line-height: var(--m3-type-display-large-line);
+  font-weight: var(--m3-type-display-large-weight);
+  letter-spacing: var(--m3-type-display-large-tracking);
+}
+.m3-type-display-medium {
+  font-size: var(--m3-type-display-medium-size);
+  line-height: var(--m3-type-display-medium-line);
+  font-weight: var(--m3-type-display-medium-weight);
+  letter-spacing: var(--m3-type-display-medium-tracking);
+}
+.m3-type-display-small {
+  font-size: var(--m3-type-display-small-size);
+  line-height: var(--m3-type-display-small-line);
+  font-weight: var(--m3-type-display-small-weight);
+  letter-spacing: var(--m3-type-display-small-tracking);
+}
+
+.m3-type-headline-large {
+  font-size: var(--m3-type-headline-large-size);
+  line-height: var(--m3-type-headline-large-line);
+  font-weight: var(--m3-type-headline-large-weight);
+  letter-spacing: var(--m3-type-headline-large-tracking);
+}
+.m3-type-headline-medium {
+  font-size: var(--m3-type-headline-medium-size);
+  line-height: var(--m3-type-headline-medium-line);
+  font-weight: var(--m3-type-headline-medium-weight);
+  letter-spacing: var(--m3-type-headline-medium-tracking);
+}
+.m3-type-headline-small {
+  font-size: var(--m3-type-headline-small-size);
+  line-height: var(--m3-type-headline-small-line);
+  font-weight: var(--m3-type-headline-small-weight);
+  letter-spacing: var(--m3-type-headline-small-tracking);
+}
+
+.m3-type-title-large {
+  font-size: var(--m3-type-title-large-size);
+  line-height: var(--m3-type-title-large-line);
+  font-weight: var(--m3-type-title-large-weight);
+  letter-spacing: var(--m3-type-title-large-tracking);
+}
+.m3-type-title-medium {
+  font-size: var(--m3-type-title-medium-size);
+  line-height: var(--m3-type-title-medium-line);
+  font-weight: var(--m3-type-title-medium-weight);
+  letter-spacing: var(--m3-type-title-medium-tracking);
+}
+.m3-type-title-small {
+  font-size: var(--m3-type-title-small-size);
+  line-height: var(--m3-type-title-small-line);
+  font-weight: var(--m3-type-title-small-weight);
+  letter-spacing: var(--m3-type-title-small-tracking);
+}
+
+.m3-type-body-large {
+  font-size: var(--m3-type-body-large-size);
+  line-height: var(--m3-type-body-large-line);
+  font-weight: var(--m3-type-body-large-weight);
+  letter-spacing: var(--m3-type-body-large-tracking);
+}
+.m3-type-body-medium {
+  font-size: var(--m3-type-body-medium-size);
+  line-height: var(--m3-type-body-medium-line);
+  font-weight: var(--m3-type-body-medium-weight);
+  letter-spacing: var(--m3-type-body-medium-tracking);
+}
+.m3-type-body-small {
+  font-size: var(--m3-type-body-small-size);
+  line-height: var(--m3-type-body-small-line);
+  font-weight: var(--m3-type-body-small-weight);
+  letter-spacing: var(--m3-type-body-small-tracking);
+}
+
+.m3-type-label-large {
+  font-size: var(--m3-type-label-large-size);
+  line-height: var(--m3-type-label-large-line);
+  font-weight: var(--m3-type-label-large-weight);
+  letter-spacing: var(--m3-type-label-large-tracking);
+}
+.m3-type-label-medium {
+  font-size: var(--m3-type-label-medium-size);
+  line-height: var(--m3-type-label-medium-line);
+  font-weight: var(--m3-type-label-medium-weight);
+  letter-spacing: var(--m3-type-label-medium-tracking);
+}
+.m3-type-label-small {
+  font-size: var(--m3-type-label-small-size);
+  line-height: var(--m3-type-label-small-line);
+  font-weight: var(--m3-type-label-small-weight);
+  letter-spacing: var(--m3-type-label-small-tracking);
+}
+
+.m3-type-mono {
+  font-family: var(--m3-font-mono);
+  font-variant-ligatures: none;
+}
+
+/* M3E emphasized variants. */
+.m3-type-display-large-emphasized {
+  font-weight: var(--m3-type-emphasized-weight-strong);
+  letter-spacing: var(--m3-type-display-emphasized-tracking);
+}
+.m3-type-display-medium-emphasized,
+.m3-type-display-small-emphasized,
+.m3-type-headline-large-emphasized,
+.m3-type-headline-medium-emphasized,
+.m3-type-headline-small-emphasized {
+  font-weight: var(--m3-type-emphasized-weight);
+  letter-spacing: var(--m3-type-headline-emphasized-tracking);
+}
+.m3-type-title-large-emphasized,
+.m3-type-title-medium-emphasized,
+.m3-type-title-small-emphasized {
+  font-weight: var(--m3-type-emphasized-weight);
+  letter-spacing: var(--m3-type-title-emphasized-tracking);
+}

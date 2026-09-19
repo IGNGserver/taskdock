@@ -1,0 +1,632 @@
+/*
+ * M3E buttons, icon buttons, button groups, menus, split buttons and FABs.
+ *
+ * Sizing follows the M3E button scale: XS 32, S 40, M 40, L 56, XL 96. Every
+ * control keeps a 48dp minimum *touch* target even when its visual box is
+ * smaller, via an invisible expanded hit area.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Shared interaction state                                                   */
+/* -------------------------------------------------------------------------- */
+
+.m3e-button,
+.m3e-icon-button,
+.m3e-menu__item,
+.m3e-fab,
+.m3e-chip,
+.m3e-navigation-bar__item,
+.m3e-navigation-rail__item,
+.m3e-drawer__item,
+.m3e-list-item.is-interactive,
+.m3e-select__trigger,
+.m3e-select__option,
+.m3e-snackbar__action,
+.m3e-sheet__handle {
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Touch-target expander: keeps the visual box small without shrinking the
+   tappable region below 48dp. */
+.m3e-button::after,
+.m3e-icon-button::after,
+.m3e-chip::after {
+  content: '';
+  position: absolute;
+  inset: 50% 50%;
+  min-inline-size: 48px;
+  min-block-size: 48px;
+  translate: -50% -50%;
+}
+
+.m3e-button:disabled,
+.m3e-icon-button:disabled,
+.m3e-menu__item:disabled,
+.m3e-fab:disabled,
+.m3e-chip:disabled,
+.m3e-select__trigger:disabled,
+.m3e-switch__track:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Button                                                                     */
+/* -------------------------------------------------------------------------- */
+
+.m3e-button {
+  --m3e-button-radius: var(--m3-shape-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-block-size: 40px;
+  padding-inline: 24px;
+  border: 1px solid transparent;
+  border-radius: var(--m3e-button-radius);
+  background-color: transparent;
+  background-image: none;
+  color: var(--m3-on-surface);
+  font-family: inherit;
+  font-size: var(--m3-type-label-large-size);
+  font-weight: var(--m3-type-label-large-weight);
+  letter-spacing: var(--m3-type-label-large-tracking);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-radius var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast),
+    background-color var(--m3-motion-short2) var(--m3-easing-standard),
+    color var(--m3-motion-short2) var(--m3-easing-standard),
+    box-shadow var(--m3-motion-short2) var(--m3-easing-standard),
+    transform var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast);
+}
+
+.m3e-button--square {
+  --m3e-button-radius: var(--m3-shape-md);
+}
+
+/* Expressive squish: the corner radius morphs on press. */
+.m3e-button:active:not(:disabled) {
+  border-radius: var(--m3e-button-radius);
+  scale: 0.97;
+}
+.m3e-button--round:active:not(:disabled) {
+  border-radius: var(--m3-shape-lg);
+}
+
+.m3e-button__icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.m3e-button__label {
+  display: inline-block;
+}
+
+/* Sizes */
+.m3e-button--xs {
+  min-block-size: 32px;
+  padding-inline: 16px;
+  font-size: var(--m3-type-label-medium-size);
+}
+.m3e-button--s,
+.m3e-button--m {
+  min-block-size: 40px;
+}
+.m3e-button--l {
+  min-block-size: 56px;
+  padding-inline: 32px;
+  font-size: var(--m3-type-title-medium-size);
+}
+.m3e-button--xl {
+  min-block-size: 96px;
+  padding-inline: 48px;
+  font-size: var(--m3-type-headline-small-size);
+  border-radius: var(--m3-shape-xl);
+}
+
+/* Variants */
+.m3e-button--filled {
+  background-color: var(--m3-primary);
+  color: var(--m3-on-primary);
+}
+.m3e-button--filled:hover:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-hover-primary), var(--m3-state-hover-primary));
+}
+.m3e-button--filled:active:not(:disabled) {
+  background-image: linear-gradient(
+    var(--m3-state-pressed-primary),
+    var(--m3-state-pressed-primary)
+  );
+}
+
+.m3e-button--tonal {
+  background-color: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+}
+.m3e-button--tonal:hover:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+.m3e-button--tonal:active:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-pressed), var(--m3-state-pressed));
+}
+
+.m3e-button--outlined {
+  border-color: var(--m3-outline);
+  color: var(--m3-on-surface);
+}
+.m3e-button--outlined:hover:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+.m3e-button--outlined:active:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-pressed), var(--m3-state-pressed));
+}
+
+.m3e-button--text {
+  padding-inline: 12px;
+  color: var(--m3-primary);
+}
+.m3e-button--text:hover:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+.m3e-button--text:active:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-pressed), var(--m3-state-pressed));
+}
+
+.m3e-button--elevated {
+  background-color: var(--m3-surface-container-low);
+  color: var(--m3-primary);
+  box-shadow: var(--m3-elevation-1);
+}
+.m3e-button--elevated:hover:not(:disabled) {
+  box-shadow: var(--m3-elevation-2);
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+
+.m3e-button--danger {
+  background-color: var(--m3-error);
+  color: var(--m3-on-error);
+}
+.m3e-button--danger:hover:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-hover-error), var(--m3-state-hover-error));
+}
+.m3e-button--danger:active:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-pressed-error), var(--m3-state-pressed-error));
+}
+
+.m3e-button:disabled:not(.m3e-button--text):not(.m3e-button--outlined) {
+  background-color: var(--m3-state-disabled-container);
+  background-image: none;
+  color: var(--m3-state-disabled-content);
+}
+.m3e-button:disabled.m3e-button--outlined {
+  border-color: var(--m3-state-disabled-container);
+  color: var(--m3-state-disabled-content);
+}
+.m3e-button:disabled.m3e-button--text {
+  color: var(--m3-state-disabled-content);
+}
+
+.m3e-button--wide,
+.m3e-button.is-wide {
+  inline-size: 100%;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Icon button                                                                */
+/* -------------------------------------------------------------------------- */
+
+.m3e-icon-button {
+  --m3e-icon-radius: 50%;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  inline-size: 40px;
+  block-size: 40px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--m3e-icon-radius);
+  background-color: transparent;
+  color: var(--m3-on-surface-variant);
+  cursor: pointer;
+  transition:
+    border-radius var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast),
+    background-color var(--m3-motion-short2) var(--m3-easing-standard),
+    color var(--m3-motion-short2) var(--m3-easing-standard),
+    scale var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast);
+}
+
+.m3e-icon-button--square {
+  --m3e-icon-radius: var(--m3-shape-sm);
+}
+
+.m3e-icon-button--xs {
+  inline-size: 32px;
+  block-size: 32px;
+}
+.m3e-icon-button--s {
+  inline-size: 40px;
+  block-size: 40px;
+}
+.m3e-icon-button--m {
+  inline-size: 48px;
+  block-size: 48px;
+}
+.m3e-icon-button--l {
+  inline-size: 56px;
+  block-size: 56px;
+}
+.m3e-icon-button--xl {
+  inline-size: 96px;
+  block-size: 96px;
+}
+
+.m3e-icon-button--standard:hover:not(:disabled),
+.m3e-icon-button--standard.is-selected {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+.m3e-icon-button--standard:active:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-pressed), var(--m3-state-pressed));
+}
+.m3e-icon-button--standard.is-selected {
+  color: var(--m3-primary);
+}
+
+.m3e-icon-button--filled {
+  background-color: var(--m3-primary);
+  color: var(--m3-on-primary);
+}
+.m3e-icon-button--filled:hover:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-hover-primary), var(--m3-state-hover-primary));
+}
+.m3e-icon-button--tonal {
+  background-color: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+}
+.m3e-icon-button--tonal:hover:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+.m3e-icon-button--outlined {
+  border-color: var(--m3-outline);
+  color: var(--m3-on-surface-variant);
+}
+.m3e-icon-button--outlined:hover:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+
+.m3e-icon-button--danger {
+  color: var(--m3-error);
+}
+.m3e-icon-button--danger:hover:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+.m3e-icon-button--danger:active:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-pressed), var(--m3-state-pressed));
+}
+
+.m3e-icon-button:disabled {
+  color: var(--m3-state-disabled-content);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Button group                                                               */
+/* -------------------------------------------------------------------------- */
+
+.m3e-button-group {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+  max-inline-size: 100%;
+  padding: 2px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-lg);
+  background-color: var(--m3-surface-container-lowest);
+}
+
+.m3e-button-group .m3e-button {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  padding-inline: 16px;
+  border: 0;
+  border-radius: var(--m3-shape-md);
+  background-color: transparent;
+  color: var(--m3-on-surface-variant);
+}
+
+.m3e-button-group .m3e-button:hover:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+  color: var(--m3-on-surface);
+}
+
+.m3e-button-group .m3e-button[aria-checked='true'] {
+  background-color: var(--m3-secondary-container);
+  background-image: none;
+  color: var(--m3-on-secondary-container);
+}
+
+/* The leading edge of the selected segment morphs toward a squarer shape,
+   which is the M3E group coordination cue. */
+.m3e-button-group .m3e-button[aria-checked='true']:first-child {
+  border-start-start-radius: var(--m3-shape-lg);
+  border-end-start-radius: var(--m3-shape-lg);
+}
+.m3e-button-group .m3e-button[aria-checked='true']:last-child {
+  border-start-end-radius: var(--m3-shape-lg);
+  border-end-end-radius: var(--m3-shape-lg);
+}
+
+.m3e-button-group__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 20px;
+  padding-inline: 5px;
+  border-radius: var(--m3-shape-full);
+  background-color: color-mix(in srgb, currentColor 14%, transparent);
+  font-size: var(--m3-type-label-small-size);
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Menu                                                                       */
+/* -------------------------------------------------------------------------- */
+
+.m3e-menu {
+  position: absolute;
+  z-index: 6;
+  inset-block-start: calc(100% + 6px);
+  min-inline-size: 200px;
+  max-inline-size: min(360px, calc(100vw - 32px));
+  max-block-size: min(420px, 60vh);
+  padding-block: 8px;
+  overflow-y: auto;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-md);
+  background-color: var(--m3-surface-container);
+  box-shadow: var(--m3-elevation-2);
+  animation: m3e-menu-in var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast) both;
+}
+.m3e-menu--start {
+  inset-inline-start: 0;
+}
+.m3e-menu--end {
+  inset-inline-end: 0;
+}
+
+@keyframes m3e-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.m3e-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  inline-size: 100%;
+  min-block-size: 48px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--m3-on-surface);
+  font-family: inherit;
+  font-size: var(--m3-type-label-large-size);
+  text-align: start;
+  cursor: pointer;
+}
+.m3e-menu__item:hover:not(:disabled) {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+.m3e-menu__item:disabled {
+  color: var(--m3-state-disabled-content);
+}
+.m3e-menu__item--danger {
+  color: var(--m3-error);
+}
+.m3e-menu__icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--m3-on-surface-variant);
+}
+.m3e-menu__label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.m3e-menu__hint {
+  flex: none;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-label-medium-size);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Split button                                                               */
+/* -------------------------------------------------------------------------- */
+
+.m3e-split-button {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.m3e-split-button__primary {
+  border-start-end-radius: var(--m3-shape-xs);
+  border-end-end-radius: var(--m3-shape-xs);
+  padding-inline-end: 20px;
+}
+
+.m3e-split-button__trailing {
+  position: relative;
+  display: inline-flex;
+}
+
+.m3e-split-button__toggle {
+  border-start-start-radius: var(--m3-shape-xs);
+  border-end-start-radius: var(--m3-shape-xs);
+  margin-inline-start: 2px;
+}
+
+.m3e-split-button__toggle svg {
+  transition: rotate var(--m3-spring-spatial-duration) var(--m3-spring-spatial);
+}
+.m3e-split-button__toggle.is-open svg {
+  rotate: 180deg;
+}
+
+/* -------------------------------------------------------------------------- */
+/* FAB and FAB menu                                                           */
+/* -------------------------------------------------------------------------- */
+
+.m3e-fab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  inline-size: 56px;
+  block-size: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--m3-shape-lg);
+  background-color: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+  box-shadow: var(--m3-elevation-3);
+  cursor: pointer;
+  transition:
+    border-radius var(--m3-spring-spatial-duration) var(--m3-spring-expressive-spatial),
+    scale var(--m3-spring-spatial-duration) var(--m3-spring-expressive-spatial),
+    box-shadow var(--m3-motion-short3) var(--m3-easing-standard);
+}
+.m3e-fab:hover {
+  box-shadow: var(--m3-elevation-4);
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+.m3e-fab:active {
+  scale: 0.94;
+  border-radius: var(--m3-shape-xl);
+}
+
+.m3e-fab--round {
+  border-radius: var(--m3-shape-lg);
+}
+.m3e-fab--extended {
+  inline-size: auto;
+  padding-inline: 20px;
+  border-radius: var(--m3-shape-lg);
+}
+
+.m3e-fab--s {
+  inline-size: 40px;
+  block-size: 40px;
+}
+.m3e-fab--l {
+  inline-size: 96px;
+  block-size: 96px;
+  border-radius: var(--m3-shape-xl);
+}
+.m3e-fab--l.m3e-fab--extended {
+  block-size: 96px;
+  padding-inline: 28px;
+}
+
+.m3e-fab--primary {
+  background-color: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+}
+.m3e-fab--secondary {
+  background-color: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+}
+.m3e-fab--tertiary {
+  background-color: var(--m3-tertiary-container);
+  color: var(--m3-on-tertiary-container);
+}
+.m3e-fab--surface {
+  background-color: var(--m3-surface-container-high);
+  color: var(--m3-primary);
+}
+
+.m3e-fab__icon {
+  display: inline-flex;
+  flex: none;
+}
+.m3e-fab__label {
+  font-size: var(--m3-type-label-large-size);
+  font-weight: 600;
+}
+
+.m3e-fab-menu {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  /* The closed menu must not create a click-blocking box around the FAB: only
+     the FAB itself and the open item list may receive pointer events. */
+  pointer-events: none;
+}
+
+.m3e-fab-menu__list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+
+.m3e-fab-menu > .m3e-fab,
+.m3e-fab-menu.is-open .m3e-fab-menu__list {
+  pointer-events: auto;
+}
+
+.m3e-fab-menu__row {
+  opacity: 0;
+  transform: translateY(12px) scale(0.9);
+  transition:
+    opacity var(--m3-motion-short3) var(--m3-easing-standard),
+    transform var(--m3-spring-spatial-duration) var(--m3-spring-expressive-spatial);
+  /* Staggered entry: 50ms per item as recommended for the FAB menu. */
+  transition-delay: calc(var(--m3e-fab-menu-index, 0) * 50ms);
+}
+
+.m3e-fab-menu.is-open .m3e-fab-menu__row {
+  opacity: 1;
+  transform: none;
+}
+
+.m3e-fab-menu__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-block-size: 48px;
+  min-inline-size: 180px;
+  padding-inline: 16px;
+  border: 0;
+  border-radius: var(--m3-shape-lg);
+  background-color: var(--m3-surface-container-high);
+  color: var(--m3-on-surface);
+  font-family: inherit;
+  font-size: var(--m3-type-label-large-size);
+  box-shadow: var(--m3-elevation-2);
+  cursor: pointer;
+}
+.m3e-fab-menu__item:hover {
+  background-image: linear-gradient(var(--m3-state-hover), var(--m3-state-hover));
+}
+.m3e-fab-menu__item-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--m3-primary);
+}

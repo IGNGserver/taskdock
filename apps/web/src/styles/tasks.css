@@ -1,0 +1,683 @@
+/*
+ * Task and placement surfaces: the task list, task rows, status control,
+ * today overview, timeline, pickers and the task detail sheet body.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Task list                                                                  */
+/* -------------------------------------------------------------------------- */
+
+.task-list {
+  display: grid;
+  gap: 8px;
+}
+
+.task-list.completed-list {
+  gap: 6px;
+}
+
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 72px;
+  padding: 8px 10px 8px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--m3-shape-lg);
+  background-color: var(--m3-surface-container-lowest);
+  box-shadow: var(--m3-elevation-1);
+  transition:
+    background-color var(--m3-motion-short3) var(--m3-easing-standard),
+    border-color var(--m3-motion-short3) var(--m3-easing-standard),
+    box-shadow var(--m3-motion-short3) var(--m3-easing-standard),
+    scale var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast);
+}
+
+.task-row:hover {
+  border-color: var(--m3-outline-variant);
+  background-color: var(--m3-surface-container);
+  box-shadow: var(--m3-elevation-2);
+}
+
+.task-row:active {
+  scale: 0.998;
+}
+
+.task-row[draggable='true'] {
+  cursor: grab;
+}
+
+.task-row[draggable='true']:active {
+  cursor: grabbing;
+}
+
+.task-row.dragging {
+  opacity: 0.6;
+  box-shadow: var(--m3-elevation-4);
+}
+
+.task-row.is-progress {
+  border-color: color-mix(in srgb, var(--m3-primary) 28%, var(--m3-outline-variant));
+  background-color: color-mix(
+    in srgb,
+    var(--m3-primary-container) 34%,
+    var(--m3-surface-container-lowest)
+  );
+}
+
+.task-row.is-done {
+  background-color: color-mix(
+    in srgb,
+    var(--m3-surface-container) 65%,
+    var(--m3-surface-container-lowest)
+  );
+}
+
+.task-row.is-done .task-title {
+  color: var(--m3-on-surface-variant);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--m3-on-surface-variant) 60%, transparent);
+}
+
+/* The v2 tree page renders its own row shell; it inherits the row treatment. */
+.task-row-v2,
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 64px;
+  padding: 8px 10px 8px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--m3-shape-lg);
+  background-color: var(--m3-surface-container-lowest);
+  transition:
+    background-color var(--m3-motion-short3) var(--m3-easing-standard),
+    border-color var(--m3-motion-short3) var(--m3-easing-standard);
+}
+
+.task-row-v2:hover,
+.tree-row:hover {
+  border-color: var(--m3-outline-variant);
+  background-color: var(--m3-surface-container);
+}
+
+.tree-row.focused-highlight,
+.task-row-v2.focused-highlight {
+  border-color: var(--m3-primary);
+  background-color: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Status control                                                             */
+/* -------------------------------------------------------------------------- */
+
+.task-status-button,
+.task-check {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background-color: var(--m3-surface-container);
+  color: var(--m3-on-surface-variant);
+  cursor: pointer;
+  /* Shape morphs on state change; the completion moment is the one place the
+     expressive spring overshoot is allowed inside a row. */
+  transition:
+    background-color var(--m3-motion-short2) var(--m3-easing-standard),
+    color var(--m3-motion-short2) var(--m3-easing-standard),
+    border-radius var(--m3-spring-expressive-spatial-duration) var(--m3-spring-expressive-spatial),
+    scale var(--m3-spring-expressive-spatial-duration) var(--m3-spring-expressive-spatial);
+}
+
+button.task-status-button:hover,
+.task-status-button:hover {
+  background-color: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+}
+
+.task-status-button:active {
+  scale: 0.92;
+}
+
+.task-check.progress {
+  background-color: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+}
+
+.task-check.progress span {
+  inline-size: 12px;
+  block-size: 12px;
+  border-radius: 40% 60% 55% 45%;
+  background: currentColor;
+  animation: m3e-loading-morph 1.6s var(--m3-easing-standard) infinite;
+}
+
+.task-check.done {
+  border-radius: var(--m3-shape-md);
+  background-color: var(--m3-success-container);
+  color: var(--m3-on-success-container);
+}
+
+.task-row.is-progress .task-status-button {
+  background-color: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+}
+
+.task-row.is-done .task-status-button {
+  border-radius: var(--m3-shape-md);
+  background-color: var(--m3-success-container);
+  color: var(--m3-on-success-container);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Row contents                                                               */
+/* -------------------------------------------------------------------------- */
+
+.task-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 5px;
+  min-inline-size: 0;
+  padding: 8px 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.task-title {
+  color: var(--m3-on-surface);
+  font-size: var(--m3-type-body-large-size);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+}
+
+.reference-id {
+  color: var(--m3-on-surface-variant);
+  font-family: var(--m3-font-mono);
+  font-size: var(--m3-type-label-small-size);
+  opacity: 0.8;
+}
+
+.status-label {
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-label-medium-size);
+}
+
+.task-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.task-reorder-actions,
+.card-reorder-actions,
+.timeline-actions,
+.archived-timeline-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--m3-motion-short3) var(--m3-easing-standard);
+}
+
+.task-row:hover .task-reorder-actions,
+.task-row:focus-within .task-reorder-actions,
+.project-card-shell:hover .card-reorder-actions,
+.project-card-shell:focus-within .card-reorder-actions,
+.timeline-item-shell:hover .timeline-actions,
+.timeline-item-shell:focus-within .timeline-actions,
+.timeline-item-shell:hover .archived-timeline-actions,
+.timeline-item-shell:focus-within .archived-timeline-actions {
+  opacity: 1;
+}
+
+.row-menu {
+  position: relative;
+}
+
+.row-error {
+  flex-basis: 100%;
+  color: var(--m3-error);
+  font-size: var(--m3-type-body-small-size);
+}
+
+.placement-drop-target {
+  border-radius: var(--m3-shape-lg);
+  outline: 2px dashed transparent;
+  outline-offset: -4px;
+  transition: outline-color var(--m3-motion-short3) var(--m3-easing-standard);
+}
+
+.placement-drop-target:has(.task-row:active),
+.placement-empty-drop {
+  outline-color: var(--m3-primary);
+  background-color: color-mix(in srgb, var(--m3-primary-container) 40%, transparent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Today overview                                                             */
+/* -------------------------------------------------------------------------- */
+
+.today-overview {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(180px, 2fr) auto;
+  align-items: center;
+  gap: 20px;
+  margin: 0 0 26px;
+  padding: 18px 20px;
+  border-radius: var(--m3-shape-xl);
+  background-color: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+}
+
+.today-overview-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.today-overview-label {
+  /* Must stay at full on-container strength: 78% falls to 4.29:1 against the
+     container fill, below the WCAG AA 4.5:1 floor axe enforces. */
+  color: var(--m3-on-primary-container);
+  font-size: var(--m3-type-label-medium-size);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.today-overview-copy strong {
+  font-size: var(--m3-type-title-medium-size);
+  font-weight: var(--m3-type-emphasized-weight);
+}
+
+.today-progress {
+  position: relative;
+  block-size: 10px;
+  border-radius: var(--m3-shape-full);
+  background-color: color-mix(in srgb, var(--m3-on-primary-container) 18%, transparent);
+  overflow: hidden;
+}
+
+.today-progress span {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  border-radius: var(--m3-shape-full);
+  background-color: var(--m3-primary);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--m3-primary) 0 8px,
+    color-mix(in srgb, var(--m3-primary) 55%, var(--m3-primary-container)) 8px 16px
+  );
+  transition: inline-size var(--m3-spring-spatial-duration) var(--m3-spring-spatial);
+}
+
+.today-overview-percent {
+  font-size: var(--m3-type-title-large-size);
+  font-weight: var(--m3-type-emphasized-weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.task-library-summary {
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-medium-size);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Timeline / events                                                          */
+/* -------------------------------------------------------------------------- */
+
+.timeline-list,
+.archived-timeline-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline-item-shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--m3-shape-lg);
+  background-color: var(--m3-surface-container-lowest);
+}
+
+.timeline-item {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+  min-block-size: 68px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: var(--m3-shape-lg);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.timeline-item:hover {
+  background-color: var(--m3-surface-container);
+}
+
+.timeline-node {
+  flex: none;
+  inline-size: 12px;
+  block-size: 12px;
+  border: 2px solid var(--m3-outline);
+  border-radius: 50%;
+}
+
+.timeline-node.reached {
+  border-color: var(--m3-tertiary);
+  background-color: var(--m3-tertiary);
+}
+
+.timeline-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.timeline-copy strong {
+  font-size: var(--m3-type-body-large-size);
+  font-weight: 600;
+}
+
+.timeline-copy small,
+.event-count {
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+}
+
+.event-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.event-state-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-end: 20px;
+}
+
+.event-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 32px;
+  padding-inline: 12px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-sm);
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-label-large-size);
+}
+
+.event-state.reached {
+  border-color: transparent;
+  background-color: var(--m3-tertiary-container);
+  color: var(--m3-on-tertiary-container);
+}
+
+.reached-events {
+  margin-block-end: 24px;
+}
+
+.reached-event-list {
+  display: grid;
+  gap: 6px;
+}
+
+.reached-event {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-block-size: 56px;
+  padding: 8px 14px;
+  border-radius: var(--m3-shape-md);
+  background-color: var(--m3-tertiary-container);
+  color: var(--m3-on-tertiary-container);
+  text-decoration: none;
+}
+
+.reached-event > span:nth-child(2) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.reached-event strong {
+  font-size: var(--m3-type-body-large-size);
+}
+
+.reached-event small {
+  font-size: var(--m3-type-body-small-size);
+  opacity: 0.85;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pickers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+.picker-list {
+  display: grid;
+  gap: 6px;
+  max-block-size: min(420px, 52vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.picker-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  inline-size: 100%;
+  min-block-size: 56px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--m3-shape-md);
+  background-color: var(--m3-surface-container-lowest);
+  color: inherit;
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.picker-item:hover {
+  border-color: var(--m3-outline-variant);
+  background-color: var(--m3-surface-container);
+}
+
+.picker-item > span:nth-child(2) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.picker-item strong {
+  overflow: hidden;
+  font-size: var(--m3-type-body-large-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-item small {
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+}
+
+.picker-hint {
+  margin-block: 4px;
+}
+
+.date-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block-end: 12px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Task detail (v2)                                                           */
+/* -------------------------------------------------------------------------- */
+
+.task-detail-v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-detail-v2-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.task-detail-title {
+  inline-size: 100%;
+  margin-block-start: 4px;
+  padding: 6px 0;
+  border: 0;
+  border-block-end: 1px solid transparent;
+  background: transparent;
+  color: var(--m3-on-surface);
+  font-family: inherit;
+  font-size: var(--m3-type-headline-small-size);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.task-detail-title:hover {
+  border-block-end-color: var(--m3-outline-variant);
+}
+
+.task-detail-title:focus {
+  border-block-end-color: var(--m3-primary);
+  outline: 0;
+}
+
+.task-detail-v2-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 20px 0;
+}
+
+.task-detail-v2-status > span,
+.task-detail-v2-section h3 {
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-label-medium-size);
+}
+
+.task-detail-v2-section {
+  margin-block-start: 16px;
+  padding-block-start: 15px;
+  border-block-start: 1px solid var(--m3-outline-variant);
+}
+
+.task-detail-v2-section h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 10px;
+  color: var(--m3-on-surface);
+  font-size: var(--m3-type-title-small-size);
+  font-weight: 650;
+}
+
+.archive-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block: 12px;
+  padding: 10px 14px;
+  border-radius: var(--m3-shape-sm);
+  background-color: var(--m3-warning-container);
+  color: var(--m3-on-warning-container);
+  font-size: var(--m3-type-body-medium-size);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Steps (v2)                                                                 */
+/* -------------------------------------------------------------------------- */
+
+.step-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 48px;
+  padding: 6px 8px;
+  border-radius: var(--m3-shape-sm);
+}
+
+.step-row-editable {
+  background-color: var(--m3-surface-container);
+}
+
+.step-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  inline-size: 100%;
+}
+
+.step-editor input,
+.step-editor textarea,
+.step-editor select,
+.task-detail-v2-section select {
+  inline-size: 100%;
+  min-block-size: 48px;
+  padding: 0 12px;
+  border: 1px solid var(--m3-outline);
+  border-radius: var(--m3-shape-xs);
+  background-color: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: var(--m3-type-body-medium-size);
+}
+
+.step-editor textarea {
+  min-block-size: 96px;
+  padding: 10px 12px;
+}
+
+.step-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

@@ -21,7 +21,22 @@
 
 ## 颜色令牌
 
-共享令牌位于 `packages/ui/src/tokens.css`。浅色和深色都定义以下语义类别：画布、表面、悬停表面、文字、边框、强调色、状态色、焦点环、遮罩、代码块和阴影。业务 CSS 不应新增页面级硬编码颜色。
+共享令牌位于 `packages/ui/src/tokens.css`，采用 Material 3 Expressive 命名。浅色和深色都定义以下语义类别：
+
+- **颜色角色**：`primary / secondary / tertiary` 三组（含 `-container`、`-fixed`、`-fixed-dim`、`on-*` 变体）、`surface` 阶梯（`container-lowest` → `container-highest`、`dim`、`bright`）、`inverse-*`、`outline / outline-variant`、`error`，以及 TaskDock 自有的 `success` / `warning` 组。
+- **画布**：`--m3-canvas`（浅色取 `surface-container-low`，深色取 `surface-container-lowest`）。外壳与滚动页面使用它，不用页面级颜色。
+- **状态层**：`--m3-state-{hover,focus,pressed,dragged}` 按 `on-surface` 计算，另有按角色的 `*-primary` / `*-error` 变体。M3 用叠加而非换填充色，所以组件用 `background-image` 叠加，底色保留。
+- **形状 / 动效 / 类型 / 高度**：10 级圆角、由 `scripts/motion-tokens.ts` 生成的弹簧缓动、15 个类型角色（含 emphasized 变体）、高度 0–5。
+
+业务 CSS 不应新增页面级硬编码颜色、圆角、时长或字号。
+
+## 对比度档位
+
+`prefers-contrast: more` 通过令牌覆盖提高 `on-surface-variant`、`outline`、`outline-variant` 并加厚状态层，深浅两套各自定义。这是令牌改动而非独立样式表。
+
+## 令牌来源校验
+
+调色板此前散落在六处（HTML meta、`theme-preload.js`、`theme.ts`、PWA manifest、Electron 主进程、Android 资源）。现在由 `scripts/theme-tokens.ts` 从 `tokens.css` 派生，`pnpm tokens:theme` 在漂移时失败；`pnpm tokens:check` 同时校验弹簧参数。二者已接入 `pnpm build`。
 
 ## 数据边界
 
