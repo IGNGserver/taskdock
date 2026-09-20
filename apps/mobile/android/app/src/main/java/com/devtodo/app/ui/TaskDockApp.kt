@@ -1,269 +1,196 @@
 package com.devtodo.app.ui
 
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.NavigationRailItemDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.adaptive.navigationsuite.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import com.devtodo.app.ui.navigation.BottomNavScreens
 import com.devtodo.app.ui.navigation.Screen
-import com.devtodo.app.ui.screens.LoginScreen
-import com.devtodo.app.ui.screens.MainViewModel
-import com.devtodo.app.ui.screens.ArchiveCenterV2Screen
-import com.devtodo.app.ui.screens.SettingsScreen
-import com.devtodo.app.ui.screens.TaskDetailScreen
-import com.devtodo.app.ui.screens.AllTasksV2Screen
-import com.devtodo.app.ui.screens.TreeScreen
-import com.devtodo.app.ui.screens.WorkflowsV2Screen
-import com.devtodo.app.ui.screens.TimeScreen
-import com.devtodo.app.ui.screens.TodayV2Screen
-import kotlinx.coroutines.flow.collectLatest
+import com.devtodo.app.ui.screens.*
+import com.devtodo.app.ui.theme.TaskDockMotion
+import kotlinx.coroutines.flow.collect
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskDockApp(
     viewModel: MainViewModel,
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
 ) {
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
-    val isLoggedIn by viewModel.authenticated.collectAsState()
-    val isMainDestination = BottomNavScreens.any { it.route == currentRoute }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val colorScheme = MaterialTheme.colorScheme
-
-    BoxWithConstraints {
-        val useNavigationRail = maxWidth >= 600.dp
-
-        LaunchedEffect(viewModel) {
-            viewModel.messages.collectLatest { message ->
-                snackbarHostState.showSnackbar(message)
-            }
+    val backStack by navController.currentBackStackEntryAsState()
+    val currentRoute = backStack?.destination?.route
+    val loggedIn by viewModel.authenticated.collectAsStateWithLifecycle()
+    val primary = loggedIn && BottomNavScreens.any { it.route == currentRoute }
+    val snackbar = remember { SnackbarHostState() }
+    var locateFolder by rememberSaveable { mutableStateOf<String?>(null) }
+    var locateTask by rememberSaveable { mutableStateOf<String?>(null) }
+    var locateRequest by rememberSaveable { mutableIntStateOf(0) }
+    fun navigatePrimary(route: String) {
+        navController.navigate(route) {
+            popUpTo(Screen.Today.route) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
         }
-
-        LaunchedEffect(isLoggedIn, currentRoute) {
-            if (!isLoggedIn && currentRoute != null && currentRoute != Screen.Login.route) {
-                navController.navigate(Screen.Login.route) {
-                    popUpTo(0) { inclusive = true }
-                }
-            }
+    }
+    fun locate(folder: String?, task: String?) {
+        locateFolder = folder
+        locateTask = task
+        locateRequest++
+        navigatePrimary(Screen.Tree.route)
+    }
+    LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
+    LaunchedEffect(loggedIn, currentRoute) {
+        if (!loggedIn && currentRoute != null && currentRoute != Screen.Login.route) {
+            navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
         }
-
+    }
+    val adaptiveInfo = currentWindowAdaptiveInfo()
+    NavigationSuiteScaffold(
+        modifier =
+            Modifier.fillMaxSize()
+                .background(MaterialTheme.colorScheme.surface)
+                .windowInsetsPadding(WindowInsets.safeDrawing),
+        layoutType =
+            if (primary) NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(adaptiveInfo)
+            else NavigationSuiteType.None,
+        navigationSuiteItems = {
+            BottomNavScreens.forEach { screen ->
+                item(
+                    selected = currentRoute == screen.route,
+                    onClick = { navigatePrimary(screen.route) },
+                    icon = { screen.icon?.let { Icon(it, null) } },
+                    label = { Text(screen.title) },
+                )
+            }
+        },
+    ) {
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            bottomBar = {
-                if (isLoggedIn && isMainDestination && !useNavigationRail) {
-                    NavigationBar(
-                        containerColor = colorScheme.surfaceContainer
-                    ) {
-                        BottomNavScreens.forEach { screen ->
-                            NavigationBarItem(
-                                icon = {
-                                    screen.icon?.let {
-                                        Icon(it, contentDescription = screen.title)
-                                    }
-                                },
-                                label = { Text(screen.title) },
-                                selected = currentRoute == screen.route,
-                                colors = NavigationBarItemDefaults.colors(
-                                    indicatorColor = colorScheme.primaryContainer,
-                                    selectedIconColor = colorScheme.onPrimaryContainer,
-                                    selectedTextColor = colorScheme.onSurface,
-                                    unselectedIconColor = colorScheme.onSurfaceVariant,
-                                    unselectedTextColor = colorScheme.onSurfaceVariant,
-                                ),
-                                onClick = {
-                                    navController.navigate(screen.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
+            snackbarHost = { SnackbarHost(snackbar) },
         ) { padding ->
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                if (isLoggedIn && isMainDestination && useNavigationRail) {
-                    NavigationRail(
-                        containerColor = colorScheme.surfaceContainerLow
-                    ) {
-                        BottomNavScreens.forEach { screen ->
-                            NavigationRailItem(
-                                icon = {
-                                    screen.icon?.let {
-                                        Icon(it, contentDescription = screen.title)
-                                    }
-                                },
-                                label = { Text(screen.title) },
-                                selected = currentRoute == screen.route,
-                                colors = NavigationRailItemDefaults.colors(
-                                    indicatorColor = colorScheme.primaryContainer,
-                                    selectedIconColor = colorScheme.onPrimaryContainer,
-                                    selectedTextColor = colorScheme.onSurface,
-                                    unselectedIconColor = colorScheme.onSurfaceVariant,
-                                    unselectedTextColor = colorScheme.onSurfaceVariant,
-                                ),
-                                onClick = {
-                                    navController.navigate(screen.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            )
+            NavHost(
+                navController = navController,
+                startDestination = if (loggedIn) Screen.Today.route else Screen.Login.route,
+                modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
+                enterTransition = {
+                    if (BottomNavScreens.any { it.route == targetState.destination.route })
+                        fadeIn(
+                            tween(TaskDockMotion.NavigationMillis, easing = TaskDockMotion.Standard)
+                        )
+                    else
+                        fadeIn(
+                            tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard)
+                        ) +
+                            slideInHorizontally(
+                                tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard)
+                            ) {
+                                it / 12
+                            }
+                },
+                exitTransition = {
+                    fadeOut(tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard))
+                },
+                popEnterTransition = {
+                    fadeIn(tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard))
+                },
+                popExitTransition = {
+                    fadeOut(tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard)) +
+                        slideOutHorizontally(
+                            tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard)
+                        ) {
+                            it / 12
                         }
-                    }
+                },
+            ) {
+                composable(Screen.Login.route) {
+                    LoginScreen(
+                        viewModel = viewModel,
+                        onLoginSuccess = {
+                            viewModel.onAuthenticated()
+                            navController.navigate(Screen.Today.route) {
+                                popUpTo(Screen.Login.route) { inclusive = true }
+                            }
+                        },
+                    )
                 }
 
-                NavHost(
-                    navController = navController,
-                    startDestination = if (isLoggedIn) {
-                        Screen.Today.route
-                    } else {
-                        Screen.Login.route
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                ) {
-                    composable(Screen.Login.route) {
-                        LoginScreen(
-                            viewModel = viewModel,
-                            onLoginSuccess = {
-                                viewModel.onAuthenticated()
-                                navController.navigate(Screen.Today.route) {
-                                    popUpTo(Screen.Login.route) { inclusive = true }
-                                }
+                composable(Screen.Today.route) {
+                    TodayV2Screen(
+                        viewModel = viewModel,
+                        onNavigateToDetail = { taskId ->
+                            navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                        },
+                        onNavigateToTree = ::locate,
+                    )
+                }
+
+                composable(Screen.Tree.route) {
+                    TreeScreen(
+                        viewModel = viewModel,
+                        initialFolderId = locateFolder,
+                        highlightedTaskId = locateTask,
+                        locateRequest = locateRequest,
+                        onNavigateToDetail = { taskId ->
+                            navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                        },
+                    )
+                }
+
+                composable(Screen.Time.route) {
+                    PlanningScreen(
+                        viewModel = viewModel,
+                        onNavigateToDetail = { taskId ->
+                            navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                        },
+                        onNavigateToTree = ::locate,
+                    )
+                }
+
+                composable(Screen.More.route) {
+                    SettingsScreen(
+                        viewModel = viewModel,
+                        onThemeModeChange = viewModel::setThemeMode,
+                        onDynamicColorChange = viewModel::setDynamicColor,
+                        onPureBlackChange = viewModel::setPureBlack,
+                        onNavigateToArchived = {
+                            navController.navigate(Screen.ArchivedTasks.route)
+                        },
+                        onLogout = {
+                            viewModel.onLoggedOut()
+                            viewModel.authManager.clearSession()
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
                             }
-                        )
-                    }
+                        },
+                    )
+                }
 
-                    composable(Screen.Today.route) {
-                        TodayV2Screen(
-                            viewModel = viewModel,
-                            onNavigateToDetail = { taskId ->
-                                navController.navigate(Screen.TaskDetail.createRoute(taskId))
-                            },
-                            onNavigateToTree = { _, _ ->
-                                navController.navigate(Screen.Tree.route)
-                            }
-                        )
-                    }
+                composable(Screen.ArchivedTasks.route) {
+                    ArchiveCenterV2Screen(
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
 
-                    composable(Screen.Tree.route) {
-                        TreeScreen(
-                            viewModel = viewModel,
-                            onNavigateToDetail = { taskId ->
-                                navController.navigate(Screen.TaskDetail.createRoute(taskId))
-                            }
-                        )
-                    }
-
-                    composable(Screen.AllTasks.route) {
-                        AllTasksV2Screen(
-                            viewModel = viewModel,
-                            onNavigateToDetail = { taskId ->
-                                navController.navigate(Screen.TaskDetail.createRoute(taskId))
-                            }
-                        )
-                    }
-
-                    composable(Screen.Workflows.route) {
-                        WorkflowsV2Screen(viewModel = viewModel)
-                    }
-
-                    composable(Screen.Time.route) {
-                        TimeScreen(
-                            viewModel = viewModel,
-                            onNavigateToDetail = { taskId ->
-                                navController.navigate(Screen.TaskDetail.createRoute(taskId))
-                            },
-                            onNavigateToTree = { _, _ ->
-                                navController.navigate(Screen.Tree.route)
-                            }
-                        )
-                    }
-
-                    composable(Screen.More.route) {
-                        SettingsScreen(
-                            viewModel = viewModel,
-                            onThemeModeChange = viewModel::setThemeMode,
-                            onDynamicColorChange = viewModel::setDynamicColor,
-                            onPureBlackChange = viewModel::setPureBlack,
-                            onNavigateToArchived = {
-                                navController.navigate(Screen.ArchivedTasks.route)
-                            },
-                            onLogout = {
-                                viewModel.onLoggedOut()
-                                viewModel.authManager.clearSession()
-                                navController.navigate(Screen.Login.route) {
-                                    popUpTo(0) { inclusive = true }
-                                }
-                            }
-                        )
-                    }
-
-                    composable(Screen.ArchivedTasks.route) {
-                        ArchiveCenterV2Screen(
-                            viewModel = viewModel,
-                            onBack = { navController.popBackStack() }
-                        )
-                    }
-
-                    composable(
-                        route = Screen.TaskDetail.route,
-                        arguments = listOf(
-                            navArgument("taskId") { type = NavType.StringType }
-                        )
-                    ) { backStackEntry ->
-                        val taskId = backStackEntry.arguments?.getString("taskId") ?: ""
-                        TaskDetailScreen(
-                            taskId = taskId,
-                            viewModel = viewModel,
-                            onBack = { navController.popBackStack() }
-                        )
-                    }
+                composable(
+                    route = Screen.TaskDetail.route,
+                    arguments = listOf(navArgument("taskId") { type = NavType.StringType }),
+                ) { backStackEntry ->
+                    val taskId = backStackEntry.arguments?.getString("taskId") ?: ""
+                    TaskDetailScreen(
+                        taskId = taskId,
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() },
+                    )
                 }
             }
         }

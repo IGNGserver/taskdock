@@ -75,7 +75,7 @@ interface TaskDao {
     @Query("DELETE FROM tasks WHERE id = :id AND ownerId = :ownerId")
     suspend fun deleteTask(id: String, ownerId: String)
 
-    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NOT NULL ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NOT NULL AND deletedAt IS NULL ORDER BY updatedAt DESC")
     fun getArchivedTasksFlow(ownerId: String): Flow<List<TaskEntity>>
 
     @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND ((:parentFolderId IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parentFolderId) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER) ASC, id ASC")
@@ -212,6 +212,9 @@ interface NoteDao {
 
 @Dao
 interface TimePointDao {
+    @Query("SELECT * FROM time_points WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL ORDER BY type, localDate, CAST(rank AS INTEGER)")
+    fun getActiveTimePointsFlow(ownerId: String): Flow<List<TimePointEntity>>
+
     @Query("SELECT * FROM time_points WHERE ownerId = :ownerId AND type = 'DATE' AND localDate = :localDate AND archivedAt IS NULL AND deletedAt IS NULL LIMIT 1")
     suspend fun getTimePointByDate(ownerId: String, localDate: String): TimePointEntity?
 

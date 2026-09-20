@@ -86,6 +86,10 @@ class MainViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val activeTimePoints: StateFlow<List<TimePointEntity>> = currentOwnerId
+        .flatMapLatest { ownerId -> ownerId?.let { db.timePointDao().getActiveTimePointsFlow(it) } ?: flowOf(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val activeEvents: StateFlow<List<TimePointEntity>> = currentOwnerId
         .flatMapLatest { ownerId ->
             ownerId?.let { db.timePointDao().getActiveEventsFlow(it) } ?: flowOf(emptyList())
@@ -949,34 +953,6 @@ class MainViewModel(
         }
     }
 
-    fun restoreTask(task: TaskEntity) {
-        viewModelScope.launch {
-            try {
-                val ownerId = authManager.ownerId
-                    ?: throw IllegalStateException("登录状态已失效，请重新登录")
-                require(task.ownerId == ownerId) { "任务不属于当前账户" }
-                val now = nowIso()
-                db.taskDao().upsertTask(
-                    task.copy(
-                        archivedAt = null,
-                        version = task.version + 1,
-                        updatedAt = now,
-                        pendingSync = true
-                    )
-                )
-                syncEngine.recordLocalMutation(
-                    command = "task.restore",
-                    entityId = task.id,
-                    baseVersion = task.version,
-                    payload = emptyMap()
-                )
-                _messages.tryEmit("任务已恢复")
-            } catch (error: Exception) {
-                _messages.tryEmit(error.userMessage("恢复任务失败"))
-            }
-        }
-    }
-
     fun createTask(title: String, projectId: String?, scheduleToday: Boolean) {
         viewModelScope.launch {
             try {
@@ -1192,6 +1168,8 @@ class MainViewModel(
             }
         }
     }
+
+    fun showMessage(message: String) { _messages.tryEmit(message) }
 
     fun syncNow() {
         viewModelScope.launch {
