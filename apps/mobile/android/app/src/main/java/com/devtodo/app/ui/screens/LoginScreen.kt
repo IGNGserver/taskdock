@@ -35,170 +35,186 @@ import com.devtodo.app.data.remote.ApiFailureCategory
 import kotlinx.coroutines.launch
 
 @Composable
-fun LoginScreen(
-    viewModel: MainViewModel,
-    onLoginSuccess: () -> Unit
-) {
+fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     val haptic = LocalHapticFeedback.current
 
     var hubUrl by rememberSaveable { mutableStateOf(viewModel.authManager.hubOrigin) }
     var username by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
-    var isLoading by rememberSaveable { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
     val isHttpHub = hubUrl.trimStart().startsWith("http://", ignoreCase = true)
 
     fun submit() {
         if (isLoading || username.isBlank() || password.isBlank() || hubUrl.isBlank()) return
+        val origin = normalizedHubOrigin(hubUrl)
+        if (origin == null) {
+            errorMessage = "请输入完整的 HTTP 或 HTTPS 中枢地址"
+            return
+        }
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         isLoading = true
         errorMessage = null
-        viewModel.authManager.hubOrigin = hubUrl
+        if (viewModel.authManager.hubOrigin != origin) viewModel.authManager.clearSession()
+        viewModel.authManager.hubOrigin = origin
         coroutineScope.launch {
             val res = viewModel.api.login(username.trim(), password)
             isLoading = false
             if (res.isSuccess) {
                 onLoginSuccess()
             } else {
-                errorMessage = when (val error = res.exceptionOrNull()) {
-                    is ApiClientException -> when (error.category) {
-                        ApiFailureCategory.AUTH_REQUIRED -> "账号或密码错误，或登录会话已失效"
-                        ApiFailureCategory.INCOMPATIBLE -> "中枢版本不兼容，请升级中枢后重试"
-                        ApiFailureCategory.SERVER_UNAVAILABLE -> "中枢暂不可用，请稍后重试"
-                        ApiFailureCategory.REQUEST_REJECTED -> error.serverMessage
-                        ApiFailureCategory.CURSOR_EXPIRED -> error.serverMessage
+                errorMessage =
+                    when (val error = res.exceptionOrNull()) {
+                        is ApiClientException ->
+                            when (error.category) {
+                                ApiFailureCategory.AUTH_REQUIRED -> "账号或密码错误，或登录会话已失效"
+                                ApiFailureCategory.INCOMPATIBLE -> "中枢版本不兼容，请升级中枢后重试"
+                                ApiFailureCategory.SERVER_UNAVAILABLE -> "中枢暂不可用，请稍后重试"
+                                ApiFailureCategory.REQUEST_REJECTED -> error.serverMessage
+                                ApiFailureCategory.CURSOR_EXPIRED -> error.serverMessage
+                            }
+                        is java.io.IOException -> "无法连接中枢，请检查网络和服务器地址"
+                        else -> "登录失败，请检查中枢地址、账号和密码"
                     }
-                    is java.io.IOException -> "无法连接中枢，请检查网络和服务器地址"
-                    else -> "登录失败，请检查中枢地址、账号和密码"
-                }
             }
         }
     }
 
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .imePadding()
-            .padding(horizontal = 24.dp)
-            .verticalScroll(rememberScrollState())
+        modifier =
+            Modifier.fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .imePadding()
+                .padding(horizontal = 24.dp)
+                .verticalScroll(rememberScrollState()),
     ) {
-        ElevatedCard(
+        Surface(
             shape = MaterialTheme.shapes.extraLarge,
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 480.dp)
-                .padding(vertical = 24.dp)
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(vertical = 24.dp),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 28.dp),
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.taskdock_icon),
                     contentDescription = "TaskDock",
-                    modifier = Modifier.size(56.dp)
+                    modifier = Modifier.size(56.dp),
                 )
                 Text(
                     text = "TaskDock",
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary
+                    style =
+                        MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
-                    text = "离线优先 · 个人开发任务工作台",
+                    text = "连接你的中枢，继续处理任务",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
 
                 // 1. Hub Origin Input
                 OutlinedTextField(
+                    enabled = !isLoading,
                     value = hubUrl,
-                    onValueChange = {
-                        hubUrl = it
-                        viewModel.authManager.hubOrigin = it
-                    },
+                    onValueChange = { hubUrl = it },
                     label = { Text("中枢服务器地址 (Hub)") },
                     placeholder = { Text("http://192.168.x.x:48731") },
                     singleLine = true,
                     leadingIcon = {
-                        Icon(Icons.Default.Dns, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(
+                            Icons.Default.Dns,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Uri,
-                        imeAction = ImeAction.Next
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                    ),
+                    keyboardOptions =
+                        KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Next,
+                        ),
+                    keyboardActions =
+                        KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
                     isError = errorMessage != null,
-                    supportingText = if (isHttpHub) {
-                        { Text("当前使用 HTTP，账号和密码会以明文传输，请优先使用 HTTPS") }
-                    } else null,
+                    supportingText =
+                        if (isHttpHub) {
+                            { Text("当前使用 HTTP，账号和密码会以明文传输，请优先使用 HTTPS") }
+                        } else null,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
                 // 2. Username Input
                 OutlinedTextField(
+                    enabled = !isLoading,
                     value = username,
                     onValueChange = { username = it },
                     label = { Text("用户名") },
                     singleLine = true,
                     leadingIcon = {
-                        Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Next
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                    ),
+                    keyboardOptions =
+                        KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Next,
+                        ),
+                    keyboardActions =
+                        KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
                     isError = errorMessage != null,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
                 // 3. Password Input with Native Password Keyboard
                 OutlinedTextField(
+                    enabled = !isLoading,
                     value = password,
                     onValueChange = { password = it },
                     label = { Text("密码") },
                     singleLine = true,
                     leadingIcon = {
-                        Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     },
                     trailingIcon = {
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
                             Icon(
-                                imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
+                                imageVector =
+                                    if (passwordVisible) Icons.Default.VisibilityOff
+                                    else Icons.Default.Visibility,
+                                contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
                             )
                         }
                     },
-                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            submit()
-                            focusManager.clearFocus()
-                        }
-                    ),
+                    visualTransformation =
+                        if (passwordVisible) VisualTransformation.None
+                        else PasswordVisualTransformation(),
+                    keyboardOptions =
+                        KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done,
+                        ),
+                    keyboardActions =
+                        KeyboardActions(
+                            onDone = {
+                                submit()
+                                focusManager.clearFocus()
+                            }
+                        ),
                     isError = errorMessage != null,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -208,7 +224,7 @@ fun LoginScreen(
                         text = it,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 4.dp)
+                        modifier = Modifier.padding(horizontal = 4.dp),
                     )
                 }
 
@@ -216,19 +232,21 @@ fun LoginScreen(
 
                 Button(
                     onClick = ::submit,
-                    enabled = !isLoading && username.isNotBlank() && password.isNotBlank() && hubUrl.isNotBlank(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
+                    enabled =
+                        !isLoading &&
+                            username.isNotBlank() &&
+                            password.isNotBlank() &&
+                            hubUrl.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.5.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
+                            color = MaterialTheme.colorScheme.onPrimary,
                         )
                     } else {
-                        Text("登 录", style = MaterialTheme.typography.titleMedium)
+                        Text("登录", style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }
