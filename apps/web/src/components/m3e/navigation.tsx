@@ -244,9 +244,11 @@ export function NavigationDrawer({
       <aside ref={drawerRef} aria-label={label} className="m3e-drawer">
         <header className="m3e-drawer__header">
           {header}
-          <IconButton label="关闭侧边栏" onClick={onClose}>
-            <CloseGlyph size={20} />
-          </IconButton>
+          {modal && (
+            <IconButton label="关闭侧边栏" onClick={onClose}>
+              <CloseGlyph size={20} />
+            </IconButton>
+          )}
         </header>
         <nav aria-label={label} className="m3e-drawer__nav">
           <ul>
@@ -336,14 +338,14 @@ export function TopAppBar({
         {leading && <div className="m3e-app-bar__leading">{leading}</div>}
         <div className="m3e-app-bar__titles">
           {eyebrow && <span className="m3e-app-bar__eyebrow m3e-type-label-medium">{eyebrow}</span>}
-          <h1
+          <div
             className={joinClasses(
               'm3e-app-bar__title',
               variant === 'small' ? 'm3e-type-title-large' : 'm3e-type-headline-medium',
             )}
           >
             {title}
-          </h1>
+          </div>
         </div>
         {actions && <div className="m3e-app-bar__actions">{actions}</div>}
       </div>

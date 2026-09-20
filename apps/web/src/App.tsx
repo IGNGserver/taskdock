@@ -711,7 +711,7 @@ function AuthenticatedApp() {
       )}
       <main className="main-shell">
         <TopAppBar
-          variant={sizeClass === 'compact' ? 'small' : 'large'}
+          variant="small"
           title={breadcrumb(location.pathname)}
           leading={
             isCompactShell(sizeClass) ? (
@@ -735,7 +735,7 @@ function AuthenticatedApp() {
                   >
                     <Search size={20} />
                     <span>搜索任务、备注…</span>
-                    {!isNativeMobileClient() && <kbd>⌘ K</kbd>}
+                    {!isNativeMobileClient() && <kbd>{isWindowsDesktop() ? 'Ctrl K' : '⌘ K'}</kbd>}
                   </button>
                   <ConnectionStatus />
                   <SplitButton
@@ -1200,9 +1200,9 @@ function ConnectionStatus() {
   } as const;
   const [label, className] = config[connection];
   return (
-    <div className={`connection-status ${className}`}>
+    <div className={`connection-status ${className}`} aria-label={label}>
       <span className="status-dot" />
-      {label}
+      <span className="connection-label">{label}</span>
     </div>
   );
 }
@@ -1286,8 +1286,11 @@ function EmptyState({
 function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
     <div className="inline-error">
-      <span>{error}</span>
-      <Button variant="text" type="submit" onClick={onRetry}>
+      <span className="inline-error-message">
+        <Circle size={16} aria-hidden="true" />
+        <span>{error}</span>
+      </span>
+      <Button variant="text" type="button" onClick={onRetry}>
         重试
       </Button>
     </div>
@@ -1749,7 +1752,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   return (
     <div className="page page--today">
       <PageHeader
-        eyebrow="TODAY"
+        eyebrow="今天"
         title={formatDate(localDate)}
         description="把今天要处理的内容放在眼前，完成状态会同步到每一个安排位置。"
         action={
@@ -1788,20 +1791,25 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             </div>
           </div>
           <div className="today-overview-metric">
-            <LinearProgress
-              value={done.length}
-              max={total}
-              label="今日任务完成度"
-              wavy
-              className="today-progress"
-            />
-            <span className="today-overview-percent">{completionPercent}%</span>
+            {total > 0 ? (
+              <>
+                <LinearProgress
+                  value={done.length}
+                  max={total}
+                  label="今日任务完成度"
+                  className="today-progress"
+                />
+                <span className="today-overview-percent">{completionPercent}%</span>
+              </>
+            ) : (
+              <span className="today-overview-empty-metric">等待第一个安排</span>
+            )}
           </div>
         </section>
         <aside className="today-context" aria-labelledby="today-context-title">
           <div className="today-context-heading">
             <div>
-              <span className="today-context-eyebrow">CONTEXT</span>
+              <span className="today-context-eyebrow">上下文</span>
               <h2 id="today-context-title">今天的上下文</h2>
             </div>
             <span className="today-context-mark" aria-hidden="true">
@@ -1852,7 +1860,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       )}
       <section className="capture-zone" aria-labelledby="capture-zone-title">
         <div className="capture-zone-copy">
-          <span className="capture-zone-eyebrow">CAPTURE</span>
+          <span className="capture-zone-eyebrow">捕获</span>
           <h2 id="capture-zone-title">先记下来，再决定怎么安排</h2>
           <p>今天页面创建的任务会自动获得今天的安排位置。</p>
         </div>
@@ -4207,7 +4215,9 @@ function isHttpOrigin(value: string): boolean {
 
 function breadcrumb(pathname: string): string {
   if (pathname.startsWith('/today')) return '今日';
+  if (pathname.startsWith('/tree')) return '目录';
   if (pathname.startsWith('/tasks')) return '任务库';
+  if (pathname.startsWith('/workflows')) return '流程';
   if (
     pathname.startsWith('/projects') ||
     pathname.startsWith('/inbox') ||
@@ -4216,6 +4226,7 @@ function breadcrumb(pathname: string): string {
     return '目录';
   if (pathname.startsWith('/time/calendar')) return '时间 / 日历';
   if (pathname.startsWith('/time/events')) return '时间 / 时间点';
+  if (pathname === '/time' || pathname.startsWith('/time/')) return '时间';
   if (pathname.startsWith('/archive')) return '归档';
   if (pathname.startsWith('/settings')) return '设置';
   return 'TaskDock';

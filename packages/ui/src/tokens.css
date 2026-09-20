@@ -834,7 +834,7 @@
   --m3-on-tertiary-fixed: #2d122a;
   --m3-on-tertiary-fixed-variant: #5b3c55;
 
-  --m3-canvas: var(--m3-surface-container-lowest);
+  --m3-canvas: var(--m3-surface-container-low);
   --m3-surface: #121318;
   --m3-surface-dim: #121318;
   --m3-surface-bright: #38393f;

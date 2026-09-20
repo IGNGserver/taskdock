@@ -208,6 +208,7 @@
 }
 
 .m3e-drawer-layer--persistent .m3e-drawer {
+  inline-size: min(320px, calc(100vw - 56px));
   translate: 0 0;
   border-radius: 0;
   box-shadow: none;
@@ -311,8 +312,8 @@
   justify-content: space-between;
   gap: 12px;
   flex: none;
-  min-block-size: 56px;
-  padding-inline: 8px 4px;
+  min-block-size: 52px;
+  padding-inline: 4px;
 }
 
 .m3e-drawer__nav {
@@ -325,8 +326,8 @@
 .m3e-drawer__nav ul {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin: 12px 0 0;
+  gap: 2px;
+  margin: 16px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -337,8 +338,8 @@
   align-items: center;
   gap: 12px;
   inline-size: 100%;
-  min-block-size: 56px;
-  padding: 0 16px 0 20px;
+  min-block-size: 52px;
+  padding: 0 12px 0 16px;
   text-decoration: none;
   border: 0;
   border-radius: var(--m3-shape-full);
@@ -394,15 +395,16 @@
 
 .m3e-app-bar {
   flex: none;
-  background-color: var(--m3-surface-container-low);
+  border-block-end: 1px solid var(--m3-outline-variant);
+  background-color: var(--m3-canvas);
 }
 
 .m3e-app-bar__row {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-block-size: 64px;
-  padding-inline: 16px;
+  min-block-size: 60px;
+  padding-inline: 20px;
 }
 
 .m3e-app-bar__leading,

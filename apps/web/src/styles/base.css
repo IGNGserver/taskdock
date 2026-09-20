@@ -113,7 +113,7 @@ pre,
 
 .page {
   position: relative;
-  inline-size: min(1080px, calc(100% - 64px));
+  inline-size: min(var(--m3-content-measure), calc(100% - 64px));
   margin: 0 auto;
   padding: 40px 0 120px;
 }
@@ -136,10 +136,10 @@ pre,
 .page-header h1 {
   margin: 0;
   color: var(--m3-on-surface);
-  font-size: var(--m3-type-headline-large-size);
+  font-size: var(--m3-type-headline-medium-size);
   font-weight: var(--m3-type-emphasized-weight);
   letter-spacing: var(--m3-type-headline-emphasized-tracking);
-  line-height: var(--m3-type-headline-large-line);
+  line-height: var(--m3-type-headline-medium-line);
 }
 
 .page-header p {
@@ -157,7 +157,10 @@ pre,
 }
 
 .page-section {
-  margin-block-end: 28px;
+  position: relative;
+  inline-size: min(var(--m3-content-measure), calc(100% - 64px));
+  margin: 0 auto;
+  padding-block: 32px 120px;
 }
 
 .eyebrow,
@@ -165,8 +168,7 @@ pre,
   color: var(--m3-primary);
   font-size: var(--m3-type-label-medium-size);
   font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .section-title {
@@ -225,10 +227,14 @@ pre,
 /* -------------------------------------------------------------------------- */
 
 .error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   margin: 12px 0;
   padding: 12px 16px;
-  border-radius: var(--m3-shape-sm);
-  background-color: var(--m3-error-container);
+  border: 1px solid color-mix(in srgb, var(--m3-error) 42%, var(--m3-outline-variant));
+  border-radius: var(--m3-shape-md);
+  background-color: color-mix(in srgb, var(--m3-error-container) 32%, var(--m3-surface-container));
   color: var(--m3-on-error-container);
   font-size: var(--m3-type-body-medium-size);
 }
@@ -505,10 +511,18 @@ pre,
   gap: 12px;
   margin: 14px 0;
   padding: 12px 16px;
-  border-radius: var(--m3-shape-sm);
-  background-color: var(--m3-error-container);
+  border: 1px solid color-mix(in srgb, var(--m3-error) 42%, var(--m3-outline-variant));
+  border-radius: var(--m3-shape-md);
+  background-color: color-mix(in srgb, var(--m3-error-container) 32%, var(--m3-surface-container));
   color: var(--m3-on-error-container);
   font-size: var(--m3-type-body-medium-size);
+}
+
+.inline-error-message {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-inline-size: 0;
 }
 
 .danger-text {
@@ -534,8 +548,8 @@ pre,
   display: grid;
   justify-items: center;
   gap: 8px;
-  min-block-size: 220px;
-  padding: 36px 20px;
+  min-block-size: 184px;
+  padding: 28px 20px;
   border: 1px solid var(--m3-outline-variant);
   border-radius: var(--m3-shape-lg);
   background-color: var(--m3-surface-container);
@@ -546,21 +560,11 @@ pre,
 .empty-state-icon {
   display: grid;
   place-items: center;
-  inline-size: 56px;
-  block-size: 56px;
-  border-radius: var(--m3-shape-expressive-blob);
+  inline-size: 48px;
+  block-size: 48px;
+  border-radius: var(--m3-shape-md);
   background-color: var(--m3-primary-container);
   color: var(--m3-on-primary-container);
-  rotate: -6deg;
-  transition:
-    border-radius var(--m3-spring-expressive-spatial-duration) var(--m3-spring-expressive-spatial),
-    rotate var(--m3-spring-expressive-spatial-duration) var(--m3-spring-expressive-spatial);
-}
-
-.empty-state:hover .empty-icon,
-.empty-state:hover .empty-state-icon {
-  border-radius: var(--m3-shape-lg-increased);
-  rotate: 0deg;
 }
 
 .empty-state h2 {
