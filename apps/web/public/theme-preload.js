@@ -16,6 +16,6 @@
         : 'light';
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
-  const themeColor = theme === 'dark' ? '#0d0e13' : '#f5f2f9';
+  const themeColor = theme === 'dark' ? '#1a1b20' : '#f5f2f9';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
 })();
