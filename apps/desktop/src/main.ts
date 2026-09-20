@@ -84,7 +84,7 @@ function getSystemTheme(): SystemTheme {
 }
 
 function themeBackground(theme: SystemTheme): string {
-  return theme === 'dark' ? '#0d0e13' : '#f5f2f9';
+  return theme === 'dark' ? '#1a1b20' : '#f5f2f9';
 }
 
 function themeTitleBar(theme: SystemTheme): { color: string; symbolColor: string } {

@@ -28,7 +28,7 @@ export function readSystemTheme(): ThemeName {
 }
 
 function updateThemeColor(theme: ThemeName): void {
-  const themeColor = theme === 'dark' ? '#0d0e13' : '#f5f2f9';
+  const themeColor = theme === 'dark' ? '#1a1b20' : '#f5f2f9';
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (meta) meta.content = themeColor;
 }
