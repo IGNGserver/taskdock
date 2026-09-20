@@ -121,6 +121,26 @@
   --m3-shape-xl-increased: 32px;
   --m3-shape-xxl: 48px;
   --m3-shape-full: 999px;
+  /* Expressive shape is reserved for state-bearing decorative surfaces. A
+     predictable rectangle remains the default for controls and content. */
+  --m3-shape-expressive-blob: 38% 62% 55% 45% / 42% 48% 52% 58%;
+
+  /* ---------------------------------------------------------------------- */
+  /* Spacing and layout                                                     */
+  /* ---------------------------------------------------------------------- */
+  --m3-space-1: 4px;
+  --m3-space-2: 8px;
+  --m3-space-3: 12px;
+  --m3-space-4: 16px;
+  --m3-space-5: 20px;
+  --m3-space-6: 24px;
+  --m3-space-7: 28px;
+  --m3-space-8: 32px;
+  --m3-space-9: 40px;
+  --m3-space-10: 48px;
+  --m3-content-measure: 72rem;
+  --m3-content-measure-narrow: 52rem;
+  --m3-touch-target: 48px;
 
   /* ---------------------------------------------------------------------- */
   /* 4. Motion                                                              */

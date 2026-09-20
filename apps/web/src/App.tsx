@@ -93,14 +93,17 @@ import {
   Dialog as M3eDialog,
   FabMenu,
   IconButton,
+  LinearProgress,
   NavigationBar,
   NavigationDrawer,
   NavigationRail,
   SearchBar,
+  SplitButton,
   Select,
   Snackbar,
   TextField,
   TopAppBar,
+  Toolbar,
   SPRING_DURATION,
   isCompactShell,
   useWindowSizeClass,
@@ -699,34 +702,40 @@ function AuthenticatedApp() {
           }
           actions={
             <>
-              {sizeClass !== 'compact' && (
-                <button
-                  className="command-trigger"
-                  aria-label="搜索任务和备注"
-                  onClick={() => setCommandOpen(true)}
-                >
-                  <Search size={20} />
-                  <span>搜索任务、备注…</span>
-                  {!isNativeMobileClient() && <kbd>⌘ K</kbd>}
-                </button>
-              )}
-              {sizeClass === 'compact' && (
+              {sizeClass !== 'compact' ? (
+                <Toolbar variant="floating" ariaLabel="工作区操作" className="app-toolbar">
+                  <button
+                    className="command-trigger"
+                    aria-label="搜索任务和备注"
+                    onClick={() => setCommandOpen(true)}
+                  >
+                    <Search size={20} />
+                    <span>搜索任务、备注…</span>
+                    {!isNativeMobileClient() && <kbd>⌘ K</kbd>}
+                  </button>
+                  <ConnectionStatus />
+                  <SplitButton
+                    icon={<Plus size={20} />}
+                    label="快速添加"
+                    onPrimary={() => {
+                      setQuickKind('task');
+                      setQuickOpen(true);
+                    }}
+                    options={[
+                      { id: 'search', label: '搜索任务和备注', icon: <Search size={18} /> },
+                      { id: 'tasks', label: '打开所有任务', icon: <ListChecksIcon size={18} /> },
+                    ]}
+                    onSelect={(id) => {
+                      if (id === 'search') setCommandOpen(true);
+                      if (id === 'tasks') navigate('/tasks');
+                    }}
+                    menuLabel="更多创建操作"
+                  />
+                </Toolbar>
+              ) : (
                 <IconButton label="搜索任务和备注" onClick={() => setCommandOpen(true)}>
                   <Search size={22} />
                 </IconButton>
-              )}
-              {sizeClass !== 'compact' && <ConnectionStatus />}
-              {sizeClass !== 'compact' && (
-                <Button
-                  leadingIcon={<Plus size={20} />}
-                  aria-label="快速添加"
-                  onClick={() => {
-                    setQuickKind('task');
-                    setQuickOpen(true);
-                  }}
-                >
-                  快速添加
-                </Button>
               )}
             </>
           }
@@ -1680,6 +1689,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const done = data.items.filter(({ task }) => task.status === 'DONE');
   const total = active.length + done.length;
   const completionPercent = total ? Math.round((done.length / total) * 100) : 0;
+  const dayNumber = localDate.slice(-2);
   const movePlacement = async (placementId: string, direction: 'up' | 'down') => {
     if (!data.point) return;
     const activeIndexes = data.items
@@ -1699,13 +1709,13 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
     window.dispatchEvent(new Event('devtodo:data-changed'));
   };
   return (
-    <div className="page">
+    <div className="page page--today">
       <PageHeader
         eyebrow="TODAY"
         title={formatDate(localDate)}
         description="把今天要处理的内容放在眼前，完成状态会同步到每一个安排位置。"
         action={
-          <div className="header-actions">
+          <Toolbar variant="floating" ariaLabel="今日操作" className="today-toolbar">
             <Button
               variant="tonal"
               leadingIcon={<Plus size={16} />}
@@ -1722,25 +1732,76 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             >
               安排未完成到明天
             </Button>
-          </div>
+          </Toolbar>
         }
       />
-      <section className="today-overview" aria-label="今日进度">
-        <div className="today-overview-copy">
-          <span className="today-overview-label">今日聚焦</span>
-          <strong>{total ? `${done.length} / ${total} 已完成` : '还没有安排任务'}</strong>
-        </div>
-        <div
-          className="today-progress"
-          role="progressbar"
-          aria-label="今日任务完成度"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={completionPercent}
-        >
-          <span style={{ width: `${completionPercent}%` }} />
-        </div>
-        <span className="today-overview-percent">{completionPercent}%</span>
+      <section className="today-stage" aria-label="今日工作区">
+        <section className="today-overview" aria-label="今日进度">
+          <div className="today-overview-identity">
+            <span className="today-day-marker" aria-hidden="true">
+              {dayNumber}
+            </span>
+            <div className="today-overview-copy">
+              <span className="today-overview-label">今天的焦点</span>
+              <strong>{total ? `${done.length} / ${total} 已完成` : '还没有安排任务'}</strong>
+              <span className="today-overview-supporting">
+                {total ? '完成一个任务，下一步会自然浮现' : '从捕获一个小任务开始'}
+              </span>
+            </div>
+          </div>
+          <div className="today-overview-metric">
+            <LinearProgress
+              value={done.length}
+              max={total}
+              label="今日任务完成度"
+              wavy
+              className="today-progress"
+            />
+            <span className="today-overview-percent">{completionPercent}%</span>
+          </div>
+        </section>
+        <aside className="today-context" aria-labelledby="today-context-title">
+          <div className="today-context-heading">
+            <div>
+              <span className="today-context-eyebrow">CONTEXT</span>
+              <h2 id="today-context-title">今天的上下文</h2>
+            </div>
+            <span className="today-context-mark" aria-hidden="true">
+              <Clock3 size={18} />
+            </span>
+          </div>
+          {data.reachedEvents.length > 0 ? (
+            <div className="today-context-events">
+              <span className="today-context-label">已到达的时间点</span>
+              {data.reachedEvents.slice(0, 3).map((event) => (
+                <NavLink
+                  key={event.id}
+                  to={`/time/events/${event.id}`}
+                  className="today-context-event"
+                >
+                  <span className="timeline-node reached" />
+                  <span>
+                    <strong>{event.title}</strong>
+                    <small>{data.eventCounts[event.id]?.openCount ?? 0} 项未完成</small>
+                  </span>
+                  <ChevronRight size={16} aria-hidden="true" />
+                </NavLink>
+              ))}
+              {data.reachedEvents.length > 3 && (
+                <NavLink to="/time/events" className="today-context-more">
+                  查看全部时间点
+                </NavLink>
+              )}
+            </div>
+          ) : (
+            <div className="today-context-note">
+              <span className="today-context-note-icon" aria-hidden="true">
+                <Target size={18} />
+              </span>
+              <p>没有已到达的事件。任务状态与时间点状态始终独立。</p>
+            </div>
+          )}
+        </aside>
       </section>
       {rollover && (
         <Snackbar
@@ -1751,99 +1812,89 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       {rolloverError && (
         <ErrorState error={rolloverError} onRetry={() => void (rollover ? undo() : doRollover())} />
       )}
-      {data.reachedEvents.length > 0 && (
-        <section className="reached-events" aria-labelledby="reached-events-title">
-          <div className="section-title">
-            <h2 id="reached-events-title">已到达的时间点</h2>
-            <span className="muted-label">任务仍按自己的状态管理</span>
-          </div>
-          <div className="reached-event-list">
-            {data.reachedEvents.map((event) => (
-              <NavLink key={event.id} to={`/time/events/${event.id}`} className="reached-event">
-                <span className="timeline-node reached" />
-                <span>
-                  <strong>{event.title}</strong>
-                  <small>查看其中未完成的安排</small>
-                </span>
-                <EventCount count={data.eventCounts[event.id]?.openCount} />
-                <ChevronRight size={16} />
-              </NavLink>
-            ))}
-          </div>
-        </section>
-      )}
-      <QuickCapture
-        defaultTaskFolderId={defaultTaskFolderId}
-        onCreated={async (task) => {
-          const point =
-            data.point ??
-            ((await mutationV2('POST', '/time-points/date', { localDate })) as TimePointDto);
-          await mutationV2('POST', '/placements', { taskId: task.id, timePointId: point.id });
-          await reload();
-        }}
-      />
+      <section className="capture-zone" aria-labelledby="capture-zone-title">
+        <div className="capture-zone-copy">
+          <span className="capture-zone-eyebrow">CAPTURE</span>
+          <h2 id="capture-zone-title">先记下来，再决定怎么安排</h2>
+          <p>今天页面创建的任务会自动获得今天的安排位置。</p>
+        </div>
+        <QuickCapture
+          defaultTaskFolderId={defaultTaskFolderId}
+          onCreated={async (task) => {
+            const point =
+              data.point ??
+              ((await mutationV2('POST', '/time-points/date', { localDate })) as TimePointDto);
+            await mutationV2('POST', '/placements', { taskId: task.id, timePointId: point.id });
+            await reload();
+          }}
+        />
+      </section>
       {error && <ErrorState error={error} onRetry={() => void reload()} />}
       {loading ? (
         <SkeletonList />
       ) : (
-        <>
-          <SectionTitle title="今天要做" count={active.length} />
-          <PlacementList
-            items={active}
-            reorderItems={data.items}
-            pointId={data.point?.id}
-            onOpenTask={onOpenTask}
-            onChanged={() => void reload()}
-            onMove={movePlacement}
-            emptyTitle="今天还没有安排"
-            emptyDescription="可以从所有任务中安排内容，或先捕获一个位于最近目录的任务。"
-            emptyAction={
-              data.point ? (
-                <Button
-                  variant="filled"
-                  leadingIcon={<Plus size={16} />}
-                  onClick={() => setShowTaskPicker(true)}
-                >
-                  从任务库加入
-                </Button>
-              ) : undefined
-            }
-          />
-          <SectionTitle
-            title="已完成"
-            count={done.length}
-            action={
-              done.length > 0 ? (
-                <Button
-                  variant="text"
-                  type="submit"
-                  onClick={() => setCompletedOpen((current) => !current)}
-                  aria-expanded={completedOpen}
-                >
-                  {completedOpen ? '收起' : '展开'}
-                </Button>
-              ) : undefined
-            }
-          />
-          {done.length > 0 && completedOpen ? (
-            <div className="task-list completed-list">
-              {done.map((item) => (
-                <PlacementRow
-                  key={item.id}
-                  placement={item}
-                  task={item.task}
-                  onOpen={onOpenTask}
-                  onChanged={() => void reload()}
-                  onToggleStatus
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="quiet-empty">
-              {done.length > 0 ? '已完成任务默认收起' : '完成的任务会收在这里'}
-            </div>
-          )}
-        </>
+        <section className="today-task-workspace">
+          <section className="today-task-pane" aria-label="今天要做">
+            <SectionTitle title="今天要做" count={active.length} />
+            <PlacementList
+              items={active}
+              reorderItems={data.items}
+              pointId={data.point?.id}
+              onOpenTask={onOpenTask}
+              onChanged={() => void reload()}
+              onMove={movePlacement}
+              emptyTitle="今天还没有安排"
+              emptyDescription="可以从所有任务中安排内容，或先捕获一个位于最近目录的任务。"
+              emptyAction={
+                data.point ? (
+                  <Button
+                    variant="filled"
+                    leadingIcon={<Plus size={16} />}
+                    onClick={() => setShowTaskPicker(true)}
+                  >
+                    从任务库加入
+                  </Button>
+                ) : undefined
+              }
+            />
+          </section>
+          <aside className="today-complete-pane" aria-label="已完成任务">
+            <SectionTitle
+              title="已完成"
+              count={done.length}
+              action={
+                done.length > 0 ? (
+                  <Button
+                    variant="text"
+                    type="submit"
+                    onClick={() => setCompletedOpen((current) => !current)}
+                    aria-expanded={completedOpen}
+                  >
+                    {completedOpen ? '收起' : '展开'}
+                  </Button>
+                ) : undefined
+              }
+            />
+            {done.length > 0 && completedOpen ? (
+              <div className="task-list completed-list m3e-stagger">
+                {done.map((item) => (
+                  <PlacementRow
+                    key={item.id}
+                    placement={item}
+                    task={item.task}
+                    onOpen={onOpenTask}
+                    onChanged={() => void reload()}
+                    onToggleStatus
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="quiet-empty">
+                {done.length > 0 ? '已完成任务默认收起' : '完成的任务会收在这里'}
+              </div>
+            )}
+          </aside>
+        </section>
       )}
       {showTaskPicker && data.point && (
         <AddTaskModal
@@ -2388,6 +2439,7 @@ function PlacementRow({
   const [targetMode, setTargetMode] = useState<'copy' | 'move' | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const longPressRef = useRef<number | null>(null);
   const closeMenu = useCallback(() => setMenu(false), []);
   const menuRef = useDismissibleMenu(menu, closeMenu);
@@ -2455,7 +2507,9 @@ function PlacementRow({
   };
   return (
     <div
-      className="task-row"
+      className={`task-row${dragging ? ' dragging' : ''}`}
+      aria-busy={busy || undefined}
+      aria-grabbed={dragging}
       draggable={!readOnly}
       onPointerDown={startLongPress}
       onPointerUp={cancelLongPress}
@@ -2463,11 +2517,13 @@ function PlacementRow({
       onPointerCancel={cancelLongPress}
       onDragStart={(event) => {
         if (readOnly) return;
+        setDragging(true);
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('application/x-devtodo-placement', placement.id);
         event.dataTransfer.setData('application/x-devtodo-task', task.id);
         event.dataTransfer.setData('text/plain', task.id);
       }}
+      onDragEnd={() => setDragging(false)}
       onDragOver={(event) => {
         if (onDrop && !readOnly) event.preventDefault();
       }}
@@ -2665,7 +2721,7 @@ function PlacementList({
       <>
         {dropNotice}
         <div
-          className="task-list placement-drop-target placement-empty-drop"
+          className="task-list placement-drop-target placement-empty-drop m3e-stagger"
           onDragOver={(event) => {
             if (!readOnly && !dropBusy) event.preventDefault();
           }}
@@ -2679,7 +2735,7 @@ function PlacementList({
     <>
       {dropNotice}
       <div
-        className="task-list placement-drop-target"
+        className="task-list placement-drop-target m3e-stagger"
         onDragOver={(event) => {
           if (!readOnly && !dropBusy) event.preventDefault();
         }}

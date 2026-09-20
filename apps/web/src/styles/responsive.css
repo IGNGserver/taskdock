@@ -56,6 +56,55 @@
     padding-block-end: calc(176px + var(--dt-safe-bottom));
   }
 
+  .page--today {
+    inline-size: calc(100% - 32px);
+    padding-block-start: 20px;
+  }
+
+  .today-toolbar {
+    display: grid;
+    grid-template-columns: 1fr;
+    inline-size: 100%;
+    border-radius: var(--m3-shape-lg);
+  }
+
+  .today-toolbar > * {
+    inline-size: 100%;
+  }
+
+  .today-overview {
+    min-block-size: 0;
+    padding: var(--m3-space-5);
+  }
+
+  .today-day-marker {
+    inline-size: 60px;
+    block-size: 72px;
+    font-size: var(--m3-type-headline-small-size);
+  }
+
+  .today-context {
+    padding: var(--m3-space-4);
+  }
+
+  .capture-zone {
+    grid-template-columns: 1fr;
+    gap: var(--m3-space-3);
+    padding: var(--m3-space-4);
+  }
+
+  .today-task-workspace {
+    grid-template-columns: 1fr;
+    gap: var(--m3-space-5);
+  }
+
+  .today-complete-pane {
+    padding-block-start: var(--m3-space-3);
+    padding-inline-start: 0;
+    border-block-start: 1px solid var(--m3-outline-variant);
+    border-inline-start: 0;
+  }
+
   .page-header h1 {
     font-size: var(--m3-type-headline-medium-size);
   }
@@ -88,8 +137,14 @@
   }
 
   .today-progress {
-    grid-column: 1 / -1;
-    order: 3;
+    grid-column: auto;
+    order: initial;
+  }
+
+  .today-overview {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    gap: var(--m3-space-5);
   }
 
   .calendar-panel,
@@ -140,6 +195,18 @@
 
   .m3e-drawer {
     inline-size: min(320px, calc(100vw - 48px));
+  }
+
+  .today-stage,
+  .today-task-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .today-complete-pane {
+    padding-block-start: var(--m3-space-3);
+    padding-inline-start: 0;
+    border-block-start: 1px solid var(--m3-outline-variant);
+    border-inline-start: 0;
   }
 }
 
