@@ -681,3 +681,46 @@ button.task-status-button:hover,
   align-items: center;
   gap: 6px;
 }
+
+/* The Today workbench is a contained list, so rows no longer read as a stack
+   of unrelated cards. The state layer and status shape carry the hierarchy. */
+.today-task-pane .task-row,
+.today-complete-pane .task-row {
+  min-block-size: 68px;
+  border-color: transparent;
+  border-radius: var(--m3-shape-md);
+  box-shadow: none;
+}
+
+.today-task-pane .task-row:hover,
+.today-complete-pane .task-row:hover {
+  border-color: transparent;
+  background-color: var(--m3-surface-container-high);
+  box-shadow: none;
+}
+
+.today-task-pane .task-row:focus-within,
+.today-complete-pane .task-row:focus-within {
+  background-color: var(--m3-surface-container-high);
+}
+
+.today-task-pane .task-status-button,
+.today-complete-pane .task-status-button {
+  inline-size: var(--m3-touch-target);
+  block-size: var(--m3-touch-target);
+}
+
+.today-task-pane .task-row.is-done,
+.today-complete-pane .task-row.is-done {
+  background-color: var(--m3-surface-container-low);
+}
+
+.today-task-pane .task-row[aria-busy='true'],
+.today-complete-pane .task-row[aria-busy='true'] {
+  cursor: progress;
+}
+
+.today-task-pane .task-row[aria-busy='true'] .task-main,
+.today-complete-pane .task-row[aria-busy='true'] .task-main {
+  opacity: 0.62;
+}

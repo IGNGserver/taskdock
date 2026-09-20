@@ -534,10 +534,11 @@ pre,
   display: grid;
   justify-items: center;
   gap: 8px;
-  padding: 44px 20px;
-  border: 1px dashed var(--m3-outline);
+  min-block-size: 220px;
+  padding: 36px 20px;
+  border: 1px solid var(--m3-outline-variant);
   border-radius: var(--m3-shape-lg);
-  background-color: color-mix(in srgb, var(--m3-surface-container) 62%, transparent);
+  background-color: var(--m3-surface-container);
   text-align: center;
 }
 
@@ -547,9 +548,19 @@ pre,
   place-items: center;
   inline-size: 56px;
   block-size: 56px;
-  border-radius: var(--m3-shape-lg-increased);
+  border-radius: var(--m3-shape-expressive-blob);
   background-color: var(--m3-primary-container);
   color: var(--m3-on-primary-container);
+  rotate: -6deg;
+  transition:
+    border-radius var(--m3-spring-expressive-spatial-duration) var(--m3-spring-expressive-spatial),
+    rotate var(--m3-spring-expressive-spatial-duration) var(--m3-spring-expressive-spatial);
+}
+
+.empty-state:hover .empty-icon,
+.empty-state:hover .empty-state-icon {
+  border-radius: var(--m3-shape-lg-increased);
+  rotate: 0deg;
 }
 
 .empty-state h2 {
