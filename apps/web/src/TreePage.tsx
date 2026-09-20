@@ -7,19 +7,25 @@ import type {
   TreeTaskDto,
   WorkflowDto,
 } from '@devtodo/contracts';
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Archive,
-  ChevronDown,
   ChevronRight,
-  ChevronUp,
   Folder,
   FolderPlus,
   ListChecks,
   MoreHorizontal,
   Plus,
-  Trash2,
+  Workflow as WorkflowGlyph,
 } from 'lucide-react';
 import { ApiError, mutationV2, requestV2 } from './api.js';
 import { useAuth } from './auth.js';
@@ -27,8 +33,12 @@ import {
   BottomSheet,
   Button,
   IconButton,
+  Menu,
   SideSheet,
+  TextField,
+  useDismissibleMenu,
   useWindowSizeClass,
+  type MenuOption,
 } from './components/m3e/index.js';
 import { recordLastFolderId, resolveCaptureFolder } from './folder-preference.js';
 
@@ -47,6 +57,85 @@ type TreeMoveTarget = {
   baseVersion: number;
   title: string;
 };
+
+function TreeRowActions({
+  item,
+  index,
+  groupLength,
+  onMove,
+  onOpenMove,
+  onArchiveFolder,
+  onDeleteFolder,
+  onArchiveTask,
+}: {
+  item: TreeItemDto;
+  index: number;
+  groupLength: number;
+  onMove: (item: TreeItemDto, direction: 'up' | 'down') => void;
+  onOpenMove: (item: TreeItemDto) => void;
+  onArchiveFolder: (item: Extract<TreeItemDto, { kind: 'FOLDER' }>) => void;
+  onDeleteFolder: (item: Extract<TreeItemDto, { kind: 'FOLDER' }>) => void;
+  onArchiveTask: (item: Extract<TreeItemDto, { kind: 'TASK' }>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuId = useId();
+  const containerRef = useDismissibleMenu(open, () => setOpen(false));
+  const title = item.kind === 'FOLDER' ? item.folder.title : item.task.title;
+  const isFolder = item.kind === 'FOLDER';
+  const options: MenuOption[] = [
+    {
+      id: 'move-up',
+      label: '上移',
+      hint: '↑',
+      disabled: index === 0,
+    },
+    {
+      id: 'move-down',
+      label: '下移',
+      hint: '↓',
+      disabled: index === groupLength - 1,
+    },
+    { id: 'move', label: '移动到其他目录' },
+    { id: 'archive', label: isFolder ? '归档文件夹' : '归档任务' },
+    ...(isFolder ? [{ id: 'delete', label: '永久删除', danger: true }] : []),
+  ];
+
+  const select = (id: string) => {
+    setOpen(false);
+    if (id === 'move-up') onMove(item, 'up');
+    if (id === 'move-down') onMove(item, 'down');
+    if (id === 'move') onOpenMove(item);
+    if (id === 'archive') {
+      if (isFolder) onArchiveFolder(item);
+      else onArchiveTask(item);
+    }
+    if (id === 'delete' && isFolder) onDeleteFolder(item);
+  };
+
+  return (
+    <div ref={containerRef} className="tree-row-actions">
+      <IconButton
+        label={`打开 ${title} 的操作菜单`}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <MoreHorizontal size={18} />
+      </IconButton>
+      {open && (
+        <Menu
+          id={menuId}
+          label={`${title} 的操作`}
+          options={options}
+          onSelect={select}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
 
 export function TreePage() {
   const params = useParams<{ folderId?: string }>();
@@ -171,6 +260,12 @@ export function TreePage() {
       return;
     await mutationV2('POST', `/folders/${item.folder.id}/archive-tree`, {
       baseVersion: item.folder.version,
+    });
+    await load();
+  };
+  const archiveTask = async (item: Extract<TreeItemDto, { kind: 'TASK' }>) => {
+    await mutationV2('POST', `/tasks/${item.task.id}/archive`, {
+      baseVersion: item.task.version,
     });
     await load();
   };
@@ -313,14 +408,16 @@ export function TreePage() {
     <section className="page-section tree-page" aria-labelledby="tree-title">
       <div className="page-header">
         <div>
-          <p className="eyebrow">DIRECTORY</p>
+          <p className="eyebrow">目录</p>
           <h1 id="tree-title">目录</h1>
           <p className="page-subtitle">任务只有一个目录位置，日期、时间点和流程都是独立视图。</p>
         </div>
         <div className="tree-header-actions">
           <form onSubmit={createFolder} className="inline-capture">
-            <input
-              aria-label="新建文件夹"
+            <TextField
+              label="新建文件夹"
+              hideLabel
+              className="tree-inline-field"
               placeholder="新建文件夹"
               value={newFolderTitle}
               onChange={(event) => setNewFolderTitle(event.target.value)}
@@ -354,8 +451,10 @@ export function TreePage() {
       </div>
       <form onSubmit={createTask} className="tree-capture-form">
         <Plus size={18} aria-hidden="true" />
-        <input
-          aria-label="新建任务"
+        <TextField
+          label="新建任务"
+          hideLabel
+          className="tree-inline-field"
           placeholder={folderId ? '在当前文件夹新建任务…' : '在根目录新建任务…'}
           value={newTitle}
           onChange={(event) => setNewTitle(event.target.value)}
@@ -404,51 +503,16 @@ export function TreePage() {
                       </span>
                       <ChevronRight size={16} />
                     </button>
-                    <div className="tree-row-actions">
-                      <IconButton
-                        label="操作"
-                        type="button"
-                        onClick={() => void moveWithinStatus(item, 'up')}
-                        disabled={index === 0}
-                        aria-label={`上移文件夹 ${item.folder.title}`}
-                      >
-                        <ChevronUp size={16} />
-                      </IconButton>
-                      <IconButton
-                        label="操作"
-                        type="button"
-                        onClick={() => void moveWithinStatus(item, 'down')}
-                        disabled={index === group.items.length - 1}
-                        aria-label={`下移文件夹 ${item.folder.title}`}
-                      >
-                        <ChevronDown size={16} />
-                      </IconButton>
-                      <IconButton
-                        label="操作"
-                        type="button"
-                        onClick={() => void openMove(item)}
-                        aria-label={`移动文件夹 ${item.folder.title}`}
-                      >
-                        <FolderPlus size={16} />
-                      </IconButton>
-                      <IconButton
-                        label="操作"
-                        type="button"
-                        onClick={() => void archiveFolder(item)}
-                        aria-label={`归档文件夹 ${item.folder.title}`}
-                      >
-                        <Archive size={16} />
-                      </IconButton>
-                      <IconButton
-                        label="操作"
-                        className="m3e-icon-button--danger"
-                        type="button"
-                        onClick={() => void deleteFolder(item)}
-                        aria-label={`删除文件夹 ${item.folder.title}`}
-                      >
-                        <Trash2 size={16} />
-                      </IconButton>
-                    </div>
+                    <TreeRowActions
+                      item={item}
+                      index={index}
+                      groupLength={group.items.length}
+                      onMove={(candidate, direction) => void moveWithinStatus(candidate, direction)}
+                      onOpenMove={(candidate) => void openMove(candidate)}
+                      onArchiveFolder={(candidate) => void archiveFolder(candidate)}
+                      onDeleteFolder={(candidate) => void deleteFolder(candidate)}
+                      onArchiveTask={(candidate) => void archiveTask(candidate)}
+                    />
                   </article>
                 ) : (
                   <article
@@ -469,47 +533,16 @@ export function TreePage() {
                         {statusLabel(item.task.status)}
                       </span>
                     </button>
-                    <div className="tree-row-actions">
-                      <IconButton
-                        label="操作"
-                        type="button"
-                        onClick={() => void moveWithinStatus(item, 'up')}
-                        disabled={index === 0}
-                        aria-label={`上移任务 ${item.task.title}`}
-                      >
-                        <ChevronUp size={16} />
-                      </IconButton>
-                      <IconButton
-                        label="操作"
-                        type="button"
-                        onClick={() => void moveWithinStatus(item, 'down')}
-                        disabled={index === group.items.length - 1}
-                        aria-label={`下移任务 ${item.task.title}`}
-                      >
-                        <ChevronDown size={16} />
-                      </IconButton>
-                      <IconButton
-                        label="操作"
-                        type="button"
-                        onClick={() => void openMove(item)}
-                        aria-label={`移动任务 ${item.task.title}`}
-                      >
-                        <FolderPlus size={16} />
-                      </IconButton>
-                      <IconButton
-                        label="操作"
-                        type="button"
-                        onClick={() =>
-                          void mutationV2('POST', `/tasks/${item.task.id}/archive`, {
-                            baseVersion: item.task.version,
-                          }).then(load)
-                        }
-                        aria-label={`归档任务 ${item.task.title}`}
-                      >
-                        <Archive size={16} />
-                      </IconButton>
-                      <MoreHorizontal size={16} />
-                    </div>
+                    <TreeRowActions
+                      item={item}
+                      index={index}
+                      groupLength={group.items.length}
+                      onMove={(candidate, direction) => void moveWithinStatus(candidate, direction)}
+                      onOpenMove={(candidate) => void openMove(candidate)}
+                      onArchiveFolder={(candidate) => void archiveFolder(candidate)}
+                      onDeleteFolder={(candidate) => void deleteFolder(candidate)}
+                      onArchiveTask={(candidate) => void archiveTask(candidate)}
+                    />
                   </article>
                 ),
               )
@@ -1150,11 +1183,11 @@ export function WorkflowsPage() {
   };
 
   return (
-    <section className="page-section workflows-page">
+    <section className="page-section workflows-page" aria-labelledby="workflows-title">
       <div className="page-header">
         <div>
-          <p className="eyebrow">WORKFLOWS</p>
-          <h1>流程</h1>
+          <p className="eyebrow">流程</p>
+          <h1 id="workflows-title">流程</h1>
           <p className="page-subtitle">一个任务可以加入多个流程；阶段只表示流程位置。</p>
         </div>
       </div>
@@ -1164,8 +1197,10 @@ export function WorkflowsPage() {
         </div>
       )}
       <form onSubmit={create} className="tree-capture-form">
-        <input
-          aria-label="新建流程"
+        <TextField
+          label="新建流程"
+          hideLabel
+          className="tree-inline-field"
           placeholder="新建流程…"
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -1174,6 +1209,15 @@ export function WorkflowsPage() {
           创建流程
         </Button>
       </form>
+      {workflows.length === 0 && !error && (
+        <div className="empty-state workflow-empty-state">
+          <div className="empty-icon">
+            <WorkflowGlyph size={24} aria-hidden="true" />
+          </div>
+          <h2>还没有流程</h2>
+          <p>把重复的发布、插件或维护步骤拆成可复用的阶段。</p>
+        </div>
+      )}
       {workflows.map((workflow) => {
         const stages = workflow.stages ?? [];
         const memberIds = new Set(stages.flatMap((stage) => stage.tasks.map((task) => task.id)));
@@ -1616,7 +1660,7 @@ export function AllTasksV2Page() {
     <section className="page-section all-tasks-page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">TASKS</p>
+          <p className="eyebrow">任务</p>
           <h1>所有任务</h1>
           <p className="page-subtitle">按任务本体查看，不复制目录、日期或流程中的任务。</p>
         </div>

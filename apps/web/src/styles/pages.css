@@ -1840,3 +1840,332 @@
 .app-toolbar .command-trigger {
   max-inline-size: min(320px, 28vw);
 }
+
+/* -------------------------------------------------------------------------- */
+/* M3 workbench calibration                                                   */
+/*                                                                            */
+/* The v2 pages share the same semantic components as the rest of the app,    */
+/* but their first pass was allowed to grow into independent card systems.    */
+/* Keep the data and actions intact while bringing their surfaces back to the */
+/* M3 contained-list and supporting-pane patterns.                            */
+/* -------------------------------------------------------------------------- */
+
+.tree-header-actions {
+  flex: none;
+}
+
+.inline-capture .tree-inline-field {
+  inline-size: min(240px, 34vw);
+}
+
+.tree-capture-form .tree-inline-field {
+  flex: 1 1 360px;
+  min-inline-size: 0;
+  max-inline-size: 560px;
+}
+
+.tree-inline-field .m3e-field__box {
+  min-block-size: 48px;
+  border-radius: var(--m3-shape-md);
+  background-color: var(--m3-surface-container-low);
+}
+
+.tree-inline-field .m3e-field__input {
+  min-block-size: 48px;
+  padding: 0 14px;
+  font-size: var(--m3-type-body-medium-size);
+}
+
+.tree-inline-field .m3e-field__input::placeholder {
+  color: var(--m3-on-surface-variant);
+}
+
+.tree-breadcrumbs {
+  margin-block: 8px 20px;
+  padding: 4px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-md);
+  background-color: var(--m3-surface-container-low);
+}
+
+.tree-group {
+  margin-block-end: 16px;
+  padding: 8px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-lg);
+  background-color: var(--m3-surface-container-low);
+}
+
+.tree-group-heading {
+  justify-content: space-between;
+  margin: 0;
+  padding: 8px 10px;
+  border-block-end: 1px solid var(--m3-outline-variant);
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-label-large-size);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.tree-group-empty {
+  margin: 8px 0 0;
+  padding: 20px 16px;
+  border: 0;
+  border-radius: var(--m3-shape-md);
+  background-color: var(--m3-surface-container);
+}
+
+.tree-row,
+.folder-row,
+.task-row-v2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 60px;
+  padding: 4px 4px 4px 6px;
+  border: 0;
+  border-radius: var(--m3-shape-md);
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.tree-row + .tree-row {
+  border-block-start: 1px solid var(--m3-outline-variant);
+  border-radius: 0;
+}
+
+.tree-row:hover,
+.folder-row:hover,
+.task-row-v2:hover {
+  border-color: transparent;
+  background-color: var(--m3-surface-container-high);
+}
+
+.tree-row.focused-highlight,
+.task-row-v2.focused-highlight {
+  border-color: var(--m3-primary);
+  border-block-start-color: var(--m3-primary);
+  background-color: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+}
+
+.tree-main-button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 10px;
+  inline-size: 100%;
+  min-block-size: 52px;
+  padding: 6px 10px;
+  border-radius: var(--m3-shape-md);
+}
+
+.tree-main-button > svg {
+  color: var(--m3-on-surface-variant);
+}
+
+.tree-main-button:hover {
+  background-color: color-mix(in srgb, var(--m3-primary) 8%, transparent);
+}
+
+.tree-item-title {
+  min-inline-size: 0;
+}
+
+.tree-main-button code {
+  max-inline-size: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-row-actions {
+  position: relative;
+  align-self: center;
+  justify-content: flex-end;
+  padding-inline-end: 2px;
+}
+
+.tree-row-actions .m3e-menu {
+  inset-block-start: calc(100% - 2px);
+}
+
+.workflow-empty-state {
+  margin-block-start: 20px;
+}
+
+.workflow-card {
+  gap: 16px;
+  margin-block-end: 16px;
+  padding: 16px;
+  border-radius: var(--m3-shape-lg);
+  background-color: var(--m3-surface-container-low);
+  box-shadow: none;
+}
+
+.workflow-card > header {
+  align-items: flex-start;
+}
+
+.workflow-card > header > div:first-child {
+  min-inline-size: 0;
+}
+
+.workflow-card > header > div:first-child > span {
+  display: block;
+  margin-block-start: 2px;
+  padding-inline: 12px;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+}
+
+.workflow-stages section {
+  padding: 12px;
+  border: 1px solid var(--m3-outline-variant);
+  background-color: var(--m3-surface-container);
+}
+
+.workflow-task {
+  background-color: var(--m3-surface-container-low);
+}
+
+.workflow-add-task input,
+.workflow-add-task select,
+.workflow-add-stage input {
+  min-block-size: 48px;
+  border-radius: var(--m3-shape-md);
+  background-color: var(--m3-surface-container-low);
+}
+
+.app-toolbar,
+.today-toolbar {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.app-toolbar .command-trigger {
+  flex: 0 1 360px;
+  max-inline-size: 360px;
+  min-block-size: 48px;
+  border: 1px solid var(--m3-outline-variant);
+  background-color: var(--m3-surface-container-high);
+  box-shadow: none;
+}
+
+.app-toolbar .command-trigger:hover {
+  border-color: var(--m3-outline);
+  box-shadow: none;
+}
+
+.app-toolbar .connection-status {
+  min-block-size: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-full);
+  background-color: var(--m3-surface-container-low);
+}
+
+.today-toolbar {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.page--today .page-header {
+  margin-block-end: var(--m3-space-6);
+}
+
+.page--today .page-header h1 {
+  font-size: var(--m3-type-headline-large-size);
+  line-height: var(--m3-type-headline-large-line);
+}
+
+.today-overview {
+  min-block-size: 176px;
+  padding: 24px;
+  border-radius: var(--m3-shape-lg);
+  box-shadow: none;
+}
+
+.today-overview::after {
+  display: none;
+}
+
+.today-day-marker {
+  inline-size: 64px;
+  block-size: 64px;
+  border-radius: var(--m3-shape-lg);
+  rotate: 0deg;
+}
+
+.today-overview:hover .today-day-marker {
+  border-radius: var(--m3-shape-lg);
+  rotate: 0deg;
+}
+
+.today-overview-label,
+.today-context-eyebrow,
+.capture-zone-eyebrow {
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.today-overview-metric {
+  min-block-size: 20px;
+}
+
+.today-progress {
+  block-size: 8px;
+}
+
+.today-progress .m3e-progress__fill {
+  background-image: none;
+}
+
+.today-overview-empty-metric {
+  grid-column: 1 / -1;
+  color: color-mix(in srgb, var(--m3-on-primary-container) 82%, transparent);
+  font-size: var(--m3-type-body-medium-size);
+}
+
+.today-context {
+  min-block-size: 176px;
+  padding: 20px;
+  border-radius: var(--m3-shape-lg);
+  background-color: var(--m3-surface-container-low);
+}
+
+.today-context-note {
+  margin-block-start: 0;
+  padding-block-start: 16px;
+}
+
+.today-context-mark,
+.today-context-note-icon {
+  border-radius: var(--m3-shape-md);
+}
+
+.capture-zone {
+  margin-block: 20px;
+  padding: 16px 20px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-lg);
+  background-color: var(--m3-surface-container-low);
+  box-shadow: none;
+}
+
+.today-task-workspace {
+  gap: 20px;
+}
+
+.today-task-pane .task-list,
+.today-complete-pane .task-list {
+  padding: 4px;
+  border: 1px solid var(--m3-outline-variant);
+  background-color: var(--m3-surface-container-low);
+}

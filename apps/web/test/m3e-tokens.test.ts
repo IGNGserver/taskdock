@@ -128,9 +128,9 @@ describe('M3E token surface', () => {
     for (const level of [1, 2, 3, 4, 5]) expect(rootToken(`--m3-elevation-${level}`)).toBeTruthy();
   });
 
-  it('gives light and dark their own canvas role', () => {
+  it('keeps the application canvas on the low surface layer in both themes', () => {
     const dark = css.slice(css.indexOf("[data-theme='dark']"));
     expect(rootToken('--m3-canvas')).toMatch(/^var\(--m3-surface-container-low\)$/);
-    expect(/--m3-canvas:\s*var\(--m3-surface-container-lowest\)/.test(dark)).toBe(true);
+    expect(/--m3-canvas:\s*var\(--m3-surface-container-low\)/.test(dark)).toBe(true);
   });
 });

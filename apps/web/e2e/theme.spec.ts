@@ -8,5 +8,5 @@ test('follows the browser color scheme at startup and during runtime', async ({ 
 
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect.poll(() => page.locator('html').getAttribute('data-theme')).toBe('dark');
-  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(13, 14, 19)');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(26, 27, 32)');
 });
