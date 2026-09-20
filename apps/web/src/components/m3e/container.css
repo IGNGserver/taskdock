@@ -334,6 +334,13 @@
   inset: 0;
 }
 
+/* Dialogs can be opened from navigation drawers and must own the interaction
+   layer until they close. Sheets keep their lower overlay tier because they
+   are page-context surfaces rather than confirmations. */
+.m3e-dialog-layer {
+  z-index: 80;
+}
+
 .m3e-dialog-layer {
   display: grid;
   place-items: center;

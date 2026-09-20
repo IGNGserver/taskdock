@@ -41,6 +41,7 @@ async function installMockApi(page: Page): Promise<void> {
         },
       });
     }
+    if (path.endsWith('/devices')) return body([]);
     if (path.endsWith('/me'))
       return body({
         user,
@@ -218,4 +219,51 @@ test('reduced motion still lets the navigation drawer open and close', async ({ 
   // The close must still complete: the presence lifecycle reads the same token
   // the stylesheet uses, so a flattened spring cannot strand the overlay.
   await expect(drawer).toBeHidden();
+});
+
+test('route changes enter through a shared transition and logout is explicit', async ({ page }) => {
+  let logoutRequests = 0;
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/v1/auth/logout')) logoutRequests += 1;
+  });
+
+  await signIn(page);
+  const isMobile = test.info().project.name === 'mobile';
+  if (isMobile) {
+    await page.getByRole('button', { name: '打开侧边栏' }).click();
+    await page
+      .getByRole('complementary', { name: '移动侧边栏' })
+      .getByRole('link', { name: /打开 motion-user 的账户设置/ })
+      .click();
+    await expect(page.getByRole('complementary', { name: '移动侧边栏' })).toBeHidden();
+  } else {
+    await page.getByRole('link', { name: /打开 motion-user 的账户设置/ }).click();
+  }
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.locator('.route-transition')).toHaveCSS('animation-name', 'm3e-route-enter');
+
+  if (isMobile) await page.getByRole('button', { name: '打开侧边栏' }).click();
+  const logout = isMobile
+    ? page.getByRole('complementary', { name: '移动侧边栏' }).getByRole('button', {
+        name: '退出登录',
+      })
+    : page.getByRole('button', { name: '退出登录' });
+  await logout.click();
+  await expect(page.getByRole('dialog', { name: '退出登录' })).toBeVisible();
+  expect(logoutRequests).toBe(0);
+
+  await page
+    .getByRole('dialog', { name: '退出登录' })
+    .getByRole('button', { name: '取消' })
+    .click();
+  await expect(page.getByRole('dialog', { name: '退出登录' })).toBeHidden();
+  expect(logoutRequests).toBe(0);
+
+  await logout.click();
+  await page
+    .getByRole('dialog', { name: '退出登录' })
+    .getByRole('button', { name: '退出登录' })
+    .click();
+  await expect(page.getByRole('button', { name: '登录' })).toBeVisible();
+  expect(logoutRequests).toBe(1);
 });

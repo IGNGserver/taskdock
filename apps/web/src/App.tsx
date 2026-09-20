@@ -510,15 +510,21 @@ function AuthenticatedApp() {
   const location = useLocation();
   const navigate = useNavigate();
   const sizeClass = useWindowSizeClass();
+  const pageWrapRef = useRef<HTMLDivElement | null>(null);
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickKind, setQuickKind] = useState<'task'>('task');
   const [commandOpen, setCommandOpen] = useState(false);
   const [mobileActionOpen, setMobileActionOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useSearchParams();
   const activeFolderId = /^\/tree\/([^/]+)/.exec(location.pathname)?.[1] ?? null;
   const defaultTaskFolderId =
     activeFolderId ?? readRecentCaptureFolder(auth.settings?.defaultCaptureTarget);
+
+  useEffect(() => {
+    pageWrapRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname]);
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -647,11 +653,29 @@ function AuthenticatedApp() {
   const drawerFooter = (
     <>
       <ConnectionStatus />
-      <button className="user-chip" onClick={() => void auth.logout()} title="退出当前设备">
-        <span className="avatar">{auth.user?.username?.slice(0, 1).toUpperCase() ?? '?'}</span>
-        <span className="user-name">{auth.user?.username}</span>
-        <LogOut size={16} />
-      </button>
+      <div className="user-account-row">
+        <NavLink
+          className="user-chip"
+          to="/settings"
+          aria-label={`打开 ${auth.user?.username ?? '当前用户'} 的账户设置`}
+          title="打开账户设置"
+          onClick={() => {
+            if (isCompactShell(sizeClass)) setMobileSidebarOpen(false);
+          }}
+        >
+          <span className="avatar">{auth.user?.username?.slice(0, 1).toUpperCase() ?? '?'}</span>
+          <span className="user-name">{auth.user?.username}</span>
+          <Settings size={16} aria-hidden="true" />
+        </NavLink>
+        <IconButton
+          className="user-logout-button"
+          label="退出登录"
+          variant="outlined"
+          onClick={() => setLogoutConfirmOpen(true)}
+        >
+          <LogOut size={17} />
+        </IconButton>
+      </div>
     </>
   );
 
@@ -740,31 +764,36 @@ function AuthenticatedApp() {
             </>
           }
         />
-        <div className="page-wrap">
-          <Routes>
-            <Route path="/" element={<Navigate to="/today" replace />} />
-            <Route path="/today" element={<TodayPage onOpenTask={openTask} />} />
-            <Route path="/tree" element={<TreePage />} />
-            <Route path="/tree/:folderId" element={<TreePage />} />
-            <Route path="/tasks" element={<AllTasksV2Page />} />
-            <Route path="/workflows" element={<WorkflowsPage />} />
-            <Route path="/projects" element={<Navigate to="/tree" replace />} />
-            <Route path="/projects/:projectId" element={<Navigate to="/tree" replace />} />
-            <Route path="/inbox" element={<Navigate to="/tree" replace />} />
-            <Route path="/misc" element={<Navigate to="/tree" replace />} />
-            <Route path="/time" element={<TimeHubPage />} />
-            <Route path="/time/calendar" element={<CalendarPage onOpenTask={openTask} />} />
-            <Route
-              path="/time/calendar/:localDate"
-              element={<CalendarPage onOpenTask={openTask} />}
-            />
-            <Route path="/time/events" element={<EventsPage />} />
-            <Route path="/time/events/:eventId" element={<EventPage onOpenTask={openTask} />} />
-            <Route path="/archive" element={<ArchivePage onOpenTask={openTask} />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/more" element={<MorePage onOpenSearch={() => setCommandOpen(true)} />} />
-            <Route path="*" element={<Navigate to="/today" replace />} />
-          </Routes>
+        <div ref={pageWrapRef} className="page-wrap">
+          <div key={location.pathname} className="route-transition">
+            <Routes>
+              <Route path="/" element={<Navigate to="/today" replace />} />
+              <Route path="/today" element={<TodayPage onOpenTask={openTask} />} />
+              <Route path="/tree" element={<TreePage />} />
+              <Route path="/tree/:folderId" element={<TreePage />} />
+              <Route path="/tasks" element={<AllTasksV2Page />} />
+              <Route path="/workflows" element={<WorkflowsPage />} />
+              <Route path="/projects" element={<Navigate to="/tree" replace />} />
+              <Route path="/projects/:projectId" element={<Navigate to="/tree" replace />} />
+              <Route path="/inbox" element={<Navigate to="/tree" replace />} />
+              <Route path="/misc" element={<Navigate to="/tree" replace />} />
+              <Route path="/time" element={<TimeHubPage />} />
+              <Route path="/time/calendar" element={<CalendarPage onOpenTask={openTask} />} />
+              <Route
+                path="/time/calendar/:localDate"
+                element={<CalendarPage onOpenTask={openTask} />}
+              />
+              <Route path="/time/events" element={<EventsPage />} />
+              <Route path="/time/events/:eventId" element={<EventPage onOpenTask={openTask} />} />
+              <Route path="/archive" element={<ArchivePage onOpenTask={openTask} />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route
+                path="/more"
+                element={<MorePage onOpenSearch={() => setCommandOpen(true)} />}
+              />
+              <Route path="*" element={<Navigate to="/today" replace />} />
+            </Routes>
+          </div>
         </div>
       </main>
       {isCompactShell(sizeClass) && (
@@ -838,6 +867,15 @@ function AuthenticatedApp() {
         taskId={selectedTask.get('task')}
         onClose={closeTask}
         onChanged={() => window.dispatchEvent(new Event('devtodo:data-changed'))}
+      />
+      <ConfirmDialog
+        open={logoutConfirmOpen}
+        title="退出登录"
+        description="将退出当前设备的登录状态。再次进入 TaskDock 时需要重新登录。"
+        confirmLabel="退出登录"
+        busyLabel="正在退出"
+        onClose={() => setLogoutConfirmOpen(false)}
+        onConfirm={auth.logout}
       />
     </div>
   );

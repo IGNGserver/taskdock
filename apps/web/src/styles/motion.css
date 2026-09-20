@@ -56,6 +56,26 @@
   }
 }
 
+/* Route replacement is a state transition, not decoration: the small lift
+   makes the new page read as the next surface in the same workbench while the
+   stable app bar and navigation keep the spatial context anchored. */
+@keyframes m3e-route-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.route-transition {
+  min-block-size: 100%;
+  transform-origin: top center;
+  animation: m3e-route-enter var(--m3-spring-spatial-duration) var(--m3-spring-spatial) both;
+}
+
 /* Staggered list entry. Only the first paint of a list opts in; re-sorting must
    not replay it, so the class is applied by the page, not by the list itself. */
 .m3e-stagger > * {
@@ -119,6 +139,10 @@
   }
 
   .m3e-stagger > * {
+    animation-name: m3e-fade-in;
+  }
+
+  .route-transition {
     animation-name: m3e-fade-in;
   }
 
