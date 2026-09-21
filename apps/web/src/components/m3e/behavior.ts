@@ -208,21 +208,21 @@ export function useRovingFocus<T extends string>(
  * focused element on close. Shared by dialogs, sheets and the drawer so the
  * three cannot drift apart.
  */
+const focusTrapStack: HTMLElement[] = [];
+
 export function useFocusTrap(
   ref: { readonly current: HTMLElement | null },
   active: boolean,
   onEscape?: () => void,
 ) {
-  const previousFocus = useRef<HTMLElement | null>(
-    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null,
-  );
+  const escapeRef = useRef(onEscape);
+  escapeRef.current = onEscape;
 
   useEffect(() => {
     const container = ref.current;
     if (!container || !active) return;
-    const restoreTo = previousFocus.current;
+    const restoreTo = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    focusTrapStack.push(container);
     const focusable = () =>
       Array.from(
         container.querySelectorAll<HTMLElement>(
@@ -235,9 +235,10 @@ export function useFocusTrap(
     first?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && onEscape) {
+      if (focusTrapStack.at(-1) !== container) return;
+      if (event.key === 'Escape' && escapeRef.current) {
         event.preventDefault();
-        onEscape();
+        escapeRef.current();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -257,9 +258,11 @@ export function useFocusTrap(
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
-      restoreTo?.focus?.();
+      const index = focusTrapStack.indexOf(container);
+      if (index >= 0) focusTrapStack.splice(index, 1);
+      if (restoreTo?.isConnected) restoreTo.focus({ preventScroll: true });
     };
-  }, [active, onEscape, ref]);
+  }, [active, ref]);
 }
 
 /**
@@ -267,18 +270,28 @@ export function useFocusTrap(
  * dialogs, sheets and the navigation drawer cannot disagree about whether the
  * page behind them may scroll.
  */
+const scrollLocks = new Map<string, number>();
+let unlockedOverflow = '';
+
 export function useScrollLock(active: boolean, className = 'modal-open') {
   useEffect(() => {
     if (!active || typeof document === 'undefined') return;
+    if (scrollLocks.size === 0) {
+      unlockedOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+    }
+    scrollLocks.set(className, (scrollLocks.get(className) ?? 0) + 1);
     document.documentElement.classList.add(className);
-    const previousOverflow = document.body.style.overflow;
-    const previousTouchAction = document.body.style.touchAction;
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
+    // Do not put touch-action:none on body: it also disables scrolling inside
+    // portalled dialogs on touch devices. The background scrollport is locked by CSS.
     return () => {
-      document.documentElement.classList.remove(className);
-      document.body.style.overflow = previousOverflow;
-      document.body.style.touchAction = previousTouchAction;
+      const count = (scrollLocks.get(className) ?? 1) - 1;
+      if (count > 0) scrollLocks.set(className, count);
+      else {
+        scrollLocks.delete(className);
+        document.documentElement.classList.remove(className);
+      }
+      if (scrollLocks.size === 0) document.body.style.overflow = unlockedOverflow;
     };
   }, [active, className]);
 }

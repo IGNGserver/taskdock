@@ -161,7 +161,7 @@ export interface TaskDetailV2Dto {
   task: TreeTaskDto;
   note: NoteDto;
   steps: TaskStepDto[];
-  placements: PlacementDto[];
+  placements: Array<PlacementDto & { timePoint: TimePointDto }>;
   workflowMemberships: Array<
     WorkflowTaskMembershipDto & {
       workflow: Pick<WorkflowDto, 'id' | 'name'>;

@@ -155,10 +155,60 @@
   position: relative;
 }
 
+.all-tasks-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-block: 18px;
+}
+
+.all-tasks-toolbar > * {
+  min-inline-size: 220px;
+}
+
+.all-tasks-toolbar .m3e-text-field {
+  flex: 1 1 280px;
+}
+
+.select-field {
+  display: grid;
+  gap: 6px;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+}
+
+.select-field select {
+  min-block-size: 48px;
+  padding: 0 36px 0 12px;
+  border: 1px solid var(--m3-outline);
+  border-radius: var(--m3-shape-xs);
+  background: var(--m3-surface-container);
+  color: var(--m3-on-surface);
+  font: inherit;
+}
+
 .tree-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.tree-view-select {
+  display: grid;
+  gap: 4px;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+}
+
+.tree-view-select select {
+  min-block-size: 40px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--m3-outline);
+  border-radius: var(--m3-shape-xs);
+  background: var(--m3-surface-container);
+  color: var(--m3-on-surface);
+  font: inherit;
 }
 
 .inline-capture,
@@ -516,6 +566,39 @@
   margin: 0;
   font-size: var(--m3-type-title-medium-size);
   font-weight: 650;
+}
+
+.settings-advanced {
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-lg);
+  background: var(--m3-surface-container-low);
+}
+
+.settings-advanced > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 16px 18px;
+  color: var(--m3-on-surface);
+  font-weight: 650;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.settings-advanced > summary small {
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+  font-weight: 400;
+}
+
+.settings-advanced[open] > summary {
+  border-block-end: 1px solid var(--m3-outline-variant);
+}
+
+.settings-advanced > .settings-section {
+  margin: 12px;
 }
 
 .settings-actions {

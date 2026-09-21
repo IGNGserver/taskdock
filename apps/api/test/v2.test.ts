@@ -28,6 +28,66 @@ async function boot() {
 }
 
 describe('TaskDock v2 API and sync protocol', () => {
+  it('searches task notes and returns readable placement context in task details', async () => {
+    const { app, accessToken } = await boot();
+    const headers = () => ({
+      authorization: `Bearer ${accessToken}`,
+      'x-client-id': uuidv7(),
+      'idempotency-key': uuidv7(),
+    });
+    const taskId = uuidv7();
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v2/tasks',
+      headers: headers(),
+      payload: { id: taskId, title: '发布版本' },
+    });
+    expect(created.statusCode).toBe(201);
+    const note = created.json().note as { id: string; version: number };
+    const updatedNote = await app.inject({
+      method: 'PATCH',
+      url: `/api/v2/tasks/${taskId}/note`,
+      headers: headers(),
+      payload: {
+        contentMarkdown: '上线前检查数据库迁移',
+        baseVersion: note.version,
+      },
+    });
+    expect(updatedNote.statusCode).toBe(200);
+
+    const search = await app.inject({
+      method: 'GET',
+      url: '/api/v2/tasks?q=数据库迁移',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(search.statusCode).toBe(200);
+    expect(search.json().items.map((task: { id: string }) => task.id)).toContain(taskId);
+
+    const date = await app.inject({
+      method: 'POST',
+      url: '/api/v2/time-points/date',
+      headers: headers(),
+      payload: { localDate: '2026-09-21' },
+    });
+    const placement = await app.inject({
+      method: 'POST',
+      url: '/api/v2/placements',
+      headers: headers(),
+      payload: { taskId, timePointId: date.json().id },
+    });
+    expect(placement.statusCode).toBe(201);
+
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/api/v2/tasks/${taskId}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().placements[0]).toMatchObject({
+      timePoint: { type: 'DATE', localDate: '2026-09-21' },
+    });
+  });
+
   it('covers the tree, archive boundary, workflows, steps, placements, deletion preview and protocol gate', async () => {
     const { app, store, accessToken } = await boot();
     const headers = () => ({

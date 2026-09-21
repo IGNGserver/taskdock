@@ -100,7 +100,19 @@ async function main(): Promise<void> {
   });
   if (bootstrap.status !== 201)
     throw new Error(`real E2E fixture bootstrap failed: HTTP ${bootstrap.status}`);
-  start('pnpm', ['--filter', '@devtodo/web', 'dev', '--host', '127.0.0.1', '--port', '4173'], {});
+  start(
+    'pnpm',
+    [
+      '--filter',
+      '@devtodo/web',
+      process.env['E2E_PWA'] === '1' ? 'preview' : 'dev',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      '4173',
+    ],
+    {},
+  );
   await waitFor('http://127.0.0.1:4173');
 
   const stopChildren = (): void => {

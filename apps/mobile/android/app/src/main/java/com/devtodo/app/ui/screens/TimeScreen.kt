@@ -35,7 +35,7 @@ fun TimeScreen(
             ExtendedFloatingActionButton(
                 onClick = { datePicker = true },
                 icon = { Icon(Icons.Default.Add, null) },
-                text = { Text("按日期新建") },
+                text = { Text("安排任务") },
             )
         }
     ) { padding ->
@@ -44,7 +44,13 @@ fun TimeScreen(
             contentPadding = PaddingValues(bottom = 96.dp),
         ) {
             if (points.isEmpty())
-                item { EmptyState(Icons.Default.Event, "还没有计划", "选择日期创建任务。已有事件会在同步后显示。") }
+                item {
+                    EmptyState(
+                        Icons.Default.Event,
+                        "还没有日期或事件",
+                        "选择一个日期安排任务；已有事件会在同步后显示。",
+                    )
+                }
             items(points, key = { it.id }) { point ->
                 val placements by
                     remember(point.id) { viewModel.observeTimePointPlacements(point.id) }
@@ -64,7 +70,13 @@ fun TimeScreen(
                             else point.title ?: "未命名事件"
                         )
                     },
-                    supportingContent = { Text("${visible.size} 个任务") },
+                    supportingContent = {
+                        val context =
+                            if (point.type == TimePointType.DATE) "日期安排"
+                            else if (point.reachedAt != null) "已到达事件"
+                            else "未到达事件"
+                        Text("$context · ${visible.size} 个任务")
+                    },
                     leadingContent = {
                         Icon(Icons.Default.Event, null, tint = MaterialTheme.colorScheme.primary)
                     },
@@ -108,7 +120,7 @@ fun TimeScreen(
                         datePicker = false
                     },
                 ) {
-                    Text("下一步")
+                    Text("选择日期")
                 }
             },
             dismissButton = { TextButton(onClick = { datePicker = false }) { Text("取消") } },
@@ -117,7 +129,7 @@ fun TimeScreen(
         }
     if (selectedId != null || selectedDate != null)
         CaptureSheet(
-            "新建计划任务",
+            "新建安排",
             onDismiss = {
                 selectedId = null
                 selectedDate = null

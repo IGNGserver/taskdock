@@ -1,8 +1,10 @@
 import type {
   FolderDto,
+  PlacementDto,
   TaskDetailV2Dto,
   TaskStatus,
   TaskStepDto,
+  TimePointDto,
   TreeItemDto,
   TreeTaskDto,
   WorkflowDto,
@@ -12,6 +14,7 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -48,6 +51,21 @@ function statusLabel(status: string): string {
 
 function statusClass(status: string): string {
   return status === 'IN_PROGRESS' ? 'in-progress' : status === 'DONE' ? 'done' : 'todo';
+}
+
+type TaskPlacementDetail = PlacementDto & { timePoint: TimePointDto };
+
+function placementLabel(placement: TaskPlacementDetail): string {
+  const point = placement.timePoint;
+  if (point.type === 'EVENT') return point.title?.trim() || '未命名事件';
+  if (!point.localDate) return '未命名日期';
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    weekday: 'short',
+    timeZone: 'UTC',
+  }).format(new Date(`${point.localDate}T00:00:00Z`));
 }
 
 type TreeMoveTarget = {
@@ -155,9 +173,14 @@ export function TreePage() {
   const [moveFolders, setMoveFolders] = useState<FolderDto[]>([]);
   const [moveParentId, setMoveParentId] = useState('');
   const [moveBusy, setMoveBusy] = useState(false);
+  const [groupByStatus, setGroupByStatus] = useState(false);
+  const loadedFolder = useRef<string | null | undefined>(undefined);
+  const loadSequence = useRef(0);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const sequence = ++loadSequence.current;
+    // Keep rows mounted during background sync so open touch menus survive.
+    if (loadedFolder.current !== folderId) setLoading(true);
     setError('');
     try {
       const query = folderId
@@ -171,15 +194,18 @@ export function TreePage() {
             )
           : Promise.resolve({ items: [] }),
       ]);
+      if (sequence !== loadSequence.current) return;
+      loadedFolder.current = folderId;
       setItems(children.items);
       setPath(nextPath.items);
       // Remember the folder the user is actually browsing so later quick
       // captures can resolve "most recent valid folder".
       recordLastFolderId(folderId);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '目录加载失败');
+      if (sequence === loadSequence.current)
+        setError(cause instanceof Error ? cause.message : '目录加载失败');
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }, [folderId]);
 
@@ -234,22 +260,42 @@ export function TreePage() {
       })),
     [items],
   );
+  const visibleGroups = groupByStatus ? groups : [{ key: 'ALL', label: '当前目录', items }];
+  const statusPosition = (item: TreeItemDto) => {
+    const status = item.kind === 'FOLDER' ? item.aggregate.status : item.task.status;
+    const group = groups.find((candidate) => candidate.key === status);
+    const id = item.kind === 'FOLDER' ? item.folder.id : item.task.id;
+    const index =
+      group?.items.findIndex((candidate) => {
+        const candidateId = candidate.kind === 'FOLDER' ? candidate.folder.id : candidate.task.id;
+        return candidate.kind === item.kind && candidateId === id;
+      }) ?? 0;
+    return { index, length: group?.items.length ?? 1 };
+  };
 
   const createTask = async (event: FormEvent) => {
     event.preventDefault();
     const title = newTitle.trim();
     if (!title) return;
-    await mutationV2('POST', '/tasks', { parentFolderId: folderId, title });
-    setNewTitle('');
-    await load();
+    try {
+      await mutationV2('POST', '/tasks', { parentFolderId: folderId, title });
+      setNewTitle('');
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '创建任务失败，请重试');
+    }
   };
   const createFolder = async (event: FormEvent) => {
     event.preventDefault();
     const title = newFolderTitle.trim();
     if (!title) return;
-    await mutationV2('POST', '/folders', { parentFolderId: folderId, title });
-    setNewFolderTitle('');
-    await load();
+    try {
+      await mutationV2('POST', '/folders', { parentFolderId: folderId, title });
+      setNewFolderTitle('');
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '创建文件夹失败，请重试');
+    }
   };
   const archiveFolder = async (item: Extract<TreeItemDto, { kind: 'FOLDER' }>) => {
     if (
@@ -258,16 +304,24 @@ export function TreePage() {
       )
     )
       return;
-    await mutationV2('POST', `/folders/${item.folder.id}/archive-tree`, {
-      baseVersion: item.folder.version,
-    });
-    await load();
+    try {
+      await mutationV2('POST', `/folders/${item.folder.id}/archive-tree`, {
+        baseVersion: item.folder.version,
+      });
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '归档目录失败，请重试');
+    }
   };
   const archiveTask = async (item: Extract<TreeItemDto, { kind: 'TASK' }>) => {
-    await mutationV2('POST', `/tasks/${item.task.id}/archive`, {
-      baseVersion: item.task.version,
-    });
-    await load();
+    try {
+      await mutationV2('POST', `/tasks/${item.task.id}/archive`, {
+        baseVersion: item.task.version,
+      });
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '归档任务失败，请重试');
+    }
   };
   const deleteFolder = async (item: Extract<TreeItemDto, { kind: 'FOLDER' }>) => {
     try {
@@ -306,10 +360,10 @@ export function TreePage() {
       // Surface the structured offline-refusal guidance instead of a generic
       // network error. Permanent tree deletion is online-only by design.
       if (cause instanceof ApiError && cause.code === 'OFFLINE_TREE_DELETE_FORBIDDEN') {
-        alert(`${cause.message}\n\n建议：改为递归归档整棵目录。`);
+        setError(`${cause.message} 建议：改为递归归档整棵目录。`);
         return;
       }
-      alert(cause instanceof Error ? cause.message : '删除操作失败');
+      setError(cause instanceof Error ? cause.message : '删除操作失败');
     }
   };
   const moveWithinStatus = async (item: TreeItemDto, direction: 'up' | 'down') => {
@@ -328,26 +382,30 @@ export function TreePage() {
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (index < 0 || targetIndex < 0 || targetIndex >= group.length) return;
     const target = group[targetIndex]!;
-    await mutationV2('POST', '/tree/items/move', {
-      item: { kind: item.kind, id: item.kind === 'FOLDER' ? item.folder.id : item.task.id },
-      parentFolderId: folderId,
-      expectedStatus: status,
-      baseVersion: item.kind === 'FOLDER' ? item.folder.version : item.task.version,
-      ...(direction === 'up'
-        ? {
-            before: {
-              kind: target.kind,
-              id: target.kind === 'FOLDER' ? target.folder.id : target.task.id,
-            },
-          }
-        : {
-            after: {
-              kind: target.kind,
-              id: target.kind === 'FOLDER' ? target.folder.id : target.task.id,
-            },
-          }),
-    });
-    await load();
+    try {
+      await mutationV2('POST', '/tree/items/move', {
+        item: { kind: item.kind, id: item.kind === 'FOLDER' ? item.folder.id : item.task.id },
+        parentFolderId: folderId,
+        expectedStatus: status,
+        baseVersion: item.kind === 'FOLDER' ? item.folder.version : item.task.version,
+        ...(direction === 'up'
+          ? {
+              before: {
+                kind: target.kind,
+                id: target.kind === 'FOLDER' ? target.folder.id : target.task.id,
+              },
+            }
+          : {
+              after: {
+                kind: target.kind,
+                id: target.kind === 'FOLDER' ? target.folder.id : target.task.id,
+              },
+            }),
+      });
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '调整顺序失败，请重试');
+    }
   };
   const openMove = async (item: TreeItemDto) => {
     try {
@@ -408,11 +466,21 @@ export function TreePage() {
     <section className="page-section tree-page" aria-labelledby="tree-title">
       <div className="page-header">
         <div>
-          <p className="eyebrow">目录</p>
-          <h1 id="tree-title">目录</h1>
-          <p className="page-subtitle">任务只有一个目录位置，日期、时间点和流程都是独立视图。</p>
+          <p className="eyebrow">任务库</p>
+          <h1 id="tree-title">任务库</h1>
+          <p className="page-subtitle">按目录整理任务；日期、事件和流程是任务的其他视图。</p>
         </div>
         <div className="tree-header-actions">
+          <label className="tree-view-select">
+            <span>显示方式</span>
+            <select
+              value={groupByStatus ? 'status' : 'tree'}
+              onChange={(event) => setGroupByStatus(event.target.value === 'status')}
+            >
+              <option value="tree">目录顺序</option>
+              <option value="status">按状态分组</option>
+            </select>
+          </label>
           <form onSubmit={createFolder} className="inline-capture">
             <TextField
               label="新建文件夹"
@@ -471,7 +539,7 @@ export function TreePage() {
       {loading ? (
         <div className="empty-state">正在加载目录…</div>
       ) : (
-        groups.map((group) => (
+        visibleGroups.map((group) => (
           <section
             key={group.key}
             className="tree-group"
@@ -505,8 +573,8 @@ export function TreePage() {
                     </button>
                     <TreeRowActions
                       item={item}
-                      index={index}
-                      groupLength={group.items.length}
+                      index={groupByStatus ? index : statusPosition(item).index}
+                      groupLength={groupByStatus ? group.items.length : statusPosition(item).length}
                       onMove={(candidate, direction) => void moveWithinStatus(candidate, direction)}
                       onOpenMove={(candidate) => void openMove(candidate)}
                       onArchiveFolder={(candidate) => void archiveFolder(candidate)}
@@ -535,8 +603,8 @@ export function TreePage() {
                     </button>
                     <TreeRowActions
                       item={item}
-                      index={index}
-                      groupLength={group.items.length}
+                      index={groupByStatus ? index : statusPosition(item).index}
+                      groupLength={groupByStatus ? group.items.length : statusPosition(item).length}
                       onMove={(candidate, direction) => void moveWithinStatus(candidate, direction)}
                       onOpenMove={(candidate) => void openMove(candidate)}
                       onArchiveFolder={(candidate) => void archiveFolder(candidate)}
@@ -551,38 +619,63 @@ export function TreePage() {
         ))
       )}
       {moveTarget && (
-        <div className="tree-move-sheet" role="dialog" aria-label="移动目录项">
-          <form onSubmit={submitMove}>
-            <strong>移动“{moveTarget.title}”</strong>
-            <label className="field">
-              <span>目标文件夹</span>
-              <select
-                value={moveParentId}
-                onChange={(event) => setMoveParentId(event.target.value)}
-              >
-                <option value="">根目录</option>
-                {moveFolders
-                  .filter((folder) => folder.id !== moveTarget.item.id)
-                  .map((folder) => (
-                    <option value={folder.id} key={folder.id}>
-                      {folder.title}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <div className="header-actions">
-              <Button variant="tonal" type="button" onClick={() => setMoveTarget(null)}>
-                取消
-              </Button>
-              <Button variant="filled" type="submit" disabled={moveBusy}>
-                {moveBusy ? '移动中…' : '移动'}
-              </Button>
-            </div>
-          </form>
-        </div>
+        <BottomSheet
+          open
+          onClose={() => {
+            if (!moveBusy) setMoveTarget(null);
+          }}
+          title="移动目录项"
+        >
+          <div className="tree-move-sheet">
+            <form onSubmit={submitMove}>
+              <strong>移动“{moveTarget.title}”</strong>
+              {error && (
+                <p className="error-banner" role="alert">
+                  {error}
+                </p>
+              )}
+              <label className="field">
+                <span>目标文件夹</span>
+                <select
+                  value={moveParentId}
+                  onChange={(event) => setMoveParentId(event.target.value)}
+                >
+                  <option value="">根目录</option>
+                  {moveFolders
+                    .filter((folder) => folder.id !== moveTarget.item.id)
+                    .map((folder) => (
+                      <option value={folder.id} key={folder.id}>
+                        {folder.title}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <div className="header-actions">
+                <Button
+                  variant="tonal"
+                  type="button"
+                  disabled={moveBusy}
+                  onClick={() => setMoveTarget(null)}
+                >
+                  取消
+                </Button>
+                <Button variant="filled" type="submit" disabled={moveBusy}>
+                  {moveBusy ? '移动中…' : '移动'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </BottomSheet>
       )}
       {selectedTaskId && detail && (
-        <TaskDetailV2 detail={detail} onClose={() => setSelectedTaskId(null)} onChanged={load} />
+        <TaskDetailSurface open onClose={() => setSelectedTaskId(null)} title={detail.task.title}>
+          <TaskDetailV2
+            key={selectedTaskId}
+            detail={detail}
+            onClose={() => setSelectedTaskId(null)}
+            onChanged={load}
+          />
+        </TaskDetailSurface>
       )}
     </section>
   );
@@ -610,24 +703,32 @@ export function TaskDetailV2Overlay({
   }, [taskId]);
   useEffect(() => {
     setDetail(null);
+    setError('');
     void load();
   }, [load]);
-  if (!taskId || !detail)
-    return error ? (
-      <div className="error-banner" role="alert">
-        {error}
-      </div>
-    ) : null;
+  if (!taskId) return null;
   return (
-    <TaskDetailSurface open onClose={onClose} title={detail.task.title || '任务详情'}>
-      <TaskDetailV2
-        detail={detail}
-        onClose={onClose}
-        onChanged={async () => {
-          await load();
-          onChanged();
-        }}
-      />
+    <TaskDetailSurface open onClose={onClose} title={detail?.task.title || '任务详情'}>
+      {error ? (
+        <div className="error-banner" role="alert">
+          <p>{error}</p>
+          <Button variant="tonal" onClick={() => void load()}>
+            重试
+          </Button>
+        </div>
+      ) : detail ? (
+        <TaskDetailV2
+          key={taskId}
+          detail={detail}
+          onClose={onClose}
+          onChanged={async () => {
+            await load();
+            onChanged();
+          }}
+        />
+      ) : (
+        <p role="status">正在加载任务详情…</p>
+      )}
     </TaskDetailSurface>
   );
 }
@@ -859,6 +960,7 @@ function TaskDetailV2({
           <span className="eyebrow">{taskRecord.referenceId}</span>
           <input
             className="task-detail-title"
+            aria-label="任务标题"
             value={title}
             disabled={archived}
             onChange={(event) => setTitle(event.target.value)}
@@ -905,6 +1007,7 @@ function TaskDetailV2({
       <div className="task-detail-v2-section">
         <h3>备注</h3>
         <textarea
+          aria-label="任务备注"
           value={note}
           disabled={archived}
           onChange={(event) => setNote(event.target.value)}
@@ -1051,7 +1154,14 @@ function TaskDetailV2({
         {detail.placements.length ? (
           detail.placements.map((placement) => (
             <div className="step-row" key={placement.id}>
-              <span>{placement.timePointId}</span>
+              <span>
+                <strong>{placementLabel(placement as TaskPlacementDetail)}</strong>
+                <small className="muted">
+                  {(placement as TaskPlacementDetail).timePoint.type === 'EVENT'
+                    ? '事件安排'
+                    : '日期安排'}
+                </small>
+              </span>
               <Button
                 variant="tonal"
                 size="s"
@@ -1064,7 +1174,7 @@ function TaskDetailV2({
             </div>
           ))
         ) : (
-          <span className="muted">暂无日期或时间点安排</span>
+          <span className="muted">暂无日期或事件安排</span>
         )}
       </div>
       <div className="task-detail-v2-section">
@@ -1645,6 +1755,8 @@ export function AllTasksV2Page() {
   >([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'TODO' | 'IN_PROGRESS' | 'DONE'>('ALL');
   const load = useCallback(async () => {
     try {
       const result = await requestV2<{ items: typeof tasks }>('/tasks');
@@ -1656,14 +1768,50 @@ export function AllTasksV2Page() {
   useEffect(() => {
     void load();
   }, [load]);
+  const visibleTasks = tasks.filter((task) => {
+    const needle = query.trim().toLocaleLowerCase();
+    const matchesQuery =
+      !needle ||
+      task.title.toLocaleLowerCase().includes(needle) ||
+      task.referenceId.toLocaleLowerCase().includes(needle);
+    return matchesQuery && (statusFilter === 'ALL' || task.status === statusFilter);
+  });
+  const archiveTask = async (task: (typeof tasks)[number]) => {
+    try {
+      await mutationV2('POST', `/tasks/${task.id}/archive`, { baseVersion: task.version });
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '归档任务失败，请重试');
+    }
+  };
   return (
     <section className="page-section all-tasks-page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">任务</p>
-          <h1>所有任务</h1>
-          <p className="page-subtitle">按任务本体查看，不复制目录、日期或流程中的任务。</p>
+          <p className="eyebrow">任务库</p>
+          <h1>全部任务</h1>
+          <p className="page-subtitle">按任务本体查看，不重复显示目录、日期或流程中的同一任务。</p>
         </div>
+      </div>
+      <div className="all-tasks-toolbar">
+        <TextField
+          label="筛选任务"
+          placeholder="按标题或引用 ID 筛选…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <label className="select-field">
+          <span>状态</span>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+          >
+            <option value="ALL">全部状态</option>
+            <option value="TODO">待开始</option>
+            <option value="IN_PROGRESS">进行中</option>
+            <option value="DONE">已完成</option>
+          </select>
+        </label>
       </div>
       {error && (
         <div className="error-banner" role="alert">
@@ -1671,7 +1819,7 @@ export function AllTasksV2Page() {
         </div>
       )}
       <div className="tree-group">
-        {tasks.map((task) => (
+        {visibleTasks.map((task) => (
           <article className="tree-row task-row-v2" key={task.id}>
             <button
               type="button"
@@ -1689,17 +1837,14 @@ export function AllTasksV2Page() {
             <IconButton
               label="操作"
               type="button"
-              onClick={() =>
-                void mutationV2('POST', `/tasks/${task.id}/archive`, {
-                  baseVersion: task.version,
-                }).then(load)
-              }
+              onClick={() => void archiveTask(task)}
               aria-label={`归档任务 ${task.title}`}
             >
               <Archive size={16} />
             </IconButton>
           </article>
         ))}
+        {!visibleTasks.length && <div className="empty-state">没有符合条件的任务。</div>}
       </div>
       <TaskDetailV2Overlay
         taskId={selectedTaskId}

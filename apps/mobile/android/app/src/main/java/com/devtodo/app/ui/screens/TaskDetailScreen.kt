@@ -41,6 +41,10 @@ fun TaskDetailScreen(taskId: String, viewModel: MainViewModel, onBack: () -> Uni
         remember(taskId) { viewModel.observeTaskSteps(taskId) }
             .collectAsStateWithLifecycle(initialValue = emptyList())
     val folders by viewModel.foldersV2.collectAsStateWithLifecycle()
+    val placements by
+        remember(taskId) { viewModel.observeTaskPlacements(taskId) }
+            .collectAsStateWithLifecycle(initialValue = emptyList())
+    val timePoints by viewModel.activeTimePoints.collectAsStateWithLifecycle()
     val ready by viewModel.dataReady.collectAsStateWithLifecycle()
     var title by rememberSaveable(taskId) { mutableStateOf("") }
     var markdownContent by rememberSaveable(taskId) { mutableStateOf("") }
@@ -283,13 +287,42 @@ fun TaskDetailScreen(taskId: String, viewModel: MainViewModel, onBack: () -> Uni
                             "同一任务可以安排到多个日期，完成状态保持一致。",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (placements.isEmpty()) {
+                            Text(
+                                "还没有安排。可以添加日期，或从计划页安排到事件。",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            placements.forEach { placement ->
+                                val point = timePoints.firstOrNull { it.id == placement.timePointId }
+                                ListItem(
+                                    headlineContent = {
+                                        Text(
+                                            when {
+                                                point?.title?.isNotBlank() == true -> point.title!!
+                                                point?.localDate?.isNotBlank() == true -> point.localDate!!
+                                                else -> "已安排的位置"
+                                            }
+                                        )
+                                    },
+                                    supportingContent = {
+                                        Text(if (point?.localDate != null) "日期安排" else "事件安排")
+                                    },
+                                    trailingContent = {
+                                        TextButton(onClick = { viewModel.removePlacement(placement) }) {
+                                            Text("移除")
+                                        }
+                                    },
+                                )
+                            }
+                        }
                         FilledTonalButton(
                             onClick = {
                                 scheduleCopy = false
                                 showDatePicker = true
                             }
                         ) {
-                            Text("移动到日期")
+                            Text("移到日期")
                         }
                         OutlinedButton(
                             onClick = {
@@ -297,7 +330,7 @@ fun TaskDetailScreen(taskId: String, viewModel: MainViewModel, onBack: () -> Uni
                                 showDatePicker = true
                             }
                         ) {
-                            Text("保留原安排，添加日期")
+                            Text("添加另一个日期")
                         }
                     }
                 }

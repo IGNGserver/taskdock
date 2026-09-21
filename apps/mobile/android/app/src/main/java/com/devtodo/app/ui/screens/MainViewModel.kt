@@ -96,6 +96,12 @@ class MainViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val settings: StateFlow<SettingsEntity?> = currentOwnerId
+        .flatMapLatest { ownerId ->
+            ownerId?.let { db.settingsDao().getSettingsFlow(it) } ?: flowOf(null)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     private val _todayTasks = MutableStateFlow<List<Pair<TaskEntity, PlacementEntity>>>(emptyList())
     val todayTasks: StateFlow<List<Pair<TaskEntity, PlacementEntity>>> = _todayTasks.asStateFlow()
 
@@ -122,7 +128,9 @@ class MainViewModel(
     private var sessionRestoreJob: Job? = null
 
     private val todayStr: String
-        get() = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        get() = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone(settings.value?.timezone ?: "Asia/Shanghai")
+        }.format(Date())
 
     init {
         if (authManager.isLoggedIn) {
@@ -261,6 +269,10 @@ class MainViewModel(
 
     fun observeTimePointPlacements(timePointId: String): Flow<List<PlacementEntity>> = currentOwnerId.flatMapLatest { ownerId ->
         ownerId?.let { db.placementDao().getPlacementsByTimePointFlow(it, timePointId) } ?: flowOf(emptyList())
+    }
+
+    fun observeTaskPlacements(taskId: String): Flow<List<PlacementEntity>> = currentOwnerId.flatMapLatest { ownerId ->
+        ownerId?.let { db.placementDao().getPlacementsByTaskFlow(taskId, it) } ?: flowOf(emptyList())
     }
 
     fun createFolderV2(parentFolderId: String?, title: String) {
@@ -1165,6 +1177,60 @@ class MainViewModel(
                 onSuccess()
             } catch (error: Exception) {
                 _messages.tryEmit(error.userMessage("安排任务失败"))
+            }
+        }
+    }
+
+    fun removePlacement(placement: PlacementEntity) {
+        viewModelScope.launch {
+            try {
+                val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
+                require(placement.ownerId == ownerId) { "安排不属于当前账户" }
+                db.placementDao().deletePlacementForOwner(ownerId, placement.id)
+                syncEngine.recordLocalMutation(
+                    command = "placement.remove",
+                    entityId = placement.id,
+                    baseVersion = placement.version,
+                    payload = emptyMap(),
+                )
+                loadTodayData()
+                _messages.tryEmit("安排已移除")
+            } catch (error: Exception) {
+                _messages.tryEmit(error.userMessage("移除安排失败"))
+            }
+        }
+    }
+
+    fun updateSettings(
+        timezone: String? = null,
+        weekStartsOn: Int? = null,
+        defaultCaptureTarget: String? = null,
+    ) {
+        viewModelScope.launch {
+            try {
+                val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
+                val current = db.settingsDao().getSettings(ownerId) ?: error("账户设置尚未同步")
+                val updated = current.copy(
+                    timezone = timezone ?: current.timezone,
+                    weekStartsOn = weekStartsOn ?: current.weekStartsOn,
+                    defaultCaptureTarget = defaultCaptureTarget ?: current.defaultCaptureTarget,
+                    updatedAt = nowIso(),
+                    version = current.version + 1,
+                )
+                db.settingsDao().upsertSettings(updated)
+                syncEngine.recordLocalMutation(
+                    command = "settings.update",
+                    entityId = ownerId,
+                    baseVersion = current.version,
+                    payload = mapOf(
+                        "timezone" to updated.timezone,
+                        "weekStartsOn" to updated.weekStartsOn,
+                        "defaultCaptureTarget" to updated.defaultCaptureTarget,
+                    ),
+                )
+                _messages.tryEmit("设置已保存")
+            } catch (error: Exception) {
+                _messages.tryEmit(error.userMessage("保存设置失败"))
             }
         }
     }

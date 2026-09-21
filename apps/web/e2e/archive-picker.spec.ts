@@ -196,7 +196,10 @@ test('archives and restores a v2 folder through the tree and archive views', asy
   await page.goto('/tree');
   const folderButton = page.getByRole('button', { name: `打开文件夹 ${folder.title}` });
   await expect(folderButton).toBeVisible();
-  await page.getByRole('button', { name: `归档文件夹 ${folder.title}` }).click();
+  await page.getByRole('button', { name: `打开 ${folder.title} 的操作菜单` }).click();
+  await page.evaluate(() => window.dispatchEvent(new Event('devtodo:data-changed')));
+  await expect(page.getByRole('menuitem', { name: '归档文件夹', exact: true })).toBeVisible();
+  await page.getByRole('menuitem', { name: '归档文件夹', exact: true }).click();
   await expect(folderButton).toHaveCount(0);
 
   await page.goto('/archive');

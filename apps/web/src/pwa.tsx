@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
 export function PwaLifecycleNotice() {
@@ -6,6 +7,12 @@ export function PwaLifecycleNotice() {
     offlineReady: [offlineReady, setOfflineReady],
     updateServiceWorker,
   } = useRegisterSW();
+
+  useEffect(() => {
+    if (!offlineReady) return;
+    const timer = window.setTimeout(() => setOfflineReady(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [offlineReady, setOfflineReady]);
 
   if (needRefresh)
     return (

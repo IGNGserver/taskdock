@@ -460,7 +460,6 @@
   color: var(--m3-on-surface);
   box-shadow: var(--m3-elevation-3);
   animation: m3e-sheet-in var(--m3-spring-spatial-slow-duration) var(--m3-spring-spatial-slow) both;
-  touch-action: none;
 }
 
 .m3e-sheet--half {
@@ -473,6 +472,7 @@
 }
 
 .m3e-sheet__handle {
+  touch-action: none;
   display: grid;
   place-items: center;
   flex: none;

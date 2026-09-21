@@ -57,6 +57,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  Link,
   NavLink,
   Navigate,
   Route,
@@ -202,7 +203,7 @@ function DesktopBridgeUnavailableScreen() {
         <p className="eyebrow">DESKTOP RUNTIME</p>
         <h1>桌面安全通道未加载</h1>
         <p className="auth-intro">
-          当前窗口是桌面客户端，但安全桥接没有启动，因此无法读取或保存中枢地址。
+          当前窗口是桌面客户端，但安全桥接没有启动，因此无法读取或保存服务器地址。
         </p>
         <div className="form-error" role="alert">
           请完全退出 TaskDock 后重试；如果问题持续，请重新安装最新桌面版本。
@@ -220,7 +221,7 @@ function DesktopBridgeUnavailableScreen() {
         <span className="aside-number">00</span>
         <p>先恢复连接，再开始工作。</p>
         <span className="aside-rule" />
-        <small>桌面端不会在桥接缺失时回退到网页登录，避免错误地使用错误的中枢会话。</small>
+        <small>桌面端不会在桥接缺失时回退到网页登录，以避免使用错误的服务器会话。</small>
       </aside>
     </main>
   );
@@ -234,7 +235,7 @@ function DesktopStartup() {
 
   const verify = useCallback(async (candidate: string) => {
     setPhase('checking');
-    setMessage('正在连接中枢…');
+    setMessage('正在连接服务器…');
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 8_000);
     try {
@@ -248,7 +249,7 @@ function DesktopStartup() {
           ? '连接超时，请检查地址、证书和网络。'
           : cause instanceof Error
             ? cause.message
-            : '无法连接中枢，请检查地址、证书和网络。',
+            : '无法连接服务器，请检查地址、证书和网络。',
       );
     } finally {
       window.clearTimeout(timeout);
@@ -315,7 +316,7 @@ function DesktopStartup() {
         afterSave={finishSwitch}
       />
     );
-  if (phase === 'checking') return <LoadingScreen label="正在连接中枢" />;
+  if (phase === 'checking') return <LoadingScreen label="正在连接服务器" />;
   if (phase === 'error')
     return (
       <HubSetupScreen
@@ -385,7 +386,7 @@ function HubSetupScreen({
           ? '连接超时，请检查地址、证书和网络。'
           : cause instanceof Error
             ? cause.message
-            : '无法连接中枢，请检查地址、证书和网络。',
+            : '无法连接服务器，请检查地址、证书和网络。',
       );
     } finally {
       window.clearTimeout(timeout);
@@ -400,9 +401,9 @@ function HubSetupScreen({
           <span>TaskDock</span>
         </div>
         <p className="eyebrow">DESKTOP CONNECTION</p>
-        <h1>{origin ? '连接中枢' : '配置中枢地址'}</h1>
+        <h1>{origin ? '连接服务器' : '配置服务器地址'}</h1>
         <p className="auth-intro">
-          桌面端不会默认绑定网页地址。先连接你的自托管中枢，之后登录、同步和离线数据都会跟随这个地址隔离。
+          先连接你的 TaskDock 服务器，之后登录、同步和离线数据都会跟随这个地址。
         </p>
         {message && (
           <div className={`${state === 'error' ? 'form-error' : 'bootstrap-notice'}`} role="status">
@@ -413,13 +414,13 @@ function HubSetupScreen({
           <div className="http-security-warning" role="alert">
             <strong>当前地址使用 HTTP</strong>
             <span>
-              HTTP 地址可以连接外网中枢，但密码和会话信息会明文传输；正式公网部署仍建议使用 HTTPS。
+              HTTP 地址可以连接服务器，但密码和会话信息会明文传输；正式公网部署仍建议使用 HTTPS。
             </span>
           </div>
         )}
         <div className="stack-form">
           <Field
-            label="中枢 HTTP/HTTPS 地址"
+            label="服务器 HTTP/HTTPS 地址"
             value={origin}
             onChange={(value) => {
               originEdited.current = true;
@@ -450,7 +451,7 @@ function HubSetupScreen({
         <span className="aside-number">01</span>
         <p>先连接，再安排。</p>
         <span className="aside-rule" />
-        <small>中枢地址是桌面端的运行边界，切换地址不会串用另一套会话。</small>
+        <small>切换服务器后会使用独立的登录会话，数据不会混用。</small>
       </aside>
     </main>
   );
@@ -473,17 +474,14 @@ function HubWaitingScreen({
           <span>TaskDock</span>
         </div>
         <p className="eyebrow">DESKTOP CONNECTION</p>
-        <h1>等待中枢初始化</h1>
-        <p className="auth-intro">已连接到中枢，但部署者还没有完成首次 Owner 初始化。</p>
+        <h1>等待服务器准备就绪</h1>
+        <p className="auth-intro">服务器已经连接，但管理员还没有完成首次初始化。</p>
         <div className="bootstrap-notice" role="status">
-          <strong>请先完成中枢部署</strong>
-          <span>
-            初始化令牌只在部署中枢时使用。请让部署者在服务器端完成首次 Owner
-            初始化，完成后点击重试即可登录。
-          </span>
+          <strong>请先完成服务器初始化</strong>
+          <span>请让管理员在服务器端完成首次初始化，完成后点击“重新检查”即可登录。</span>
         </div>
         <div className="hub-origin-card">
-          <span>当前中枢</span>
+          <span>当前服务器</span>
           <code>{origin}</code>
         </div>
         <div className="hub-check-row">
@@ -491,7 +489,7 @@ function HubWaitingScreen({
             重新检查
           </Button>
           <Button variant="tonal" type="button" onClick={onChangeOrigin}>
-            更换中枢
+            更换服务器
           </Button>
         </div>
       </div>
@@ -499,7 +497,7 @@ function HubWaitingScreen({
         <span className="aside-number">02</span>
         <p>部署完成，再开始。</p>
         <span className="aside-rule" />
-        <small>桌面端不会代替部署者创建 Owner，初始化仍由中枢服务端负责。</small>
+        <small>初始化需要由服务器管理员完成，客户端不会替管理员创建账号。</small>
       </aside>
     </main>
   );
@@ -517,6 +515,7 @@ function AuthenticatedApp() {
   const [mobileActionOpen, setMobileActionOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [toast, setToast] = useState('');
   const [selectedTask, setSelectedTask] = useSearchParams();
   const activeFolderId = /^\/tree\/([^/]+)/.exec(location.pathname)?.[1] ?? null;
   const defaultTaskFolderId =
@@ -570,14 +569,22 @@ function AuthenticatedApp() {
     window.addEventListener('devtodo:native-back', listener);
     return () => window.removeEventListener('devtodo:native-back', listener);
   }, [closeTask, commandOpen, mobileActionOpen, mobileSidebarOpen, quickOpen, selectedTask]);
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const message = (event as CustomEvent<{ message?: string }>).detail?.message;
+      if (message) setToast(message);
+    };
+    window.addEventListener('devtodo:toast', listener);
+    return () => window.removeEventListener('devtodo:toast', listener);
+  }, []);
   const navItems = useMemo<NavigationDestination[]>(
     () => [
       { to: '/today', label: '今日', icon: <Target size={20} /> },
-      { to: '/tree', label: '目录', icon: <LayoutList size={20} /> },
-      { to: '/tasks', label: '所有任务', icon: <ListChecksIcon size={20} /> },
+      { to: '/tree', label: '任务库', icon: <LayoutList size={20} /> },
+      { to: '/tasks', label: '全部任务', icon: <ListChecksIcon size={20} /> },
       { to: '/workflows', label: '流程', icon: <WorkflowIcon size={20} /> },
       { to: '/time/calendar', label: '日历', icon: <CalendarDays size={20} /> },
-      { to: '/time/events', label: '时间点', icon: <Clock3 size={20} /> },
+      { to: '/time/events', label: '事件', icon: <Clock3 size={20} /> },
       { to: '/archive', label: '归档', icon: <Archive size={20} /> },
       { to: '/settings', label: '设置', icon: <Settings size={20} /> },
     ],
@@ -587,9 +594,9 @@ function AuthenticatedApp() {
   const compactNavItems = useMemo<NavigationDestination[]>(
     () => [
       { to: '/today', label: '今日', icon: <Target size={22} /> },
-      { to: '/tree', label: '目录', icon: <LayoutList size={22} /> },
+      { to: '/tree', label: '任务库', icon: <LayoutList size={22} /> },
       { to: '/workflows', label: '流程', icon: <WorkflowIcon size={22} /> },
-      { to: '/time', label: '时间', icon: <Clock3 size={22} /> },
+      { to: '/time', label: '计划', icon: <Clock3 size={22} /> },
       { to: '/more', label: '更多', icon: <MoreHorizontal size={22} /> },
     ],
     [],
@@ -598,7 +605,7 @@ function AuthenticatedApp() {
     const path = location.pathname;
     return (
       compactNavItems.find((item) => path === item.to || path.startsWith(`${item.to}/`))?.to ??
-      compactNavItems[0]!.to
+      '/more'
     );
   }, [compactNavItems, location.pathname]);
   const activeExpanded = useMemo(() => {
@@ -630,15 +637,28 @@ function AuthenticatedApp() {
         onClick?: () => void;
       }) {
         return (
-          <NavLink
+          <Link
             to={to}
             className={className}
             aria-current={ariaCurrent}
             tabIndex={tabIndex}
-            onClick={onClick}
+            onClick={(event) => {
+              if (
+                event.button !== 0 ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              )
+                return;
+              if (onClick) {
+                event.preventDefault();
+                onClick();
+              }
+            }}
           >
             {children}
-          </NavLink>
+          </Link>
         );
       },
     [],
@@ -747,7 +767,7 @@ function AuthenticatedApp() {
                     }}
                     options={[
                       { id: 'search', label: '搜索任务和备注', icon: <Search size={18} /> },
-                      { id: 'tasks', label: '打开所有任务', icon: <ListChecksIcon size={18} /> },
+                      { id: 'tasks', label: '打开全部任务', icon: <ListChecksIcon size={18} /> },
                     ]}
                     onSelect={(id) => {
                       if (id === 'search') setCommandOpen(true);
@@ -868,6 +888,7 @@ function AuthenticatedApp() {
         onClose={closeTask}
         onChanged={() => window.dispatchEvent(new Event('devtodo:data-changed'))}
       />
+      {toast && <Snackbar message={toast} onDismiss={() => setToast('')} />}
       <ConfirmDialog
         open={logoutConfirmOpen}
         title="退出登录"
@@ -926,7 +947,7 @@ function LoginScreen({
       setHubCheck('success');
       setHubInitialized(status.initialized);
       setHubCheckMessage(
-        status.initialized ? '连接成功 · Owner 已初始化' : '连接成功 · 等待部署者初始化',
+        status.initialized ? '服务器已连接，可以登录' : '服务器已连接，等待管理员完成初始化',
       );
       return status.initialized;
     } catch (cause) {
@@ -936,7 +957,7 @@ function LoginScreen({
           ? '连接超时，请检查地址、证书和网络'
           : cause instanceof Error
             ? cause.message
-            : '无法连接中枢，请检查地址、证书和网络',
+            : '无法连接服务器，请检查地址、证书和网络',
       );
       return null;
     } finally {
@@ -958,7 +979,7 @@ function LoginScreen({
         }
       }
       if (!nextInitialized) {
-        setError('中枢尚未完成初始化，请先在部署中枢时完成 Owner 初始化。');
+        setError('服务器尚未准备好，请让管理员完成首次初始化。');
         return;
       }
       await auth.login(username, password, desktopClient ? '桌面端' : '浏览器');
@@ -976,24 +997,21 @@ function LoginScreen({
           <span>TaskDock</span>
         </div>
         <p className="eyebrow">PERSONAL DEV WORKSPACE</p>
-        <h1>{hubInitialized ? '欢迎回来' : '等待中枢初始化'}</h1>
+        <h1>{hubInitialized ? '欢迎回来' : '等待服务器准备就绪'}</h1>
         <p className="auth-intro">一个任务本体，多处安排。离线时也能继续捕获和整理。</p>
         {desktopClient && onChangeHub && (
           <div className="hub-origin-card login-hub-origin">
-            <span>当前中枢</span>
+            <span>当前服务器</span>
             <code>{hubOrigin}</code>
             <Button variant="text" type="button" onClick={onChangeHub}>
-              更换中枢
+              更换服务器
             </Button>
           </div>
         )}
         {!hubInitialized && (
           <div className="bootstrap-notice" role="status">
-            <strong>请先完成中枢部署</strong>
-            <span>
-              初始化令牌只在部署中枢时使用。请让部署者在服务器端完成首次 Owner
-              初始化，完成后刷新此页面即可登录。
-            </span>
+            <strong>请先完成服务器初始化</strong>
+            <span>请让管理员在服务器端完成首次初始化，完成后刷新此页面即可登录。</span>
           </div>
         )}
         {isHttpOrigin(nativeClient ? hubOrigin : window.location.origin) && (
@@ -1006,7 +1024,7 @@ function LoginScreen({
           {mobileClient && (
             <>
               <Field
-                label="中枢 HTTP/HTTPS 地址"
+                label="服务器 HTTP/HTTPS 地址"
                 value={hubOrigin}
                 onChange={(value) => {
                   hubOriginEdited.current = true;
@@ -1033,7 +1051,7 @@ function LoginScreen({
                 )}
               </div>
               <p className="field-help">
-                首次使用先填写自托管中枢地址，例如 https://todo.example.com；也支持外网或内网
+                首次使用先填写 TaskDock 服务器地址，例如 https://todo.example.com；也支持外网或内网
                 http:// 地址，但密码和会话信息会明文传输。
               </p>
             </>
@@ -1068,7 +1086,7 @@ function LoginScreen({
         <span className="aside-number">01</span>
         <p>先捕获，再安排。</p>
         <span className="aside-rule" />
-        <small>Task 与 Placement 分离，今天、明天和事件共享同一个真实状态。</small>
+        <small>任务与安排分离，今天、明天和事件共享同一个真实状态。</small>
       </aside>
     </main>
   );
@@ -1115,8 +1133,8 @@ function TimeHubPage() {
     <div className="page">
       <PageHeader
         eyebrow="TIME"
-        title="时间"
-        description="日期和自定义时间点都是安排位置；任务本体不会因为换了时间而复制。"
+        title="计划"
+        description="按日期或事件安排任务；安排只是任务的一个位置，不会复制任务本体。"
       />
       <div className="more-grid time-hub-grid">
         <NavLink to={`/time/calendar/${localDate}`} className="more-link-card">
@@ -1124,8 +1142,8 @@ function TimeHubPage() {
             <CalendarDays size={20} />
           </span>
           <span>
-            <strong>日期日历</strong>
-            <small>按月查看每日安排，今天是 {localDate}。</small>
+            <strong>日历</strong>
+            <small>按月查看日期安排，今天是 {localDate}。</small>
           </span>
           <ChevronRight size={16} />
         </NavLink>
@@ -1134,8 +1152,8 @@ function TimeHubPage() {
             <Clock3 size={20} />
           </span>
           <span>
-            <strong>自定义时间点</strong>
-            <small>管理事件节点、到达状态和其中的任务安排。</small>
+            <strong>事件</strong>
+            <small>管理项目节点、到达状态和其中的任务安排。</small>
           </span>
           <ChevronRight size={16} />
         </NavLink>
@@ -1150,7 +1168,7 @@ function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
     {
       to: '/archive',
       label: '归档',
-      description: '恢复已归档的文件夹、任务和时间点。',
+      description: '恢复已归档的文件夹、任务和事件。',
       icon: Archive,
     },
     {
@@ -1165,7 +1183,7 @@ function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
       <PageHeader
         eyebrow="MORE"
         title="更多"
-        description="次要入口集中在这里，底部导航保持专注于今天、目录和时间。"
+        description="次要入口集中在这里，底部导航保持专注于今天、任务库和计划。"
       />
       <button className="more-search-button" onClick={onOpenSearch}>
         <Search size={18} />
@@ -1350,6 +1368,7 @@ function QuickCapture({
       setTitle('');
       await onCreated?.(task);
       window.dispatchEvent(new Event('devtodo:data-changed'));
+      window.dispatchEvent(new CustomEvent('devtodo:toast', { detail: { message: '任务已创建' } }));
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '创建任务失败，请重试');
     } finally {
@@ -1367,8 +1386,15 @@ function QuickCapture({
         value={title}
         onChange={(event) => setTitle(event.target.value)}
         placeholder="现在要记下什么？"
+        enterKeyHint="done"
       />
-      <kbd aria-hidden="true">↵</kbd>
+      {title.trim() ? (
+        <IconButton label="创建任务" type="submit" disabled={busy}>
+          <Plus size={20} />
+        </IconButton>
+      ) : (
+        <kbd aria-hidden="true">↵</kbd>
+      )}
       {error && (
         <span className="capture-error" role="alert">
           {error}
@@ -1429,6 +1455,11 @@ function QuickCaptureDialog({
         }
       }
       window.dispatchEvent(new Event('devtodo:data-changed'));
+      window.dispatchEvent(
+        new CustomEvent('devtodo:toast', {
+          detail: { message: placeTaskOnToday ? '任务已创建并安排到今天' : '任务已创建' },
+        }),
+      );
       onClose();
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '创建失败，请重试');
@@ -1521,17 +1552,10 @@ function CommandPalette({
     }
     const timer = window.setTimeout(() => {
       void requestV2<{ items: TreeTaskDto[] }>(
-        `/tasks?archived=${includeArchived ? 'true' : 'false'}`,
+        `/tasks?archived=${includeArchived ? 'true' : 'false'}&q=${encodeURIComponent(query.trim())}`,
       )
         .then((result) => {
-          const needle = query.trim().toLocaleLowerCase();
-          setItems(
-            result.items.filter(
-              (task) =>
-                task.title.toLocaleLowerCase().includes(needle) ||
-                task.referenceId.toLocaleLowerCase().includes(needle),
-            ),
-          );
+          setItems(result.items);
         })
         .catch(() => setItems([]));
     }, 180);
@@ -1570,7 +1594,7 @@ function CommandPalette({
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索任务和引用 ID…"
+            placeholder="搜索任务、备注或引用 ID…"
           />
           <label className="command-archive-toggle">
             <input
@@ -1621,7 +1645,7 @@ function CommandPalette({
             <span>
               <Command size={16} /> 输入关键词开始搜索
             </span>
-            <span>搜索任务标题和引用 ID</span>
+            <span>搜索任务标题、备注和引用 ID</span>
             <div className="command-actions">
               <button onClick={() => onQuickCapture('task')}>新建任务</button>
               <button
@@ -1661,6 +1685,7 @@ function StatusIcon({ status }: { status: TaskDto['status'] }) {
 }
 
 function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
+  const compact = useWindowSizeClass() === 'compact';
   const { settings } = useAuth();
   const localDate = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
   const defaultTaskFolderId = readRecentCaptureFolder(settings?.defaultCaptureTarget);
@@ -1754,7 +1779,9 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       <PageHeader
         eyebrow="今天"
         title={formatDate(localDate)}
-        description="把今天要处理的内容放在眼前，完成状态会同步到每一个安排位置。"
+        description={
+          compact ? undefined : '把今天要处理的内容放在眼前，完成状态会同步到每一个安排位置。'
+        }
         action={
           <Toolbar variant="floating" ariaLabel="今日操作" className="today-toolbar">
             <Button
@@ -1806,7 +1833,10 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             )}
           </div>
         </section>
-        <aside className="today-context" aria-labelledby="today-context-title">
+        <aside
+          className={`today-context${data.reachedEvents.length === 0 ? ' today-context--empty' : ''}`}
+          aria-labelledby="today-context-title"
+        >
           <div className="today-context-heading">
             <div>
               <span className="today-context-eyebrow">上下文</span>
@@ -1818,7 +1848,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           </div>
           {data.reachedEvents.length > 0 ? (
             <div className="today-context-events">
-              <span className="today-context-label">已到达的时间点</span>
+              <span className="today-context-label">已到达的事件</span>
               {data.reachedEvents.slice(0, 3).map((event) => (
                 <NavLink
                   key={event.id}
@@ -1835,7 +1865,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               ))}
               {data.reachedEvents.length > 3 && (
                 <NavLink to="/time/events" className="today-context-more">
-                  查看全部时间点
+                  查看全部事件
                 </NavLink>
               )}
             </div>
@@ -1844,7 +1874,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               <span className="today-context-note-icon" aria-hidden="true">
                 <Target size={18} />
               </span>
-              <p>没有已到达的事件。任务状态与时间点状态始终独立。</p>
+              <p>没有已到达的事件。任务完成状态与事件到达状态始终独立。</p>
             </div>
           )}
         </aside>
@@ -1858,23 +1888,6 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       {rolloverError && (
         <ErrorState error={rolloverError} onRetry={() => void (rollover ? undo() : doRollover())} />
       )}
-      <section className="capture-zone" aria-labelledby="capture-zone-title">
-        <div className="capture-zone-copy">
-          <span className="capture-zone-eyebrow">捕获</span>
-          <h2 id="capture-zone-title">先记下来，再决定怎么安排</h2>
-          <p>今天页面创建的任务会自动获得今天的安排位置。</p>
-        </div>
-        <QuickCapture
-          defaultTaskFolderId={defaultTaskFolderId}
-          onCreated={async (task) => {
-            const point =
-              data.point ??
-              ((await mutationV2('POST', '/time-points/date', { localDate })) as TimePointDto);
-            await mutationV2('POST', '/placements', { taskId: task.id, timePointId: point.id });
-            await reload();
-          }}
-        />
-      </section>
       {error && <ErrorState error={error} onRetry={() => void reload()} />}
       {loading ? (
         <SkeletonList />
@@ -1890,7 +1903,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               onChanged={() => void reload()}
               onMove={movePlacement}
               emptyTitle="今天还没有安排"
-              emptyDescription="可以从所有任务中安排内容，或先捕获一个位于最近目录的任务。"
+              emptyDescription="可以从全部任务中安排内容，或先捕获一个位于最近目录的任务。"
               emptyAction={
                 data.point ? (
                   <Button
@@ -1942,6 +1955,23 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           </aside>
         </section>
       )}
+      <section className="capture-zone" aria-labelledby="capture-zone-title">
+        <div className="capture-zone-copy">
+          <span className="capture-zone-eyebrow">捕获</span>
+          <h2 id="capture-zone-title">先记下来，再决定怎么安排</h2>
+          <p>今天创建的任务会自动安排到今天；需要整理时再移动到其他日期或事件。</p>
+        </div>
+        <QuickCapture
+          defaultTaskFolderId={defaultTaskFolderId}
+          onCreated={async (task) => {
+            const point =
+              data.point ??
+              ((await mutationV2('POST', '/time-points/date', { localDate })) as TimePointDto);
+            await mutationV2('POST', '/placements', { taskId: task.id, timePointId: point.id });
+            await reload();
+          }}
+        />
+      </section>
       {showTaskPicker && data.point && (
         <AddTaskModal
           pointId={data.point.id}
@@ -2010,7 +2040,7 @@ function EventsPage() {
       await reload();
       window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
-      setActionError(cause instanceof ApiError ? cause.message : '时间点排序失败，请重试');
+      setActionError(cause instanceof ApiError ? cause.message : '事件排序失败，请重试');
     }
   };
   const restoreEvent = async (point: TimePointDto) => {
@@ -2021,7 +2051,7 @@ function EventsPage() {
       await mutationV2('POST', `/time-points/${point.id}/restore`, { baseVersion: point.version });
       await reload();
     } catch (cause) {
-      setActionError(cause instanceof ApiError ? cause.message : '恢复时间点失败，请重试');
+      setActionError(cause instanceof ApiError ? cause.message : '恢复事件失败，请重试');
     } finally {
       setRestoreBusyId(null);
     }
@@ -2039,9 +2069,9 @@ function EventsPage() {
           <EventCount count={data.counts[point.id]?.openCount} />
           <ChevronRight size={16} />
         </NavLink>
-        <div className="timeline-actions" aria-label="时间点操作">
+        <div className="timeline-actions" aria-label="事件操作">
           <IconButton
-            label="上移时间点"
+            label="上移事件"
             type="submit"
             onClick={() => void moveEvent(point.id, 'up')}
             disabled={index <= 0}
@@ -2049,7 +2079,7 @@ function EventsPage() {
             <ChevronUp size={16} />
           </IconButton>
           <IconButton
-            label="下移时间点"
+            label="下移事件"
             type="submit"
             onClick={() => void moveEvent(point.id, 'down')}
             disabled={index < 0 || index >= data.active.length - 1}
@@ -2071,12 +2101,12 @@ function EventsPage() {
   return (
     <div className="page">
       <PageHeader
-        eyebrow="TIME POINTS"
-        title="时间点"
-        description="事件有自己的生命周期，不会自动完成或移动其中的任务。"
+        eyebrow="EVENTS"
+        title="事件"
+        description="事件有自己的生命周期；任务完成状态与事件到达状态彼此独立。"
         action={
           <Button leadingIcon={<Plus size={16} />} onClick={() => setOpen(true)}>
-            新建时间点
+            新建事件
           </Button>
         }
       />
@@ -2089,7 +2119,7 @@ function EventsPage() {
           {data.active.length > 0 && (
             <div className="timeline-list">
               <SectionTitle
-                title="进行中的时间点"
+                title="进行中的事件"
                 count={data.active.length}
                 action={
                   <span className="muted-label">
@@ -2123,7 +2153,7 @@ function EventsPage() {
                       disabled={restoreBusyId === point.id}
                       onClick={() => void restoreEvent(point)}
                     >
-                      {restoreBusyId === point.id ? '恢复中…' : '恢复时间点'}
+                      {restoreBusyId === point.id ? '恢复中…' : '恢复事件'}
                     </Button>
                   </div>
                 </div>
@@ -2134,11 +2164,11 @@ function EventsPage() {
       ) : (
         <EmptyState
           icon={<Clock3 size={20} />}
-          title="还没有自定义时间点"
+          title="还没有自定义事件"
           description="例如“Codex 额度重置后”或下一次发布窗口。"
           action={
             <Button leadingIcon={<Plus size={16} />} onClick={() => setOpen(true)}>
-              创建时间点
+              创建事件
             </Button>
           }
         />
@@ -2187,7 +2217,7 @@ function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreat
     }
   };
   return (
-    <Modal title="新建时间点" onClose={onClose}>
+    <Modal title="新建事件" onClose={onClose}>
       <form className="stack-form" onSubmit={submit}>
         <Field label="名称" value={title} onChange={setTitle} autoComplete="off" />
         <p className="field-help">
@@ -2200,7 +2230,7 @@ function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreat
           type="submit"
           disabled={busy || !title.trim()}
         >
-          {busy ? '创建中…' : '创建时间点'}
+          {busy ? '创建中…' : '创建事件'}
         </Button>
       </form>
     </Modal>
@@ -2237,7 +2267,7 @@ function EditEventModal({
     }
   };
   return (
-    <Modal title="编辑时间点" onClose={onClose}>
+    <Modal title="编辑事件" onClose={onClose}>
       <form className="stack-form" onSubmit={submit}>
         <Field label="名称" value={title} onChange={setTitle} autoComplete="off" />
         {error && (
@@ -2251,7 +2281,7 @@ function EditEventModal({
           type="submit"
           disabled={busy || !title.trim()}
         >
-          {busy ? '保存中…' : '保存时间点'}
+          {busy ? '保存中…' : '保存事件'}
         </Button>
       </form>
     </Modal>
@@ -2360,7 +2390,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               disabled={Boolean(point.archivedAt) || actionBusy}
               onClick={() => setEditOpen(true)}
             >
-              编辑时间点
+              编辑事件
             </Button>
             <Button
               variant="outlined"
@@ -2380,7 +2410,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                   : setArchiveConfirmOpen(true)
               }
             >
-              {point.archivedAt ? '恢复时间点' : point.reachedAt ? '归档时间点' : '标记已到达'}
+              {point.archivedAt ? '恢复事件' : point.reachedAt ? '归档事件' : '标记已到达'}
             </Button>
           </div>
         }
@@ -2389,7 +2419,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         <span className={`event-state ${point.reachedAt ? 'reached' : ''}`}>
           {point.archivedAt ? '已归档' : point.reachedAt ? '已到达' : '等待中'}
         </span>
-        <span>任务状态与时间点状态互不影响</span>
+        <span>任务完成状态与事件到达状态互不影响</span>
       </div>
       <SectionTitle
         title="安排在这里"
@@ -2413,7 +2443,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         onChanged={() => void load()}
         onMove={point.archivedAt ? undefined : movePlacement}
         readOnly={Boolean(point.archivedAt)}
-        emptyTitle="这个时间点还没有安排"
+        emptyTitle="这个事件还没有安排"
         emptyDescription="从任务库加入已有任务；它不会创建新的 Task。"
         emptyAction={
           <Button leadingIcon={<Plus size={16} />} onClick={() => setShowAdd(true)}>
@@ -2445,9 +2475,9 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       )}
       {archiveConfirmOpen && (
         <ConfirmDialog
-          title="归档时间点"
-          description={`确定要归档“${point.title ?? ''}”吗？其中的任务安排会保留，但这个时间点将从默认列表隐藏；之后可以从归档中心恢复。`}
-          confirmLabel="归档时间点"
+          title="归档事件"
+          description={`确定要归档“${point.title ?? ''}”吗？其中的任务安排会保留，但这个事件将从默认列表隐藏；之后可以从归档中心恢复。`}
+          confirmLabel="归档事件"
           error={error}
           onClose={() => setArchiveConfirmOpen(false)}
           onConfirm={changeEventState}
@@ -2618,7 +2648,7 @@ function PlacementRow({
       {!readOnly && (
         <div ref={menuRef} className="task-actions">
           <IconButton
-            label="安排操作（也可长按安排行）"
+            label="安排操作"
             type="submit"
             aria-expanded={menu}
             aria-haspopup="menu"
@@ -2653,7 +2683,7 @@ function PlacementRow({
                 }}
               >
                 <Target size={16} />
-                移动到其他时间点
+                移动到其他事件
               </button>
               <button
                 role="menuitem"
@@ -2663,7 +2693,7 @@ function PlacementRow({
                 }}
               >
                 <Copy size={16} />
-                再安排到其他时间点
+                再安排到其他事件
               </button>
             </div>
           )}
@@ -2824,7 +2854,7 @@ function EventTargetField({
   const eventPoints = points.filter((point) => point.type === 'EVENT');
   return (
     <div className="field">
-      <span>选择自定义时间点</span>
+      <span>选择事件</span>
       {createOpen ? (
         <InlineEventCreator
           onCancel={() => setCreateOpen(false)}
@@ -2836,7 +2866,7 @@ function EventTargetField({
       ) : (
         <>
           <Select
-            label="选择自定义时间点"
+            label="选择事件"
             value={value}
             onChange={onChange}
             options={[
@@ -2849,11 +2879,11 @@ function EventTargetField({
           />
           <div className="event-target-actions">
             <small className="field-help">
-              {eventPoints.length ? '也可以新建一个自定义时间点。' : '还没有可用的自定义时间点。'}
+              {eventPoints.length ? '也可以新建一个事件。' : '还没有可用的事件。'}
             </small>
             <Button variant="text" type="button" onClick={() => setCreateOpen(true)}>
               <Plus size={16} />
-              新建时间点
+              新建事件
             </Button>
           </div>
         </>
@@ -2881,14 +2911,14 @@ function InlineEventCreator({
         (await mutationV2('POST', '/time-points/events', { title: title.trim() })) as TimePointDto,
       );
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : '创建时间点失败，请重试');
+      setError(cause instanceof ApiError ? cause.message : '创建事件失败，请重试');
     } finally {
       setBusy(false);
     }
   };
   return (
     <div className="inline-event-creator">
-      <Field label="时间点名称" value={title} onChange={setTitle} autoFocus autoComplete="off" />
+      <Field label="事件名称" value={title} onChange={setTitle} autoFocus autoComplete="off" />
       {error && (
         <div className="form-error" role="alert">
           {error}
@@ -2934,7 +2964,7 @@ function PlacementTargetModal({
   useEffect(() => {
     void requestV2<{ items: TimePointDto[] }>('/time-points?archived=false')
       .then((result) => setPoints(result.items))
-      .catch((cause) => setError(cause instanceof ApiError ? cause.message : '时间点加载失败'));
+      .catch((cause) => setError(cause instanceof ApiError ? cause.message : '事件加载失败'));
   }, []);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -2951,7 +2981,7 @@ function PlacementTargetModal({
         ).id;
       if (!nextId) throw new Error('请选择事件或输入日期');
       if (mode === 'move' && nextId === placement.timePointId)
-        throw new Error('目标时间点不能与当前位置相同');
+        throw new Error('目标事件不能与当前位置相同');
       await mutationV2(
         'POST',
         `/placements/${placement.id}/${mode}`,
@@ -2973,7 +3003,7 @@ function PlacementTargetModal({
     }
   };
   return (
-    <Modal title={mode === 'move' ? '移动到其他时间点' : '再安排到其他时间点'} onClose={onClose}>
+    <Modal title={mode === 'move' ? '移动到其他事件' : '再安排到其他事件'} onClose={onClose}>
       <form className="stack-form" onSubmit={submit}>
         <p className="field-help">
           {mode === 'move'
@@ -2985,7 +3015,7 @@ function PlacementTargetModal({
           value={targetKind}
           options={[
             { value: 'date' as const, label: '日期' },
-            { value: 'event' as const, label: '自定义时间点' },
+            { value: 'event' as const, label: '事件' },
           ]}
           onChange={(nextMode) => {
             setTargetKind(nextMode);
@@ -3038,7 +3068,7 @@ function PlacementTargetModal({
           className="wide"
           disabled={busy || (targetKind === 'event' ? !targetId : !localDate)}
         >
-          {busy ? '处理中…' : mode === 'move' ? '移动安排' : '创建副本安排'}
+          {busy ? '处理中…' : mode === 'move' ? '移动安排' : '添加另一份安排'}
         </Button>
       </form>
     </Modal>
@@ -3532,11 +3562,11 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           onRetry={() => void reloadAll()}
         />
       )}
-      <SectionTitle title="目录级联归档" count={operations.data.length} />
+      <SectionTitle title="整棵目录归档" count={operations.data.length} />
       {operations.initialLoading ? (
         <SkeletonList />
       ) : operations.data.length === 0 ? (
-        <div className="quiet-empty">没有目录级联归档</div>
+        <div className="quiet-empty">没有整棵目录归档记录</div>
       ) : (
         <div className="archive-project-list">
           {operations.data.map((operation) => {
@@ -3611,13 +3641,13 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           })}
         </div>
       )}
-      <SectionTitle title="独立归档任务" count={looseTasks.length} />
+      <SectionTitle title="单独归档的任务" count={looseTasks.length} />
       {tasks.initialLoading ? (
         <SkeletonList />
       ) : (
         <div className="task-list">
           {looseTasks.length === 0 ? (
-            <div className="quiet-empty">没有独立归档任务</div>
+            <div className="quiet-empty">没有单独归档的任务</div>
           ) : (
             looseTasks.map((task) => (
               <div className="task-row" key={task.id}>
@@ -3650,7 +3680,7 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       )}
       {(folders.initialLoading || looseFolders.length > 0) && (
         <>
-          <SectionTitle title="独立归档文件夹" count={looseFolders.length} />
+          <SectionTitle title="单独归档的文件夹" count={looseFolders.length} />
           {folders.initialLoading ? (
             <SkeletonList />
           ) : (
@@ -3662,7 +3692,7 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                     <small>
                       {folder.archivedByOperationId
                         ? '来自批量归档操作'
-                        : '独立归档（需先恢复父目录）'}
+                        : '单独归档（需先恢复父目录）'}
                     </small>
                   </span>
                   <Button
@@ -3685,7 +3715,7 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       )}
       {(events.initialLoading || events.data.length > 0) && (
         <>
-          <SectionTitle title="时间点" count={events.data.length} />
+          <SectionTitle title="事件" count={events.data.length} />
           {events.initialLoading ? (
             <SkeletonList />
           ) : (
@@ -3712,7 +3742,7 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                       })
                     }
                   >
-                    {busyId === event.id ? '恢复中…' : '恢复时间点'}
+                    {busyId === event.id ? '恢复中…' : '恢复事件'}
                   </Button>
                 </div>
               ))}
@@ -3834,8 +3864,14 @@ function SettingsPage() {
             </div>
           ))}
         </div>
-        <ConflictSection />
-        <RejectedMutationSection />
+        <details className="settings-advanced">
+          <summary>
+            <span>高级同步与故障处理</span>
+            <small>只在出现冲突或同步停滞时打开</small>
+          </summary>
+          <ConflictSection />
+          <RejectedMutationSection />
+        </details>
         <div className="settings-actions">
           <Button variant="filled" type="submit">
             保存设置
@@ -3881,7 +3917,7 @@ function HubSettingsSection() {
       await setHubOrigin(nextOrigin);
       if (currentOrigin !== nextOrigin) await auth.logout();
       setState('success');
-      setMessage(status.initialized ? '连接成功，正在切换中枢…' : '连接成功，等待中枢初始化…');
+      setMessage(status.initialized ? '连接成功，正在切换服务器…' : '连接成功，等待服务器初始化…');
       window.setTimeout(() => window.location.reload(), 250);
     } catch (cause) {
       setState('error');
@@ -3890,7 +3926,7 @@ function HubSettingsSection() {
           ? '连接超时，请检查地址、证书和网络'
           : cause instanceof Error
             ? cause.message
-            : '无法连接中枢',
+            : '无法连接服务器',
       );
     } finally {
       window.clearTimeout(timeout);
@@ -3898,13 +3934,12 @@ function HubSettingsSection() {
   };
   return (
     <div className="settings-section hub-settings-section">
-      <h2>中枢连接</h2>
+      <h2>服务器连接</h2>
       <p className="field-help">
-        修改前会先测试新地址。切换后会清理当前设备会话并重新载入，旧中枢的 refresh token
-        不会带到新中枢。
+        修改前会先测试新地址。切换后会重新登录，旧服务器的会话不会带到新服务器。
       </p>
       <label className="field">
-        <span>中枢地址</span>
+        <span>服务器地址</span>
         <input
           type="url"
           value={origin}
@@ -4215,18 +4250,18 @@ function isHttpOrigin(value: string): boolean {
 
 function breadcrumb(pathname: string): string {
   if (pathname.startsWith('/today')) return '今日';
-  if (pathname.startsWith('/tree')) return '目录';
-  if (pathname.startsWith('/tasks')) return '任务库';
+  if (pathname.startsWith('/tree')) return '任务库';
+  if (pathname.startsWith('/tasks')) return '任务库 / 全部任务';
   if (pathname.startsWith('/workflows')) return '流程';
   if (
     pathname.startsWith('/projects') ||
     pathname.startsWith('/inbox') ||
     pathname.startsWith('/misc')
   )
-    return '目录';
-  if (pathname.startsWith('/time/calendar')) return '时间 / 日历';
-  if (pathname.startsWith('/time/events')) return '时间 / 时间点';
-  if (pathname === '/time' || pathname.startsWith('/time/')) return '时间';
+    return '任务库';
+  if (pathname.startsWith('/time/calendar')) return '计划 / 日历';
+  if (pathname.startsWith('/time/events')) return '计划 / 事件';
+  if (pathname === '/time' || pathname.startsWith('/time/')) return '计划';
   if (pathname.startsWith('/archive')) return '归档';
   if (pathname.startsWith('/settings')) return '设置';
   return 'TaskDock';

@@ -221,7 +221,7 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
     );
     await expect(drawer).toBeHidden();
     await menuButton.click();
-    await drawer.getByRole('link', { name: '设置' }).click();
+    await drawer.getByRole('link', { name: '设置', exact: true }).click();
     await expect(page).toHaveURL(/\/settings$/);
     await expect(drawer).toBeHidden();
     await page

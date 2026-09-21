@@ -466,6 +466,8 @@ class SyncEngine(
             "workflowStage.create", "workflowStage.update", "workflowStage.move", "workflowStage.delete",
             "workflowTask.add", "workflowTask.move", "workflowTask.remove" ->
                 Mutation(item.mutationId, item.command, item.entityId, item.baseVersion, item.occurredAt, payload)
+            "settings.update" ->
+                Mutation(item.mutationId, item.command, item.entityId, item.baseVersion, item.occurredAt, payload)
             else -> return markUpgradeRequired(item)
         }
         return ConvertedOutbox(item, converted)
@@ -504,7 +506,18 @@ class SyncEngine(
                 db.workflowDao().upsertMemberships(snapshot.workflowTaskMemberships.filter { it.ownerId == null || it.ownerId == ownerId }.map { membershipEntity(it, ownerId, now) })
                 db.archiveOperationDao().upsertAll(snapshot.archiveOperations.filter { it.ownerId == null || it.ownerId == ownerId }.map { archiveEntity(it, ownerId, now) })
                 snapshot.settings?.takeIf { it.ownerId == ownerId }?.let { settings ->
-                    db.settingsDao().upsertSettings(SettingsEntity(ownerId, settings.timezone, settings.defaultCaptureTarget, null, settings.weekStartsOn, settings.updatedAt ?: now, settings.updatedAt ?: now))
+                    db.settingsDao().upsertSettings(
+                        SettingsEntity(
+                            ownerId = ownerId,
+                            timezone = settings.timezone,
+                            defaultCaptureTarget = settings.defaultCaptureTarget,
+                            recentProjectId = null,
+                            weekStartsOn = settings.weekStartsOn,
+                            createdAt = settings.updatedAt ?: now,
+                            updatedAt = settings.updatedAt ?: now,
+                            version = settings.version,
+                        )
+                    )
                 }
                 db.syncMetaDao().set(SyncMetaEntity("protocol:$ownerId", "2"))
             }
@@ -718,6 +731,24 @@ class SyncEngine(
                         if (c.operation == "delete") {
                             db.placementDao().deletePlacement(c.entityId, ownerId)
                         }
+                    }
+                }
+                "settings" -> {
+                    c.snapshot?.let {
+                        val settings = api.json.decodeFromJsonElement<V2SettingsDto>(it)
+                        if (settings.ownerId != ownerId) return@let
+                        db.settingsDao().upsertSettings(
+                            SettingsEntity(
+                                ownerId = settings.ownerId,
+                                timezone = settings.timezone,
+                                defaultCaptureTarget = settings.defaultCaptureTarget,
+                                recentProjectId = null,
+                                weekStartsOn = settings.weekStartsOn,
+                                createdAt = settings.updatedAt ?: now,
+                                updatedAt = settings.updatedAt ?: now,
+                                version = settings.version,
+                            )
+                        )
                     }
                 }
                 "note" -> {

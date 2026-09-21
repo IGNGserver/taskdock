@@ -18,8 +18,11 @@ import './styles/responsive.css';
 import { App } from './App.js';
 import { AuthProvider } from './auth.js';
 import { installTheme } from './theme.js';
+import { installMobileViewport } from './mobile-viewport.js';
 
 installTheme();
+const disposeMobileViewport = installMobileViewport();
+if (import.meta.hot) import.meta.hot.dispose(disposeMobileViewport);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

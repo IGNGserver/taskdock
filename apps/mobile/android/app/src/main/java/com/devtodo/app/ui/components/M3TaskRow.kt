@@ -65,7 +65,15 @@ fun M3TaskRow(
         leadingContent = {
             Checkbox(
                 checked = task.status == TaskStatus.DONE,
-                onCheckedChange = { onStatusToggle(if (it) TaskStatus.DONE else TaskStatus.TODO) },
+                onCheckedChange = {
+                    onStatusToggle(
+                        when (task.status) {
+                            TaskStatus.TODO -> TaskStatus.IN_PROGRESS
+                            TaskStatus.IN_PROGRESS -> TaskStatus.DONE
+                            TaskStatus.DONE -> TaskStatus.TODO
+                        }
+                    )
+                },
                 modifier =
                     Modifier.semantics {
                         contentDescription = "${task.title}，完成状态"
