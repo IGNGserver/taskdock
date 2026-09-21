@@ -5,11 +5,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
-import androidx.compose.material3.adaptive.navigationsuite.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -53,64 +52,80 @@ fun TaskDockApp(
             navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
         }
     }
-    val adaptiveInfo = currentWindowAdaptiveInfo()
-    NavigationSuiteScaffold(
+    BoxWithConstraints(
         modifier =
             Modifier.fillMaxSize()
                 .background(MaterialTheme.colorScheme.surface)
                 .windowInsetsPadding(WindowInsets.safeDrawing),
-        layoutType =
-            if (primary) NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(adaptiveInfo)
-            else NavigationSuiteType.None,
-        navigationSuiteItems = {
-            BottomNavScreens.forEach { screen ->
-                item(
-                    selected = currentRoute == screen.route,
-                    onClick = { navigatePrimary(screen.route) },
-                    icon = { screen.icon?.let { Icon(it, null) } },
-                    label = { Text(screen.title) },
-                )
-            }
-        },
     ) {
+        val useNavigationRail = maxWidth >= 600.dp
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             snackbarHost = { SnackbarHost(snackbar) },
+            bottomBar = {
+                if (primary && !useNavigationRail) {
+                    NavigationBar {
+                        BottomNavScreens.forEach { screen ->
+                            NavigationBarItem(
+                                selected = currentRoute == screen.route,
+                                onClick = { navigatePrimary(screen.route) },
+                                icon = { screen.icon?.let { Icon(it, screen.title) } },
+                                label = { Text(screen.title) },
+                            )
+                        }
+                    }
+                }
+            },
         ) { padding ->
-            NavHost(
-                navController = navController,
-                startDestination = if (loggedIn) Screen.Today.route else Screen.Login.route,
+            Row(
                 modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
-                enterTransition = {
-                    if (BottomNavScreens.any { it.route == targetState.destination.route })
-                        fadeIn(
-                            tween(TaskDockMotion.NavigationMillis, easing = TaskDockMotion.Standard)
-                        )
-                    else
-                        fadeIn(
-                            tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard)
-                        ) +
-                            slideInHorizontally(
+            ) {
+                if (primary && useNavigationRail) {
+                    NavigationRail {
+                        BottomNavScreens.forEach { screen ->
+                            NavigationRailItem(
+                                selected = currentRoute == screen.route,
+                                onClick = { navigatePrimary(screen.route) },
+                                icon = { screen.icon?.let { Icon(it, screen.title) } },
+                                label = { Text(screen.title) },
+                            )
+                        }
+                    }
+                }
+                NavHost(
+                    navController = navController,
+                    startDestination = if (loggedIn) Screen.Today.route else Screen.Login.route,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    enterTransition = {
+                        if (BottomNavScreens.any { it.route == targetState.destination.route })
+                            fadeIn(
+                                tween(TaskDockMotion.NavigationMillis, easing = TaskDockMotion.Standard)
+                            )
+                        else
+                            fadeIn(
                                 tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard)
+                            ) +
+                                slideInHorizontally(
+                                    tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard)
+                                ) {
+                                    it / 12
+                                }
+                    },
+                    exitTransition = {
+                        fadeOut(tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard))
+                    },
+                    popEnterTransition = {
+                        fadeIn(tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard))
+                    },
+                    popExitTransition = {
+                        fadeOut(tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard)) +
+                            slideOutHorizontally(
+                                tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard)
                             ) {
                                 it / 12
                             }
-                },
-                exitTransition = {
-                    fadeOut(tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard))
-                },
-                popEnterTransition = {
-                    fadeIn(tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard))
-                },
-                popExitTransition = {
-                    fadeOut(tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard)) +
-                        slideOutHorizontally(
-                            tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard)
-                        ) {
-                            it / 12
-                        }
-                },
-            ) {
+                    },
+                ) {
                 composable(Screen.Login.route) {
                     LoginScreen(
                         viewModel = viewModel,
@@ -195,4 +210,5 @@ fun TaskDockApp(
             }
         }
     }
+}
 }
