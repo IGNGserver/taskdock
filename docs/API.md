@@ -10,7 +10,7 @@ v2 不再把 Project/Inbox/category/priority 作为产品模型。`GET /api/v2/t
 
 批量顺延使用 `POST /api/v2/dates/:localDate/rollover`，只把该日期仍处于活动状态的 Placement 复制到次日，跳过已完成或已归档任务；响应 `{ createdIds, skippedTaskIds, targetDate }`。撤销使用 `POST /api/v2/rollovers/undo`，body 传 `{ placementIds }`。该操作无服务端状态，可跨进程与重启使用；离线时不排队，直接 fail-closed。
 
-Task 详情通过 `GET /api/v2/tasks/:id` 聚合 Note、独立 TaskStep、Placement、Workflow Membership 和 Folder path。日期与 Event/Placement 使用 `/time-points`、`/placements` v2 路由；Workflow、Stage、Membership 使用 `/workflows`、`/workflow-stages` 和 `/workflow-memberships`。同一 Task 可以加入多个 Workflow，但同一 Workflow 只能有一个活动 Membership。
+`GET /api/v2/tasks?archived=false&q=...` 支持按任务标题、引用 ID 或备注内容搜索。Task 详情通过 `GET /api/v2/tasks/:id` 聚合 Note、独立 TaskStep、Placement、Workflow Membership 和 Folder path；每个 Placement 同时返回可直接展示的 `timePoint` 日期/事件信息。日期与 Event/Placement 使用 `/time-points`、`/placements` v2 路由；Workflow、Stage、Membership 使用 `/workflows`、`/workflow-stages` 和 `/workflow-memberships`。同一 Task 可以加入多个 Workflow，但同一 Workflow 只能有一个活动 Membership。
 
 v2 设置通过 `/api/v2/settings` 保存 `ROOT/RECENT_FOLDER` 目标；`GET /api/v2/status` 返回 `schemaVersion: 2`、支持的 API/sync 版本和 `minClientVersion`。v2 写入继续要求 `Idempotency-Key`、`X-Client-Id` 和适用的 `baseVersion`。
 

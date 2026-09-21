@@ -128,8 +128,8 @@ fun TreeScreen(
                     title = {
                         Text(
                             if (tab == 0)
-                                currentFolderId?.let { folderTitle(it, allFolders) } ?: "任务"
-                            else "任务"
+                                currentFolderId?.let { folderTitle(it, allFolders) } ?: "任务库"
+                            else "全部任务"
                         )
                     },
                     navigationIcon = {
@@ -151,7 +151,7 @@ fun TreeScreen(
                             )
                     },
                 )
-                WorkspaceTabs(listOf("目录", "全部任务"), tab) { tab = it }
+                WorkspaceTabs(listOf("任务库", "全部任务"), tab) { tab = it }
             }
         },
         floatingActionButton = {
@@ -241,7 +241,7 @@ fun TreeScreen(
         AlertDialog(
             onDismissRequest = { pendingDeleteFolder = null },
             title = { Text("处理目录树") },
-            text = { Text("选择归档整棵目录，或在线预览后永久删除。删除不会删除流程和时间点，但会删除其中的任务及其依赖。") },
+            text = { Text("选择归档整棵目录，或在线预览后永久删除。删除不会删除流程和事件，但会删除其中的任务及其依赖。") },
             confirmButton = {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(

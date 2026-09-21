@@ -37,14 +37,16 @@ fun SettingsScreen(
     val black by viewModel.pureBlack.collectAsStateWithLifecycle()
     val pending by viewModel.pendingOutboxItems.collectAsStateWithLifecycle()
     val conflicts by viewModel.unresolvedConflicts.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     var showHub by rememberSaveable { mutableStateOf(false) }
     var hub by rememberSaveable { mutableStateOf(viewModel.authManager.hubOrigin) }
     var confirmOrigin by rememberSaveable { mutableStateOf<String?>(null) }
     var logout by rememberSaveable { mutableStateOf(false) }
     var discard by remember { mutableStateOf<OutboxEntity?>(null) }
     var queue by rememberSaveable { mutableStateOf(false) }
+    var showTimezone by rememberSaveable { mutableStateOf(false) }
     WorkspaceScaffold(
-        topBar = { TopAppBar(title = { Text("设置") }, windowInsets = WindowInsets(0, 0, 0, 0)) }
+        topBar = { TopAppBar(title = { Text("更多") }, windowInsets = WindowInsets(0, 0, 0, 0)) }
     ) { padding ->
         Column(
             Modifier.fillMaxSize()
@@ -72,7 +74,7 @@ fun SettingsScreen(
                 )
             }
             ListItem(
-                headlineContent = { Text("中枢服务器") },
+                headlineContent = { Text("服务器连接") },
                 supportingContent = { Text(viewModel.authManager.hubOrigin) },
                 trailingContent = {
                     TextButton(
@@ -95,7 +97,7 @@ fun SettingsScreen(
             if (queue) {
                 if (conflicts.isNotEmpty())
                     Text(
-                        "冲突数据已保留，请在 Web 端选择要保留的版本。",
+                        "冲突数据已保留，请打开 Web 端的“更多 → 设置 → 高级同步与故障处理”选择要保留的版本。",
                         Modifier.padding(16.dp),
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -123,6 +125,53 @@ fun SettingsScreen(
                 if (pending.isEmpty() && conflicts.isEmpty())
                     Text("没有待处理项", Modifier.padding(16.dp))
             }
+            HorizontalDivider(Modifier.padding(vertical = 12.dp))
+            SectionHeading("日期与安排")
+            ListItem(
+                headlineContent = { Text("时区") },
+                supportingContent = {
+                    Text(timezoneLabel(settings?.timezone ?: "Asia/Shanghai"))
+                },
+                trailingContent = {
+                    TextButton(onClick = { showTimezone = true }) { Text("更改") }
+                },
+            )
+            Text(
+                "今日、日期安排和日历都会使用这个时区。",
+                Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text("每周开始于", Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp))
+            FlowRow(
+                Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(1 to "周一", 0 to "周日").forEach { (value, label) ->
+                    FilterChip(
+                        selected = settings?.weekStartsOn == value,
+                        onClick = { viewModel.updateSettings(weekStartsOn = value) },
+                        label = { Text(label) },
+                    )
+                }
+            }
+            Text("新任务默认放到", Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp))
+            FlowRow(
+                Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf("ROOT" to "根目录", "RECENT_FOLDER" to "最近文件夹").forEach { (value, label) ->
+                    FilterChip(
+                        selected = (settings?.defaultCaptureTarget ?: "ROOT") == value,
+                        onClick = { viewModel.updateSettings(defaultCaptureTarget = value) },
+                        label = { Text(label) },
+                    )
+                }
+            }
+            Text(
+                "这只决定快速新建任务的起点，之后仍可移动到其他目录。",
+                Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
             SectionHeading("外观")
             FlowRow(
@@ -159,10 +208,45 @@ fun SettingsScreen(
             }
         }
     }
+    if (showTimezone)
+        AlertDialog(
+            onDismissRequest = { showTimezone = false },
+            title = { Text("选择时区") },
+            text = {
+                Column {
+                    listOf(
+                        "Asia/Shanghai" to "中国标准时间 (UTC+08:00)",
+                        "Asia/Tokyo" to "日本标准时间 (UTC+09:00)",
+                        "UTC" to "协调世界时 (UTC)",
+                        "America/Los_Angeles" to "太平洋时间",
+                    ).forEach { (value, label) ->
+                        TextButton(
+                            onClick = {
+                                viewModel.updateSettings(timezone = value)
+                                showTimezone = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                label,
+                                modifier = Modifier.fillMaxWidth(),
+                                color =
+                                    if (settings?.timezone == value)
+                                        MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showTimezone = false }) { Text("取消") }
+            },
+        )
     if (showHub)
         AlertDialog(
             onDismissRequest = { showHub = false },
-            title = { Text("中枢服务器") },
+            title = { Text("服务器连接") },
             text = {
                 Column {
                     OutlinedTextField(
@@ -179,7 +263,7 @@ fun SettingsScreen(
                         },
                     )
                     if (pending.isNotEmpty())
-                        Text("请先完成待提交操作，再更换中枢。", color = MaterialTheme.colorScheme.error)
+                        Text("请先完成待提交操作，再更换服务器。", color = MaterialTheme.colorScheme.error)
                 }
             },
             confirmButton = {
@@ -189,7 +273,7 @@ fun SettingsScreen(
                         val origin = normalizedHubOrigin(hub)!!
                         showHub = false
                         if (origin != viewModel.authManager.hubOrigin) confirmOrigin = origin
-                        else viewModel.showMessage("中枢地址未改变")
+                        else viewModel.showMessage("服务器地址未改变")
                     },
                 ) {
                     Text("保存")
@@ -200,7 +284,7 @@ fun SettingsScreen(
     confirmOrigin?.let { origin ->
         AlertDialog(
             onDismissRequest = { confirmOrigin = null },
-            title = { Text("切换中枢并重新登录？") },
+            title = { Text("切换服务器并重新登录？") },
             text = { Text("将连接 $origin。当前设备上的任务不会被删除。") },
             confirmButton = {
                 TextButton(
@@ -233,7 +317,7 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { discard = null },
             title = { Text("丢弃待提交操作？") },
-            text = { Text("这条操作将不再发送到中枢，本地显示可能与其他设备不同。") },
+            text = { Text("这条操作将不再发送到服务器，本地显示可能与其他设备不同。") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -277,7 +361,16 @@ private fun syncStateLabel(state: SyncState): String =
         SyncState.SYNCING -> "正在同步"
         SyncState.OFFLINE -> "离线，修改会保存在此设备"
         SyncState.AUTH_REQUIRED -> "需要重新登录"
-        SyncState.INCOMPATIBLE -> "请升级中枢后重试"
-        SyncState.SERVER_UNAVAILABLE -> "中枢暂不可用"
+        SyncState.INCOMPATIBLE -> "请升级服务器后重试"
+        SyncState.SERVER_UNAVAILABLE -> "服务器暂不可用"
         SyncState.ERROR -> "同步失败，请重试"
+    }
+
+private fun timezoneLabel(timezone: String): String =
+    when (timezone) {
+        "Asia/Shanghai" -> "中国标准时间 (UTC+08:00)"
+        "Asia/Tokyo" -> "日本标准时间 (UTC+09:00)"
+        "UTC" -> "协调世界时 (UTC)"
+        "America/Los_Angeles" -> "太平洋时间"
+        else -> timezone
     }

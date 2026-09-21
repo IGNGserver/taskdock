@@ -15,9 +15,9 @@ test.describe('real API and IndexedDB workflow', () => {
     const openTaskCapture = async (targetPage: Page) => {
       if (isMobile) {
         await targetPage.getByRole('button', { name: '打开创建菜单' }).click();
-        const actionSheet = targetPage.getByRole('dialog', { name: '创建' });
+        const actionSheet = targetPage.getByRole('menu', { name: '创建菜单' });
         await expect(actionSheet).toBeVisible();
-        await actionSheet.getByRole('button', { name: '新建任务' }).click();
+        await actionSheet.getByRole('menuitem', { name: '新建任务' }).click();
       } else {
         await targetPage.getByRole('button', { name: '快速添加' }).click();
       }
@@ -41,7 +41,9 @@ test.describe('real API and IndexedDB workflow', () => {
     await dialog.getByRole('button', { name: '创建' }).click();
     await expect(page.getByText(title, { exact: true })).toBeVisible({ timeout: 15_000 });
 
-    const secondContext = await browser.newContext();
+    const secondContext = await browser.newContext(
+      isMobile ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } : {},
+    );
     const secondPage = await secondContext.newPage();
     try {
       await secondPage.goto('/login');

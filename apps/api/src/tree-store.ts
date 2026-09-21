@@ -195,7 +195,7 @@ export interface V2TreeStore {
     ownerId: string,
     input: { id?: string; parentFolderId: string | null; title: string },
   ): { task: TreeTaskDto; note: NoteDto };
-  listTasks(ownerId: string, archived?: boolean): TreeTaskDto[];
+  listTasks(ownerId: string, archived?: boolean, query?: string): TreeTaskDto[];
   getTask(ownerId: string, id: string, includeArchived?: boolean): TreeTaskDto;
   updateTask(
     ownerId: string,
@@ -1018,8 +1018,9 @@ export class MemoryTreeStore implements V2TreeStore {
     return { task: this.taskDto(task), note: this.noteDto(note) };
   }
 
-  listTasks(ownerId: string, archived = false): TreeTaskDto[] {
+  listTasks(ownerId: string, archived = false, query = ''): TreeTaskDto[] {
     this.ensureOwner(ownerId);
+    const needle = query.trim().toLocaleLowerCase();
     return [...this.tasks.values()]
       .filter(
         (row) =>
@@ -1027,6 +1028,16 @@ export class MemoryTreeStore implements V2TreeStore {
           !row.deletedAt &&
           (archived ? Boolean(row.archivedAt) : !row.archivedAt),
       )
+      .filter((row) => {
+        if (!needle) return true;
+        const note = [...this.notes.values()].find(
+          (candidate) =>
+            candidate.ownerId === ownerId && candidate.taskId === row.id && !candidate.deletedAt,
+        );
+        return [row.title, row.referenceId, note?.contentMarkdown ?? ''].some((value) =>
+          value.toLocaleLowerCase().includes(needle),
+        );
+      })
       .sort((a, b) =>
         BigInt(a.rank) < BigInt(b.rank)
           ? -1
@@ -1193,7 +1204,10 @@ export class MemoryTreeStore implements V2TreeStore {
       steps: this.stepsForTask(ownerId, id).map((row) => this.stepDto(row)),
       placements: [...this.placements.values()]
         .filter((row) => row.ownerId === ownerId && row.taskId === id && !row.deletedAt)
-        .map((row) => this.placementDto(row)),
+        .map((row) => ({
+          ...this.placementDto(row),
+          timePoint: this.timePointDto(this.timePoint(ownerId, row.timePointId)),
+        })),
       workflowMemberships: memberships.map((membership) => {
         const workflow = this.workflow(ownerId, membership.workflowId);
         const stage = this.stage(ownerId, membership.stageId);

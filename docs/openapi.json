@@ -985,7 +985,7 @@
       "get": {
         "responses": {
           "200": {
-            "description": "TaskDock v2 GET /v2/tasks"
+            "description": "TaskDock v2 GET /v2/tasks; optional archived and q filters (q searches title, reference ID and note content)"
           }
         }
       },

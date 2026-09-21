@@ -52,7 +52,7 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
         if (isLoading || username.isBlank() || password.isBlank() || hubUrl.isBlank()) return
         val origin = normalizedHubOrigin(hubUrl)
         if (origin == null) {
-            errorMessage = "请输入完整的 HTTP 或 HTTPS 中枢地址"
+            errorMessage = "请输入完整的 HTTP 或 HTTPS 服务器地址"
             return
         }
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -71,13 +71,13 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                         is ApiClientException ->
                             when (error.category) {
                                 ApiFailureCategory.AUTH_REQUIRED -> "账号或密码错误，或登录会话已失效"
-                                ApiFailureCategory.INCOMPATIBLE -> "中枢版本不兼容，请升级中枢后重试"
-                                ApiFailureCategory.SERVER_UNAVAILABLE -> "中枢暂不可用，请稍后重试"
+                                ApiFailureCategory.INCOMPATIBLE -> "服务器版本不兼容，请升级服务器后重试"
+                                ApiFailureCategory.SERVER_UNAVAILABLE -> "服务器暂不可用，请稍后重试"
                                 ApiFailureCategory.REQUEST_REJECTED -> error.serverMessage
                                 ApiFailureCategory.CURSOR_EXPIRED -> error.serverMessage
                             }
-                        is java.io.IOException -> "无法连接中枢，请检查网络和服务器地址"
-                        else -> "登录失败，请检查中枢地址、账号和密码"
+                        is java.io.IOException -> "无法连接服务器，请检查网络和服务器地址"
+                        else -> "登录失败，请检查服务器地址、账号和密码"
                     }
             }
         }
@@ -114,19 +114,19 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
-                    text = "连接你的中枢，继续处理任务",
+                    text = "连接 TaskDock 服务器，继续处理任务",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // 1. Hub Origin Input
+                // 1. Server origin input
                 OutlinedTextField(
                     enabled = !isLoading,
                     value = hubUrl,
                     onValueChange = { hubUrl = it },
-                    label = { Text("中枢服务器地址 (Hub)") },
+                    label = { Text("服务器地址") },
                     placeholder = { Text("http://192.168.x.x:48731") },
                     singleLine = true,
                     leadingIcon = {

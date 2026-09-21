@@ -184,7 +184,8 @@ data class SettingsEntity(
     val recentProjectId: String?,
     val weekStartsOn: Int = 1,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
+    val version: Long = 1,
 )
 
 @Entity(tableName = "outbox")

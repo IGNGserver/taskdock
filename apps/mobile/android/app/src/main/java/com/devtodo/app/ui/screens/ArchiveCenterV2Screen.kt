@@ -38,7 +38,7 @@ fun ArchiveCenterV2Screen(viewModel: MainViewModel, onBack: () -> Unit) {
             if (operations.isEmpty() && standalone.isEmpty())
                 item { EmptyState(Icons.Default.Archive, "没有归档内容", "归档后的目录与任务可以在这里恢复。") }
             if (operations.isNotEmpty()) {
-                item { SectionHeading("目录归档记录") }
+                item { SectionHeading("整棵目录归档") }
                 items(operations, key = { "operation:${it.id}" }) { operation ->
                     ListItem(
                         headlineContent = {

@@ -14,8 +14,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.ui.components.*
-import java.text.DateFormat
+import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,7 +27,14 @@ fun TodayV2Screen(
     onNavigateToTree: ((String?, String?) -> Unit)? = null,
 ) {
     val scheduled by viewModel.todayTasks.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     val ready by viewModel.dataReady.collectAsStateWithLifecycle()
+    val todayLabel =
+        remember(settings?.timezone) {
+            SimpleDateFormat("yyyy-MM-dd (EEE)", Locale.getDefault()).apply {
+                timeZone = TimeZone.getTimeZone(settings?.timezone ?: "Asia/Shanghai")
+            }.format(Date())
+        }
     var create by rememberSaveable { mutableStateOf(false) }
     val done = scheduled.count { it.first.status == TaskStatus.DONE }
     WorkspaceScaffold(
@@ -45,7 +54,7 @@ fun TodayV2Screen(
             item {
                 Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        DateFormat.getDateInstance(DateFormat.FULL).format(Date()),
+                        todayLabel,
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -67,7 +76,26 @@ fun TodayV2Screen(
             }
             if (!ready) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             else if (scheduled.isEmpty())
-                item { EmptyState(Icons.Default.Today, "今天还没有安排", "新建一个任务，或从任务详情中安排到今天。") }
+                item {
+                    if (onNavigateToTree != null) {
+                        EmptyState(
+                            Icons.Default.Today,
+                            "今天还没有安排",
+                            "先新建一个任务，或从任务库加入已有任务。",
+                            action = {
+                                FilledTonalButton(onClick = { onNavigateToTree.invoke(null, null) }) {
+                                    Text("打开任务库")
+                                }
+                            },
+                        )
+                    } else {
+                        EmptyState(
+                            Icons.Default.Today,
+                            "今天还没有安排",
+                            "先新建一个任务，或从任务库加入已有任务。",
+                        )
+                    }
+                }
             listOf(TaskStatus.IN_PROGRESS, TaskStatus.TODO, TaskStatus.DONE).forEach { status ->
                 val group = scheduled.filter { it.first.status == status }
                 if (group.isNotEmpty()) {

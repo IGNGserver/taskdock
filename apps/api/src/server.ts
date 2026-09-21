@@ -1142,10 +1142,13 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
 
       api.get('/tasks', async (request) => {
         const query = z
-          .object({ archived: z.enum(['true', 'false']).optional() })
+          .object({
+            archived: z.enum(['true', 'false']).optional(),
+            q: z.string().trim().max(500).optional(),
+          })
           .parse(request.query);
         return {
-          items: tree.listTasks(request.auth!.ownerId, query.archived === 'true'),
+          items: tree.listTasks(request.auth!.ownerId, query.archived === 'true', query.q),
           nextCursor: null,
         };
       });
