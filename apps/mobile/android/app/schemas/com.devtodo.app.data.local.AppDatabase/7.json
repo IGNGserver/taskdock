@@ -523,7 +523,28 @@
             "id"
           ]
         },
-        "indices": [],
+        "indices": [
+          {
+            "name": "index_folders_ownerId_parentFolderId",
+            "unique": false,
+            "columnNames": [
+              "ownerId",
+              "parentFolderId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_folders_ownerId_parentFolderId` ON `${TABLE_NAME}` (`ownerId`, `parentFolderId`)"
+          },
+          {
+            "name": "index_folders_ownerId_archivedAt",
+            "unique": false,
+            "columnNames": [
+              "ownerId",
+              "archivedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_folders_ownerId_archivedAt` ON `${TABLE_NAME}` (`ownerId`, `archivedAt`)"
+          }
+        ],
         "foreignKeys": []
       },
       {
@@ -615,7 +636,18 @@
             "id"
           ]
         },
-        "indices": [],
+        "indices": [
+          {
+            "name": "index_task_steps_ownerId_taskId",
+            "unique": false,
+            "columnNames": [
+              "ownerId",
+              "taskId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_task_steps_ownerId_taskId` ON `${TABLE_NAME}` (`ownerId`, `taskId`)"
+          }
+        ],
         "foreignKeys": []
       },
       {
@@ -689,7 +721,18 @@
             "id"
           ]
         },
-        "indices": [],
+        "indices": [
+          {
+            "name": "index_workflows_ownerId_archivedAt",
+            "unique": false,
+            "columnNames": [
+              "ownerId",
+              "archivedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_workflows_ownerId_archivedAt` ON `${TABLE_NAME}` (`ownerId`, `archivedAt`)"
+          }
+        ],
         "foreignKeys": []
       },
       {
@@ -763,7 +806,18 @@
             "id"
           ]
         },
-        "indices": [],
+        "indices": [
+          {
+            "name": "index_workflow_stages_ownerId_workflowId",
+            "unique": false,
+            "columnNames": [
+              "ownerId",
+              "workflowId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_workflow_stages_ownerId_workflowId` ON `${TABLE_NAME}` (`ownerId`, `workflowId`)"
+          }
+        ],
         "foreignKeys": []
       },
       {
@@ -843,7 +897,28 @@
             "id"
           ]
         },
-        "indices": [],
+        "indices": [
+          {
+            "name": "index_workflow_task_memberships_ownerId_workflowId",
+            "unique": false,
+            "columnNames": [
+              "ownerId",
+              "workflowId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_workflow_task_memberships_ownerId_workflowId` ON `${TABLE_NAME}` (`ownerId`, `workflowId`)"
+          },
+          {
+            "name": "index_workflow_task_memberships_ownerId_stageId",
+            "unique": false,
+            "columnNames": [
+              "ownerId",
+              "stageId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_workflow_task_memberships_ownerId_stageId` ON `${TABLE_NAME}` (`ownerId`, `stageId`)"
+          }
+        ],
         "foreignKeys": []
       },
       {

@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 4,
-    "identityHash": "367b9a0563d0ea4b32dafb8da45d4209",
+    "version": 8,
+    "identityHash": "f6856de9bbeb1b20997afd0b14f2b498",
     "entities": [
       {
         "tableName": "projects",
@@ -208,7 +208,7 @@
       },
       {
         "tableName": "notes",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `ownerId` TEXT NOT NULL, `taskId` TEXT NOT NULL, `contentMarkdown` TEXT NOT NULL, `version` INTEGER NOT NULL, `createdAt` TEXT NOT NULL, `updatedAt` TEXT NOT NULL, `pendingSync` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `ownerId` TEXT NOT NULL, `taskId` TEXT NOT NULL, `contentMarkdown` TEXT NOT NULL, `version` INTEGER NOT NULL, `createdAt` TEXT NOT NULL, `updatedAt` TEXT NOT NULL, `deletedAt` TEXT, `pendingSync` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -253,6 +253,12 @@
             "notNull": true
           },
           {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
             "fieldPath": "pendingSync",
             "columnName": "pendingSync",
             "affinity": "INTEGER",
@@ -270,7 +276,7 @@
       },
       {
         "tableName": "time_points",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `ownerId` TEXT NOT NULL, `type` TEXT NOT NULL, `localDate` TEXT, `title` TEXT, `rank` TEXT NOT NULL, `version` INTEGER NOT NULL, `reachedAt` TEXT, `archivedAt` TEXT, `createdAt` TEXT NOT NULL, `updatedAt` TEXT NOT NULL, `pendingSync` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `ownerId` TEXT NOT NULL, `type` TEXT NOT NULL, `localDate` TEXT, `title` TEXT, `rank` TEXT NOT NULL, `version` INTEGER NOT NULL, `reachedAt` TEXT, `archivedAt` TEXT, `createdAt` TEXT NOT NULL, `updatedAt` TEXT NOT NULL, `deletedAt` TEXT, `pendingSync` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -339,6 +345,12 @@
             "notNull": true
           },
           {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
             "fieldPath": "pendingSync",
             "columnName": "pendingSync",
             "affinity": "INTEGER",
@@ -356,7 +368,7 @@
       },
       {
         "tableName": "placements",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `ownerId` TEXT NOT NULL, `taskId` TEXT NOT NULL, `timePointId` TEXT NOT NULL, `rank` TEXT NOT NULL, `version` INTEGER NOT NULL, `createdAt` TEXT NOT NULL, `updatedAt` TEXT NOT NULL, `pendingSync` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `ownerId` TEXT NOT NULL, `taskId` TEXT NOT NULL, `timePointId` TEXT NOT NULL, `rank` TEXT NOT NULL, `version` INTEGER NOT NULL, `createdAt` TEXT NOT NULL, `updatedAt` TEXT NOT NULL, `deletedAt` TEXT, `pendingSync` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -405,6 +417,12 @@
             "columnName": "updatedAt",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "pendingSync",
@@ -967,7 +985,7 @@
       },
       {
         "tableName": "settings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerId` TEXT NOT NULL, `timezone` TEXT NOT NULL, `defaultCaptureTarget` TEXT NOT NULL, `recentProjectId` TEXT, `createdAt` TEXT NOT NULL, `updatedAt` TEXT NOT NULL, PRIMARY KEY(`ownerId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerId` TEXT NOT NULL, `timezone` TEXT NOT NULL, `defaultCaptureTarget` TEXT NOT NULL, `recentProjectId` TEXT, `weekStartsOn` INTEGER NOT NULL, `createdAt` TEXT NOT NULL, `updatedAt` TEXT NOT NULL, `version` INTEGER NOT NULL, PRIMARY KEY(`ownerId`))",
         "fields": [
           {
             "fieldPath": "ownerId",
@@ -994,6 +1012,12 @@
             "notNull": false
           },
           {
+            "fieldPath": "weekStartsOn",
+            "columnName": "weekStartsOn",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
             "fieldPath": "createdAt",
             "columnName": "createdAt",
             "affinity": "TEXT",
@@ -1003,6 +1027,12 @@
             "fieldPath": "updatedAt",
             "columnName": "updatedAt",
             "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "version",
+            "columnName": "version",
+            "affinity": "INTEGER",
             "notNull": true
           }
         ],
@@ -1205,7 +1235,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '367b9a0563d0ea4b32dafb8da45d4209')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f6856de9bbeb1b20997afd0b14f2b498')"
     ]
   }
 }

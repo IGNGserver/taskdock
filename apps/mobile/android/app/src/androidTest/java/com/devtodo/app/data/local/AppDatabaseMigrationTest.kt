@@ -79,4 +79,35 @@ class AppDatabaseMigrationTest {
         assertNotNull(migrated)
         migrated.close()
     }
+
+    @Test
+    fun migrateV7ToV8AddsIndexesToDatabasesCreatedWithoutThem() {
+        val databaseName = "taskdock-v7-no-indexes-fixture"
+        helper.createDatabase(databaseName, 7).apply {
+            listOf(
+                "index_folders_ownerId_parentFolderId",
+                "index_folders_ownerId_archivedAt",
+                "index_task_steps_ownerId_taskId",
+                "index_workflows_ownerId_archivedAt",
+                "index_workflow_stages_ownerId_workflowId",
+                "index_workflow_task_memberships_ownerId_workflowId",
+                "index_workflow_task_memberships_ownerId_stageId",
+            ).forEach { index -> execSQL("DROP INDEX IF EXISTS `$index`") }
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            databaseName,
+            8,
+            true,
+            AppDatabase.MIGRATION_7_8,
+        )
+        migrated.query(
+            "SELECT count(*) FROM sqlite_master WHERE type='index' AND name LIKE 'index_%'",
+        ).use { cursor ->
+            assertEquals(true, cursor.moveToFirst())
+            assertEquals(7, cursor.getInt(0))
+        }
+        migrated.close()
+    }
 }
