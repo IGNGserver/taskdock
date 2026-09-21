@@ -25,7 +25,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ConflictEntity::class,
         SyncMetaEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -54,7 +54,15 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "devtodo_local.db"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
+                    MIGRATION_7_8,
+                )
                 .build().also { INSTANCE = it }
             }
         }
@@ -201,6 +209,21 @@ abstract class AppDatabase : RoomDatabase() {
         internal val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE settings ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        internal val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Older v7 databases may have been created without these
+                // indexes. The v3->v4 migration already created them for
+                // upgraded databases, so IF NOT EXISTS keeps both paths safe.
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_folders_ownerId_parentFolderId ON folders(ownerId, parentFolderId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_folders_ownerId_archivedAt ON folders(ownerId, archivedAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_task_steps_ownerId_taskId ON task_steps(ownerId, taskId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workflows_ownerId_archivedAt ON workflows(ownerId, archivedAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workflow_stages_ownerId_workflowId ON workflow_stages(ownerId, workflowId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workflow_task_memberships_ownerId_workflowId ON workflow_task_memberships(ownerId, workflowId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workflow_task_memberships_ownerId_stageId ON workflow_task_memberships(ownerId, stageId)")
             }
         }
     }

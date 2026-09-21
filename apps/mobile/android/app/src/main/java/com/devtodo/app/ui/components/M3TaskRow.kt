@@ -2,14 +2,19 @@ package com.devtodo.app.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import com.devtodo.app.data.local.TaskEntity
 import com.devtodo.app.data.model.TaskStatus
 
@@ -63,23 +68,30 @@ fun M3TaskRow(
             )
         },
         leadingContent = {
-            Checkbox(
-                checked = task.status == TaskStatus.DONE,
-                onCheckedChange = {
-                    onStatusToggle(
-                        when (task.status) {
-                            TaskStatus.TODO -> TaskStatus.IN_PROGRESS
-                            TaskStatus.IN_PROGRESS -> TaskStatus.DONE
-                            TaskStatus.DONE -> TaskStatus.TODO
-                        }
+            Box(
+                modifier = Modifier
+                    .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                    .toggleable(
+                        value = task.status == TaskStatus.DONE,
+                        role = Role.Checkbox,
+                        onValueChange = { checked ->
+                            onStatusToggle(
+                                if (checked) TaskStatus.DONE else TaskStatus.TODO,
+                            )
+                        },
                     )
-                },
-                modifier =
-                    Modifier.semantics {
+                    .semantics {
                         contentDescription = "${task.title}，完成状态"
                         stateDescription = taskStatusLabel(task.status)
                     },
-            )
+                contentAlignment = Alignment.Center,
+            ) {
+                Checkbox(
+                    checked = task.status == TaskStatus.DONE,
+                    onCheckedChange = null,
+                    modifier = Modifier.clearAndSetSemantics {},
+                )
+            }
         },
         trailingContent = {
             ActionMenu(

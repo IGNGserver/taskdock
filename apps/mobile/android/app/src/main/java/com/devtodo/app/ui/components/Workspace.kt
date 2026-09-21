@@ -83,7 +83,12 @@ data class RowAction(
 fun ActionMenu(label: String, actions: List<RowAction>) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }) { Icon(Icons.Default.MoreVert, label) }
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(48.dp),
+        ) {
+            Icon(Icons.Default.MoreVert, label)
+        }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             actions.forEach { action ->
                 DropdownMenuItem(

@@ -1,6 +1,7 @@
 package com.devtodo.app.data.local
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.devtodo.app.data.model.TaskCategory
 import com.devtodo.app.data.model.TaskPriority
@@ -44,7 +45,13 @@ data class TaskEntity(
     val pendingSync: Boolean = false
 )
 
-@Entity(tableName = "folders")
+@Entity(
+    tableName = "folders",
+    indices = [
+        Index(value = ["ownerId", "parentFolderId"]),
+        Index(value = ["ownerId", "archivedAt"]),
+    ],
+)
 data class FolderEntity(
     @PrimaryKey val id: String,
     val ownerId: String,
@@ -60,7 +67,10 @@ data class FolderEntity(
     val pendingSync: Boolean = false
 )
 
-@Entity(tableName = "task_steps")
+@Entity(
+    tableName = "task_steps",
+    indices = [Index(value = ["ownerId", "taskId"])],
+)
 data class TaskStepEntity(
     @PrimaryKey val id: String,
     val ownerId: String,
@@ -77,7 +87,10 @@ data class TaskStepEntity(
     val pendingSync: Boolean = false
 )
 
-@Entity(tableName = "workflows")
+@Entity(
+    tableName = "workflows",
+    indices = [Index(value = ["ownerId", "archivedAt"])],
+)
 data class WorkflowEntity(
     @PrimaryKey val id: String,
     val ownerId: String,
@@ -91,7 +104,10 @@ data class WorkflowEntity(
     val pendingSync: Boolean = false
 )
 
-@Entity(tableName = "workflow_stages")
+@Entity(
+    tableName = "workflow_stages",
+    indices = [Index(value = ["ownerId", "workflowId"])],
+)
 data class WorkflowStageEntity(
     @PrimaryKey val id: String,
     val ownerId: String,
@@ -105,7 +121,13 @@ data class WorkflowStageEntity(
     val pendingSync: Boolean = false
 )
 
-@Entity(tableName = "workflow_task_memberships")
+@Entity(
+    tableName = "workflow_task_memberships",
+    indices = [
+        Index(value = ["ownerId", "workflowId"]),
+        Index(value = ["ownerId", "stageId"]),
+    ],
+)
 data class WorkflowTaskMembershipEntity(
     @PrimaryKey val id: String,
     val ownerId: String,
