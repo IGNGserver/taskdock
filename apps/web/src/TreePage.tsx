@@ -22,22 +22,39 @@ import {
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Archive,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
   ChevronRight,
   Folder,
   FolderPlus,
   ListChecks,
   MoreHorizontal,
   Plus,
+  Trash2,
   Workflow as WorkflowGlyph,
 } from 'lucide-react';
 import { ApiError, mutationV2, requestV2 } from './api.js';
 import { useAuth } from './auth.js';
 import {
+  Alert,
   BottomSheet,
   Button,
+  ButtonGroup,
+  Card,
+  Chip,
+  ConfirmDialog,
+  DestructiveSection,
+  EmptyState,
   IconButton,
+  List,
+  ListItem,
+  LoadingState,
   Menu,
+  Select,
   SideSheet,
+  TextArea,
   TextField,
   useDismissibleMenu,
   useWindowSizeClass,
@@ -74,6 +91,14 @@ type TreeMoveTarget = {
   expectedStatus: 'TODO' | 'IN_PROGRESS' | 'DONE';
   baseVersion: number;
   title: string;
+};
+
+type ConfirmRequest = {
+  title: ReactNode;
+  description: ReactNode;
+  confirmLabel: string;
+  danger?: boolean;
+  onConfirm: () => Promise<boolean | void> | boolean | void;
 };
 
 function TreeRowActions({
@@ -149,6 +174,7 @@ function TreeRowActions({
           options={options}
           onSelect={select}
           onClose={() => setOpen(false)}
+          className="m3e-menu--dense-row"
         />
       )}
     </div>
@@ -171,6 +197,7 @@ export function TreePage() {
   const [newFolderTitle, setNewFolderTitle] = useState('');
   const [moveTarget, setMoveTarget] = useState<TreeMoveTarget | null>(null);
   const [moveFolders, setMoveFolders] = useState<FolderDto[]>([]);
+  const [confirmation, setConfirmation] = useState<ConfirmRequest | null>(null);
   const [moveParentId, setMoveParentId] = useState('');
   const [moveBusy, setMoveBusy] = useState(false);
   const [groupByStatus, setGroupByStatus] = useState(false);
@@ -297,21 +324,24 @@ export function TreePage() {
       setError(cause instanceof Error ? cause.message : '创建文件夹失败，请重试');
     }
   };
-  const archiveFolder = async (item: Extract<TreeItemDto, { kind: 'FOLDER' }>) => {
-    if (
-      !window.confirm(
-        `归档“${item.folder.title}”及其 ${item.aggregate.totalCount} 个有效后代任务？`,
-      )
-    )
-      return;
-    try {
-      await mutationV2('POST', `/folders/${item.folder.id}/archive-tree`, {
-        baseVersion: item.folder.version,
-      });
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '归档目录失败，请重试');
-    }
+  const archiveFolder = (item: Extract<TreeItemDto, { kind: 'FOLDER' }>) => {
+    setConfirmation({
+      title: '归档文件夹',
+      description: `归档“${item.folder.title}”及其 ${item.aggregate.totalCount} 个有效后代任务？你可以在归档中恢复它们。`,
+      confirmLabel: '归档',
+      danger: false,
+      onConfirm: async () => {
+        try {
+          await mutationV2('POST', `/folders/${item.folder.id}/archive-tree`, {
+            baseVersion: item.folder.version,
+          });
+          await load();
+          return true;
+        } catch (cause) {
+          throw cause instanceof Error ? cause : new Error('归档目录失败，请重试');
+        }
+      },
+    });
   };
   const archiveTask = async (item: Extract<TreeItemDto, { kind: 'TASK' }>) => {
     try {
@@ -334,7 +364,7 @@ export function TreePage() {
         workflowMembershipCount?: number;
         confirmationToken: string;
       }>(`/folders/${item.folder.id}/delete-preview`, { method: 'POST', body: '{}' });
-      const deps = [
+      const dependencies = [
         `文件夹 ${preview.folderCount} 个`,
         `任务 ${preview.taskCount} 个`,
         preview.noteCount !== undefined ? `备注 ${preview.noteCount} 条` : null,
@@ -346,16 +376,30 @@ export function TreePage() {
       ]
         .filter(Boolean)
         .join('，');
-      if (
-        !window.confirm(
-          `删除目录及全部受影响内容？\n包含：${deps}。\n此操作为永久级联删除，不可恢复。确认继续？`,
-        )
-      )
-        return;
-      await mutationV2('DELETE', `/folders/${item.folder.id}/tree`, {
-        confirmationToken: preview.confirmationToken,
+      setConfirmation({
+        title: '永久删除目录',
+        description: (
+          <>
+            删除“{item.folder.title}”及全部受影响内容。包含：{dependencies}。此操作不可恢复。
+          </>
+        ),
+        confirmLabel: '永久删除',
+        danger: true,
+        onConfirm: async () => {
+          try {
+            await mutationV2('DELETE', `/folders/${item.folder.id}/tree`, {
+              confirmationToken: preview.confirmationToken,
+            });
+            await load();
+            return true;
+          } catch (cause) {
+            if (cause instanceof ApiError && cause.code === 'OFFLINE_TREE_DELETE_FORBIDDEN') {
+              throw new Error(`${cause.message} 建议：改为递归归档整棵目录。`);
+            }
+            throw cause instanceof Error ? cause : new Error('删除操作失败');
+          }
+        },
       });
-      await load();
     } catch (cause) {
       // Surface the structured offline-refusal guidance instead of a generic
       // network error. Permanent tree deletion is online-only by design.
@@ -471,21 +515,21 @@ export function TreePage() {
           <p className="page-subtitle">按目录整理任务；日期、事件和流程是任务的其他视图。</p>
         </div>
         <div className="tree-header-actions">
-          <label className="tree-view-select">
-            <span>显示方式</span>
-            <select
-              value={groupByStatus ? 'status' : 'tree'}
-              onChange={(event) => setGroupByStatus(event.target.value === 'status')}
-            >
-              <option value="tree">目录顺序</option>
-              <option value="status">按状态分组</option>
-            </select>
-          </label>
+          <Select
+            label="显示方式"
+            className="m3e-select--tree-view"
+            value={groupByStatus ? 'status' : 'tree'}
+            onChange={(value) => setGroupByStatus(value === 'status')}
+            options={[
+              { value: 'tree', label: '目录顺序' },
+              { value: 'status', label: '按状态分组' },
+            ]}
+          />
           <form onSubmit={createFolder} className="inline-capture">
             <TextField
               label="新建文件夹"
               hideLabel
-              className="tree-inline-field"
+              className="m3e-field--tree-inline"
               placeholder="新建文件夹"
               value={newFolderTitle}
               onChange={(event) => setNewFolderTitle(event.target.value)}
@@ -496,33 +540,39 @@ export function TreePage() {
           </form>
         </div>
       </div>
-      <div className="tree-breadcrumbs" aria-label="目录路径">
-        <button
+      <nav className="tree-breadcrumbs" aria-label="目录路径">
+        <Button
+          variant={!folderId ? 'tonal' : 'text'}
+          size="s"
           type="button"
+          aria-current={!folderId ? 'page' : undefined}
+          className="m3e-button--tree-breadcrumb"
           onClick={() => openFolder(null)}
-          className={!folderId ? 'active' : ''}
         >
           根目录
-        </button>
+        </Button>
         {path.map((crumb) => (
-          <span key={crumb.id}>
-            <ChevronRight size={16} />
-            <button
+          <span key={crumb.id} className="tree-breadcrumbs__segment">
+            <ChevronRight size={16} aria-hidden="true" />
+            <Button
+              variant={crumb.id === folderId ? 'tonal' : 'text'}
+              size="s"
               type="button"
+              aria-current={crumb.id === folderId ? 'page' : undefined}
+              className="m3e-button--tree-breadcrumb"
               onClick={() => openFolder(crumb.id)}
-              className={crumb.id === folderId ? 'active' : ''}
             >
               {crumb.title}
-            </button>
+            </Button>
           </span>
         ))}
-      </div>
+      </nav>
       <form onSubmit={createTask} className="tree-capture-form">
         <Plus size={18} aria-hidden="true" />
         <TextField
           label="新建任务"
           hideLabel
-          className="tree-inline-field"
+          className="m3e-field--tree-inline"
           placeholder={folderId ? '在当前文件夹新建任务…' : '在根目录新建任务…'}
           value={newTitle}
           onChange={(event) => setNewTitle(event.target.value)}
@@ -532,17 +582,19 @@ export function TreePage() {
         </Button>
       </form>
       {error && (
-        <div className="error-banner" role="alert">
+        <Alert tone="error" title="任务库操作失败">
           {error}
-        </div>
+        </Alert>
       )}
       {loading ? (
-        <div className="empty-state">正在加载目录…</div>
+        <LoadingState label="正在加载目录" description="正在同步当前目录中的任务与文件夹。" />
       ) : (
         visibleGroups.map((group) => (
-          <section
+          <Card
             key={group.key}
-            className="tree-group"
+            as="section"
+            variant="outlined"
+            className="m3e-card--tree-group"
             aria-labelledby={`tree-group-${group.key}`}
           >
             <div className="tree-group-heading">
@@ -550,72 +602,94 @@ export function TreePage() {
               <span>{group.items.length}</span>
             </div>
             {group.items.length === 0 ? (
-              <div className="tree-group-empty">暂无{group.label}项</div>
+              <EmptyState
+                compact
+                title={`暂无${group.label}项`}
+                description="创建任务或文件夹后，它们会显示在这里。"
+              />
             ) : (
-              group.items.map((item, index) =>
-                item.kind === 'FOLDER' ? (
-                  <article className="tree-row folder-row" key={`folder-${item.folder.id}`}>
-                    <button
-                      type="button"
-                      className="tree-main-button"
+              <List className="m3e-list--tree-group">
+                {group.items.map((item, index) =>
+                  item.kind === 'FOLDER' ? (
+                    <ListItem
+                      className="m3e-list-item--tree-row"
+                      key={`folder-${item.folder.id}`}
+                      leading={<Folder size={20} />}
+                      headline={item.folder.title}
+                      supporting={
+                        <>
+                          <Chip
+                            kind="assist"
+                            label={statusLabel(item.aggregate.status)}
+                            className={`m3e-chip--task-status m3e-chip--task-status-${statusClass(item.aggregate.status)}`}
+                          />
+                          <span className="tree-count">
+                            {item.aggregate.doneCount}/{item.aggregate.totalCount} 已完成
+                          </span>
+                        </>
+                      }
+                      trailing={<ChevronRight size={16} aria-hidden="true" />}
+                      ariaLabel={`打开文件夹 ${item.folder.title}`}
                       onClick={() => openFolder(item.folder.id)}
-                      aria-label={`打开文件夹 ${item.folder.title}`}
-                    >
-                      <Folder size={20} />
-                      <span className="tree-item-title">{item.folder.title}</span>
-                      <span className={`status-chip ${statusClass(item.aggregate.status)}`}>
-                        {statusLabel(item.aggregate.status)}
-                      </span>
-                      <span className="tree-count">
-                        {item.aggregate.doneCount}/{item.aggregate.totalCount}
-                      </span>
-                      <ChevronRight size={16} />
-                    </button>
-                    <TreeRowActions
-                      item={item}
-                      index={groupByStatus ? index : statusPosition(item).index}
-                      groupLength={groupByStatus ? group.items.length : statusPosition(item).length}
-                      onMove={(candidate, direction) => void moveWithinStatus(candidate, direction)}
-                      onOpenMove={(candidate) => void openMove(candidate)}
-                      onArchiveFolder={(candidate) => void archiveFolder(candidate)}
-                      onDeleteFolder={(candidate) => void deleteFolder(candidate)}
-                      onArchiveTask={(candidate) => void archiveTask(candidate)}
+                      actions={
+                        <TreeRowActions
+                          item={item}
+                          index={groupByStatus ? index : statusPosition(item).index}
+                          groupLength={
+                            groupByStatus ? group.items.length : statusPosition(item).length
+                          }
+                          onMove={(candidate, direction) =>
+                            void moveWithinStatus(candidate, direction)
+                          }
+                          onOpenMove={(candidate) => void openMove(candidate)}
+                          onArchiveFolder={(candidate) => void archiveFolder(candidate)}
+                          onDeleteFolder={(candidate) => void deleteFolder(candidate)}
+                          onArchiveTask={(candidate) => void archiveTask(candidate)}
+                        />
+                      }
                     />
-                  </article>
-                ) : (
-                  <article
-                    id={`task-${item.task.id}`}
-                    className={`tree-row task-row-v2 ${focusTaskId === item.task.id ? 'focused-highlight' : ''}`}
-                    key={`task-${item.task.id}`}
-                  >
-                    <button
-                      type="button"
-                      className="tree-main-button"
+                  ) : (
+                    <ListItem
+                      id={`task-${item.task.id}`}
+                      className="m3e-list-item--tree-row"
+                      key={`task-${item.task.id}`}
+                      leading={<ListChecks size={20} />}
+                      headline={item.task.title}
+                      supporting={
+                        <>
+                          <code>{item.task.referenceId}</code>
+                          <Chip
+                            kind="assist"
+                            label={statusLabel(item.task.status)}
+                            className={`m3e-chip--task-status m3e-chip--task-status-${statusClass(item.task.status)}`}
+                          />
+                        </>
+                      }
+                      selected={focusTaskId === item.task.id}
+                      ariaLabel={`打开任务 ${item.task.title}`}
                       onClick={() => setSelectedTaskId(item.task.id)}
-                      aria-label={`打开任务 ${item.task.title}`}
-                    >
-                      <ListChecks size={20} />
-                      <span className="tree-item-title">{item.task.title}</span>
-                      <code>{item.task.referenceId}</code>
-                      <span className={`status-chip ${statusClass(item.task.status)}`}>
-                        {statusLabel(item.task.status)}
-                      </span>
-                    </button>
-                    <TreeRowActions
-                      item={item}
-                      index={groupByStatus ? index : statusPosition(item).index}
-                      groupLength={groupByStatus ? group.items.length : statusPosition(item).length}
-                      onMove={(candidate, direction) => void moveWithinStatus(candidate, direction)}
-                      onOpenMove={(candidate) => void openMove(candidate)}
-                      onArchiveFolder={(candidate) => void archiveFolder(candidate)}
-                      onDeleteFolder={(candidate) => void deleteFolder(candidate)}
-                      onArchiveTask={(candidate) => void archiveTask(candidate)}
+                      actions={
+                        <TreeRowActions
+                          item={item}
+                          index={groupByStatus ? index : statusPosition(item).index}
+                          groupLength={
+                            groupByStatus ? group.items.length : statusPosition(item).length
+                          }
+                          onMove={(candidate, direction) =>
+                            void moveWithinStatus(candidate, direction)
+                          }
+                          onOpenMove={(candidate) => void openMove(candidate)}
+                          onArchiveFolder={(candidate) => void archiveFolder(candidate)}
+                          onDeleteFolder={(candidate) => void deleteFolder(candidate)}
+                          onArchiveTask={(candidate) => void archiveTask(candidate)}
+                        />
+                      }
                     />
-                  </article>
-                ),
-              )
+                  ),
+                )}
+              </List>
             )}
-          </section>
+          </Card>
         ))
       )}
       {moveTarget && (
@@ -630,26 +704,21 @@ export function TreePage() {
             <form onSubmit={submitMove}>
               <strong>移动“{moveTarget.title}”</strong>
               {error && (
-                <p className="error-banner" role="alert">
+                <Alert tone="error" title="移动失败">
                   {error}
-                </p>
+                </Alert>
               )}
-              <label className="field">
-                <span>目标文件夹</span>
-                <select
-                  value={moveParentId}
-                  onChange={(event) => setMoveParentId(event.target.value)}
-                >
-                  <option value="">根目录</option>
-                  {moveFolders
+              <Select
+                label="目标文件夹"
+                value={moveParentId}
+                onChange={setMoveParentId}
+                options={[
+                  { value: '', label: '根目录' },
+                  ...moveFolders
                     .filter((folder) => folder.id !== moveTarget.item.id)
-                    .map((folder) => (
-                      <option value={folder.id} key={folder.id}>
-                        {folder.title}
-                      </option>
-                    ))}
-                </select>
-              </label>
+                    .map((folder) => ({ value: folder.id, label: folder.title })),
+                ]}
+              />
               <div className="header-actions">
                 <Button
                   variant="tonal"
@@ -666,6 +735,17 @@ export function TreePage() {
             </form>
           </div>
         </BottomSheet>
+      )}
+      {confirmation && (
+        <ConfirmDialog
+          open
+          title={confirmation.title}
+          description={confirmation.description}
+          confirmLabel={confirmation.confirmLabel}
+          danger={confirmation.danger}
+          onClose={() => setConfirmation(null)}
+          onConfirm={confirmation.onConfirm}
+        />
       )}
       {selectedTaskId && detail && (
         <TaskDetailSurface open onClose={() => setSelectedTaskId(null)} title={detail.task.title}>
@@ -710,12 +790,17 @@ export function TaskDetailV2Overlay({
   return (
     <TaskDetailSurface open onClose={onClose} title={detail?.task.title || '任务详情'}>
       {error ? (
-        <div className="error-banner" role="alert">
-          <p>{error}</p>
-          <Button variant="tonal" onClick={() => void load()}>
-            重试
-          </Button>
-        </div>
+        <Alert
+          tone="error"
+          title="任务详情加载失败"
+          action={
+            <Button variant="text" size="s" onClick={() => void load()}>
+              重试
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
       ) : detail ? (
         <TaskDetailV2
           key={taskId}
@@ -727,7 +812,7 @@ export function TaskDetailV2Overlay({
           }}
         />
       ) : (
-        <p role="status">正在加载任务详情…</p>
+        <LoadingState label="正在加载任务详情" description="正在准备任务、步骤和安排。" />
       )}
     </TaskDetailSurface>
   );
@@ -786,6 +871,8 @@ function TaskDetailV2({
   const [moveFolderId, setMoveFolderId] = useState(detail.task.parentFolderId ?? '');
   const [folderBusy, setFolderBusy] = useState(false);
   const [error, setError] = useState('');
+  const [pendingStepDeletion, setPendingStepDeletion] = useState<TaskStepDto | null>(null);
+  const [taskDeletionOpen, setTaskDeletionOpen] = useState(false);
   const archived = Boolean(taskRecord.archivedAt);
   useEffect(() => {
     setTaskRecord(detail.task);
@@ -889,12 +976,13 @@ function TaskDetailV2({
     }
   };
   const deleteStep = async (step: TaskStepDto) => {
-    if (archived || !window.confirm(`删除步骤“${step.title}”？`)) return;
+    if (archived) return false;
     try {
       await mutationV2('DELETE', `/task-steps/${step.id}`, { baseVersion: step.version });
       setSteps((current) => current.filter((candidate) => candidate.id !== step.id));
+      return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '步骤删除失败');
+      throw cause instanceof Error ? cause : new Error('步骤删除失败');
     }
   };
   const loadFolderOptions = async () => {
@@ -942,15 +1030,15 @@ function TaskDetailV2({
     }
   };
   const deleteTask = async () => {
-    if (!window.confirm('删除任务及其备注、步骤、安排和流程成员？此操作不可恢复。')) return;
     try {
       await mutationV2('DELETE', `/tasks/${taskRecord.id}`, {
         baseVersion: taskRecord.version,
       });
       await onChanged();
       onClose();
+      return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '任务删除失败');
+      throw cause instanceof Error ? cause : new Error('任务删除失败');
     }
   };
   return (
@@ -958,9 +1046,10 @@ function TaskDetailV2({
       <div className="task-detail-v2-header">
         <div>
           <span className="eyebrow">{taskRecord.referenceId}</span>
-          <input
-            className="task-detail-title"
-            aria-label="任务标题"
+          <TextField
+            className="m3e-field--task-detail-title"
+            label="任务标题"
+            hideLabel
             value={title}
             disabled={archived}
             onChange={(event) => setTitle(event.target.value)}
@@ -979,35 +1068,56 @@ function TaskDetailV2({
           >
             复制任务
           </Button>
-          <IconButton label="关闭任务详情" type="button" onClick={onClose}>
-            ×
-          </IconButton>
         </div>
       </div>
       {error && (
-        <div className="error-banner" role="alert">
+        <Alert tone="error" title="任务操作失败">
           {error}
-        </div>
+        </Alert>
       )}
-      {archived && <div className="archive-notice">此任务已归档；恢复后才能编辑。</div>}
+      {archived && (
+        <Alert tone="warning" title="此任务已归档">
+          恢复后才能编辑任务、备注、步骤和安排。
+        </Alert>
+      )}
+      {pendingStepDeletion && (
+        <ConfirmDialog
+          open
+          title="删除执行步骤"
+          description={`删除步骤“${pendingStepDeletion.title}”？此操作不可恢复。`}
+          confirmLabel="删除步骤"
+          onClose={() => setPendingStepDeletion(null)}
+          onConfirm={() => deleteStep(pendingStepDeletion)}
+        />
+      )}
+      {taskDeletionOpen && (
+        <ConfirmDialog
+          open
+          title="删除任务"
+          description="删除任务及其备注、步骤、安排和流程成员？此操作不可恢复。"
+          confirmLabel="删除任务"
+          onClose={() => setTaskDeletionOpen(false)}
+          onConfirm={deleteTask}
+        />
+      )}
       <div className="task-detail-v2-status">
-        <span>任务状态</span>
-        {(['TODO', 'IN_PROGRESS', 'DONE'] as const).map((candidate) => (
-          <button
-            key={candidate}
-            type="button"
-            disabled={archived}
-            className={status === candidate ? 'active' : ''}
-            onClick={() => void updateTask({ status: candidate })}
-          >
-            {statusLabel(candidate)}
-          </button>
-        ))}
+        <ButtonGroup
+          value={status}
+          label="任务状态"
+          onChange={(candidate) => void updateTask({ status: candidate })}
+          options={[
+            { value: 'TODO', label: '待开始', disabled: archived },
+            { value: 'IN_PROGRESS', label: '进行中', disabled: archived },
+            { value: 'DONE', label: '已完成', disabled: archived },
+          ]}
+        />
       </div>
       <div className="task-detail-v2-section">
         <h3>备注</h3>
-        <textarea
-          aria-label="任务备注"
+        <TextArea
+          className="m3e-field--task-detail-note"
+          label="任务备注"
+          hideLabel
           value={note}
           disabled={archived}
           onChange={(event) => setNote(event.target.value)}
@@ -1030,8 +1140,10 @@ function TaskDetailV2({
           return (
             <div key={step.id} className="step-row step-row-editable">
               <div className="step-editor">
-                <input
-                  aria-label={`步骤 ${index + 1} 标题`}
+                <TextField
+                  className="m3e-field--step-title"
+                  label={`步骤 ${index + 1} 标题`}
+                  hideLabel
                   value={draft.title}
                   disabled={archived}
                   onChange={(event) =>
@@ -1045,8 +1157,10 @@ function TaskDetailV2({
                     void updateStep(step, { title: draft.title.trim() })
                   }
                 />
-                <textarea
-                  aria-label={`步骤 ${index + 1} 备注`}
+                <TextArea
+                  className="m3e-field--step-note"
+                  label={`步骤 ${index + 1} 备注`}
+                  hideLabel
                   placeholder="步骤备注（可选）"
                   value={draft.noteMarkdown}
                   disabled={archived}
@@ -1062,18 +1176,20 @@ function TaskDetailV2({
                   }
                   rows={2}
                 />
-                <select
-                  aria-label={`步骤 ${index + 1} 状态`}
+                <Select
+                  className="m3e-select--step-status"
+                  label={`步骤 ${index + 1} 状态`}
                   value={step.status}
                   disabled={archived}
-                  onChange={(event) =>
-                    void updateStep(step, { status: event.target.value as TaskStepDto['status'] })
+                  onChange={(value) =>
+                    void updateStep(step, { status: value as TaskStepDto['status'] })
                   }
-                >
-                  <option value="TODO">待开始</option>
-                  <option value="IN_PROGRESS">进行中</option>
-                  <option value="DONE">已完成</option>
-                </select>
+                  options={[
+                    { value: 'TODO', label: '待开始' },
+                    { value: 'IN_PROGRESS', label: '进行中' },
+                    { value: 'DONE', label: '已完成' },
+                  ]}
+                />
               </div>
               <div className="step-actions">
                 <IconButton
@@ -1098,7 +1214,7 @@ function TaskDetailV2({
                   type="button"
                   aria-label={`删除步骤 ${step.title}`}
                   disabled={archived}
-                  onClick={() => void deleteStep(step)}
+                  onClick={() => setPendingStepDeletion(step)}
                 >
                   ×
                 </IconButton>
@@ -1107,8 +1223,10 @@ function TaskDetailV2({
           );
         })}
         <form className="inline-capture" onSubmit={addStep}>
-          <input
-            aria-label="新增执行步骤"
+          <TextField
+            className="m3e-field--inline-capture"
+            label="新增执行步骤"
+            hideLabel
             placeholder="新增执行步骤…"
             value={newStep}
             onChange={(event) => setNewStep(event.target.value)}
@@ -1124,20 +1242,18 @@ function TaskDetailV2({
         <h3>所在目录</h3>
         <p>{detail.folderPath.map((folder) => folder.title).join(' / ') || '根目录'}</p>
         <div className="inline-capture">
-          <select
-            aria-label="移动任务到文件夹"
+          <Select
+            className="m3e-select--task-folder"
+            label="移动任务到文件夹"
             value={moveFolderId}
             disabled={archived || folderBusy}
             onFocus={() => void loadFolderOptions()}
-            onChange={(event) => setMoveFolderId(event.target.value)}
-          >
-            <option value="">根目录</option>
-            {folderOptions.map((folder) => (
-              <option value={folder.id} key={folder.id}>
-                {folder.title}
-              </option>
-            ))}
-          </select>
+            onChange={setMoveFolderId}
+            options={[
+              { value: '', label: '根目录' },
+              ...folderOptions.map((folder) => ({ value: folder.id, label: folder.title })),
+            ]}
+          />
           <Button
             variant="tonal"
             size="s"
@@ -1191,32 +1307,46 @@ function TaskDetailV2({
           <span className="muted">暂未加入流程</span>
         )}
       </div>
-      <div className="header-actions">
-        <Button
-          variant="tonal"
-          type="button"
-          onClick={() => {
-            void mutationV2('POST', `/tasks/${taskRecord.id}/${archived ? 'restore' : 'archive'}`, {
-              baseVersion: taskRecord.version,
-            })
-              .then((updated) => {
-                setTaskRecord(updated as TaskDetailV2Dto['task']);
-                return onChanged();
-              })
-              .catch((cause) => setError(cause instanceof Error ? cause.message : '归档操作失败'));
-          }}
-        >
-          {archived ? '恢复任务' : '归档任务'}
-        </Button>
-        <Button
-          variant="filled"
-          className="m3e-button--danger"
-          type="button"
-          onClick={() => void deleteTask()}
-        >
-          删除任务及全部内容
-        </Button>
-      </div>
+      <DestructiveSection
+        className="m3e-destructive-section--task-detail"
+        title="任务管理"
+        description={
+          archived ? '恢复任务后可继续编辑。' : '归档可恢复；删除会永久移除任务及其全部关联内容。'
+        }
+      >
+        <div className="header-actions">
+          <Button
+            variant="tonal"
+            type="button"
+            onClick={() => {
+              void mutationV2(
+                'POST',
+                `/tasks/${taskRecord.id}/${archived ? 'restore' : 'archive'}`,
+                {
+                  baseVersion: taskRecord.version,
+                },
+              )
+                .then((updated) => {
+                  setTaskRecord(updated as TaskDetailV2Dto['task']);
+                  return onChanged();
+                })
+                .catch((cause) =>
+                  setError(cause instanceof Error ? cause.message : '归档操作失败'),
+                );
+            }}
+          >
+            {archived ? '恢复任务' : '归档任务'}
+          </Button>
+          <Button
+            variant="filled"
+            className="m3e-button--danger"
+            type="button"
+            onClick={() => setTaskDeletionOpen(true)}
+          >
+            删除任务及全部内容
+          </Button>
+        </div>
+      </DestructiveSection>
     </div>
   );
 }
@@ -1233,9 +1363,12 @@ export function WorkflowsPage() {
   const [taskDrafts, setTaskDrafts] = useState<Record<string, string>>({});
   const [newTaskDrafts, setNewTaskDrafts] = useState<Record<string, string>>({});
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<ConfirmRequest | null>(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const [workflowResult, taskResult, folderResult] = await Promise.all([
         requestV2<{ items: WorkflowDto[] }>('/workflows?includeArchived=true'),
@@ -1248,6 +1381,8 @@ export function WorkflowsPage() {
       setError('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '流程加载失败');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -1270,6 +1405,15 @@ export function WorkflowsPage() {
     await run(() => mutationV2('POST', '/workflows', { name }));
     setName('');
   };
+  const addExistingTaskToStage = async (stage: NonNullable<WorkflowDto['stages']>[number]) => {
+    const taskId = taskDrafts[stage.id];
+    if (!taskId) return;
+    await run(() =>
+      mutationV2('POST', `/workflow-stages/${stage.id}/tasks`, { taskId }).then(() =>
+        setTaskDrafts((current) => ({ ...current, [stage.id]: '' })),
+      ),
+    );
+  };
   const createTaskInStage = async (stage: NonNullable<WorkflowDto['stages']>[number]) => {
     const title = newTaskDrafts[stage.id]?.trim();
     if (!title) return;
@@ -1291,6 +1435,15 @@ export function WorkflowsPage() {
       setNewTaskDrafts((current) => ({ ...current, [stage.id]: '' }));
     });
   };
+  const createStage = async (workflow: WorkflowDto) => {
+    const name = stageDrafts[workflow.id]?.trim();
+    if (!name) return;
+    await run(() =>
+      mutationV2('POST', `/workflows/${workflow.id}/stages`, { name }).then(() =>
+        setStageDrafts((current) => ({ ...current, [workflow.id]: '' })),
+      ),
+    );
+  };
 
   return (
     <section className="page-section workflows-page" aria-labelledby="workflows-title">
@@ -1302,15 +1455,23 @@ export function WorkflowsPage() {
         </div>
       </div>
       {error && (
-        <div className="error-banner" role="alert">
+        <Alert
+          tone="error"
+          title="流程操作失败"
+          action={
+            <Button variant="text" size="s" onClick={() => void load()}>
+              刷新
+            </Button>
+          }
+        >
           {error}
-        </div>
+        </Alert>
       )}
       <form onSubmit={create} className="tree-capture-form">
         <TextField
           label="新建流程"
           hideLabel
-          className="tree-inline-field"
+          className="m3e-field--tree-inline"
           placeholder="新建流程…"
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -1319,427 +1480,482 @@ export function WorkflowsPage() {
           创建流程
         </Button>
       </form>
-      {workflows.length === 0 && !error && (
-        <div className="empty-state workflow-empty-state">
-          <div className="empty-icon">
-            <WorkflowGlyph size={24} aria-hidden="true" />
-          </div>
-          <h2>还没有流程</h2>
-          <p>把重复的发布、插件或维护步骤拆成可复用的阶段。</p>
-        </div>
-      )}
-      {workflows.map((workflow) => {
-        const stages = workflow.stages ?? [];
-        const memberIds = new Set(stages.flatMap((stage) => stage.tasks.map((task) => task.id)));
-        const availableTasks = tasks.filter((task) => !task.archivedAt && !memberIds.has(task.id));
-        return (
-          <article className="workflow-card" key={workflow.id}>
-            <header>
-              <div>
-                <input
-                  className="workflow-name-input"
-                  aria-label={`流程名称 ${workflow.name}`}
-                  value={workflowDrafts[workflow.id] ?? workflow.name}
-                  disabled={Boolean(workflow.archivedAt)}
-                  onChange={(event) =>
-                    setWorkflowDrafts((current) => ({
-                      ...current,
-                      [workflow.id]: event.target.value,
-                    }))
-                  }
-                  onBlur={() => {
-                    const nextName = workflowDrafts[workflow.id]?.trim();
-                    if (nextName && nextName !== workflow.name)
+      {loading ? (
+        <LoadingState label="正在加载流程" description="正在准备流程、阶段和可加入的任务。" />
+      ) : workflows.length === 0 && !error ? (
+        <EmptyState
+          className="m3e-empty-state--workflow"
+          icon={<WorkflowGlyph size={24} aria-hidden="true" />}
+          title="还没有流程"
+          description="把重复的发布、插件或维护步骤拆成可复用的阶段。"
+        />
+      ) : (
+        workflows.map((workflow) => {
+          const stages = workflow.stages ?? [];
+          const memberIds = new Set(stages.flatMap((stage) => stage.tasks.map((task) => task.id)));
+          const availableTasks = tasks.filter(
+            (task) => !task.archivedAt && !memberIds.has(task.id),
+          );
+          const archived = Boolean(workflow.archivedAt);
+          return (
+            <Card
+              as="article"
+              variant={archived ? 'outlined' : 'filled'}
+              className="m3e-card--workflow"
+              key={workflow.id}
+            >
+              <header className="workflow-card__header">
+                <div className="workflow-card__summary">
+                  <TextField
+                    label="流程名称"
+                    className="m3e-field--workflow-name"
+                    value={workflowDrafts[workflow.id] ?? workflow.name}
+                    disabled={archived}
+                    onChange={(event) =>
+                      setWorkflowDrafts((current) => ({
+                        ...current,
+                        [workflow.id]: event.target.value,
+                      }))
+                    }
+                    onBlur={() => {
+                      const nextName = workflowDrafts[workflow.id]?.trim();
+                      if (nextName && nextName !== workflow.name)
+                        void run(() =>
+                          mutationV2('PATCH', `/workflows/${workflow.id}`, {
+                            name: nextName,
+                            baseVersion: workflow.version,
+                          }),
+                        );
+                    }}
+                  />
+                  <div className="workflow-card__meta">
+                    <Chip
+                      kind="assist"
+                      label={`${stages.length} 个阶段 · ${memberIds.size} 个任务`}
+                    />
+                    {archived && (
+                      <Chip kind="assist" label="已归档" className="m3e-chip--workflow-archive" />
+                    )}
+                  </div>
+                </div>
+                <div className="header-actions">
+                  <Button
+                    variant="tonal"
+                    size="s"
+                    type="button"
+                    onClick={() =>
                       void run(() =>
-                        mutationV2('PATCH', `/workflows/${workflow.id}`, {
-                          name: nextName,
-                          baseVersion: workflow.version,
-                        }),
-                      );
-                  }}
-                />
-                <span>
-                  {stages.length} 个阶段 · {memberIds.size} 个任务
-                </span>
+                        mutationV2(
+                          'POST',
+                          `/workflows/${workflow.id}/${archived ? 'restore' : 'archive'}`,
+                          { baseVersion: workflow.version },
+                        ),
+                      )
+                    }
+                  >
+                    {archived ? '恢复流程' : '归档流程'}
+                  </Button>
+                  <Button
+                    variant="filled"
+                    size="s"
+                    className="m3e-button--danger"
+                    type="button"
+                    onClick={() =>
+                      setConfirmation({
+                        title: '删除流程',
+                        description: `删除“${workflow.name}”的阶段与成员关系，但不会删除任务。此操作不可恢复。`,
+                        confirmLabel: '删除流程',
+                        danger: true,
+                        onConfirm: async () => {
+                          await mutationV2('DELETE', `/workflows/${workflow.id}`, {
+                            baseVersion: workflow.version,
+                          });
+                          await load();
+                          return true;
+                        },
+                      })
+                    }
+                  >
+                    删除
+                  </Button>
+                </div>
+              </header>
+              <div className="workflow-stages">
+                {stages.map((stage, index) => (
+                  <Card
+                    as="section"
+                    variant="outlined"
+                    className="m3e-card--workflow-stage"
+                    key={stage.id}
+                  >
+                    <header className="workflow-stage__header">
+                      <div className="workflow-stage__summary">
+                        <TextField
+                          label="阶段名称"
+                          className="m3e-field--workflow-stage-name"
+                          value={stageNameDrafts[stage.id] ?? stage.name}
+                          disabled={archived}
+                          onChange={(event) =>
+                            setStageNameDrafts((current) => ({
+                              ...current,
+                              [stage.id]: event.target.value,
+                            }))
+                          }
+                          onBlur={() => {
+                            const nextName = stageNameDrafts[stage.id]?.trim();
+                            if (nextName && nextName !== stage.name)
+                              void run(() =>
+                                mutationV2('PATCH', `/workflow-stages/${stage.id}`, {
+                                  name: nextName,
+                                  baseVersion: stage.version,
+                                }),
+                              );
+                          }}
+                        />
+                        {stage.hiddenTaskCount ? (
+                          <span className="workflow-stage__hidden-count">
+                            {stage.hiddenTaskCount} 个已归档任务已隐藏
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="workflow-stage__actions">
+                        <IconButton
+                          label="阶段上移"
+                          type="button"
+                          disabled={archived || index === 0}
+                          onClick={() =>
+                            void run(() =>
+                              mutationV2('POST', `/workflow-stages/${stage.id}/move`, {
+                                beforeId: stages[index - 1]?.id ?? null,
+                                afterId: null,
+                                baseVersion: stage.version,
+                              }),
+                            )
+                          }
+                        >
+                          <ArrowUp size={18} />
+                        </IconButton>
+                        <IconButton
+                          label="阶段下移"
+                          type="button"
+                          disabled={archived || index === stages.length - 1}
+                          onClick={() =>
+                            void run(() =>
+                              mutationV2('POST', `/workflow-stages/${stage.id}/move`, {
+                                beforeId: null,
+                                afterId: stages[index + 1]?.id ?? null,
+                                baseVersion: stage.version,
+                              }),
+                            )
+                          }
+                        >
+                          <ArrowDown size={18} />
+                        </IconButton>
+                        <IconButton
+                          label={`删除阶段 ${stage.name}`}
+                          className="m3e-icon-button--danger"
+                          type="button"
+                          disabled={archived}
+                          onClick={() =>
+                            setConfirmation({
+                              title: '删除阶段',
+                              description: `删除“${stage.name}”及其中的流程成员关系，但不会删除任务。此操作不可恢复。`,
+                              confirmLabel: '删除阶段',
+                              danger: true,
+                              onConfirm: async () => {
+                                await mutationV2('DELETE', `/workflow-stages/${stage.id}`, {
+                                  baseVersion: stage.version,
+                                });
+                                await load();
+                                return true;
+                              },
+                            })
+                          }
+                        >
+                          <Trash2 size={18} />
+                        </IconButton>
+                      </div>
+                    </header>
+                    <List className="m3e-list--workflow-stage">
+                      {stage.tasks.map((task, taskIndex) => {
+                        const membership = stage.memberships?.find(
+                          (candidate) => candidate.taskId === task.id,
+                        );
+                        const folderTitle = task.parentFolderId
+                          ? (folders.find((folder) => folder.id === task.parentFolderId)?.title ??
+                            '目录')
+                          : '根目录';
+                        const nextStatusMap: Record<TaskStatus, TaskStatus> = {
+                          TODO: 'IN_PROGRESS',
+                          IN_PROGRESS: 'DONE',
+                          DONE: 'TODO',
+                        };
+                        const prevMember = taskIndex > 0 ? stage.tasks[taskIndex - 1] : null;
+                        const nextMember =
+                          taskIndex < stage.tasks.length - 1 ? stage.tasks[taskIndex + 1] : null;
+                        return (
+                          <ListItem
+                            className="m3e-list-item--workflow-task"
+                            key={task.id}
+                            leading={
+                              <Chip
+                                kind="assist"
+                                label={statusLabel(task.status)}
+                                disabled={archived}
+                                className={`m3e-chip--workflow-task-status m3e-chip--workflow-task-status-${statusClass(task.status)}`}
+                                onClick={() =>
+                                  void run(() =>
+                                    mutationV2('PATCH', `/tasks/${task.id}`, {
+                                      status: nextStatusMap[task.status],
+                                      baseVersion: task.version,
+                                    }),
+                                  )
+                                }
+                              />
+                            }
+                            headline={
+                              <Button
+                                variant="text"
+                                size="s"
+                                type="button"
+                                className="m3e-button--workflow-task-primary"
+                                onClick={() => setSelectedTaskId(task.id)}
+                              >
+                                {task.title}
+                              </Button>
+                            }
+                            supporting={
+                              <span className="workflow-task__meta">
+                                <code>{task.referenceId}</code>
+                                <span className="workflow-task__folder">
+                                  <Folder size={15} aria-hidden="true" />
+                                  {folderTitle}
+                                </span>
+                              </span>
+                            }
+                            trailing={
+                              <span className="workflow-task__actions">
+                                {taskIndex > 0 && membership && prevMember && (
+                                  <IconButton
+                                    label="在阶段内上移"
+                                    type="button"
+                                    disabled={archived}
+                                    onClick={() =>
+                                      void run(() =>
+                                        mutationV2(
+                                          'POST',
+                                          `/workflow-memberships/${membership.id}/move`,
+                                          {
+                                            stageId: stage.id,
+                                            beforeId: stage.memberships?.find(
+                                              (candidate) => candidate.taskId === prevMember.id,
+                                            )?.id,
+                                            baseVersion: membership.version,
+                                          },
+                                        ),
+                                      )
+                                    }
+                                  >
+                                    <ArrowUp size={17} />
+                                  </IconButton>
+                                )}
+                                {taskIndex < stage.tasks.length - 1 && membership && nextMember && (
+                                  <IconButton
+                                    label="在阶段内下移"
+                                    type="button"
+                                    disabled={archived}
+                                    onClick={() =>
+                                      void run(() =>
+                                        mutationV2(
+                                          'POST',
+                                          `/workflow-memberships/${membership.id}/move`,
+                                          {
+                                            stageId: stage.id,
+                                            afterId: stage.memberships?.find(
+                                              (candidate) => candidate.taskId === nextMember.id,
+                                            )?.id,
+                                            baseVersion: membership.version,
+                                          },
+                                        ),
+                                      )
+                                    }
+                                  >
+                                    <ArrowDown size={17} />
+                                  </IconButton>
+                                )}
+                                {index > 0 && membership && (
+                                  <IconButton
+                                    label="移到上一阶段"
+                                    type="button"
+                                    disabled={archived}
+                                    onClick={() =>
+                                      void run(() =>
+                                        mutationV2(
+                                          'POST',
+                                          `/workflow-memberships/${membership.id}/move`,
+                                          {
+                                            stageId: stages[index - 1]!.id,
+                                            baseVersion: membership.version,
+                                          },
+                                        ),
+                                      )
+                                    }
+                                  >
+                                    <ArrowLeft size={17} />
+                                  </IconButton>
+                                )}
+                                {index < stages.length - 1 && membership && (
+                                  <IconButton
+                                    label="移到下一阶段"
+                                    type="button"
+                                    disabled={archived}
+                                    onClick={() =>
+                                      void run(() =>
+                                        mutationV2(
+                                          'POST',
+                                          `/workflow-memberships/${membership.id}/move`,
+                                          {
+                                            stageId: stages[index + 1]!.id,
+                                            baseVersion: membership.version,
+                                          },
+                                        ),
+                                      )
+                                    }
+                                  >
+                                    <ArrowRight size={17} />
+                                  </IconButton>
+                                )}
+                                {membership && (
+                                  <IconButton
+                                    label={`从阶段中移除 ${task.title}`}
+                                    type="button"
+                                    className="m3e-icon-button--danger"
+                                    disabled={archived}
+                                    onClick={() =>
+                                      void run(() =>
+                                        mutationV2(
+                                          'DELETE',
+                                          `/workflow-memberships/${membership.id}`,
+                                          {
+                                            baseVersion: membership.version,
+                                          },
+                                        ),
+                                      )
+                                    }
+                                  >
+                                    <Trash2 size={17} />
+                                  </IconButton>
+                                )}
+                              </span>
+                            }
+                          />
+                        );
+                      })}
+                    </List>
+                    <div className="workflow-add-task">
+                      <div className="workflow-add-task__existing">
+                        <Select
+                          label="添加已有任务"
+                          className="m3e-select--workflow-add-task"
+                          value={taskDrafts[stage.id] ?? ''}
+                          disabled={archived}
+                          options={[
+                            { value: '', label: '添加已有任务…' },
+                            ...availableTasks.map((task) => ({
+                              value: task.id,
+                              label: task.title,
+                            })),
+                          ]}
+                          onChange={(value) =>
+                            setTaskDrafts((current) => ({ ...current, [stage.id]: value }))
+                          }
+                        />
+                        <Button
+                          variant="tonal"
+                          size="s"
+                          type="button"
+                          disabled={archived || !taskDrafts[stage.id]}
+                          onClick={() => void addExistingTaskToStage(stage)}
+                        >
+                          添加
+                        </Button>
+                      </div>
+                      <form
+                        className="workflow-add-task__create"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void createTaskInStage(stage);
+                        }}
+                      >
+                        <TextField
+                          label={`在${stage.name}中新建任务`}
+                          hideLabel
+                          className="m3e-field--workflow-add-task"
+                          placeholder="新建任务…"
+                          value={newTaskDrafts[stage.id] ?? ''}
+                          disabled={archived}
+                          onChange={(event) =>
+                            setNewTaskDrafts((current) => ({
+                              ...current,
+                              [stage.id]: event.target.value,
+                            }))
+                          }
+                        />
+                        <Button
+                          variant="tonal"
+                          size="s"
+                          type="submit"
+                          disabled={archived || !newTaskDrafts[stage.id]?.trim()}
+                        >
+                          新建并加入
+                        </Button>
+                      </form>
+                    </div>
+                  </Card>
+                ))}
               </div>
-              <div className="header-actions">
+              <form
+                className="workflow-add-stage"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void createStage(workflow);
+                }}
+              >
+                <TextField
+                  label={`为${workflow.name}新增阶段`}
+                  hideLabel
+                  className="m3e-field--workflow-add-stage"
+                  placeholder="新增阶段…"
+                  value={stageDrafts[workflow.id] ?? ''}
+                  disabled={archived}
+                  onChange={(event) =>
+                    setStageDrafts((current) => ({ ...current, [workflow.id]: event.target.value }))
+                  }
+                />
                 <Button
                   variant="tonal"
                   size="s"
-                  type="button"
-                  onClick={() =>
-                    void run(() =>
-                      mutationV2(
-                        'POST',
-                        `/workflows/${workflow.id}/${workflow.archivedAt ? 'restore' : 'archive'}`,
-                        { baseVersion: workflow.version },
-                      ),
-                    )
-                  }
+                  type="submit"
+                  disabled={archived || !stageDrafts[workflow.id]?.trim()}
                 >
-                  {workflow.archivedAt ? '恢复流程' : '归档流程'}
+                  新增阶段
                 </Button>
-                <Button
-                  variant="filled"
-                  size="s"
-                  className="m3e-button--danger"
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm('删除流程结构？不会删除任务。'))
-                      void run(() =>
-                        mutationV2('DELETE', `/workflows/${workflow.id}`, {
-                          baseVersion: workflow.version,
-                        }),
-                      );
-                  }}
-                >
-                  删除
-                </Button>
-              </div>
-            </header>
-            <div className="workflow-stages">
-              {stages.map((stage, index) => (
-                <section key={stage.id}>
-                  <div className="workflow-stage-heading">
-                    <input
-                      className="workflow-stage-name-input"
-                      aria-label={`阶段名称 ${stage.name}`}
-                      value={stageNameDrafts[stage.id] ?? stage.name}
-                      disabled={Boolean(workflow.archivedAt)}
-                      onChange={(event) =>
-                        setStageNameDrafts((current) => ({
-                          ...current,
-                          [stage.id]: event.target.value,
-                        }))
-                      }
-                      onBlur={() => {
-                        const nextName = stageNameDrafts[stage.id]?.trim();
-                        if (nextName && nextName !== stage.name)
-                          void run(() =>
-                            mutationV2('PATCH', `/workflow-stages/${stage.id}`, {
-                              name: nextName,
-                              baseVersion: stage.version,
-                            }),
-                          );
-                      }}
-                    />
-                    {stage.hiddenTaskCount ? (
-                      <span className="muted">{stage.hiddenTaskCount} 个已归档任务已隐藏</span>
-                    ) : null}
-                    <div>
-                      <IconButton
-                        label="阶段上移"
-                        type="button"
-                        disabled={index === 0}
-                        onClick={() =>
-                          void run(() =>
-                            mutationV2('POST', `/workflow-stages/${stage.id}/move`, {
-                              beforeId: stages[index - 1]?.id ?? null,
-                              afterId: null,
-                              baseVersion: stage.version,
-                            }),
-                          )
-                        }
-                      >
-                        ↑
-                      </IconButton>
-                      <IconButton
-                        label="阶段下移"
-                        type="button"
-                        disabled={index === stages.length - 1}
-                        onClick={() =>
-                          void run(() =>
-                            mutationV2('POST', `/workflow-stages/${stage.id}/move`, {
-                              beforeId: null,
-                              afterId: stages[index + 1]?.id ?? null,
-                              baseVersion: stage.version,
-                            }),
-                          )
-                        }
-                      >
-                        ↓
-                      </IconButton>
-                      <IconButton
-                        label="操作"
-                        className="m3e-icon-button--danger"
-                        type="button"
-                        aria-label={`删除阶段 ${stage.name}`}
-                        disabled={Boolean(workflow.archivedAt)}
-                        onClick={() => {
-                          if (window.confirm('删除阶段及其中的流程成员？不会删除任务。'))
-                            void run(() =>
-                              mutationV2('DELETE', `/workflow-stages/${stage.id}`, {
-                                baseVersion: stage.version,
-                              }),
-                            );
-                        }}
-                      >
-                        ×
-                      </IconButton>
-                    </div>
-                  </div>
-                  {stage.tasks.map((task, taskIndex) => {
-                    const membership = stage.memberships?.find(
-                      (candidate) => candidate.taskId === task.id,
-                    );
-                    const folderTitle = task.parentFolderId
-                      ? (folders.find((f) => f.id === task.parentFolderId)?.title ?? '目录')
-                      : '根目录';
-                    const nextStatusMap: Record<TaskStatus, TaskStatus> = {
-                      TODO: 'IN_PROGRESS',
-                      IN_PROGRESS: 'DONE',
-                      DONE: 'TODO',
-                    };
-                    const prevMember = taskIndex > 0 ? stage.tasks[taskIndex - 1] : null;
-                    const nextMember =
-                      taskIndex < stage.tasks.length - 1 ? stage.tasks[taskIndex + 1] : null;
-                    return (
-                      <div className="workflow-task" key={task.id}>
-                        <div
-                          style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <button
-                              type="button"
-                              className={`status-pill ${task.status.toLowerCase()}`}
-                              title="点击直接切换状态"
-                              onClick={() =>
-                                void run(() =>
-                                  mutationV2('PATCH', `/tasks/${task.id}`, {
-                                    status: nextStatusMap[task.status],
-                                    baseVersion: task.version,
-                                  }),
-                                )
-                              }
-                            >
-                              {task.status === 'DONE'
-                                ? '✓ 已完成'
-                                : task.status === 'IN_PROGRESS'
-                                  ? '进行中'
-                                  : '待办'}
-                            </button>
-                            <Button
-                              variant="text"
-                              type="button"
-                              title="打开任务详情"
-                              onClick={() => setSelectedTaskId(task.id)}
-                              style={{ fontWeight: 500 }}
-                            >
-                              {task.title}
-                            </Button>
-                          </div>
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              fontSize: '0.8rem',
-                              color: '#666',
-                            }}
-                          >
-                            <code>{task.referenceId}</code>
-                            <span>📁 {folderTitle}</span>
-                          </div>
-                        </div>
-                        <div className="header-actions">
-                          {taskIndex > 0 && membership && prevMember && (
-                            <Button
-                              variant="text"
-                              type="button"
-                              title="阶段内上移"
-                              onClick={() =>
-                                void run(() =>
-                                  mutationV2(
-                                    'POST',
-                                    `/workflow-memberships/${membership.id}/move`,
-                                    {
-                                      stageId: stage.id,
-                                      beforeId: stage.memberships?.find(
-                                        (m) => m.taskId === prevMember.id,
-                                      )?.id,
-                                      baseVersion: membership.version,
-                                    },
-                                  ),
-                                )
-                              }
-                            >
-                              ↑
-                            </Button>
-                          )}
-                          {taskIndex < stage.tasks.length - 1 && membership && nextMember && (
-                            <Button
-                              variant="text"
-                              type="button"
-                              title="阶段内下移"
-                              onClick={() =>
-                                void run(() =>
-                                  mutationV2(
-                                    'POST',
-                                    `/workflow-memberships/${membership.id}/move`,
-                                    {
-                                      stageId: stage.id,
-                                      afterId: stage.memberships?.find(
-                                        (m) => m.taskId === nextMember.id,
-                                      )?.id,
-                                      baseVersion: membership.version,
-                                    },
-                                  ),
-                                )
-                              }
-                            >
-                              ↓
-                            </Button>
-                          )}
-                          {index > 0 && membership && (
-                            <Button
-                              variant="text"
-                              type="button"
-                              title="移到上一阶段"
-                              onClick={() =>
-                                void run(() =>
-                                  mutationV2(
-                                    'POST',
-                                    `/workflow-memberships/${membership.id}/move`,
-                                    {
-                                      stageId: stages[index - 1]!.id,
-                                      baseVersion: membership.version,
-                                    },
-                                  ),
-                                )
-                              }
-                            >
-                              ←
-                            </Button>
-                          )}
-                          {index < stages.length - 1 && membership && (
-                            <Button
-                              variant="text"
-                              type="button"
-                              title="移到下一阶段"
-                              onClick={() =>
-                                void run(() =>
-                                  mutationV2(
-                                    'POST',
-                                    `/workflow-memberships/${membership.id}/move`,
-                                    {
-                                      stageId: stages[index + 1]!.id,
-                                      baseVersion: membership.version,
-                                    },
-                                  ),
-                                )
-                              }
-                            >
-                              →
-                            </Button>
-                          )}
-                          {membership && (
-                            <Button
-                              variant="text"
-                              className="danger-text"
-                              type="button"
-                              onClick={() =>
-                                void run(() =>
-                                  mutationV2('DELETE', `/workflow-memberships/${membership.id}`, {
-                                    baseVersion: membership.version,
-                                  }),
-                                )
-                              }
-                            >
-                              移除
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div className="workflow-add-task">
-                    <select
-                      aria-label={`添加任务到${stage.name}`}
-                      value={taskDrafts[stage.id] ?? ''}
-                      onChange={(event) =>
-                        setTaskDrafts((current) => ({ ...current, [stage.id]: event.target.value }))
-                      }
-                    >
-                      <option value="">添加已有任务…</option>
-                      {availableTasks.map((task) => (
-                        <option value={task.id} key={task.id}>
-                          {task.title}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      variant="tonal"
-                      size="s"
-                      type="button"
-                      disabled={!taskDrafts[stage.id]}
-                      onClick={() =>
-                        void run(() =>
-                          mutationV2('POST', `/workflow-stages/${stage.id}/tasks`, {
-                            taskId: taskDrafts[stage.id],
-                          }).then(() =>
-                            setTaskDrafts((current) => ({ ...current, [stage.id]: '' })),
-                          ),
-                        )
-                      }
-                    >
-                      添加
-                    </Button>
-                    <input
-                      aria-label={`在${stage.name}中新建任务`}
-                      placeholder="新建任务…"
-                      value={newTaskDrafts[stage.id] ?? ''}
-                      disabled={Boolean(workflow.archivedAt)}
-                      onChange={(event) =>
-                        setNewTaskDrafts((current) => ({
-                          ...current,
-                          [stage.id]: event.target.value,
-                        }))
-                      }
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') void createTaskInStage(stage);
-                      }}
-                    />
-                    <Button
-                      variant="tonal"
-                      size="s"
-                      type="button"
-                      disabled={Boolean(workflow.archivedAt) || !newTaskDrafts[stage.id]?.trim()}
-                      onClick={() => void createTaskInStage(stage)}
-                    >
-                      新建并加入
-                    </Button>
-                  </div>
-                </section>
-              ))}
-            </div>
-            <div className="workflow-add-stage">
-              <input
-                aria-label={`为${workflow.name}新增阶段`}
-                placeholder="新增阶段…"
-                value={stageDrafts[workflow.id] ?? ''}
-                onChange={(event) =>
-                  setStageDrafts((current) => ({ ...current, [workflow.id]: event.target.value }))
-                }
-              />
-              <Button
-                variant="tonal"
-                size="s"
-                type="button"
-                disabled={!stageDrafts[workflow.id]?.trim()}
-                onClick={() =>
-                  void run(() =>
-                    mutationV2('POST', `/workflows/${workflow.id}/stages`, {
-                      name: stageDrafts[workflow.id],
-                    }).then(() => setStageDrafts((current) => ({ ...current, [workflow.id]: '' }))),
-                  )
-                }
-              >
-                新增阶段
-              </Button>
-            </div>
-          </article>
-        );
-      })}
+              </form>
+            </Card>
+          );
+        })
+      )}
+      {confirmation && (
+        <ConfirmDialog
+          open
+          title={confirmation.title}
+          description={confirmation.description}
+          confirmLabel={confirmation.confirmLabel}
+          danger={confirmation.danger}
+          onClose={() => setConfirmation(null)}
+          onConfirm={confirmation.onConfirm}
+        />
+      )}
       <TaskDetailV2Overlay
         taskId={selectedTaskId}
         onClose={() => setSelectedTaskId(null)}
@@ -1757,12 +1973,17 @@ export function AllTasksV2Page() {
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'TODO' | 'IN_PROGRESS' | 'DONE'>('ALL');
+  const [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const result = await requestV2<{ items: typeof tasks }>('/tasks');
       setTasks(result.items);
+      setError('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '任务加载失败');
+    } finally {
+      setLoading(false);
     }
   }, []);
   useEffect(() => {
@@ -1785,11 +2006,11 @@ export function AllTasksV2Page() {
     }
   };
   return (
-    <section className="page-section all-tasks-page">
+    <section className="page-section all-tasks-page" aria-labelledby="all-tasks-title">
       <div className="page-header">
         <div>
           <p className="eyebrow">任务库</p>
-          <h1>全部任务</h1>
+          <h1 id="all-tasks-title">全部任务</h1>
           <p className="page-subtitle">按任务本体查看，不重复显示目录、日期或流程中的同一任务。</p>
         </div>
       </div>
@@ -1800,52 +2021,70 @@ export function AllTasksV2Page() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <label className="select-field">
-          <span>状态</span>
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
-          >
-            <option value="ALL">全部状态</option>
-            <option value="TODO">待开始</option>
-            <option value="IN_PROGRESS">进行中</option>
-            <option value="DONE">已完成</option>
-          </select>
-        </label>
+        <Select
+          label="状态"
+          className="m3e-select--all-tasks-filter"
+          value={statusFilter}
+          options={[
+            { value: 'ALL', label: '全部状态' },
+            { value: 'TODO', label: '待开始' },
+            { value: 'IN_PROGRESS', label: '进行中' },
+            { value: 'DONE', label: '已完成' },
+          ]}
+          onChange={(value) => setStatusFilter(value as typeof statusFilter)}
+        />
       </div>
       {error && (
-        <div className="error-banner" role="alert">
+        <Alert
+          tone="error"
+          title="任务操作失败"
+          action={
+            <Button variant="text" size="s" onClick={() => void load()}>
+              刷新
+            </Button>
+          }
+        >
           {error}
-        </div>
+        </Alert>
       )}
-      <div className="tree-group">
-        {visibleTasks.map((task) => (
-          <article className="tree-row task-row-v2" key={task.id}>
-            <button
-              type="button"
-              className="tree-main-button"
+      {loading ? (
+        <LoadingState label="正在加载任务" description="正在准备全部任务的最新状态。" />
+      ) : visibleTasks.length ? (
+        <List className="m3e-list--all-tasks">
+          {visibleTasks.map((task) => (
+            <ListItem
+              className="m3e-list-item--all-task"
+              key={task.id}
               onClick={() => setSelectedTaskId(task.id)}
-              aria-label={`打开任务 ${task.title}`}
-            >
-              <ListChecks size={20} />
-              <span className="tree-item-title">{task.title}</span>
-              <code>{task.referenceId}</code>
-              <span className={`status-chip ${statusClass(task.status)}`}>
-                {statusLabel(task.status)}
-              </span>
-            </button>
-            <IconButton
-              label="操作"
-              type="button"
-              onClick={() => void archiveTask(task)}
-              aria-label={`归档任务 ${task.title}`}
-            >
-              <Archive size={16} />
-            </IconButton>
-          </article>
-        ))}
-        {!visibleTasks.length && <div className="empty-state">没有符合条件的任务。</div>}
-      </div>
+              ariaLabel={`打开任务 ${task.title}`}
+              leading={<ListChecks size={20} />}
+              headline={task.title}
+              supporting={<code>{task.referenceId}</code>}
+              trailing={
+                <Chip
+                  kind="assist"
+                  label={statusLabel(task.status)}
+                  className={`m3e-chip--all-task-status m3e-chip--all-task-status-${statusClass(task.status)}`}
+                />
+              }
+              actions={
+                <IconButton
+                  label={`归档任务 ${task.title}`}
+                  type="button"
+                  onClick={() => void archiveTask(task)}
+                >
+                  <Archive size={16} />
+                </IconButton>
+              }
+            />
+          ))}
+        </List>
+      ) : (
+        <EmptyState
+          title="没有符合条件的任务"
+          description="调整关键词或状态筛选，或在任务库中创建新任务。"
+        />
+      )}
       <TaskDetailV2Overlay
         taskId={selectedTaskId}
         onClose={() => setSelectedTaskId(null)}

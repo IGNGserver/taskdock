@@ -414,3 +414,136 @@
 .m3e-switch.is-disabled {
   opacity: 0.6;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Page-context modifiers (field/select internals stay here)                 */
+/* -------------------------------------------------------------------------- */
+
+.m3e-field--date-jump .m3e-field__box {
+  min-block-size: 40px;
+  border-radius: var(--m3-shape-xs);
+  background: transparent;
+}
+
+.m3e-field--date-jump .m3e-field__input {
+  min-block-size: 40px;
+  padding-inline: 10px;
+}
+
+.m3e-field--inline-capture,
+.m3e-field--workflow-add-task,
+.m3e-field--workflow-add-stage {
+  flex: 1 1 190px;
+  min-inline-size: 0;
+}
+
+.m3e-field--inline-capture .m3e-field__box,
+.m3e-field--workflow-add-task .m3e-field__box,
+.m3e-field--workflow-add-stage .m3e-field__box {
+  min-block-size: 48px;
+  border-radius: var(--m3-shape-md);
+  background: var(--m3-surface-container-low);
+}
+
+.m3e-field--inline-capture .m3e-field__input,
+.m3e-field--workflow-add-task .m3e-field__input,
+.m3e-field--workflow-add-stage .m3e-field__input {
+  min-block-size: 48px;
+  padding-inline: 14px;
+  font-size: var(--m3-type-body-medium-size);
+}
+
+.m3e-field--tree-inline {
+  flex: 1 1 360px;
+  min-inline-size: 0;
+  max-inline-size: 560px;
+}
+
+.m3e-field--tree-inline .m3e-field__box {
+  min-block-size: 48px;
+  border-radius: var(--m3-shape-md);
+  background: var(--m3-surface-container-low);
+}
+
+.m3e-field--tree-inline .m3e-field__input {
+  min-block-size: 48px;
+  padding-inline: 14px;
+  font-size: var(--m3-type-body-medium-size);
+}
+
+.m3e-field--tree-inline .m3e-field__input::placeholder {
+  color: var(--m3-on-surface-variant);
+}
+
+.m3e-field--conflict-merge .m3e-field__box {
+  min-block-size: 120px;
+  background: var(--m3-surface-container-lowest);
+}
+
+.m3e-field--conflict-merge .m3e-field__input {
+  min-block-size: 120px;
+  padding: 10px 12px;
+  font-family: var(--m3-font-mono);
+  font-size: var(--m3-type-body-small-size);
+  resize: vertical;
+}
+
+.m3e-field--step-title,
+.m3e-field--step-note,
+.m3e-field--task-detail-title,
+.m3e-field--task-detail-note {
+  inline-size: 100%;
+}
+
+.m3e-field--step-note .m3e-field__input,
+.m3e-field--task-detail-note .m3e-field__input {
+  min-block-size: 96px;
+  padding: 10px 12px;
+}
+
+.m3e-field--task-detail-title .m3e-field__input {
+  font-size: var(--m3-type-title-large-size);
+  font-weight: 600;
+}
+
+.m3e-field--workflow-name,
+.m3e-field--workflow-stage-name {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.m3e-select--all-tasks-filter,
+.m3e-select--step-status,
+.m3e-select--task-folder,
+.m3e-select--tree-view,
+.m3e-select--workflow-add-task {
+  min-inline-size: 0;
+}
+
+.m3e-select--all-tasks-filter .m3e-select__trigger,
+.m3e-select--step-status .m3e-select__trigger,
+.m3e-select--task-folder .m3e-select__trigger,
+.m3e-select--tree-view .m3e-select__trigger,
+.m3e-select--workflow-add-task .m3e-select__trigger {
+  min-block-size: 48px;
+  border-radius: var(--m3-shape-md);
+}
+
+@media (max-width: 599.98px) {
+  .m3e-field__input,
+  .m3e-select__trigger {
+    font-size: max(16px, 1rem);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m3e-switch__thumb {
+    transition-duration: var(--m3-spring-spatial-fast-duration);
+  }
+
+  .m3e-select__popup {
+    animation-name: m3e-fade-in;
+  }
+}

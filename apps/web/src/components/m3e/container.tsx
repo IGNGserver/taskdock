@@ -80,6 +80,7 @@ export function ListItem({
   trailingSupporting,
   leading,
   trailing,
+  actions,
   onClick,
   selected = false,
   className,
@@ -93,6 +94,8 @@ export function ListItem({
   trailingSupporting?: ReactNode;
   leading?: ReactNode;
   trailing?: ReactNode;
+  /** Interactive actions rendered beside an interactive row, never nested in its button. */
+  actions?: ReactNode;
   onClick?: () => void;
   selected?: boolean;
   className?: string;
@@ -134,7 +137,7 @@ export function ListItem({
   }
 
   return (
-    <li className="m3e-list-item__wrapper">
+    <li className={joinClasses('m3e-list-item__wrapper', Boolean(actions) && 'has-actions')}>
       <button
         {...(props as HTMLAttributes<HTMLButtonElement>)}
         type="button"
@@ -146,6 +149,7 @@ export function ListItem({
       >
         {content}
       </button>
+      {actions && <span className="m3e-list-item__actions">{actions}</span>}
     </li>
   );
 }

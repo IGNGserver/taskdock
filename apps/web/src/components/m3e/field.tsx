@@ -169,6 +169,7 @@ export function Select({
   name,
   className,
   id,
+  onFocus,
 }: {
   label: string;
   options: readonly SelectOption[];
@@ -179,6 +180,8 @@ export function Select({
   name?: string;
   className?: string;
   id?: string;
+  /** Called when the visible M3E combobox receives focus. */
+  onFocus?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useDismissibleMenu(open, () => setOpen(false));
@@ -218,6 +221,7 @@ export function Select({
         aria-labelledby={`${listId}-label`}
         disabled={disabled}
         className="m3e-select__trigger"
+        onFocus={() => onFocus?.()}
         onClick={() => {
           haptic();
           setOpen((current) => !current);

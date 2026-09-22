@@ -249,12 +249,12 @@ test('verifies v2 workflow reordering, direct status toggles, folder display, an
 
   // Navigate to Workflows page
   await page.goto('/workflows');
-  await expect(page.getByRole('textbox', { name: '流程名称 发布流程' })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: '阶段名称 开发阶段' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '流程名称' })).toHaveValue('发布流程');
+  await expect(page.getByRole('textbox', { name: '阶段名称' })).toHaveValue('开发阶段');
   await expect(page.getByText('任务一')).toBeVisible();
   await expect(
     page
-      .locator('.workflow-task')
+      .locator('.m3e-list-item--workflow-task')
       .first()
       .getByText(/工作项目/),
   ).toBeVisible();
@@ -265,8 +265,8 @@ test('verifies v2 workflow reordering, direct status toggles, folder display, an
 
   // Test deep-link jump to directory with focusTask query parameter
   await page.goto(`/tree/${folder.id}?focusTask=${task1.id}`);
-  await expect(page.locator('.focused-highlight')).toBeVisible();
-  await expect(page.locator('.focused-highlight')).toContainText('任务一');
+  await expect(page.locator('.m3e-list-item.is-selected')).toBeVisible();
+  await expect(page.locator('.m3e-list-item.is-selected')).toContainText('任务一');
 });
 
 test('groups the archive centre by cascade operation and distinguishes retained descendants', async ({

@@ -1,4 +1,4 @@
-import { useRef, type ComponentType, type ReactNode } from 'react';
+import { useRef, type ComponentType, type ReactNode, type Ref } from 'react';
 
 import { SPRING_DURATION, haptic, useFocusTrap, usePresence, useScrollLock } from './behavior.js';
 import { IconButton, CloseGlyph, joinClasses } from './button.js';
@@ -369,6 +369,7 @@ export function SearchBar({
   variant = 'docked',
   autoFocus = false,
   className,
+  inputRef,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -381,6 +382,7 @@ export function SearchBar({
   variant?: 'docked' | 'view';
   autoFocus?: boolean;
   className?: string;
+  inputRef?: Ref<HTMLInputElement>;
 }) {
   return (
     <form
@@ -393,6 +395,7 @@ export function SearchBar({
     >
       {leadingIcon && <span className="m3e-search-bar__leading">{leadingIcon}</span>}
       <input
+        ref={inputRef}
         type="search"
         className="m3e-search-bar__input"
         aria-label={label}

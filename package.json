@@ -34,7 +34,8 @@
     "desktop:test": "tsx scripts/desktop-security-smoke.ts",
     "android:assembleRelease": "pnpm brand:sync && tsx scripts/android-assemble.ts",
     "db:migrate": "tsx scripts/migrate.ts",
-    "openapi:check": "tsx scripts/openapi-check.ts"
+    "openapi:check": "tsx scripts/openapi-check.ts",
+    "verify:m3e:web": "tsx scripts/verify-m3e-web.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

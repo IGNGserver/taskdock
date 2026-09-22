@@ -16,8 +16,10 @@ test('explains that first-run initialization happens during deployment', async (
     }),
   );
   await page.goto('/login');
-  await expect(page.getByRole('heading', { name: '等待中枢初始化' })).toBeVisible();
-  await expect(page.getByText('初始化令牌只在部署中枢时使用。')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '等待服务器准备就绪' })).toBeVisible();
+  await expect(
+    page.getByText('请让管理员在服务器端完成首次初始化，完成后刷新此页面即可登录。'),
+  ).toBeVisible();
   await expect(page.getByLabel('初始化令牌')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '登录' })).toBeDisabled();
 });
@@ -129,12 +131,6 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
         contentType: 'application/json',
         body: JSON.stringify({ items: [] }),
       });
-    if (route.request().method() === 'GET' && path.endsWith('/devices'))
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([]),
-      });
     if (route.request().method() === 'GET' && path.endsWith('/projects/task-counts'))
       return route.fulfill({
         status: 200,
@@ -226,10 +222,10 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
     await expect(drawer).toBeHidden();
     await page
       .getByRole('navigation', { name: '移动导航' })
-      .getByRole('link', { name: '目录' })
+      .getByRole('link', { name: '任务库' })
       .click();
     await expect(page).toHaveURL(/\/tree$/);
-    await expect(page.getByRole('heading', { name: '目录' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '任务库' })).toBeVisible();
   }
 
   await quickEntry.click();

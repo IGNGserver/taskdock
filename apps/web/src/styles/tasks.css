@@ -134,12 +134,6 @@
     scale var(--m3-spring-expressive-spatial-duration) var(--m3-spring-expressive-spatial);
 }
 
-button.task-status-button:hover,
-.task-status-button:hover {
-  background-color: var(--m3-secondary-container);
-  color: var(--m3-on-secondary-container);
-}
-
 .task-status-button:active {
   scale: 0.92;
 }
@@ -592,40 +586,10 @@ button.task-status-button:hover,
   inline-size: 100%;
 }
 
-.step-editor input,
-.step-editor textarea,
-.step-editor select,
-.task-detail-v2-section select {
-  inline-size: 100%;
-  min-block-size: 48px;
-  padding: 0 12px;
-  border: 1px solid var(--m3-outline);
-  border-radius: var(--m3-shape-xs);
-  background-color: transparent;
-  color: inherit;
-  font-family: inherit;
-  font-size: var(--m3-type-body-medium-size);
-}
-
-.step-editor textarea {
-  min-block-size: 96px;
-  padding: 10px 12px;
-}
-
 .step-actions {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-/* The Today workbench is a contained list, so rows no longer read as a stack
-   of unrelated cards. The state layer and status shape carry the hierarchy. */
-.today-task-pane .task-row,
-.today-complete-pane .task-row {
-  min-block-size: 68px;
-  border-color: transparent;
-  border-radius: var(--m3-shape-md);
-  box-shadow: none;
 }
 
 .today-task-pane .task-row:hover,
