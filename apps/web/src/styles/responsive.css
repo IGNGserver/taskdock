@@ -257,11 +257,6 @@
     display: none;
   }
 
-  .m3e-app-bar__row {
-    gap: 8px;
-    padding-inline: 16px;
-  }
-
   .m3e-drawer {
     inline-size: min(320px, calc(100vw - 48px));
   }
@@ -296,10 +291,6 @@
 @media (min-width: 840px) {
   .breadcrumbs {
     display: block;
-  }
-
-  .m3e-app-bar__row {
-    min-inline-size: 0;
   }
 
   .calendar-layout {
@@ -338,25 +329,6 @@
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Orientation and input modality                                             */
-/* -------------------------------------------------------------------------- */
-
-/* Coarse pointers get larger list rows and always-visible row actions. */
-@media (pointer: coarse) {
-  .task-reorder-actions,
-  .card-reorder-actions,
-  .timeline-actions {
-    opacity: 1;
-  }
-
-  .m3e-list-item,
-  .task-row,
-  .timeline-item {
-    min-block-size: 64px;
-  }
-}
-
 /* Landscape phones: keep the sheet from consuming the whole viewport. */
 @media (max-height: 520px) and (orientation: landscape) {
   .m3e-sheet {
@@ -392,11 +364,6 @@
 [dir='rtl'] .m3e-drawer {
   border-start-end-radius: var(--m3-shape-xl);
   border-end-end-radius: var(--m3-shape-xl);
-}
-
-[dir='rtl'] .m3e-sheet__label,
-[dir='rtl'] .m3e-field__label {
-  transform-origin: right center;
 }
 
 /* An overlay owns scrolling; its contents must still accept native touch pan. */
@@ -459,33 +426,9 @@ html.drawer-open .page-wrap {
     flex-direction: column;
   }
 
-  .m3e-dialog__header {
-    flex: none;
-  }
-
-  .m3e-dialog__body {
-    min-block-size: 0;
-    max-block-size: none;
-    overscroll-behavior: contain;
-  }
-
-  .m3e-sheet__body {
-    padding-block-end: calc(24px + var(--dt-safe-bottom));
-  }
-
   .keyboard-visible .mobile-bottom-nav,
   .keyboard-visible .app-float-layer {
     display: none;
-  }
-
-  /* 16px prevents iOS from zooming the viewport on input focus. */
-  input,
-  textarea,
-  select,
-  .m3e-field__input {
-    font-size: max(16px, 1rem);
-    min-inline-size: 0;
-    max-inline-size: 100%;
   }
 }
 
@@ -630,25 +573,6 @@ html.drawer-open .page-wrap {
     border-end-end-radius: 0;
   }
 
-  .m3e-dialog__header,
-  .m3e-side-sheet__header {
-    padding: 16px;
-    align-items: center;
-  }
-
-  .m3e-side-sheet__header {
-    padding-block-start: calc(16px + var(--dt-safe-top));
-  }
-
-  .m3e-dialog__body,
-  .m3e-side-sheet__body {
-    padding: 12px 16px calc(20px + var(--dt-safe-bottom));
-  }
-
-  .m3e-dialog__title {
-    font-size: var(--m3-type-title-large-size);
-  }
-
   .pwa-notice {
     inset-block-start: calc(68px + var(--dt-safe-top));
     inset-block-end: auto;
@@ -694,11 +618,6 @@ html.drawer-open .page-wrap {
   .calendar-day {
     min-block-size: 36px;
   }
-
-  button,
-  a {
-    touch-action: manipulation;
-  }
 }
 
 @media (max-width: 599.98px) {
@@ -726,20 +645,6 @@ html.drawer-open .page-wrap {
   .step-actions {
     flex-wrap: wrap;
   }
-
-  .task-detail-v2 .inline-capture input,
-  .task-detail-v2 .inline-capture select {
-    flex: 1 1 180px;
-    inline-size: 100%;
-  }
-
-  .step-editor input,
-  .step-editor textarea,
-  .step-editor select,
-  .task-detail-v2-section select,
-  .task-detail-title {
-    font-size: 16px;
-  }
 }
 
 @media (max-width: 599.98px) {
@@ -759,19 +664,6 @@ html.drawer-open .page-wrap {
 }
 
 @media (max-width: 839.98px) {
-  .task-detail-v2-section > textarea {
-    inline-size: 100%;
-    min-block-size: 120px;
-    padding: 12px;
-    border: 1px solid var(--m3-outline);
-    border-radius: var(--m3-shape-sm);
-    color: var(--m3-on-surface);
-    background: var(--m3-surface-container);
-    font: inherit;
-    font-size: 16px;
-    resize: vertical;
-  }
-
   .step-row > span {
     min-inline-size: 0;
     overflow-wrap: anywhere;

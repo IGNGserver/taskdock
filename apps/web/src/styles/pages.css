@@ -85,15 +85,6 @@
   font-weight: 400;
 }
 
-/* Selection morphs the day cell from a circle to a squircle — the expressive
-   shape change carries the state, not just the fill. */
-.calendar-day.selected {
-  border-radius: var(--m3-shape-lg);
-  background-color: var(--m3-primary);
-  color: var(--m3-on-primary);
-  font-weight: 700;
-}
-
 .calendar-day i {
   position: absolute;
   inset-block-end: 5px;
@@ -135,16 +126,6 @@
   font-size: var(--m3-type-body-small-size);
 }
 
-.calendar-date-jump input {
-  min-block-size: 40px;
-  padding: 0 10px;
-  border: 1px solid var(--m3-outline);
-  border-radius: var(--m3-shape-xs);
-  background: transparent;
-  color: var(--m3-on-surface);
-  font-family: inherit;
-}
-
 /* -------------------------------------------------------------------------- */
 /* Directory tree (v2)                                                        */
 /* -------------------------------------------------------------------------- */
@@ -178,16 +159,6 @@
   font-size: var(--m3-type-body-small-size);
 }
 
-.select-field select {
-  min-block-size: 48px;
-  padding: 0 36px 0 12px;
-  border: 1px solid var(--m3-outline);
-  border-radius: var(--m3-shape-xs);
-  background: var(--m3-surface-container);
-  color: var(--m3-on-surface);
-  font: inherit;
-}
-
 .tree-header-actions {
   display: flex;
   align-items: center;
@@ -201,41 +172,11 @@
   font-size: var(--m3-type-body-small-size);
 }
 
-.tree-view-select select {
-  min-block-size: 40px;
-  padding: 0 28px 0 10px;
-  border: 1px solid var(--m3-outline);
-  border-radius: var(--m3-shape-xs);
-  background: var(--m3-surface-container);
-  color: var(--m3-on-surface);
-  font: inherit;
-}
-
 .inline-capture,
 .tree-capture-form {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.inline-capture input,
-.tree-capture-form input {
-  min-inline-size: 190px;
-  min-block-size: 48px;
-  padding: 0 14px;
-  border: 1px solid var(--m3-outline);
-  border-radius: var(--m3-shape-xs);
-  background-color: transparent;
-  color: var(--m3-on-surface);
-  font-family: inherit;
-  font-size: var(--m3-type-body-medium-size);
-}
-
-.inline-capture input:focus,
-.tree-capture-form input:focus {
-  border-color: var(--m3-primary);
-  box-shadow: inset 0 0 0 1px var(--m3-primary);
-  outline: 0;
 }
 
 .tree-breadcrumbs {
@@ -246,28 +187,6 @@
   margin: 4px 0 16px;
   color: var(--m3-on-surface-variant);
   font-size: var(--m3-type-body-medium-size);
-}
-
-.tree-breadcrumbs button {
-  min-block-size: 36px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: var(--m3-shape-full);
-  background: transparent;
-  color: inherit;
-  font-family: inherit;
-  font-size: inherit;
-  cursor: pointer;
-}
-
-.tree-breadcrumbs button:hover {
-  background-color: var(--m3-surface-container-high);
-}
-
-.tree-breadcrumbs button.active {
-  background-color: var(--m3-secondary-container);
-  color: var(--m3-on-secondary-container);
-  font-weight: 600;
 }
 
 .tree-group {
@@ -451,17 +370,6 @@
   gap: 8px;
 }
 
-.workflow-add-task input,
-.workflow-add-task select {
-  min-block-size: 44px;
-  padding: 0 12px;
-  border: 1px solid var(--m3-outline);
-  border-radius: var(--m3-shape-xs);
-  background: transparent;
-  color: inherit;
-  font-family: inherit;
-}
-
 /* -------------------------------------------------------------------------- */
 /* Directory (v1 folder list, still rendered on the tree page)                */
 /* -------------------------------------------------------------------------- */
@@ -574,29 +482,6 @@
   background: var(--m3-surface-container-low);
 }
 
-.settings-advanced > summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  padding: 16px 18px;
-  color: var(--m3-on-surface);
-  font-weight: 650;
-  cursor: pointer;
-  list-style-position: inside;
-}
-
-.settings-advanced > summary small {
-  color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-body-small-size);
-  font-weight: 400;
-}
-
-.settings-advanced[open] > summary {
-  border-block-end: 1px solid var(--m3-outline-variant);
-}
-
 .settings-advanced > .settings-section {
   margin: 12px;
 }
@@ -614,46 +499,6 @@
   gap: 6px;
   color: var(--m3-success);
   font-size: var(--m3-type-body-small-size);
-}
-
-.device-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-  border-block-end: 1px solid var(--m3-outline-variant);
-}
-
-.device-row:last-child {
-  border-block-end: 0;
-}
-
-.device-row > span:nth-child(2) {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 2px;
-  min-inline-size: 0;
-}
-
-.device-row strong {
-  font-size: var(--m3-type-body-large-size);
-}
-
-.device-row small {
-  color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-body-small-size);
-}
-
-.device-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  inline-size: 40px;
-  block-size: 40px;
-  border-radius: var(--m3-shape-md);
-  background-color: var(--m3-primary-container);
-  color: var(--m3-on-primary-container);
 }
 
 .bootstrap-notice {
@@ -774,23 +619,6 @@
 .conflict-merge-field span {
   color: var(--m3-on-surface-variant);
   font-size: var(--m3-type-label-medium-size);
-}
-
-.conflict-merge-field textarea {
-  min-block-size: 120px;
-  padding: 10px 12px;
-  border: 1px solid var(--m3-outline);
-  border-radius: var(--m3-shape-xs);
-  background-color: var(--m3-surface-container-lowest);
-  color: var(--m3-on-surface);
-  font-family: var(--m3-font-mono);
-  font-size: var(--m3-type-body-small-size);
-  resize: vertical;
-}
-
-.conflict-merge-field textarea:focus {
-  border-color: var(--m3-primary);
-  outline: 0;
 }
 
 .conflict-actions,
@@ -957,18 +785,6 @@
   border-block-end: 1px solid var(--m3-outline-variant);
 }
 
-.command-input input {
-  flex: 1 1 auto;
-  min-inline-size: 0;
-  min-block-size: 40px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font-family: inherit;
-  font-size: var(--m3-type-body-large-size);
-  outline: 0;
-}
-
 .command-input kbd,
 .command-trigger kbd {
   flex: none;
@@ -1085,22 +901,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.command-actions button {
-  min-block-size: 40px;
-  padding-inline: 16px;
-  border: 1px solid var(--m3-outline);
-  border-radius: var(--m3-shape-full);
-  background: transparent;
-  color: var(--m3-on-surface);
-  font-family: inherit;
-  font-size: var(--m3-type-label-large-size);
-  cursor: pointer;
-}
-
-.command-actions button:hover {
-  background-color: var(--m3-surface-container-highest);
 }
 
 .command-empty {
@@ -1401,45 +1201,6 @@
   background-color: var(--m3-surface-container-lowest);
 }
 
-.segmented-control button,
-.filter-tabs button,
-.project-tabs button,
-.editor-tabs button {
-  min-block-size: 40px;
-  padding-inline: 16px;
-  border: 0;
-  border-radius: var(--m3-shape-md);
-  background: transparent;
-  color: var(--m3-on-surface-variant);
-  font-family: inherit;
-  font-size: var(--m3-type-label-large-size);
-  cursor: pointer;
-}
-
-.segmented-control button:hover,
-.filter-tabs button:hover,
-.project-tabs button:hover,
-.editor-tabs button:hover {
-  background-color: var(--m3-surface-container-high);
-  color: var(--m3-on-surface);
-}
-
-.segmented-control button.selected,
-.filter-tabs button.selected,
-.project-tabs button.selected,
-.editor-tabs button.selected {
-  background-color: var(--m3-secondary-container);
-  color: var(--m3-on-secondary-container);
-  font-weight: 650;
-}
-
-.filter-tabs button span,
-.project-tabs button span {
-  margin-inline-start: 6px;
-  color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-label-small-size);
-}
-
 /* Event target helpers on the placement dialog. */
 .event-target-actions,
 .inline-event-actions {
@@ -1477,19 +1238,6 @@
   color: var(--m3-primary);
   font-family: inherit;
   font-size: var(--m3-type-label-large-size);
-  cursor: pointer;
-}
-
-.pwa-notice button:not(.pwa-notice-dismiss) {
-  min-block-size: 40px;
-  padding-inline: 16px;
-  border: 0;
-  border-radius: var(--m3-shape-full);
-  background-color: var(--m3-primary);
-  color: var(--m3-on-primary);
-  font-family: inherit;
-  font-size: var(--m3-type-label-large-size);
-  font-weight: 600;
   cursor: pointer;
 }
 
@@ -1546,31 +1294,8 @@
   font-size: var(--m3-type-body-medium-size);
 }
 
-.undo-banner button {
-  border: 0;
-  background: transparent;
-  color: var(--m3-inverse-primary);
-  font-family: inherit;
-  font-size: var(--m3-type-label-large-size);
-  cursor: pointer;
-}
-
 .time-hub-grid {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-}
-
-/* -------------------------------------------------------------------------- */
-/* TaskDock expressive workbench                                             */
-/*                                                                            */
-/* Today is the product's primary loop: orient -> capture -> act -> review.  */
-/* The structure below uses the M3 supporting-pane pattern instead of making  */
-/* every piece a floating card. Tonal containers carry hierarchy; the only    */
-/* expressive blob is the date marker, where it acts as a visual anchor.      */
-/* -------------------------------------------------------------------------- */
-
-.page--today {
-  inline-size: min(var(--m3-content-measure), calc(100% - 64px));
-  padding-block-start: clamp(28px, 4vw, 48px);
 }
 
 .page--today .page-header {
@@ -1697,26 +1422,6 @@
 .today-progress {
   block-size: 12px;
   color: var(--m3-primary);
-}
-
-.today-progress .m3e-progress__track {
-  position: absolute;
-  inset: 0;
-  border-radius: var(--m3-shape-full);
-  background-color: color-mix(in srgb, var(--m3-on-primary-container) 20%, transparent);
-}
-
-.today-progress .m3e-progress__fill {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: 0;
-  border-radius: var(--m3-shape-full);
-  background-color: var(--m3-primary);
-  background-image: repeating-linear-gradient(
-    -45deg,
-    var(--m3-primary) 0 8px,
-    color-mix(in srgb, var(--m3-primary) 58%, var(--m3-primary-container)) 8px 16px
-  );
 }
 
 .today-overview-percent {
@@ -1947,22 +1652,6 @@
   max-inline-size: 560px;
 }
 
-.tree-inline-field .m3e-field__box {
-  min-block-size: 48px;
-  border-radius: var(--m3-shape-md);
-  background-color: var(--m3-surface-container-low);
-}
-
-.tree-inline-field .m3e-field__input {
-  min-block-size: 48px;
-  padding: 0 14px;
-  font-size: var(--m3-type-body-medium-size);
-}
-
-.tree-inline-field .m3e-field__input::placeholder {
-  color: var(--m3-on-surface-variant);
-}
-
 .tree-breadcrumbs {
   margin-block: 8px 20px;
   padding: 4px;
@@ -2114,14 +1803,6 @@
   background-color: var(--m3-surface-container-low);
 }
 
-.workflow-add-task input,
-.workflow-add-task select,
-.workflow-add-stage input {
-  min-block-size: 48px;
-  border-radius: var(--m3-shape-md);
-  background-color: var(--m3-surface-container-low);
-}
-
 .app-toolbar,
 .today-toolbar {
   padding: 0;
@@ -2204,10 +1885,6 @@
 
 .today-progress {
   block-size: 8px;
-}
-
-.today-progress .m3e-progress__fill {
-  background-image: none;
 }
 
 .today-overview-empty-metric {

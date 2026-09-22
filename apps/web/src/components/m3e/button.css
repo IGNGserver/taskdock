@@ -630,3 +630,92 @@
   flex: none;
   color: var(--m3-primary);
 }
+
+/* Contextual menu placement is an M3E modifier, never a page-level menu override. */
+.m3e-menu--dense-row {
+  inset-block-start: calc(100% - 2px);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Page-context modifiers (still component-owned)                             */
+/* -------------------------------------------------------------------------- */
+
+.m3e-button--command-trigger {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  max-inline-size: 460px;
+  min-block-size: 48px;
+  padding-inline: 16px 12px;
+  border: 0;
+  border-radius: var(--m3-shape-full);
+  background-color: var(--m3-surface-container-high);
+  color: var(--m3-on-surface-variant);
+  text-align: start;
+}
+
+.m3e-button--command-trigger:hover:not(:disabled),
+.m3e-button--more-search:hover:not(:disabled) {
+  box-shadow: var(--m3-elevation-2);
+}
+
+.m3e-button--more-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  inline-size: min(520px, 100%);
+  min-block-size: 56px;
+  margin-block-end: 20px;
+  padding-inline: 16px;
+  border: 1px solid transparent;
+  border-radius: var(--m3-shape-full);
+  background-color: var(--m3-surface-container-high);
+  color: var(--m3-on-surface-variant);
+  text-align: start;
+}
+
+.m3e-button--tree-breadcrumb {
+  min-block-size: 36px;
+  padding-inline: 12px;
+  color: inherit;
+  font-size: inherit;
+}
+
+.m3e-button--tree-breadcrumb.is-active {
+  background-color: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+  font-weight: 600;
+}
+
+.m3e-button--tree-capture-submit {
+  flex: none;
+}
+
+.m3e-button--workflow-task-primary {
+  min-inline-size: 0;
+  padding-inline: 4px;
+  color: var(--m3-on-surface);
+  text-align: start;
+  white-space: normal;
+}
+
+.m3e-button--danger-text {
+  color: var(--m3-error);
+}
+
+.m3e-button-group--add-task-mode {
+  inline-size: 100%;
+  margin-block-end: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m3e-button:active:not(:disabled),
+  .m3e-fab:active {
+    scale: 1;
+  }
+
+  .m3e-split-button__toggle svg {
+    transition-duration: var(--m3-motion-short3);
+  }
+}

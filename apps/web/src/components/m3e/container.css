@@ -75,6 +75,24 @@
   display: block;
 }
 
+.m3e-list-item__wrapper.has-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding-inline-end: 8px;
+}
+
+.m3e-list-item__wrapper.has-actions > .m3e-list-item {
+  flex: 1 1 auto;
+}
+
+.m3e-list-item__actions {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 4px;
+}
+
 .m3e-list-item {
   display: flex;
   align-items: center;
@@ -704,4 +722,113 @@
   clip-path: inset(50%);
   border: 0;
   white-space: nowrap;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Page-context modifiers and responsive container ownership                  */
+/* -------------------------------------------------------------------------- */
+
+.m3e-card--calendar-panel,
+.m3e-card--calendar-detail {
+  padding: 12px;
+}
+
+.m3e-card--tree-group {
+  gap: 0;
+  padding: 14px;
+}
+
+.m3e-card--workflow,
+.m3e-card--workflow-stage {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.m3e-list--all-tasks,
+.m3e-list--command-results,
+.m3e-list--picker,
+.m3e-list--tree-group,
+.m3e-list--workflow-stage {
+  overflow: hidden;
+}
+
+.m3e-list-item--all-task,
+.m3e-list-item--picker,
+.m3e-list-item--tree-row,
+.m3e-list-item--workflow-task {
+  min-block-size: 52px;
+}
+
+.m3e-progress--today {
+  position: relative;
+  display: block;
+  block-size: 12px;
+  overflow: hidden;
+  color: var(--m3-primary);
+}
+
+.m3e-progress--today .m3e-progress__track {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--m3-shape-full);
+  background-color: color-mix(in srgb, var(--m3-on-primary-container) 20%, transparent);
+}
+
+.m3e-progress--today .m3e-progress__fill {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  border-radius: var(--m3-shape-full);
+  background-color: var(--m3-primary);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--m3-primary) 0 8px,
+    color-mix(in srgb, var(--m3-primary) 58%, var(--m3-primary-container)) 8px 16px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m3e-sheet,
+  .m3e-side-sheet,
+  .m3e-dialog,
+  .m3e-menu {
+    animation-name: m3e-fade-in;
+  }
+
+  .m3e-sheet-layer.presence-exiting .m3e-sheet,
+  .m3e-side-sheet-layer.presence-exiting .m3e-side-sheet,
+  .m3e-dialog-layer.presence-exiting .m3e-dialog {
+    animation-name: m3e-fade-out;
+  }
+
+  .m3e-loading-indicator__shape {
+    animation: none;
+    block-size: 12px;
+    opacity: 0.85;
+  }
+}
+
+@media (max-width: 599.98px) {
+  .m3e-progress--today {
+    block-size: 8px;
+  }
+
+  .m3e-progress--today .m3e-progress__fill {
+    background-image: none;
+  }
+}
+
+.m3e-toolbar--app-actions {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.m3e-toolbar--today {
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }

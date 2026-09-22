@@ -512,3 +512,25 @@
 .m3e-search-bar__input::-webkit-search-cancel-button {
   display: none;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .m3e-navigation-bar__item.is-active .m3e-navigation-bar__icon,
+  .m3e-navigation-rail__item.is-active .m3e-navigation-rail__icon {
+    scale: 1;
+  }
+}
+
+@media (max-width: 599.98px) {
+  .m3e-app-bar__row {
+    min-inline-size: 0;
+  }
+}
+
+.m3e-navigation-card__meta {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-label-medium-size);
+}

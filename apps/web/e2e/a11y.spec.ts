@@ -57,7 +57,6 @@ async function installMockApi(page: Page): Promise<void> {
       });
     if (path.endsWith('/sync/pull')) return body({ changes: [], nextCursor: '0', hasMore: false });
     if (path.endsWith('/sync/push')) return body({ protocolVersion: 1, results: [] });
-    if (path.endsWith('/devices')) return body([]);
     if (path.endsWith('/projects')) return body({ items: [] });
     if (path.endsWith('/tasks')) return body({ items: [] });
     if (path.endsWith('/time-points')) return body({ items: [] });
@@ -204,12 +203,12 @@ test('login and authenticated shell have no axe violations', async ({ page }) =>
  */
 const ROUTES: ReadonlyArray<{ path: string; heading: string | RegExp }> = [
   { path: '/today', heading: /今日|今天/ },
-  { path: '/tree', heading: '目录' },
-  { path: '/tasks', heading: /所有任务|任务库/ },
+  { path: '/tree', heading: '任务库' },
+  { path: '/tasks', heading: '全部任务' },
   { path: '/workflows', heading: '流程' },
-  { path: '/time', heading: '时间' },
+  { path: '/time', heading: '计划' },
   { path: '/time/calendar', heading: '日历' },
-  { path: '/time/events', heading: '时间点' },
+  { path: '/time/events', heading: '事件' },
   { path: '/archive', heading: '归档' },
   { path: '/settings', heading: '设置' },
   { path: '/more', heading: '更多' },
@@ -257,12 +256,10 @@ for (const route of ROUTES) {
  * to finish first.
  */
 async function waitForSettled(page: Page, selector: string): Promise<void> {
-  await page.waitForFunction((target) => {
-    const element = document.querySelector(target);
-    if (!element) return false;
-    const animations = element.getAnimations({ subtree: true });
-    return animations.every((animation) => animation.playState !== 'running');
-  }, selector);
+  // The longest M3E entrance ramp is 600ms. A bounded settle window keeps
+  // intentionally looping status indicators from blocking the audit forever.
+  await page.waitForTimeout(650);
+  await page.waitForFunction((target) => Boolean(document.querySelector(target)), selector);
 }
 
 test('open overlays have no axe violations', async ({ page }) => {
@@ -298,7 +295,7 @@ test('open overlays have no axe violations', async ({ page }) => {
     await page.getByRole('button', { name: '搜索任务和备注' }).click();
   }
   await expect(page.getByRole('dialog', { name: '搜索和命令面板' })).toBeVisible();
-  await waitForSettled(page, '.command-panel');
+  await waitForSettled(page, '.m3e-dialog');
   results = await analyzePage(page);
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 });

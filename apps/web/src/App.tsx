@@ -2,7 +2,6 @@ import type {
   ArchiveOperationSummaryDto,
   FolderDto,
   PlacementDto,
-  TaskDto,
   TimePointDto,
   TimePointPlacementCountDto,
   TreeTaskDto,
@@ -23,7 +22,6 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
-  Circle,
   Clock3,
   Folder,
   Command,
@@ -57,8 +55,6 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  Link,
-  NavLink,
   Navigate,
   Route,
   Routes,
@@ -79,7 +75,6 @@ import {
   loadConfiguredHubOrigin,
   normalizeHubOrigin,
   mutationV2,
-  requestV1,
   requestV2,
   setHubOrigin,
   testHubConnection,
@@ -87,21 +82,40 @@ import {
 import { useAuth } from './auth.js';
 import { BrandMark } from './components/brand-mark.js';
 import {
+  Alert,
   Button,
   ButtonGroup,
+  CalendarDayCell,
+  CaptureField,
+  Card,
   Chip,
   ConfirmDialog,
+  DateField,
+  DestructiveSection,
   Dialog as M3eDialog,
+  Disclosure,
+  EmptyState as M3EmptyState,
   FabMenu,
   IconButton,
   LinearProgress,
+  List,
+  LoadingState,
+  ListItem,
+  Menu as M3eMenu,
   NavigationBar,
+  NavigationCard,
   NavigationDrawer,
   NavigationRail,
+  RouterLinkAdapter,
   SearchBar,
   SplitButton,
   Select,
   Snackbar,
+  Switch,
+  TaskRowAction,
+  TaskStatusIndicator,
+  TaskStatusButton,
+  TextArea,
   TextField,
   TopAppBar,
   Toolbar,
@@ -205,9 +219,9 @@ function DesktopBridgeUnavailableScreen() {
         <p className="auth-intro">
           当前窗口是桌面客户端，但安全桥接没有启动，因此无法读取或保存服务器地址。
         </p>
-        <div className="form-error" role="alert">
+        <Alert tone="error" title="桌面桥接不可用">
           请完全退出 TaskDock 后重试；如果问题持续，请重新安装最新桌面版本。
-        </div>
+        </Alert>
         <Button
           variant="filled"
           className="m3e-button--wide"
@@ -405,18 +419,11 @@ function HubSetupScreen({
         <p className="auth-intro">
           先连接你的 TaskDock 服务器，之后登录、同步和离线数据都会跟随这个地址。
         </p>
-        {message && (
-          <div className={`${state === 'error' ? 'form-error' : 'bootstrap-notice'}`} role="status">
-            {message}
-          </div>
-        )}
+        {message && <Alert tone={state === 'error' ? 'error' : 'info'}>{message}</Alert>}
         {isHttpOrigin(origin) && (
-          <div className="http-security-warning" role="alert">
-            <strong>当前地址使用 HTTP</strong>
-            <span>
-              HTTP 地址可以连接服务器，但密码和会话信息会明文传输；正式公网部署仍建议使用 HTTPS。
-            </span>
-          </div>
+          <Alert tone="warning" title="当前地址使用 HTTP" className="m3e-alert--http-security">
+            HTTP 地址可以连接服务器，但密码和会话信息会明文传输；正式公网部署仍建议使用 HTTPS。
+          </Alert>
         )}
         <div className="stack-form">
           <Field
@@ -476,10 +483,9 @@ function HubWaitingScreen({
         <p className="eyebrow">DESKTOP CONNECTION</p>
         <h1>等待服务器准备就绪</h1>
         <p className="auth-intro">服务器已经连接，但管理员还没有完成首次初始化。</p>
-        <div className="bootstrap-notice" role="status">
-          <strong>请先完成服务器初始化</strong>
-          <span>请让管理员在服务器端完成首次初始化，完成后点击“重新检查”即可登录。</span>
-        </div>
+        <Alert tone="info" title="请先完成服务器初始化">
+          请让管理员在服务器端完成首次初始化，完成后点击“重新检查”即可登录。
+        </Alert>
         <div className="hub-origin-card">
           <span>当前服务器</span>
           <code>{origin}</code>
@@ -615,55 +621,6 @@ function AuthenticatedApp() {
   /** Navigating to a folder detail should still highlight 目录. */
   const activeForExpanded = activeExpanded || '/tree';
 
-  /*
-   * Navigation destinations are rendered as router links so middle-click and
-   * "open in new tab" keep working and assistive tech announces a link.
-   */
-  const navLinkComponent = useMemo(
-    () =>
-      function NavDestinationLink({
-        to,
-        className,
-        children,
-        'aria-current': ariaCurrent,
-        tabIndex,
-        onClick,
-      }: {
-        to: string;
-        className?: string;
-        children: ReactNode;
-        'aria-current'?: 'page' | undefined;
-        tabIndex?: number;
-        onClick?: () => void;
-      }) {
-        return (
-          <Link
-            to={to}
-            className={className}
-            aria-current={ariaCurrent}
-            tabIndex={tabIndex}
-            onClick={(event) => {
-              if (
-                event.button !== 0 ||
-                event.metaKey ||
-                event.ctrlKey ||
-                event.shiftKey ||
-                event.altKey
-              )
-                return;
-              if (onClick) {
-                event.preventDefault();
-                onClick();
-              }
-            }}
-          >
-            {children}
-          </Link>
-        );
-      },
-    [],
-  );
-
   const drawerHeader = (
     <div className="brand">
       <BrandMark />
@@ -674,21 +631,23 @@ function AuthenticatedApp() {
     <>
       <ConnectionStatus />
       <div className="user-account-row">
-        <NavLink
-          className="user-chip"
+        <NavigationCard
+          variant="account"
           to="/settings"
-          aria-label={`打开 ${auth.user?.username ?? '当前用户'} 的账户设置`}
+          ariaLabel={`打开 ${auth.user?.username ?? '当前用户'} 的账户设置`}
           title="打开账户设置"
           onClick={() => {
             if (isCompactShell(sizeClass)) setMobileSidebarOpen(false);
           }}
         >
-          <span className="avatar">{auth.user?.username?.slice(0, 1).toUpperCase() ?? '?'}</span>
-          <span className="user-name">{auth.user?.username}</span>
-          <Settings size={16} aria-hidden="true" />
-        </NavLink>
+          <span className="m3e-navigation-card__avatar">
+            {auth.user?.username?.slice(0, 1).toUpperCase() ?? '?'}
+          </span>
+          <span className="m3e-navigation-card__label">{auth.user?.username}</span>
+          <Settings className="m3e-navigation-card__trailing" size={16} aria-hidden="true" />
+        </NavigationCard>
         <IconButton
-          className="user-logout-button"
+          className="m3e-icon-button--danger"
           label="退出登录"
           variant="outlined"
           onClick={() => setLogoutConfirmOpen(true)}
@@ -707,7 +666,7 @@ function AuthenticatedApp() {
           destinations={navItems}
           activeTo={activeForExpanded}
           onNavigate={navigate}
-          linkAs={navLinkComponent}
+          linkAs={RouterLinkAdapter}
           header={<BrandMark size="sm" />}
           footer={<ConnectionStatus />}
         />
@@ -723,7 +682,7 @@ function AuthenticatedApp() {
           destinations={navItems}
           activeTo={activeForExpanded}
           onNavigate={navigate}
-          linkAs={navLinkComponent}
+          linkAs={RouterLinkAdapter}
           header={drawerHeader}
           footer={drawerFooter}
           className="m3e-drawer-layer--persistent"
@@ -747,16 +706,25 @@ function AuthenticatedApp() {
           actions={
             <>
               {sizeClass !== 'compact' ? (
-                <Toolbar variant="floating" ariaLabel="工作区操作" className="app-toolbar">
-                  <button
-                    className="command-trigger"
+                <Toolbar
+                  variant="floating"
+                  ariaLabel="工作区操作"
+                  className="m3e-toolbar--app-actions"
+                >
+                  <Button
+                    variant="tonal"
+                    className="m3e-button--command-trigger"
                     aria-label="搜索任务和备注"
+                    leadingIcon={<Search size={20} />}
                     onClick={() => setCommandOpen(true)}
                   >
-                    <Search size={20} />
-                    <span>搜索任务、备注…</span>
-                    {!isNativeMobileClient() && <kbd>{isWindowsDesktop() ? 'Ctrl K' : '⌘ K'}</kbd>}
-                  </button>
+                    <>
+                      搜索任务、备注…
+                      {!isNativeMobileClient() && (
+                        <kbd>{isWindowsDesktop() ? 'Ctrl K' : '⌘ K'}</kbd>
+                      )}
+                    </>
+                  </Button>
                   <ConnectionStatus />
                   <SplitButton
                     icon={<Plus size={20} />}
@@ -827,7 +795,7 @@ function AuthenticatedApp() {
             navigate(to);
             setMobileSidebarOpen(false);
           }}
-          linkAs={navLinkComponent}
+          linkAs={RouterLinkAdapter}
           header={drawerHeader}
           footer={drawerFooter}
         />
@@ -838,8 +806,8 @@ function AuthenticatedApp() {
           destinations={compactNavItems}
           activeTo={activeRoot}
           onNavigate={navigate}
-          linkAs={navLinkComponent}
-          className="mobile-bottom-nav"
+          linkAs={RouterLinkAdapter}
+          className="m3e-navigation-bar--mobile-shell"
         />
       )}
       {sizeClass === 'compact' && (
@@ -1009,16 +977,14 @@ function LoginScreen({
           </div>
         )}
         {!hubInitialized && (
-          <div className="bootstrap-notice" role="status">
-            <strong>请先完成服务器初始化</strong>
-            <span>请让管理员在服务器端完成首次初始化，完成后刷新此页面即可登录。</span>
-          </div>
+          <Alert tone="info" title="请先完成服务器初始化">
+            请让管理员在服务器端完成首次初始化，完成后刷新此页面即可登录。
+          </Alert>
         )}
         {isHttpOrigin(nativeClient ? hubOrigin : window.location.origin) && (
-          <div className="http-security-warning" role="alert">
-            <strong>当前使用 HTTP</strong>
-            <span>密码和会话信息会以明文传输，请确认网络可信；正式公网部署仍建议使用 HTTPS。</span>
-          </div>
+          <Alert tone="warning" title="当前使用 HTTP" className="m3e-alert--http-security">
+            密码和会话信息会以明文传输，请确认网络可信；正式公网部署仍建议使用 HTTPS。
+          </Alert>
         )}
         <form onSubmit={submit} className="stack-form">
           {mobileClient && (
@@ -1045,9 +1011,14 @@ function LoginScreen({
                   {hubCheck === 'checking' ? '测试中…' : '测试连接'}
                 </Button>
                 {hubCheckMessage && (
-                  <span className={`hub-check-message ${hubCheck}`} role="status">
+                  <Alert
+                    tone={
+                      hubCheck === 'error' ? 'error' : hubCheck === 'success' ? 'success' : 'info'
+                    }
+                    className="m3e-alert--hub-check"
+                  >
                     {hubCheckMessage}
-                  </span>
+                  </Alert>
                 )}
               </div>
               <p className="field-help">
@@ -1067,11 +1038,7 @@ function LoginScreen({
           <p className="field-help">
             密码为至少 6 位；可以直接使用 6 位纯数字。浏览器会用安全 Cookie 保持会话。
           </p>
-          {error && (
-            <div role="alert" className="form-error">
-              {error}
-            </div>
-          )}
+          {error && <Alert tone="error">{error}</Alert>}
           <Button
             variant="filled"
             className="m3e-button--wide"
@@ -1137,26 +1104,26 @@ function TimeHubPage() {
         description="按日期或事件安排任务；安排只是任务的一个位置，不会复制任务本体。"
       />
       <div className="more-grid time-hub-grid">
-        <NavLink to={`/time/calendar/${localDate}`} className="more-link-card">
-          <span className="more-link-icon">
+        <NavigationCard variant="card" to={`/time/calendar/${localDate}`}>
+          <span className="m3e-navigation-card__icon">
             <CalendarDays size={20} />
           </span>
-          <span>
+          <span className="m3e-navigation-card__content">
             <strong>日历</strong>
             <small>按月查看日期安排，今天是 {localDate}。</small>
           </span>
-          <ChevronRight size={16} />
-        </NavLink>
-        <NavLink to="/time/events" className="more-link-card">
-          <span className="more-link-icon">
+          <ChevronRight className="m3e-navigation-card__trailing" size={16} />
+        </NavigationCard>
+        <NavigationCard variant="card" to="/time/events">
+          <span className="m3e-navigation-card__icon">
             <Clock3 size={20} />
           </span>
-          <span>
+          <span className="m3e-navigation-card__content">
             <strong>事件</strong>
             <small>管理项目节点、到达状态和其中的任务安排。</small>
           </span>
-          <ChevronRight size={16} />
-        </NavLink>
+          <ChevronRight className="m3e-navigation-card__trailing" size={16} />
+        </NavigationCard>
       </div>
     </div>
   );
@@ -1174,7 +1141,7 @@ function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
     {
       to: '/settings',
       label: '设置',
-      description: '调整时区、默认捕获位置和设备会话。',
+      description: '调整时区与默认捕获位置。',
       icon: Settings,
     },
   ];
@@ -1185,22 +1152,26 @@ function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
         title="更多"
         description="次要入口集中在这里，底部导航保持专注于今天、任务库和计划。"
       />
-      <button className="more-search-button" onClick={onOpenSearch}>
-        <Search size={18} />
+      <Button
+        variant="tonal"
+        className="m3e-button--more-search"
+        leadingIcon={<Search size={18} />}
+        onClick={onOpenSearch}
+      >
         搜索任务、备注和引用 ID
-      </button>
+      </Button>
       <div className="more-grid">
         {links.map(({ to, label, description, icon: Icon }) => (
-          <NavLink key={to} to={to} className="more-link-card">
-            <span className="more-link-icon">
+          <NavigationCard key={to} variant="card" to={to}>
+            <span className="m3e-navigation-card__icon">
               <Icon size={20} />
             </span>
-            <span>
+            <span className="m3e-navigation-card__content">
               <strong>{label}</strong>
               <small>{description}</small>
             </span>
-            <ChevronRight size={16} />
-          </NavLink>
+            <ChevronRight className="m3e-navigation-card__trailing" size={16} />
+          </NavigationCard>
         ))}
       </div>
     </div>
@@ -1291,27 +1262,22 @@ function EmptyState({
   description: string;
   action?: ReactNode;
 }) {
-  return (
-    <div className="empty-state">
-      <div className="empty-icon">{icon}</div>
-      <h2>{title}</h2>
-      <p>{description}</p>
-      {action}
-    </div>
-  );
+  return <M3EmptyState icon={icon} title={title} description={description} action={action} />;
 }
 
 function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
-    <div className="inline-error">
-      <span className="inline-error-message">
-        <Circle size={16} aria-hidden="true" />
-        <span>{error}</span>
-      </span>
-      <Button variant="text" type="button" onClick={onRetry}>
-        重试
-      </Button>
-    </div>
+    <Alert
+      tone="error"
+      title="无法加载"
+      action={
+        <Button variant="text" onClick={onRetry}>
+          重试
+        </Button>
+      }
+    >
+      {error}
+    </Alert>
   );
 }
 
@@ -1376,31 +1342,26 @@ function QuickCapture({
     }
   };
   return (
-    <form className="quick-capture m3e-search-bar" onSubmit={submit}>
-      <span className="m3e-search-bar__leading">
-        <Plus size={20} />
-      </span>
-      <input
-        className="m3e-search-bar__input"
-        aria-label="快速创建任务"
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        placeholder="现在要记下什么？"
-        enterKeyHint="done"
-      />
-      {title.trim() ? (
-        <IconButton label="创建任务" type="submit" disabled={busy}>
-          <Plus size={20} />
-        </IconButton>
-      ) : (
-        <kbd aria-hidden="true">↵</kbd>
-      )}
-      {error && (
-        <span className="capture-error" role="alert">
-          {error}
-        </span>
-      )}
-    </form>
+    <CaptureField
+      className="m3e-capture-field--quick"
+      label="快速创建任务"
+      value={title}
+      onChange={setTitle}
+      onSubmit={submit}
+      placeholder="现在要记下什么？"
+      leading={<Plus size={20} />}
+      trailing={
+        title.trim() ? (
+          <IconButton label="创建任务" type="submit" disabled={busy}>
+            <Plus size={20} />
+          </IconButton>
+        ) : (
+          <kbd aria-hidden="true">↵</kbd>
+        )
+      }
+      error={error}
+      disabled={busy}
+    />
   );
 }
 
@@ -1478,11 +1439,7 @@ function QuickCaptureDialog({
               : `${defaultTaskFolderId ? '将创建到当前文件夹' : '将创建到根目录'}。之后可以从目录、任务详情或日期视图安排。`}
           </p>
         )}
-        {error && (
-          <div className="form-error" role="alert">
-            {error}
-          </div>
-        )}
+        {error && <Alert tone="error">{error}</Alert>}
         <Button
           variant="filled"
           className="m3e-button--wide"
@@ -1567,7 +1524,7 @@ function CommandPalette({
         localDate: todayInTimezone(settings?.timezone ?? 'Asia/Shanghai'),
       })) as TimePointDto;
       await mutationV2('POST', '/placements', { taskId, timePointId: point.id });
-      setActionError('已安排到今天');
+      setActionError('任务已安排到今天');
       window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
       setActionError(cause instanceof ApiError ? cause.message : '安排到今天失败，请重试');
@@ -1575,112 +1532,84 @@ function CommandPalette({
   };
   if (!presence.mounted) return null;
   return (
-    <div
-      className={`command-layer presence-${presence.state}`}
-      aria-hidden={presence.state === 'exiting'}
-      onMouseDown={(event) => {
-        if (presence.state !== 'exiting' && event.target === event.currentTarget) onClose();
-      }}
-    >
-      <section
-        className={`command-panel presence-${presence.state}`}
-        role="dialog"
-        aria-modal="true"
-        aria-label="搜索和命令面板"
-      >
-        <div className="command-input">
-          <Search size={20} />
-          <input
-            ref={inputRef}
+    <Modal title="搜索和命令面板" onClose={onClose} state={presence.state}>
+      <div className="command-palette-content">
+        <div className="command-controls">
+          <SearchBar
+            inputRef={inputRef}
+            label="搜索任务、备注或引用 ID"
+            variant="view"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={setQuery}
+            onClear={() => setQuery('')}
             placeholder="搜索任务、备注或引用 ID…"
+            leadingIcon={<Search size={20} />}
           />
-          <label className="command-archive-toggle">
-            <input
-              type="checkbox"
-              checked={includeArchived}
-              onChange={(event) => setIncludeArchived(event.target.checked)}
-            />
-            含归档
-          </label>
-          <kbd>ESC</kbd>
+          <Switch
+            label="包含归档任务"
+            checked={includeArchived}
+            onChange={setIncludeArchived}
+            helperText="搜索归档中的任务"
+          />
         </div>
         {query ? (
-          <div className="command-results">
-            {actionError && (
-              <div className="command-action-status" role="status">
-                {actionError}
-              </div>
-            )}
+          <div className="command-results-wrap">
+            {actionError && <Alert tone="success">{actionError}</Alert>}
             {items.length ? (
-              items.map((task) => (
-                <div key={task.id} className="command-result">
-                  <button className="command-result-main" onClick={() => onOpenTask(task.id)}>
-                    <span className="status-icon">
-                      <StatusIcon status={task.status} />
-                    </span>
-                    <span className="result-copy">
-                      <strong>{task.title}</strong>
-                      <small>
-                        {task.referenceId} · {task.archivedAt ? '已归档' : '目录任务'}
-                      </small>
-                    </span>
-                    <ChevronRight size={16} />
-                  </button>
-                  <button
-                    className="command-result-action"
-                    onClick={() => void arrangeToday(task.id)}
-                  >
-                    安排今天
-                  </button>
-                </div>
-              ))
+              <List className="m3e-list--command-results" gap>
+                {items.map((task) => (
+                  <ListItem
+                    key={task.id}
+                    leading={<TaskStatusIndicator status={task.status} />}
+                    headline={task.title}
+                    supporting={`${task.referenceId} · ${task.archivedAt ? '已归档' : '目录任务'}`}
+                    trailing={<ChevronRight size={16} />}
+                    onClick={() => onOpenTask(task.id)}
+                    actions={
+                      <Button variant="text" size="s" onClick={() => void arrangeToday(task.id)}>
+                        安排今天
+                      </Button>
+                    }
+                    ariaLabel={`打开任务 ${task.title}`}
+                  />
+                ))}
+              </List>
             ) : (
-              <div className="command-empty">没有找到匹配任务</div>
+              <M3EmptyState
+                compact
+                icon={<Search size={22} />}
+                title="没有找到匹配任务"
+                description="可以尝试更短的关键词，或改为搜索归档。"
+              />
             )}
           </div>
         ) : (
-          <div className="command-hints">
-            <span>
-              <Command size={16} /> 输入关键词开始搜索
-            </span>
-            <span>搜索任务标题、备注和引用 ID</span>
-            <div className="command-actions">
-              <button onClick={() => onQuickCapture('task')}>新建任务</button>
-              <button
-                onClick={() => {
-                  onClose();
-                  navigate('/settings');
-                }}
-              >
-                前往设置
-              </button>
-            </div>
-          </div>
+          <M3EmptyState
+            compact
+            icon={<Command size={24} />}
+            title="从搜索开始"
+            description="搜索任务标题、备注和引用 ID，或直接创建一条新任务。"
+            action={
+              <div className="command-actions">
+                <Button variant="tonal" size="s" onClick={() => onQuickCapture('task')}>
+                  新建任务
+                </Button>
+                <Button
+                  variant="text"
+                  size="s"
+                  onClick={() => {
+                    onClose();
+                    navigate('/settings');
+                  }}
+                >
+                  前往设置
+                </Button>
+              </div>
+            }
+          />
         )}
-      </section>
-    </div>
-  );
-}
-
-function StatusIcon({ status }: { status: TaskDto['status'] }) {
-  if (status === 'DONE')
-    return (
-      <span className="task-check done">
-        <Check size={14} />
-      </span>
-    );
-  if (status === 'IN_PROGRESS')
-    return (
-      <span className="task-check progress">
-        <span />
-      </span>
-    );
-  return (
-    <span className="task-check">
-      <Circle size={16} />
-    </span>
+      </div>
+    </Modal>
   );
 }
 
@@ -1783,7 +1712,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           compact ? undefined : '把今天要处理的内容放在眼前，完成状态会同步到每一个安排位置。'
         }
         action={
-          <Toolbar variant="floating" ariaLabel="今日操作" className="today-toolbar">
+          <Toolbar variant="floating" ariaLabel="今日操作" className="m3e-toolbar--today">
             <Button
               variant="tonal"
               leadingIcon={<Plus size={16} />}
@@ -1824,7 +1753,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                   value={done.length}
                   max={total}
                   label="今日任务完成度"
-                  className="today-progress"
+                  className="m3e-progress--today"
                 />
                 <span className="today-overview-percent">{completionPercent}%</span>
               </>
@@ -1850,23 +1779,32 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             <div className="today-context-events">
               <span className="today-context-label">已到达的事件</span>
               {data.reachedEvents.slice(0, 3).map((event) => (
-                <NavLink
+                <NavigationCard
                   key={event.id}
+                  variant="context"
                   to={`/time/events/${event.id}`}
-                  className="today-context-event"
+                  className="m3e-navigation-card--today-context-event"
                 >
-                  <span className="timeline-node reached" />
-                  <span>
+                  <span className="m3e-navigation-card__timeline-node is-reached" />
+                  <span className="m3e-navigation-card__content">
                     <strong>{event.title}</strong>
                     <small>{data.eventCounts[event.id]?.openCount ?? 0} 项未完成</small>
                   </span>
-                  <ChevronRight size={16} aria-hidden="true" />
-                </NavLink>
+                  <ChevronRight
+                    className="m3e-navigation-card__trailing"
+                    size={16}
+                    aria-hidden="true"
+                  />
+                </NavigationCard>
               ))}
               {data.reachedEvents.length > 3 && (
-                <NavLink to="/time/events" className="today-context-more">
+                <NavigationCard
+                  variant="inline"
+                  to="/time/events"
+                  className="m3e-navigation-card--today-context-more"
+                >
                   查看全部事件
-                </NavLink>
+                </NavigationCard>
               )}
             </div>
           ) : (
@@ -1989,14 +1927,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
 }
 
 function SkeletonList() {
-  return (
-    <div className="skeleton-list" role="status" aria-label="加载中">
-      <span />
-      <span />
-      <span />
-      <span />
-    </div>
-  );
+  return <LoadingState label="正在加载" className="m3e-loading-state--list" />;
 }
 
 function EventsPage() {
@@ -2060,15 +1991,19 @@ function EventsPage() {
     const index = data.active.findIndex((candidate) => candidate.id === point.id);
     return (
       <div className="timeline-item-shell" key={point.id}>
-        <NavLink to={`/time/events/${point.id}`} className="timeline-item">
-          <span className={`timeline-node ${point.reachedAt ? 'reached' : ''}`} />
-          <span className="timeline-copy">
+        <NavigationCard variant="timeline" to={`/time/events/${point.id}`}>
+          <span
+            className={`m3e-navigation-card__timeline-node${point.reachedAt ? ' is-reached' : ''}`}
+          />
+          <span className="m3e-navigation-card__timeline-copy">
             <strong>{point.title}</strong>
             <small>{point.reachedAt ? `已于 ${formatTime(point.reachedAt)} 到达` : '等待中'}</small>
           </span>
-          <EventCount count={data.counts[point.id]?.openCount} />
-          <ChevronRight size={16} />
-        </NavLink>
+          <span className="m3e-navigation-card__meta">
+            <EventCount count={data.counts[point.id]?.openCount} />
+          </span>
+          <ChevronRight className="m3e-navigation-card__trailing" size={16} />
+        </NavigationCard>
         <div className="timeline-actions" aria-label="事件操作">
           <IconButton
             label="上移事件"
@@ -2136,15 +2071,17 @@ function EventsPage() {
               <SectionTitle title="已归档" count={data.archived.length} />
               {data.archived.map((point) => (
                 <div className="timeline-item-shell" key={point.id}>
-                  <NavLink to={`/time/events/${point.id}`} className="timeline-item">
-                    <span className="timeline-node" />
-                    <span className="timeline-copy">
+                  <NavigationCard variant="timeline" to={`/time/events/${point.id}`}>
+                    <span className="m3e-navigation-card__timeline-node" />
+                    <span className="m3e-navigation-card__timeline-copy">
                       <strong>{point.title}</strong>
                       <small>已归档 · {point.reachedAt ? '曾到达' : '未到达'}</small>
                     </span>
-                    <EventCount count={data.counts[point.id]?.openCount} />
-                    <ChevronRight size={16} />
-                  </NavLink>
+                    <span className="m3e-navigation-card__meta">
+                      <EventCount count={data.counts[point.id]?.openCount} />
+                    </span>
+                    <ChevronRight className="m3e-navigation-card__trailing" size={16} />
+                  </NavigationCard>
                   <div className="timeline-actions archived-timeline-actions">
                     <Button
                       variant="tonal"
@@ -2223,7 +2160,7 @@ function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreat
         <p className="field-help">
           这是一个事件节点，不是截止日期；它的到达状态与任务完成状态独立。
         </p>
-        {error && <div className="form-error">{error}</div>}
+        {error && <Alert tone="error">{error}</Alert>}
         <Button
           variant="filled"
           className="m3e-button--wide"
@@ -2270,11 +2207,7 @@ function EditEventModal({
     <Modal title="编辑事件" onClose={onClose}>
       <form className="stack-form" onSubmit={submit}>
         <Field label="名称" value={title} onChange={setTitle} autoComplete="off" />
-        {error && (
-          <div className="form-error" role="alert">
-            {error}
-          </div>
-        )}
+        {error && <Alert tone="error">{error}</Alert>}
         <Button
           variant="filled"
           className="m3e-button--wide"
@@ -2581,6 +2514,29 @@ function PlacementRow({
       setBusy(false);
     }
   };
+  const menuOptions = [
+    { id: 'show-in-tree', label: '在目录中显示', icon: <Folder size={16} /> },
+    { id: 'remove', label: '从此处移除', icon: <Trash2 size={16} />, danger: true },
+    { id: 'move', label: '移动到其他事件', icon: <Target size={16} /> },
+    { id: 'copy', label: '再安排到其他事件', icon: <Copy size={16} /> },
+  ];
+  const selectMenuAction = (id: string) => {
+    setMenu(false);
+    if (id === 'show-in-tree') {
+      navigate(
+        task.parentFolderId
+          ? `/tree/${task.parentFolderId}?focusTask=${task.id}`
+          : `/tree?focusTask=${task.id}`,
+      );
+      return;
+    }
+    if (id === 'remove') {
+      void remove();
+      return;
+    }
+    if (id === 'move') setTargetMode('move');
+    if (id === 'copy') setTargetMode('copy');
+  };
   return (
     <div
       className={`task-row${dragging ? ' dragging' : ''}`}
@@ -2610,15 +2566,12 @@ function PlacementRow({
         onDrop(event);
       }}
     >
-      <button
-        className="task-status-button"
-        aria-label={onToggleStatus ? taskStatusActionLabel(task.status) : '打开任务'}
-        title={onToggleStatus ? taskStatusActionLabel(task.status) : '打开任务'}
+      <TaskStatusButton
+        status={task.status}
+        label={onToggleStatus ? taskStatusActionLabel(task.status) : '打开任务'}
         onClick={() => (onToggleStatus && !readOnly ? void toggleStatus() : onOpen(task.id))}
         disabled={busy}
-      >
-        <StatusIcon status={task.status} />
-      </button>
+      />
       {onMove && !readOnly && (
         <div className="task-reorder-actions" aria-label="调整安排顺序">
           <IconButton
@@ -2639,12 +2592,16 @@ function PlacementRow({
           </IconButton>
         </div>
       )}
-      <button className="task-main" onClick={() => onOpen(task.id)}>
+      <TaskRowAction
+        busy={busy}
+        onClick={() => onOpen(task.id)}
+        aria-label={`打开任务 ${task.title}`}
+      >
         <span className="task-title">{task.title}</span>
         <span className="task-meta">
           <span className="reference-id">{task.referenceId}</span>
         </span>
-      </button>
+      </TaskRowAction>
       {!readOnly && (
         <div ref={menuRef} className="task-actions">
           <IconButton
@@ -2657,45 +2614,12 @@ function PlacementRow({
             <MoreHorizontal size={18} />
           </IconButton>
           {menu && (
-            <div className="row-menu" role="menu">
-              <button
-                role="menuitem"
-                onClick={() => {
-                  setMenu(false);
-                  const dest = task.parentFolderId
-                    ? `/tree/${task.parentFolderId}?focusTask=${task.id}`
-                    : `/tree?focusTask=${task.id}`;
-                  navigate(dest);
-                }}
-              >
-                <Folder size={16} />
-                在目录中显示
-              </button>
-              <button role="menuitem" onClick={() => void remove()}>
-                <Trash2 size={16} />
-                从此处移除
-              </button>
-              <button
-                role="menuitem"
-                onClick={() => {
-                  setMenu(false);
-                  setTargetMode('move');
-                }}
-              >
-                <Target size={16} />
-                移动到其他事件
-              </button>
-              <button
-                role="menuitem"
-                onClick={() => {
-                  setMenu(false);
-                  setTargetMode('copy');
-                }}
-              >
-                <Copy size={16} />
-                再安排到其他事件
-              </button>
-            </div>
+            <M3eMenu
+              label={`${task.title} 的安排操作`}
+              options={menuOptions}
+              onSelect={selectMenuAction}
+              onClose={() => setMenu(false)}
+            />
           )}
         </div>
       )}
@@ -2788,9 +2712,9 @@ function PlacementList({
     />
   );
   const dropNotice = dropError ? (
-    <div className="inline-error" role="alert">
+    <Alert tone="error" className="m3e-alert--inline">
       {dropError}
-    </div>
+    </Alert>
   ) : null;
   if (!items.length)
     return (
@@ -2853,8 +2777,7 @@ function EventTargetField({
   const [createOpen, setCreateOpen] = useState(false);
   const eventPoints = points.filter((point) => point.type === 'EVENT');
   return (
-    <div className="field">
-      <span>选择事件</span>
+    <div className="event-target-field">
       {createOpen ? (
         <InlineEventCreator
           onCancel={() => setCreateOpen(false)}
@@ -2919,11 +2842,7 @@ function InlineEventCreator({
   return (
     <div className="inline-event-creator">
       <Field label="事件名称" value={title} onChange={setTitle} autoFocus autoComplete="off" />
-      {error && (
-        <div className="form-error" role="alert">
-          {error}
-        </div>
-      )}
+      {error && <Alert tone="error">{error}</Alert>}
       <div className="inline-event-actions">
         <Button variant="text" type="button" onClick={onCancel} disabled={busy}>
           返回选择
@@ -3039,14 +2958,11 @@ function PlacementTargetModal({
                 onClick={() => setLocalDate(tomorrow)}
               />
             </div>
-            <label className="field">
-              <span>选择日期</span>
-              <input
-                type="date"
-                value={localDate}
-                onChange={(event) => setLocalDate(event.target.value)}
-              />
-            </label>
+            <DateField
+              label="选择日期"
+              value={localDate}
+              onChange={(event) => setLocalDate(event.target.value)}
+            />
           </>
         ) : (
           <EventTargetField
@@ -3059,13 +2975,9 @@ function PlacementTargetModal({
             }}
           />
         )}
-        {error && (
-          <div role="alert" className="form-error">
-            {error}
-          </div>
-        )}
+        {error && <Alert tone="error">{error}</Alert>}
         <Button
-          className="wide"
+          className="m3e-button--wide"
           disabled={busy || (targetKind === 'event' ? !targetId : !localDate)}
         >
           {busy ? '处理中…' : mode === 'move' ? '移动安排' : '添加另一份安排'}
@@ -3188,30 +3100,20 @@ function AddTaskModal({
           { value: 'existing' as const, label: '从任务库加入已有' },
         ]}
         onChange={setActiveTab}
-        className="add-task-mode"
+        className="m3e-button-group--add-task-mode"
       />
 
       {activeTab === 'create' ? (
-        <form
-          onSubmit={handleCreateNew}
-          style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
-        >
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>任务标题</span>
-            <input
-              autoFocus
-              value={createTitle}
-              onChange={(e) => setCreateTitle(e.target.value)}
-              placeholder="输入任务标题..."
-              className="form-input"
-              disabled={creating}
-            />
-          </label>
-          {error && (
-            <div className="form-error" role="alert">
-              {error}
-            </div>
-          )}
+        <form className="stack-form add-task-create-form" onSubmit={handleCreateNew}>
+          <TextField
+            label="任务标题"
+            autoFocus
+            value={createTitle}
+            onChange={(event) => setCreateTitle(event.target.value)}
+            placeholder="输入任务标题..."
+            disabled={creating}
+          />
+          {error && <Alert tone="error">{error}</Alert>}
           <Button variant="filled" type="submit" disabled={creating || !createTitle.trim()}>
             {creating ? '创建中…' : '立即创建并安排'}
           </Button>
@@ -3227,37 +3129,36 @@ function AddTaskModal({
             placeholder="输入标题或引用 ID"
             leadingIcon={<Search size={20} />}
           />
-          {error && (
-            <div className="form-error" role="alert">
-              {error}
-            </div>
-          )}
+          {error && <Alert tone="error">{error}</Alert>}
           {!query && <p className="field-help picker-hint">最近未完成的任务</p>}
-          <div className="picker-list">
+          <List className="m3e-list--picker" gap>
             {items.map((task) => (
-              <button
+              <ListItem
                 key={task.id}
-                className="picker-item"
+                className="m3e-list-item--picker"
+                headline={task.title}
+                supporting={task.referenceId}
+                leading={<TaskStatusIndicator status={task.status} />}
+                trailing={
+                  busyTaskId === task.id ? (
+                    <LoaderCircle className="spin" size={16} />
+                  ) : (
+                    <Plus size={16} />
+                  )
+                }
                 onClick={() => void add(task)}
                 disabled={Boolean(busyTaskId)}
-              >
-                <StatusIcon status={task.status} />
-                <span>
-                  <strong>{task.title}</strong>
-                  <small>{task.referenceId}</small>
-                </span>
-                {busyTaskId === task.id ? (
-                  <LoaderCircle className="spin" size={16} />
-                ) : (
-                  <Plus size={16} />
-                )}
-              </button>
+                ariaLabel={`安排任务 ${task.title}`}
+              />
             ))}
-          </div>
+          </List>
           {!items.length && (
-            <div className="command-empty">
-              {query ? '没有可加入的任务' : '没有未完成任务，可以先新建任务。'}
-            </div>
+            <M3EmptyState
+              compact
+              icon={<ListChecksIcon size={20} />}
+              title={query ? '没有可加入的任务' : '没有未完成任务'}
+              description={query ? '换一个标题或引用 ID 再试。' : '可以切换到新建任务并立即安排。'}
+            />
           )}
         </>
       )}
@@ -3379,7 +3280,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         }
       />
       <div className="calendar-layout">
-        <section className="calendar-panel">
+        <Card as="section" variant="elevated" className="m3e-card--calendar-panel">
           <div className="calendar-head">
             <IconButton
               label="上个月"
@@ -3397,16 +3298,14 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               <ChevronRight size={20} />
             </IconButton>
           </div>
-          <label className="calendar-date-jump">
-            <span>跳转到日期</span>
-            <input
-              type="date"
-              value={selected}
-              onChange={(event) => {
-                if (event.target.value) selectDate(event.target.value);
-              }}
-            />
-          </label>
+          <DateField
+            className="m3e-field--date-jump"
+            label="跳转到日期"
+            value={selected}
+            onChange={(event) => {
+              if (event.target.value) selectDate(event.target.value);
+            }}
+          />
           <div className="weekday-row">
             {weekdayLabels(settings?.weekStartsOn ?? 1).map((day) => (
               <span key={day}>{day}</span>
@@ -3414,20 +3313,21 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           </div>
           <div className="calendar-grid">
             {days.map((day) => (
-              <button
+              <CalendarDayCell
                 key={day.date}
-                className={`calendar-day ${day.inMonth ? '' : 'muted'} ${selected === day.date ? 'selected' : ''}`}
+                label={String(day.label)}
+                muted={!day.inMonth}
+                selected={selected === day.date}
+                today={day.date === todayInTimezone(settings?.timezone ?? 'Asia/Shanghai')}
                 onClick={() => selectDate(day.date)}
                 onKeyDown={(event) => onCalendarKeyDown(event, day.date)}
-                aria-label={day.date}
-              >
-                <span>{day.label}</span>
-                {(dateCounts[day.date] ?? 0) > 0 && <i>{dateCounts[day.date]}</i>}
-              </button>
+                ariaLabel={day.date}
+                indicator={(dateCounts[day.date] ?? 0) > 0 ? <span /> : undefined}
+              />
             ))}
           </div>
-        </section>
-        <section className="calendar-detail">
+        </Card>
+        <Card as="section" variant="elevated" className="m3e-card--calendar-detail">
           <div className="calendar-detail-head">
             <div>
               <span className="eyebrow">SELECTED DATE</span>
@@ -3463,7 +3363,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               }}
             />
           )}
-        </section>
+        </Card>
       </div>
     </div>
   );
@@ -3552,9 +3452,9 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         description="归档只影响默认可见性，任务、备注、安排和历史引用仍然保留。"
       />
       {actionError && (
-        <div className="inline-error" role="alert">
+        <Alert tone="error" className="m3e-alert--inline">
           {actionError}
-        </div>
+        </Alert>
       )}
       {(operations.error || tasks.error || folders.error || events.error) && (
         <ErrorState
@@ -3651,13 +3551,16 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           ) : (
             looseTasks.map((task) => (
               <div className="task-row" key={task.id}>
-                <button className="task-main" onClick={() => onOpenTask(task.id)}>
+                <TaskRowAction
+                  onClick={() => onOpenTask(task.id)}
+                  aria-label={`打开已归档任务 ${task.title}`}
+                >
                   <span className="task-title">{task.title}</span>
                   <span className="task-meta">
                     <span className="reference-id">{task.referenceId}</span>
                     <span className="status-label">已归档</span>
                   </span>
-                </button>
+                </TaskRowAction>
                 <Button
                   variant="tonal"
                   size="s"
@@ -3781,20 +3684,6 @@ function SettingsPage() {
       setError(cause instanceof ApiError ? cause.message : '保存失败');
     }
   };
-  const [devices, setDevices] = useState<
-    Array<{
-      id: string;
-      name: string;
-      platform: string;
-      lastSeenAt: string;
-      revokedAt: string | null;
-    }>
-  >([]);
-  useEffect(() => {
-    void requestV1<typeof devices>('/devices')
-      .then(setDevices)
-      .catch(() => undefined);
-  }, []);
   return (
     <div className="page narrow-page">
       <PageHeader
@@ -3806,72 +3695,48 @@ function SettingsPage() {
       <form className="settings-form" onSubmit={save}>
         <div className="settings-section">
           <h2>日期与安排</h2>
-          <label className="field">
-            <span>时区</span>
-            <Select
-              label="时区"
-              value={timezone}
-              onChange={setTimezone}
-              options={[
-                { value: 'Asia/Shanghai', label: 'Asia/Shanghai' },
-                { value: 'Asia/Tokyo', label: 'Asia/Tokyo' },
-                { value: 'UTC', label: 'UTC' },
-                { value: 'America/Los_Angeles', label: 'America/Los_Angeles' },
-              ]}
-            />
-          </label>
-          <label className="field">
-            <span>每周起始日</span>
-            <Select
-              label="每周起始日"
-              value={String(weekStartsOn)}
-              onChange={(next) => setWeekStartsOn(Number(next) as 0 | 1)}
-              options={[
-                { value: '1', label: '周一' },
-                { value: '0', label: '周日' },
-              ]}
-            />
-          </label>
-          <label className="field">
-            <span>默认新任务位置</span>
-            <Select
-              label="默认新任务位置"
-              value={defaultCaptureTarget}
-              onChange={(next) => {
-                if (next === 'ROOT' || next === 'RECENT_FOLDER') setDefaultCaptureTarget(next);
-              }}
-              options={[
-                { value: 'ROOT', label: '根目录' },
-                { value: 'RECENT_FOLDER', label: '最近文件夹' },
-              ]}
-            />
-          </label>
+          <Select
+            label="时区"
+            value={timezone}
+            onChange={setTimezone}
+            options={[
+              { value: 'Asia/Shanghai', label: 'Asia/Shanghai' },
+              { value: 'Asia/Tokyo', label: 'Asia/Tokyo' },
+              { value: 'UTC', label: 'UTC' },
+              { value: 'America/Los_Angeles', label: 'America/Los_Angeles' },
+            ]}
+          />
+          <Select
+            label="每周起始日"
+            value={String(weekStartsOn)}
+            onChange={(next) => setWeekStartsOn(Number(next) as 0 | 1)}
+            options={[
+              { value: '1', label: '周一' },
+              { value: '0', label: '周日' },
+            ]}
+          />
+          <Select
+            label="默认新任务位置"
+            value={defaultCaptureTarget}
+            onChange={(next) => {
+              if (next === 'ROOT' || next === 'RECENT_FOLDER') setDefaultCaptureTarget(next);
+            }}
+            options={[
+              { value: 'ROOT', label: '根目录' },
+              { value: 'RECENT_FOLDER', label: '最近文件夹' },
+            ]}
+          />
           <p className="field-help">日期任务使用此时区的本地日期；不会把 UTC 日期直接展示给你。</p>
         </div>
-        <div className="settings-section">
-          <h2>已登录设备</h2>
-          {devices.map((device) => (
-            <div className="device-row" key={device.id}>
-              <span className="device-icon">
-                <LayoutList size={16} />
-              </span>
-              <span>
-                <strong>{device.name}</strong>
-                <small>
-                  {device.platform} · 最近活动 {formatTime(device.lastSeenAt)}
-                </small>
-              </span>
-            </div>
-          ))}
-        </div>
-        <details className="settings-advanced">
-          <summary>
-            <span>高级同步与故障处理</span>
-            <small>只在出现冲突或同步停滞时打开</small>
-          </summary>
+        <Disclosure
+          className="m3e-disclosure--settings-advanced"
+          title="高级同步与故障处理"
+          description="只在出现冲突或同步停滞时打开"
+          leading={<Settings size={18} />}
+        >
           <ConflictSection />
           <RejectedMutationSection />
-        </details>
+        </Disclosure>
         <div className="settings-actions">
           <Button variant="filled" type="submit">
             保存设置
@@ -3882,7 +3747,11 @@ function SettingsPage() {
               {saved}
             </span>
           )}
-          {error && <span className="form-error">{error}</span>}
+          {error && (
+            <Alert tone="error" className="m3e-alert--form-inline">
+              {error}
+            </Alert>
+          )}
         </div>
       </form>
     </div>
@@ -3938,26 +3807,23 @@ function HubSettingsSection() {
       <p className="field-help">
         修改前会先测试新地址。切换后会重新登录，旧服务器的会话不会带到新服务器。
       </p>
-      <label className="field">
-        <span>服务器地址</span>
-        <input
-          type="url"
-          value={origin}
-          onChange={(event) => {
-            originEdited.current = true;
-            setOrigin(event.target.value);
-            setState('idle');
-            setMessage('');
-          }}
-          placeholder="https://todo.example.com 或 http://192.168.1.10"
-          autoComplete="url"
-        />
-      </label>
+      <TextField
+        label="服务器地址"
+        type="url"
+        value={origin}
+        onChange={(event) => {
+          originEdited.current = true;
+          setOrigin(event.target.value);
+          setState('idle');
+          setMessage('');
+        }}
+        placeholder="https://todo.example.com 或 http://192.168.1.10"
+        autoComplete="url"
+      />
       {isHttpOrigin(origin) && (
-        <div className="http-security-warning" role="alert">
-          <strong>当前地址使用 HTTP</strong>
-          <span>密码和会话信息会以明文传输，请确认网络可信；正式公网部署仍建议使用 HTTPS。</span>
-        </div>
+        <Alert tone="warning" title="当前地址使用 HTTP" className="m3e-alert--http-security">
+          密码和会话信息会以明文传输，请确认网络可信；正式公网部署仍建议使用 HTTPS。
+        </Alert>
       )}
       <div className="hub-check-row">
         <Button
@@ -3969,9 +3835,12 @@ function HubSettingsSection() {
           {state === 'checking' ? '测试中…' : '测试并保存'}
         </Button>
         {message && (
-          <span className={`hub-check-message ${state}`} role="status">
+          <Alert
+            tone={state === 'error' ? 'error' : state === 'success' ? 'success' : 'info'}
+            className="m3e-alert--hub-check"
+          >
             {message}
-          </span>
+          </Alert>
         )}
       </div>
     </div>
@@ -4085,21 +3954,16 @@ function ConflictInboxItem({
         </div>
       </div>
       {mergeSupported && (
-        <label className="conflict-merge-field">
-          <span>{item.entityType === 'note' ? '编辑合并后的备注' : '编辑合并后的字段 JSON'}</span>
-          <textarea
-            aria-label="编辑合并版本"
-            value={merged}
-            onChange={(event) => setMerged(event.target.value)}
-            rows={item.entityType === 'note' ? 5 : 7}
-          />
-        </label>
+        <TextArea
+          className="m3e-field--conflict-merge"
+          label={item.entityType === 'note' ? '编辑合并后的备注' : '编辑合并后的字段 JSON'}
+          aria-label="编辑合并版本"
+          value={merged}
+          onChange={(event) => setMerged(event.target.value)}
+          rows={item.entityType === 'note' ? 5 : 7}
+        />
       )}
-      {error && (
-        <div className="form-error" role="alert">
-          {error}
-        </div>
-      )}
+      {error && <Alert tone="error">{error}</Alert>}
       <div className="conflict-actions">
         <Button variant="tonal" size="s" type="button" onClick={() => void resolve('server')}>
           采用服务器版本
@@ -4158,9 +4022,12 @@ function RejectedMutationSection() {
   }, [reload]);
   if (!items.length && !upgradePending.length) return null;
   return (
-    <div className="settings-section rejected-inbox">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>待重试的失败操作 / 升级待处理项</h2>
+    <DestructiveSection
+      className="m3e-destructive-section--rejected-inbox"
+      title="待重试的失败操作 / 升级待处理项"
+      description="服务器拒绝的本地操作或未完成协议升级项已暂停，不会在后台无限重复提交。"
+    >
+      <div className="rejected-inbox__header-actions">
         <Button
           variant="tonal"
           size="s"
@@ -4180,9 +4047,6 @@ function RejectedMutationSection() {
           导出待处理项
         </Button>
       </div>
-      <p className="field-help">
-        服务器拒绝的本地操作或未完成协议升级项已暂停，不会在后台无限重复提交。
-      </p>
       {upgradePending.length > 0 && (
         <div className="upgrade-pending-list">
           <h3>v1 升级待处理（{upgradePending.length}）</h3>
@@ -4222,7 +4086,7 @@ function RejectedMutationSection() {
             </Button>
             <Button
               variant="text"
-              className="danger-text"
+              className="m3e-button--danger-text"
               type="button"
               onClick={() =>
                 void engine?.discardRejectedMutation(item.mutationId).then(() => void reload())
@@ -4233,7 +4097,7 @@ function RejectedMutationSection() {
           </div>
         </div>
       ))}
-    </div>
+    </DestructiveSection>
   );
 }
 

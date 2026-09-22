@@ -45,19 +45,6 @@ body {
   border-radius: var(--m3-shape-xs);
 }
 
-/* Text selection stays available where it is useful, and is disabled on chrome
-   so touch users do not select labels while scrolling. */
-input,
-textarea,
-[contenteditable='true'],
-code,
-pre,
-.reference-id,
-.task-detail-title {
-  -webkit-user-select: text;
-  user-select: text;
-}
-
 /* -------------------------------------------------------------------------- */
 /* App frame                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -216,27 +203,6 @@ pre,
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Legacy aliases                                                             */
-/*                                                                            */
-/* The v2 tree/workflow markup was written against class names that never had  */
-/* a definition (or used --dt-* outside a theme). They are aliased onto the    */
-/* M3E primitives here rather than left to fall through to browser defaults.   */
-/* -------------------------------------------------------------------------- */
-
-.error-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin: 12px 0;
-  padding: 12px 16px;
-  border: 1px solid color-mix(in srgb, var(--m3-error) 42%, var(--m3-outline-variant));
-  border-radius: var(--m3-shape-md);
-  background-color: color-mix(in srgb, var(--m3-error-container) 32%, var(--m3-surface-container));
-  color: var(--m3-on-error-container);
-  font-size: var(--m3-type-body-medium-size);
 }
 
 .form-input {
@@ -464,25 +430,6 @@ pre,
 .field > span {
   color: var(--m3-on-surface-variant);
   font-size: var(--m3-type-body-small-size);
-}
-
-.field input,
-.field select {
-  min-block-size: 56px;
-  padding: 0 16px;
-  border: 1px solid var(--m3-outline);
-  border-radius: var(--m3-shape-xs);
-  background-color: transparent;
-  color: var(--m3-on-surface);
-  font-family: inherit;
-  font-size: var(--m3-type-body-large-size);
-}
-
-.field input:focus,
-.field select:focus {
-  border-color: var(--m3-primary);
-  box-shadow: inset 0 0 0 1px var(--m3-primary);
-  outline: 0;
 }
 
 .field-help {

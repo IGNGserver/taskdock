@@ -213,6 +213,7 @@ export function Menu({
   onClose,
   align = 'end',
   label = '菜单',
+  className,
 }: {
   id?: string;
   options: readonly MenuOption[];
@@ -220,6 +221,8 @@ export function Menu({
   onClose: () => void;
   align?: 'start' | 'end';
   label?: string;
+  /** Component-layer modifier for contextual menu placement or density. */
+  className?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -232,7 +235,7 @@ export function Menu({
       id={id}
       role="menu"
       aria-label={label}
-      className={joinClasses('m3e-menu', `m3e-menu--${align}`)}
+      className={joinClasses('m3e-menu', `m3e-menu--${align}`, className)}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.preventDefault();

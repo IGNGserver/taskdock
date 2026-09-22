@@ -41,7 +41,6 @@ async function installMockApi(page: Page): Promise<void> {
         },
       });
     }
-    if (path.endsWith('/devices')) return body([]);
     if (path.endsWith('/me'))
       return body({
         user,

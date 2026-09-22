@@ -1,6 +1,13 @@
 import { useEffect } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
+import { Snackbar } from './components/m3e/index.js';
+
+/**
+ * Service-worker feedback is deliberately a Snackbar: it is transient global
+ * state, not page content. This keeps refresh/offline affordances consistent
+ * with the rest of the M3 Expressive feedback model.
+ */
 export function PwaLifecycleNotice() {
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -16,25 +23,22 @@ export function PwaLifecycleNotice() {
 
   if (needRefresh)
     return (
-      <div className="pwa-notice" aria-live="polite">
-        <span>TaskDock 有新版本可用。</span>
-        <button type="button" onClick={() => void updateServiceWorker(true)}>
-          立即更新
-        </button>
-        <button type="button" className="pwa-notice-dismiss" onClick={() => setNeedRefresh(false)}>
-          稍后
-        </button>
-      </div>
+      <Snackbar
+        message="TaskDock 有新版本可用。"
+        action={{ label: '立即更新', onAction: () => void updateServiceWorker(true) }}
+        onDismiss={() => setNeedRefresh(false)}
+        duration={0}
+      />
     );
 
   if (offlineReady)
     return (
-      <div className="pwa-notice" aria-live="polite">
-        <span>应用已准备好，可在离线时打开。</span>
-        <button type="button" className="pwa-notice-dismiss" onClick={() => setOfflineReady(false)}>
-          知道了
-        </button>
-      </div>
+      <Snackbar
+        message="应用已准备好，可在离线时打开。"
+        action={{ label: '知道了', onAction: () => setOfflineReady(false) }}
+        onDismiss={() => setOfflineReady(false)}
+        duration={5000}
+      />
     );
 
   return null;

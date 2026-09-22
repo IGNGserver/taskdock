@@ -200,6 +200,10 @@ test('archives and restores a v2 folder through the tree and archive views', asy
   await page.evaluate(() => window.dispatchEvent(new Event('devtodo:data-changed')));
   await expect(page.getByRole('menuitem', { name: '归档文件夹', exact: true })).toBeVisible();
   await page.getByRole('menuitem', { name: '归档文件夹', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '归档文件夹' })
+    .getByRole('button', { name: '归档' })
+    .click();
   await expect(folderButton).toHaveCount(0);
 
   await page.goto('/archive');
