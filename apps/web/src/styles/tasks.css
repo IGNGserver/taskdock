@@ -24,7 +24,7 @@
   padding: 8px 10px 8px 6px;
   border: 1px solid transparent;
   border-radius: var(--m3-shape-lg);
-  background-color: var(--m3-surface-container-lowest);
+  background-color: var(--m3-surface-container);
   box-shadow: var(--m3-elevation-1);
   transition:
     background-color var(--m3-motion-short3) var(--m3-easing-standard),
@@ -35,7 +35,7 @@
 
 .task-row:hover {
   border-color: var(--m3-outline-variant);
-  background-color: var(--m3-surface-container);
+  background-color: var(--m3-surface-container-high);
   box-shadow: var(--m3-elevation-2);
 }
 
@@ -61,15 +61,15 @@
   background-color: color-mix(
     in srgb,
     var(--m3-primary-container) 34%,
-    var(--m3-surface-container-lowest)
+    var(--m3-surface-container)
   );
 }
 
 .task-row.is-done {
   background-color: color-mix(
     in srgb,
-    var(--m3-surface-container) 65%,
-    var(--m3-surface-container-lowest)
+    var(--m3-surface-container-low) 65%,
+    var(--m3-surface-container) 35%
   );
 }
 
@@ -89,7 +89,7 @@
   padding: 8px 10px 8px 6px;
   border: 1px solid transparent;
   border-radius: var(--m3-shape-lg);
-  background-color: var(--m3-surface-container-lowest);
+  background-color: var(--m3-surface-container);
   transition:
     background-color var(--m3-motion-short3) var(--m3-easing-standard),
     border-color var(--m3-motion-short3) var(--m3-easing-standard);
