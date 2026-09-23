@@ -301,7 +301,7 @@
   min-block-size: 48px;
   padding: 6px 10px;
   border-radius: var(--m3-shape-sm);
-  background-color: var(--m3-surface-container-lowest);
+  background-color: var(--m3-surface-container-high);
 }
 
 .workflow-add-task,
@@ -323,11 +323,11 @@
   min-block-size: 56px;
   padding: 8px 12px;
   border-radius: var(--m3-shape-md);
-  background-color: var(--m3-surface-container-lowest);
+  background-color: var(--m3-surface-container);
 }
 
 .folder-row:hover {
-  background-color: var(--m3-surface-container);
+  background-color: var(--m3-surface-container-high);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -409,7 +409,7 @@
   gap: 14px;
   padding: 18px;
   border-radius: var(--m3-shape-lg);
-  background-color: var(--m3-surface-container-lowest);
+  background-color: var(--m3-surface-container-high);
 }
 
 .settings-section h2 {
@@ -1879,9 +1879,13 @@
 .m3e-list--tree-group .m3e-list-item__wrapper,
 .m3e-list--all-tasks .m3e-list-item__wrapper,
 .m3e-list--workflow-stage .m3e-list-item__wrapper {
-  border: 1px solid color-mix(in srgb, var(--m3-outline-variant) 68%, transparent);
+  border: 1px solid color-mix(in srgb, var(--m3-outline-variant) 46%, transparent);
   border-radius: var(--m3-shape-md);
-  background: var(--m3-surface-container-lowest);
+  background: var(--m3-surface-container);
+}
+
+.m3e-list--workflow-stage .m3e-list-item__wrapper {
+  background: var(--m3-surface-container-high);
 }
 
 .m3e-list--tree-group .m3e-list-item__headline,
