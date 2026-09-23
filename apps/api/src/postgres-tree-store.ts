@@ -15,9 +15,9 @@ import {
  */
 export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
   /**
-   * The projection is a read cache, not the sync authority. Keep the database
-   * cursor alongside it so a mutation on another API instance invalidates the
-   * cache with one cheap query; only a stale/missing owner is fully hydrated.
+   * The projection is a read cache, not the sync authority. Keep the owner's
+   * latest change sequence alongside it so writes on another API instance,
+   * including legacy v1 writes, invalidate the cache with one cheap query.
    */
   private readonly loaded = new Map<string, string>();
 
@@ -33,7 +33,10 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     );
     if (!owner.rows[0]) throw new Error('Owner is not available');
     const cursor = await this.postgres.v2Query(
-      'SELECT COALESCE(MAX(seq), 0)::text AS cursor FROM sync_changes WHERE owner_id = $1 AND protocol_version = 2',
+      // This projection includes rows written by the legacy v1 API too. Use
+      // the owner-wide change sequence for cache invalidation so a v1 date
+      // point created on another API instance cannot remain invisible here.
+      'SELECT COALESCE(MAX(seq), 0)::text AS cursor FROM sync_changes WHERE owner_id = $1',
       [ownerId],
     );
     const currentCursor = String(cursor.rows[0]?.cursor ?? '0');

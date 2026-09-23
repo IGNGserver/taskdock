@@ -39,7 +39,7 @@ import websocket, { type WebSocket as HubWebSocket } from '@fastify/websocket';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { z, ZodError } from 'zod';
 import { AuthService, type AuthConfig } from './auth.js';
-import { PostgresStore } from './postgres-store.js';
+import { DatabaseConstraintError, PostgresStore } from './postgres-store.js';
 import { PostgresTreeStore } from './postgres-tree-store.js';
 import { MemoryStore, type Store } from './store.js';
 import { MemoryTreeStore, type V2TreeStore } from './tree-store.js';
@@ -279,6 +279,18 @@ export async function buildServer(
 
   app.setErrorHandler((error, request, reply) => {
     const requestId = String(reply.getHeader('X-Request-Id') ?? request.id);
+    if (error instanceof DatabaseConstraintError) {
+      request.log.warn(
+        {
+          requestId,
+          method: request.method,
+          route: request.routeOptions.url ?? request.url.split('?')[0],
+          errorCode: error.code,
+          ...error.diagnostic,
+        },
+        'database constraint rejected request',
+      );
+    }
     if (error instanceof DomainError)
       return sendError(
         reply,

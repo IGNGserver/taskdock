@@ -9,6 +9,7 @@ import com.devtodo.app.data.model.*
 import com.devtodo.app.data.remote.ApiClient
 import com.devtodo.app.data.security.SecureAuthManager
 import com.devtodo.app.data.sync.SyncEngine
+import com.devtodo.app.data.sync.SyncOutcome
 import com.devtodo.app.data.sync.SyncState
 import com.devtodo.app.ui.theme.ThemeMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -107,6 +108,9 @@ class MainViewModel(
 
     private val _dataReady = MutableStateFlow(!authManager.isLoggedIn)
     val dataReady: StateFlow<Boolean> = _dataReady.asStateFlow()
+
+    private val _todayRefreshing = MutableStateFlow(false)
+    val todayRefreshing: StateFlow<Boolean> = _todayRefreshing.asStateFlow()
 
     private val _authenticated = MutableStateFlow(authManager.isLoggedIn)
     val authenticated: StateFlow<Boolean> = _authenticated.asStateFlow()
@@ -1237,13 +1241,38 @@ class MainViewModel(
 
     fun showMessage(message: String) { _messages.tryEmit(message) }
 
+    fun refreshToday() {
+        if (_todayRefreshing.value) return
+        _todayRefreshing.value = true
+        viewModelScope.launch {
+            try {
+                when (val outcome = syncEngine.triggerSync()) {
+                    SyncOutcome.Success -> {
+                        loadTodayData()
+                        _messages.tryEmit("获取成功")
+                    }
+                    is SyncOutcome.Failure -> _messages.tryEmit("获取失败：${outcome.message}")
+                }
+            } catch (error: Exception) {
+                _messages.tryEmit(error.userMessage("获取失败"))
+            } finally {
+                _todayRefreshing.value = false
+            }
+        }
+    }
+
     fun syncNow() {
         viewModelScope.launch {
             if (!authManager.isLoggedIn) return@launch
             _dataReady.value = false
             try {
-                syncEngine.triggerSync()
-                loadTodayData()
+                when (val outcome = syncEngine.triggerSync()) {
+                    SyncOutcome.Success -> {
+                        loadTodayData()
+                        _messages.tryEmit("同步成功")
+                    }
+                    is SyncOutcome.Failure -> _messages.tryEmit("同步失败：${outcome.message}")
+                }
             } catch (error: Exception) {
                 _messages.tryEmit(error.userMessage("同步失败"))
             } finally {
