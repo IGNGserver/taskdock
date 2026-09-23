@@ -86,6 +86,11 @@ async function mockSession(page: Page, handleV2: (route: Route, path: string) =>
       await page.getByLabel('用户名').fill(user.username);
       await page.getByLabel('密码').fill('correct horse battery staple');
       await page.getByRole('button', { name: '登录' }).click();
+      const authenticatedShellAction =
+        test.info().project.name === 'mobile'
+          ? page.getByRole('button', { name: '打开创建菜单' })
+          : page.getByRole('button', { name: '快速添加' });
+      await expect(authenticatedShellAction).toBeVisible();
     },
   };
 }
@@ -218,7 +223,12 @@ test('event list retries a failed first read without showing a false empty state
   });
   const session = await mockSession(page, async (route, path) => {
     const url = new URL(route.request().url());
-    if (path.endsWith('/time-points') && url.searchParams.get('archived') === 'false') {
+    const refererPath = new URL(route.request().headers().referer ?? 'http://localhost').pathname;
+    if (
+      path.endsWith('/time-points') &&
+      url.searchParams.get('archived') === 'false' &&
+      refererPath === '/time/events'
+    ) {
       activeEventReads += 1;
       if (activeEventReads === 1)
         return route.fulfill({
