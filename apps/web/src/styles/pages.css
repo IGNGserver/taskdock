@@ -9,17 +9,15 @@
 
 .calendar-layout {
   display: grid;
-  grid-template-columns: minmax(420px, 1.2fr) minmax(280px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
 
-.calendar-panel,
-.calendar-detail {
-  padding: 18px;
+.m3e-card--calendar-panel,
+.m3e-card--calendar-detail {
+  padding: 20px;
   border-radius: var(--m3-shape-lg);
-  background-color: var(--m3-surface-container-lowest);
-  box-shadow: var(--m3-elevation-1);
 }
 
 .calendar-head {
@@ -32,7 +30,7 @@
 
 .calendar-head h2 {
   margin: 0;
-  font-size: var(--m3-type-title-large-size);
+  font-size: 24px;
   font-weight: var(--m3-type-emphasized-weight);
 }
 
@@ -44,64 +42,20 @@
 }
 
 .weekday-row {
-  margin-block-end: 6px;
+  margin-block: 0 8px;
   color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-label-medium-size);
+  font-size: var(--m3-type-label-large-size);
+  font-weight: 600;
   text-align: center;
 }
 
-.calendar-day {
-  position: relative;
-  display: grid;
-  place-items: center;
-  gap: 2px;
-  aspect-ratio: 1;
-  min-block-size: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--m3-shape-full);
-  background: transparent;
-  color: var(--m3-on-surface);
-  font-family: inherit;
-  font-size: var(--m3-type-body-medium-size);
+.m3e-calendar-day {
+  font-size: var(--m3-type-body-large-size);
   font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  transition:
-    border-radius var(--m3-spring-expressive-spatial-duration) var(--m3-spring-expressive-spatial),
-    scale var(--m3-spring-expressive-spatial-duration) var(--m3-spring-expressive-spatial),
-    background-color var(--m3-motion-short2) var(--m3-easing-standard);
 }
 
-.calendar-day:hover {
-  background-color: var(--m3-surface-container-high);
-}
-
-.calendar-day.muted {
-  /* Adjacent-month dates are real, readable dates, not disabled controls. The
-     disabled-content overlay (38%) lands at 2.37:1 and any opacity on top of
-     on-surface-variant still undershoots 4.5:1, so the distinction is carried
-     by weight and the absence of the day-count badge instead of by contrast. */
-  color: var(--m3-on-surface-variant);
+.m3e-calendar-day.is-muted {
   font-weight: 400;
-}
-
-.calendar-day i {
-  position: absolute;
-  inset-block-end: 5px;
-  min-inline-size: 16px;
-  padding-inline: 4px;
-  border-radius: var(--m3-shape-full);
-  background-color: var(--m3-tertiary-container);
-  color: var(--m3-on-tertiary-container);
-  font-size: 9px;
-  font-style: normal;
-  line-height: 14px;
-  text-align: center;
-}
-
-.calendar-day.selected i {
-  background-color: var(--m3-on-primary);
-  color: var(--m3-primary);
 }
 
 .calendar-detail-head {
@@ -117,15 +71,6 @@
   font-size: var(--m3-type-title-large-size);
 }
 
-.calendar-date-jump {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-block-end: 12px;
-  color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-body-small-size);
-}
-
 /* -------------------------------------------------------------------------- */
 /* Directory tree (v2)                                                        */
 /* -------------------------------------------------------------------------- */
@@ -137,19 +82,19 @@
 }
 
 .all-tasks-toolbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
   align-items: end;
   gap: 12px;
-  margin-block: 18px;
+  margin-block: 24px;
 }
 
 .all-tasks-toolbar > * {
-  min-inline-size: 220px;
+  min-inline-size: 0;
 }
 
-.all-tasks-toolbar .m3e-text-field {
-  flex: 1 1 280px;
+.all-tasks-toolbar .m3e-field {
+  min-inline-size: 0;
 }
 
 .select-field {
@@ -157,12 +102,6 @@
   gap: 6px;
   color: var(--m3-on-surface-variant);
   font-size: var(--m3-type-body-small-size);
-}
-
-.tree-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .tree-view-select {
@@ -184,7 +123,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin: 4px 0 16px;
+  margin-block: 8px 16px;
   color: var(--m3-on-surface-variant);
   font-size: var(--m3-type-body-medium-size);
 }
@@ -196,12 +135,15 @@
 .tree-group-heading {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  margin-block-end: 8px;
+  margin: 0;
+  padding: 0 2px 4px;
+  border: 0;
   color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-label-medium-size);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--m3-type-label-large-size);
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .tree-group-empty {
@@ -786,7 +728,7 @@
 }
 
 .command-input kbd,
-.command-trigger kbd {
+.m3e-button--command-trigger kbd {
   flex: none;
   padding: 3px 6px;
   border: 1px solid var(--m3-outline-variant);
@@ -910,34 +852,16 @@
   text-align: center;
 }
 
-.command-trigger {
+.m3e-button--command-trigger .m3e-button__label {
   display: flex;
   flex: 1 1 auto;
-  align-items: center;
-  gap: 10px;
-  max-inline-size: 460px;
-  min-block-size: 48px;
-  padding: 0 12px 0 16px;
-  border: 0;
-  border-radius: var(--m3-shape-full);
-  background-color: var(--m3-surface-container-high);
-  color: var(--m3-on-surface-variant);
-  font-family: inherit;
-  font-size: var(--m3-type-body-medium-size);
-  text-align: start;
-  cursor: pointer;
-}
-
-.command-trigger > span {
-  flex: 1 1 auto;
   min-inline-size: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.command-trigger:hover {
-  box-shadow: var(--m3-elevation-2);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1266,7 +1190,7 @@
  */
 @media (max-width: 599.98px) {
   .quick-capture kbd,
-  .command-trigger kbd {
+  .m3e-button--command-trigger kbd {
     display: none;
   }
 }
@@ -1315,7 +1239,7 @@
 
 .today-stage {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(264px, 0.38fr);
+  grid-template-columns: minmax(0, 2.7fr) minmax(264px, 1fr);
   gap: var(--m3-space-4);
   align-items: stretch;
 }
@@ -1581,9 +1505,10 @@
 
 .today-task-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 0.34fr);
-  gap: var(--m3-space-6);
+  grid-template-columns: minmax(0, 2.7fr) minmax(264px, 1fr);
+  gap: 20px;
   align-items: start;
+  margin-block-start: 28px;
 }
 
 .today-task-pane,
@@ -1603,9 +1528,16 @@
 
 .today-task-pane .task-list,
 .today-complete-pane .task-list {
-  padding: var(--m3-space-2);
+  padding: 4px;
+  border: 1px solid var(--m3-outline-variant);
   border-radius: var(--m3-shape-lg);
-  background-color: var(--m3-surface-container);
+  background-color: var(--m3-surface-container-low);
+}
+
+.today-task-pane .task-list:has(> .m3e-empty-state) {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .today-task-pane .empty-state,
@@ -1621,14 +1553,6 @@
   background-color: transparent;
 }
 
-.app-toolbar {
-  padding: var(--m3-space-2);
-}
-
-.app-toolbar .command-trigger {
-  max-inline-size: min(320px, 28vw);
-}
-
 /* -------------------------------------------------------------------------- */
 /* M3 workbench calibration                                                   */
 /*                                                                            */
@@ -1638,26 +1562,14 @@
 /* M3 contained-list and supporting-pane patterns.                            */
 /* -------------------------------------------------------------------------- */
 
-.tree-header-actions {
-  flex: none;
-}
-
-.inline-capture .tree-inline-field {
+.inline-capture .m3e-field--tree-inline {
   inline-size: min(240px, 34vw);
 }
 
-.tree-capture-form .tree-inline-field {
+.tree-capture-form .m3e-field--tree-inline {
   flex: 1 1 360px;
   min-inline-size: 0;
-  max-inline-size: 560px;
-}
-
-.tree-breadcrumbs {
-  margin-block: 8px 20px;
-  padding: 4px;
-  border: 1px solid var(--m3-outline-variant);
-  border-radius: var(--m3-shape-md);
-  background-color: var(--m3-surface-container-low);
+  max-inline-size: 640px;
 }
 
 .tree-group {
@@ -1666,18 +1578,6 @@
   border: 1px solid var(--m3-outline-variant);
   border-radius: var(--m3-shape-lg);
   background-color: var(--m3-surface-container-low);
-}
-
-.tree-group-heading {
-  justify-content: space-between;
-  margin: 0;
-  padding: 8px 10px;
-  border-block-end: 1px solid var(--m3-outline-variant);
-  color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-label-large-size);
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
 }
 
 .tree-group-empty {
@@ -1803,35 +1703,12 @@
   background-color: var(--m3-surface-container-low);
 }
 
-.app-toolbar,
 .today-toolbar {
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-}
-
-.app-toolbar .command-trigger {
-  flex: 0 1 360px;
-  max-inline-size: 360px;
-  min-block-size: 48px;
-  border: 1px solid var(--m3-outline-variant);
-  background-color: var(--m3-surface-container-high);
-  box-shadow: none;
-}
-
-.app-toolbar .command-trigger:hover {
-  border-color: var(--m3-outline);
-  box-shadow: none;
-}
-
-.app-toolbar .connection-status {
-  min-block-size: 36px;
-  padding: 0 10px;
-  border: 1px solid var(--m3-outline-variant);
-  border-radius: var(--m3-shape-full);
-  background-color: var(--m3-surface-container-low);
 }
 
 .today-toolbar {
@@ -1919,13 +1796,195 @@
   box-shadow: none;
 }
 
-.today-task-workspace {
-  gap: 20px;
+/* Workspace alignment and contained rows. */
+.tree-page-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 1.1fr);
+  align-items: end;
+  gap: 28px;
 }
 
-.today-task-pane .task-list,
-.today-complete-pane .task-list {
-  padding: 4px;
+.tree-header-actions {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(240px, 1.2fr);
+  align-items: end;
+  gap: 12px;
+}
+
+.tree-header-actions .m3e-select--tree-view {
+  min-inline-size: 0;
+}
+
+.tree-header-actions .inline-capture {
+  min-inline-size: 0;
+  align-items: end;
+}
+
+.tree-header-actions .inline-capture .m3e-field--tree-inline {
+  flex: 1 1 0;
+  inline-size: auto;
+  max-inline-size: none;
+}
+
+.tree-header-actions .inline-capture .m3e-button {
+  inline-size: 48px;
+  min-block-size: 48px;
+  padding-inline: 0;
+}
+
+.tree-capture-form {
+  gap: 12px;
+  margin-block: 16px 24px;
+}
+
+.tree-capture-form > svg {
+  flex: none;
+  color: var(--m3-on-surface-variant);
+}
+
+.tree-capture-form > .m3e-button {
+  min-block-size: 48px;
+}
+
+.m3e-field--tree-inline .m3e-field__input {
+  padding-block: 0;
+  line-height: var(--m3-type-body-large-line);
+}
+
+.workflows-page > .tree-capture-form {
+  margin-block: 8px 24px;
+}
+
+.m3e-card--tree-group {
+  margin-block: 18px 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.m3e-list--tree-group,
+.m3e-list--all-tasks,
+.m3e-list--workflow-stage {
+  gap: 8px;
+  overflow: visible;
+  background: transparent;
+}
+
+.m3e-list--tree-group .m3e-list-item,
+.m3e-list--all-tasks .m3e-list-item,
+.m3e-list--workflow-stage .m3e-list-item {
+  border-radius: var(--m3-shape-md);
+}
+
+.m3e-list--tree-group .m3e-list-item__wrapper,
+.m3e-list--all-tasks .m3e-list-item__wrapper,
+.m3e-list--workflow-stage .m3e-list-item__wrapper {
+  border: 1px solid color-mix(in srgb, var(--m3-outline-variant) 68%, transparent);
+  border-radius: var(--m3-shape-md);
+  background: var(--m3-surface-container-lowest);
+}
+
+.m3e-list--tree-group .m3e-list-item__headline,
+.m3e-list--all-tasks .m3e-list-item__headline,
+.m3e-list--workflow-stage .m3e-list-item__headline {
+  font-weight: 600;
+}
+
+.m3e-list--all-tasks .m3e-list-item__supporting code {
+  color: var(--m3-on-surface-variant);
+  font-family: var(--m3-font-sans);
+  font-size: var(--m3-type-body-small-size);
+  letter-spacing: 0.02em;
+}
+
+.all-tasks-query {
+  display: grid;
+  gap: 5px;
+  min-inline-size: 0;
+}
+
+.m3e-field--all-tasks-query {
+  min-inline-size: 0;
+}
+
+.m3e-field--all-tasks-query .m3e-field__box {
+  min-block-size: 48px;
+  border-radius: var(--m3-shape-md);
+}
+
+.m3e-field--all-tasks-query .m3e-field__input {
+  min-block-size: 48px;
+  padding: 0 14px;
+}
+
+.m3e-field--all-tasks-query .m3e-field__input::placeholder {
+  color: var(--m3-on-surface-variant);
+}
+
+.today-task-pane .m3e-empty-state {
+  min-block-size: 200px;
+  border-radius: var(--m3-shape-lg);
+}
+
+.m3e-toolbar--app-actions {
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.m3e-toolbar--app-actions .m3e-button--command-trigger {
+  flex: 0 1 360px;
+  max-inline-size: 360px;
+  min-inline-size: 180px;
+  min-block-size: 48px;
   border: 1px solid var(--m3-outline-variant);
-  background-color: var(--m3-surface-container-low);
+  border-radius: var(--m3-shape-full);
+  background: var(--m3-surface-container-high);
+  box-shadow: none;
+}
+
+.m3e-toolbar--app-actions .m3e-button--command-trigger:hover {
+  border-color: var(--m3-outline);
+  box-shadow: none;
+}
+
+.m3e-toolbar--app-actions .connection-status {
+  min-block-size: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-full);
+  background: var(--m3-surface-container-low);
+}
+
+.calendar-head,
+.weekday-row,
+.calendar-grid {
+  max-inline-size: 640px;
+  margin-inline: auto;
+}
+
+.calendar-head {
+  margin-block-end: 18px;
+}
+
+.weekday-row {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  justify-items: center;
+}
+
+.calendar-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.m3e-calendar-day {
+  min-block-size: 44px;
+  border-radius: var(--m3-shape-md);
+}
+
+.m3e-calendar-day__indicator {
+  inset-block-end: 8px;
 }
