@@ -14,7 +14,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
 
     data object Time : Screen("time", "计划", Icons.Default.DateRange)
 
-    data object More : Screen("more", "更多", Icons.Default.Settings)
+    data object More : Screen("more", "设置", Icons.Default.Settings)
 
     data object TaskDetail : Screen("task_detail/{taskId}", "任务详情") {
         fun createRoute(taskId: String) = "task_detail/$taskId"

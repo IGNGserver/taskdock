@@ -239,6 +239,9 @@ interface TimePointDao {
 
 @Dao
 interface PlacementDao {
+    @Query("SELECT * FROM placements WHERE ownerId = :ownerId AND deletedAt IS NULL ORDER BY timePointId ASC, CAST(rank AS INTEGER) ASC")
+    fun getActivePlacementsFlow(ownerId: String): Flow<List<PlacementEntity>>
+
     @Query("SELECT * FROM placements WHERE ownerId = :ownerId AND timePointId = :timePointId AND deletedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC")
     fun getPlacementsByTimePointFlow(ownerId: String, timePointId: String): Flow<List<PlacementEntity>>
 

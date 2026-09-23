@@ -1,6 +1,8 @@
 package com.devtodo.app.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -10,8 +12,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -20,23 +28,30 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -44,6 +59,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -78,7 +96,10 @@ fun TreeScreen(
         }
     val tabState = rememberSaveableStateHolder()
     var tab by rememberSaveable { mutableStateOf(0) }
+    val useInlineTaskAction =
+        LocalDensity.current.fontScale >= 1.3f || LocalConfiguration.current.screenHeightDp < 480
     val listState = rememberLazyListState()
+    val allTasksListState = rememberLazyListState()
     var handledLocateRequest by rememberSaveable { mutableStateOf(0) }
     LaunchedEffect(locateRequest) {
         if (locateRequest > handledLocateRequest) {
@@ -120,6 +141,12 @@ fun TreeScreen(
         val index = rows.indexOfFirst { it.id == highlightedTaskId }
         if (index >= 0) listState.animateScrollToItem(index)
     }
+    val isFabExpanded by remember(tab, listState, allTasksListState) {
+        derivedStateOf {
+            val state = if (tab == 0) listState else allTasksListState
+            state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset < 24
+        }
+    }
     WorkspaceScaffold(
         topBar = {
             Column {
@@ -129,7 +156,7 @@ fun TreeScreen(
                         Text(
                             if (tab == 0)
                                 currentFolderId?.let { folderTitle(it, allFolders) } ?: "任务库"
-                            else "全部任务"
+                            else "任务库"
                         )
                     },
                     navigationIcon = {
@@ -145,34 +172,62 @@ fun TreeScreen(
                     },
                     actions = {
                         if (tab == 0)
-                            ActionMenu(
-                                "目录操作",
-                                listOf(RowAction("新建文件夹") { showFolderDialog = true }),
-                            )
+                            IconButton(
+                                onClick = { showFolderDialog = true },
+                                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
+                            ) { Icon(Icons.Default.CreateNewFolder, "新建文件夹") }
+                        if (useInlineTaskAction)
+                            IconButton(
+                                onClick = { showTaskDialog = true },
+                                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
+                            ) { Icon(Icons.Default.Add, "新建任务") }
                     },
                 )
-                WorkspaceTabs(listOf("任务库", "全部任务"), tab) { tab = it }
+                WorkspaceTabs(listOf("目录", "全部任务"), tab) { tab = it }
             }
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showTaskDialog = true },
-                icon = { Icon(Icons.Default.Add, null) },
-                text = { Text("新建任务") },
-            )
+            if (!useInlineTaskAction) {
+                Crossfade(
+                    targetState = isFabExpanded,
+                    animationSpec = tween(140),
+                    label = "treeCreateFab",
+                ) {
+                    if (it) {
+                        ExtendedFloatingActionButton(
+                            onClick = { showTaskDialog = true },
+                            icon = { Icon(Icons.Default.Add, null) },
+                            text = { Text("新建任务") },
+                        )
+                    } else {
+                        FloatingActionButton(onClick = { showTaskDialog = true }) {
+                            Icon(Icons.Default.Add, "新建任务")
+                        }
+                    }
+                }
+            }
         },
     ) { padding ->
         if (tab == 1)
             tabState.SaveableStateProvider("all-tasks") {
-                AllTasksV2Screen(viewModel, onNavigateToDetail)
+                AllTasksV2Screen(viewModel, onNavigateToDetail, allTasksListState)
             }
         else
             LazyColumn(
                 Modifier.fillMaxSize().padding(padding),
                 state = listState,
-                contentPadding = PaddingValues(bottom = 96.dp),
+                contentPadding = PaddingValues(bottom = 120.dp),
             ) {
-                items(rows, key = { "${it.kind}:${it.id}" }) { row ->
+                item(key = "directory-overview") {
+                    DirectoryOverview(
+                        folderCount = folders.size,
+                        taskCount = tasks.size,
+                        pendingCount = tasks.count { it.status != TaskStatus.DONE },
+                        isRoot = currentFolderId == null,
+                    )
+                }
+                itemsIndexed(rows, key = { _, row -> "${row.kind}:${row.id}" }) { rowIndex, row ->
+                    Column {
                     val siblings = rows.filter { it.status == row.status }
                     val index = siblings.indexOfFirst { it.id == row.id }
                     val actions =
@@ -187,17 +242,40 @@ fun TreeScreen(
                         val folder = row.folder
                         ListItem(
                             headlineContent = {
-                                Text(folder.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    folder.title,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                                )
                             },
                             supportingContent = {
-                                Text("${statusLabel(row.status)} · ${row.taskCount} 个任务")
+                                val folderHint =
+                                    when {
+                                        row.taskCount == 0 -> "空目录"
+                                        row.status == TaskStatus.IN_PROGRESS -> "进行中 · ${row.taskCount} 个任务"
+                                        row.status == TaskStatus.DONE -> "全部完成 · ${row.taskCount} 个任务"
+                                        else -> "${row.taskCount} 个待处理任务"
+                                    }
+                                Text(
+                                    folderHint,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                             },
                             leadingContent = {
-                                Icon(
-                                    Icons.Default.Folder,
-                                    null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
+                                Surface(
+                                    shape = MaterialTheme.shapes.medium,
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                ) {
+                                    Icon(
+                                        Icons.Default.Folder,
+                                        null,
+                                        Modifier.padding(10.dp).size(22.dp),
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    )
+                                }
                             },
                             trailingContent = {
                                 ActionMenu(
@@ -212,6 +290,10 @@ fun TreeScreen(
                                 Modifier.fillMaxWidth().clickable(onClickLabel = "打开目录") {
                                     currentFolderId = folder.id
                                 },
+                            colors =
+                                ListItemDefaults.colors(
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                ),
                         )
                     } else {
                         val task = row.task!!
@@ -223,9 +305,13 @@ fun TreeScreen(
                             highlighted = task.id == highlightedTaskId,
                         )
                     }
+                        if (rowIndex < rows.lastIndex) {
+                            HorizontalDivider(Modifier.padding(start = 72.dp, end = 16.dp))
+                        }
+                    }
                 }
                 if (rows.isEmpty())
-                    item { EmptyState(Icons.Default.Folder, "这个目录还是空的", "添加任务，或通过右上角菜单创建子目录。") }
+                    item { EmptyState(Icons.Default.Folder, "这个目录还是空的", "使用“新建文件夹”创建目录，或新建一条任务。") }
             }
     }
 
@@ -368,56 +454,162 @@ fun TreeScreen(
 }
 
 @Composable
-fun AllTasksV2Screen(viewModel: MainViewModel, onNavigateToDetail: (String) -> Unit) {
+fun AllTasksV2Screen(
+    viewModel: MainViewModel,
+    onNavigateToDetail: (String) -> Unit,
+    listState: LazyListState,
+) {
     val tasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf<String?>(null) }
+    val normalizedQuery = query.trim()
     val visible =
         tasks.filter {
             it.deletedAt == null &&
                 it.archivedAt == null &&
                 (filter == null || it.status.name == filter) &&
-                (it.title.contains(query.trim(), ignoreCase = true) ||
-                    it.referenceId?.contains(query.trim(), ignoreCase = true) == true)
+                (it.title.contains(normalizedQuery, ignoreCase = true) ||
+                    it.referenceId?.contains(normalizedQuery, ignoreCase = true) == true)
         }
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(
-            query,
-            { query = it },
-            label = { Text("搜索任务") },
-            singleLine = true,
-            leadingIcon = { Icon(Icons.Default.Search, null) },
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-        )
-        Row(
-            Modifier.fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Surface(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
-            FilterChip(
-                selected = filter == null,
-                onClick = { filter = null },
-                label = { Text("全部") },
-            )
-            TaskStatus.entries.forEach { status ->
-                FilterChip(
-                    selected = filter == status.name,
-                    onClick = { filter = status.name },
-                    label = { Text(taskStatusLabel(status)) },
+            Column(
+                Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("搜索任务") },
+                    supportingText = { Text("可搜索标题或参考编号") },
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(
+                                onClick = { query = "" },
+                                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
+                            ) { Icon(Icons.Default.Close, "清除搜索") }
+                        }
+                    },
+                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier.fillMaxWidth(),
                 )
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(
+                        selected = filter == null,
+                        onClick = { filter = null },
+                        label = { Text("全部") },
+                    )
+                    TaskStatus.entries.forEach { status ->
+                        FilterChip(
+                            selected = filter == status.name,
+                            onClick = { filter = status.name },
+                            label = { Text(taskStatusLabel(status)) },
+                        )
+                    }
+                }
             }
         }
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 96.dp)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                when {
+                    normalizedQuery.isNotEmpty() -> "搜索结果"
+                    filter != null -> "${taskStatusLabel(TaskStatus.valueOf(filter!!))}任务"
+                    else -> "任务列表"
+                },
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text("${visible.size} 项", style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        LazyColumn(
+            Modifier.weight(1f).imePadding(),
+            state = listState,
+            contentPadding = PaddingValues(bottom = 120.dp),
+        ) {
             items(visible, key = { it.id }) { task ->
                 M3TaskRow(
                     task,
                     onClick = { onNavigateToDetail(task.id) },
                     onStatusToggle = { viewModel.updateTaskStatus(task, it) },
+                    showStatus = filter == null,
                 )
             }
-            if (visible.isEmpty())
-                item { EmptyState(Icons.Default.Search, "没有匹配的任务", "试试其他关键词或状态。") }
+            if (visible.isEmpty()) {
+                item {
+                    when {
+                        normalizedQuery.isNotEmpty() ->
+                            EmptyState(Icons.Default.Search, "没有匹配的任务", "试试其他关键词或状态。")
+                        filter != null ->
+                            EmptyState(
+                                Icons.Default.Search,
+                                "当前筛选没有任务",
+                                "切换到其他状态，或清除筛选条件。",
+                            )
+                        else ->
+                            EmptyState(
+                                Icons.Default.Folder,
+                                "还没有任务",
+                                "新建一条任务后，它会出现在这里。",
+                            )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DirectoryOverview(
+    folderCount: Int,
+    taskCount: Int,
+    pendingCount: Int,
+    isRoot: Boolean,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Row(
+            Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.tertiaryContainer) {
+                Icon(
+                    Icons.Default.Folder,
+                    contentDescription = null,
+                    modifier = Modifier.padding(12.dp).size(24.dp),
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    if (isRoot) "目录概览" else "当前目录",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                )
+                Text(
+                    "$folderCount 个子目录 · $taskCount 条任务 · $pendingCount 条未完成",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
