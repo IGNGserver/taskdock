@@ -565,7 +565,12 @@ function nullableString(value: unknown): string | null {
   return value === null || value === undefined ? null : String(value);
 }
 function nullableDate(value: unknown): string | null {
-  return value === null || value === undefined ? null : String(value).slice(0, 10);
+  if (value === null || value === undefined) return null;
+  // node-postgres parses SQL DATE values into Date objects. String(Date)
+  // produces a localized weekday string such as "Wed Sep 23", which breaks
+  // date-point identity checks and can turn an existing date into a duplicate.
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
 }
 function iso(value: unknown): string {
   return value instanceof Date ? value.toISOString() : new Date(String(value)).toISOString();
