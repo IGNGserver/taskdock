@@ -499,7 +499,7 @@ export function TreePage() {
 
   return (
     <section className="page-section tree-page" aria-labelledby="tree-title">
-      <div className="page-header">
+      <div className="page-header tree-page-header">
         <div>
           <p className="eyebrow">任务库</p>
           <h1 id="tree-title">任务库</h1>
@@ -612,7 +612,7 @@ export function TreePage() {
                 description="创建任务或文件夹后，它们会显示在这里。"
               />
             ) : (
-              <List className="m3e-list--tree-group">
+              <List gap className="m3e-list--tree-group">
                 {group.items.map((item, index) =>
                   item.kind === 'FOLDER' ? (
                     <ListItem
@@ -1720,7 +1720,7 @@ export function WorkflowsPage() {
                             </IconButton>
                           </div>
                         </header>
-                        <List className="m3e-list--workflow-stage">
+                        <List gap className="m3e-list--workflow-stage">
                           {stage.tasks.map((task, taskIndex) => {
                             const membership = stage.memberships?.find(
                               (candidate) => candidate.taskId === task.id,
@@ -2084,12 +2084,19 @@ export function AllTasksV2Page() {
         </div>
       </div>
       <div className="all-tasks-toolbar">
-        <TextField
-          label="筛选任务"
-          placeholder="按标题或引用 ID 筛选…"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
+        <div className="all-tasks-query">
+          <span className="m3e-select__label" aria-hidden="true">
+            筛选任务
+          </span>
+          <TextField
+            label="筛选任务"
+            hideLabel
+            className="m3e-field--all-tasks-query"
+            placeholder="按标题或引用 ID 筛选…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
         <Select
           label="状态"
           className="m3e-select--all-tasks-filter"
@@ -2135,7 +2142,7 @@ export function AllTasksV2Page() {
         <>
           {loading && <LoadingState label="正在更新任务" />}
           {visibleTasks.length ? (
-            <List className="m3e-list--all-tasks">
+            <List gap className="m3e-list--all-tasks">
               {visibleTasks.map((task) => (
                 <ListItem
                   className="m3e-list-item--all-task"

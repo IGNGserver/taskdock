@@ -3348,7 +3348,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   return (
     <div className="page">
       <PageHeader
-        eyebrow="CALENDAR"
+        eyebrow="计划"
         title="日历"
         description="按本地日期安排任务，不把日期当成截止日期。"
         action={
@@ -3384,14 +3384,6 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               <ChevronRight size={20} />
             </IconButton>
           </div>
-          <DateField
-            className="m3e-field--date-jump"
-            label="跳转到日期"
-            value={selected}
-            onChange={(event) => {
-              if (event.target.value) selectDate(event.target.value);
-            }}
-          />
           <div className="weekday-row">
             {weekdayLabels(settings?.weekStartsOn ?? 1).map((day) => (
               <span key={day}>{day}</span>
@@ -3416,7 +3408,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         <Card as="section" variant="elevated" className="m3e-card--calendar-detail">
           <div className="calendar-detail-head">
             <div>
-              <span className="eyebrow">SELECTED DATE</span>
+              <span className="eyebrow">当前日期</span>
               <h2>{formatDate(selected)}</h2>
             </div>
             <Button
