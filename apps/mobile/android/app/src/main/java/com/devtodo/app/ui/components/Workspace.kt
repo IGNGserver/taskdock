@@ -1,7 +1,11 @@
 package com.devtodo.app.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -12,7 +16,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /** The root owns system insets; pages own their app bar and content padding. */
@@ -43,9 +49,10 @@ fun WorkspaceScaffold(
 fun SectionHeading(title: String, modifier: Modifier = Modifier) {
     Text(
         title,
-        modifier.padding(horizontal = 16.dp, vertical = 12.dp).semantics { heading() },
+        modifier.padding(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 8.dp)
+            .semantics { heading() },
         style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
+        color = MaterialTheme.colorScheme.onSurface,
     )
 }
 
@@ -180,9 +187,48 @@ fun CaptureSheet(
 
 @Composable
 fun WorkspaceTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
-    TabRow(selectedTabIndex = selected) {
-        labels.forEachIndexed { index, label ->
-            Tab(selected = selected == index, onClick = { onSelect(index) }, text = { Text(label) })
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()).padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            labels.forEachIndexed { index, label ->
+                val isSelected = selected == index
+                val containerColor by
+                    animateColorAsState(
+                        if (isSelected) MaterialTheme.colorScheme.secondaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerLow,
+                        label = "workspaceTabContainer",
+                    )
+                val contentColor by
+                    animateColorAsState(
+                        if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        label = "workspaceTabContent",
+                    )
+                Box(
+                    Modifier.defaultMinSize(minWidth = 72.dp, minHeight = 48.dp)
+                        .background(containerColor, MaterialTheme.shapes.medium)
+                        .selectable(
+                            selected = isSelected,
+                            role = Role.Tab,
+                            onClick = { onSelect(index) },
+                        )
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                        color = contentColor,
+                    )
+                }
+            }
         }
     }
 }

@@ -91,6 +91,12 @@ class MainViewModel(
         .flatMapLatest { ownerId -> ownerId?.let { db.timePointDao().getActiveTimePointsFlow(it) } ?: flowOf(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val activeTimePointPlacements: StateFlow<List<PlacementEntity>> = currentOwnerId
+        .flatMapLatest { ownerId ->
+            ownerId?.let { db.placementDao().getActivePlacementsFlow(it) } ?: flowOf(emptyList())
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val activeEvents: StateFlow<List<TimePointEntity>> = currentOwnerId
         .flatMapLatest { ownerId ->
             ownerId?.let { db.timePointDao().getActiveEventsFlow(it) } ?: flowOf(emptyList())
