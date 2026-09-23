@@ -100,7 +100,7 @@
   }
 
   .route-transition {
-    animation-name: m3e-fade-in;
+    animation: none;
   }
 
   /*
