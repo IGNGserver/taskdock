@@ -129,7 +129,7 @@ test('task library keeps real empty state separate from failed and refreshing re
   try {
     await session.login();
     await page.goto('/tasks');
-    await expect(page.getByRole('alert')).toContainText('任务库暂时不可用');
+    await expect(page.locator('.m3e-alert--error')).toContainText('任务库暂时不可用');
     await expect(page.getByText('没有符合条件的任务')).toHaveCount(0);
     await page.getByRole('button', { name: '重试' }).click();
     const taskButton = page.getByRole('button', { name: `打开任务 ${task.title}` });
@@ -194,13 +194,13 @@ test('event detail keeps loaded content visible when an event action fails', asy
   try {
     await session.login();
     await page.goto(`/time/events/${event.id}`);
-    await expect(page.getByRole('alert')).toContainText('事件安排暂时不可用');
+    await expect(page.locator('.m3e-alert--error')).toContainText('事件安排暂时不可用');
     await page.getByRole('button', { name: '重试' }).click();
     await expect(page.getByRole('heading', { name: event.title })).toBeVisible();
 
     await page.getByRole('button', { name: '标记已到达' }).click();
-    await expect(page.getByRole('alert')).toContainText('事件状态冲突');
-    await expect(page.getByRole('alert')).toContainText('事件操作失败');
+    await expect(page.locator('.m3e-alert--error')).toContainText('事件状态冲突');
+    await expect(page.locator('.m3e-alert--error')).toContainText('事件操作失败');
     await expect(page.getByRole('heading', { name: event.title })).toBeVisible();
     await expect(page.getByText('等待中')).toBeVisible();
   } finally {
@@ -239,7 +239,7 @@ test('event list retries a failed first read without showing a false empty state
   try {
     await session.login();
     await page.goto('/time/events');
-    await expect(page.getByRole('alert')).toContainText('事件列表暂时不可用');
+    await expect(page.locator('.m3e-alert--error')).toContainText('事件列表暂时不可用');
     await expect(page.getByText('还没有自定义事件')).toHaveCount(0);
 
     await page.getByRole('button', { name: '重试' }).click();
@@ -280,7 +280,7 @@ test('workflow list only shows its empty state after a successful read', async (
   try {
     await session.login();
     await page.goto('/workflows');
-    await expect(page.getByRole('alert')).toContainText('流程列表暂时不可用');
+    await expect(page.locator('.m3e-alert--error')).toContainText('流程列表暂时不可用');
     await expect(page.getByText('还没有流程')).toHaveCount(0);
 
     await page.getByRole('button', { name: '重试' }).click();
@@ -324,7 +324,7 @@ test('archive center does not label a failed task read as an empty archive', asy
   try {
     await session.login();
     await page.goto('/archive');
-    await expect(page.getByRole('alert')).toContainText('归档任务暂时不可用');
+    await expect(page.locator('.m3e-alert--error')).toContainText('归档任务暂时不可用');
     await expect(page.getByText('没有单独归档的任务')).toHaveCount(0);
     await page.getByRole('button', { name: '重试' }).click();
     await expect(page.getByText('没有单独归档的任务')).toBeVisible();
