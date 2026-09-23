@@ -123,6 +123,11 @@ test('tree separates load errors from empty folders and recovers task detail in 
     await page.getByLabel('用户名').fill(user.username);
     await page.getByLabel('密码').fill('correct horse battery staple');
     await page.getByRole('button', { name: '登录' }).click();
+    const authenticatedShellAction =
+      test.info().project.name === 'mobile'
+        ? page.getByRole('button', { name: '打开创建菜单' })
+        : page.getByRole('button', { name: '快速添加' });
+    await expect(authenticatedShellAction).toBeVisible();
 
     await page.goto('/tree');
     await expect(page.locator('.m3e-alert--error')).toContainText('目录暂时不可用');

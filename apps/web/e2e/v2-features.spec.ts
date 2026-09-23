@@ -413,6 +413,11 @@ test('groups the archive centre by cascade operation and distinguishes retained 
   await page.getByLabel('用户名').fill(owner.username);
   await page.getByLabel('密码').fill('correct horse battery staple');
   await page.getByRole('button', { name: '登录' }).click();
+  const quickEntry =
+    test.info().project.name === 'mobile'
+      ? page.getByRole('button', { name: '打开创建菜单' })
+      : page.getByRole('button', { name: '快速添加' });
+  await expect(quickEntry).toBeVisible();
 
   await page.goto('/archive');
   // The cascade archive is one top-level entry with its counts, not a flat list.
