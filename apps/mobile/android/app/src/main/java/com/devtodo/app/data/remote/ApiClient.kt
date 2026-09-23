@@ -207,7 +207,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
             .header("Origin", nativeOrigin)
             .header("Accept", "application/json")
             .header("X-Client-Id", authManager.clientId)
-            .post("".toRequestBody(jsonMediaType))
+            .post("{}".toRequestBody(jsonMediaType))
             .build()
         return try {
             rawHttpClient.newCall(request).execute().use { response ->
