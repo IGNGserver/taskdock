@@ -159,7 +159,13 @@ class ApiClient(private val authManager: SecureAuthManager) {
                 return true
             }
             val refreshToken = authManager.refreshToken ?: return false
-            val challenge = requestNativeChallenge() ?: return false
+            val challenge = try {
+                requestNativeChallenge()
+            } catch (_: ApiClientException) {
+                // Session restoration is best-effort. Keep local data usable
+                // when the challenge service rejects or cannot serve a request.
+                return false
+            } ?: return false
             val payload = json.encodeToString(
                 mapOf(
                     "refreshToken" to refreshToken,
