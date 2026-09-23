@@ -323,16 +323,19 @@ jobs:
         with:
           name: taskdock-linux
           path: release-assets
+          merge-multiple: true
       - name: 下载 Windows 安装包
         uses: actions/download-artifact@v4
         with:
           name: taskdock-windows
           path: release-assets
+          merge-multiple: true
       - name: 下载 Android 安装包
         uses: actions/download-artifact@v4
         with:
           name: taskdock-android
           path: release-assets
+          merge-multiple: true
       - name: 写入中文发布说明
         env:
           RELEASE_CHANGES: ${{ inputs.changes }}
@@ -340,6 +343,21 @@ jobs:
           printf '%s\n' "$RELEASE_CHANGES" > release-notes.md
           printf '\n\n---\n\n## Docker 镜像\n\n```text\nghcr.io/igngserver/taskdock:%s\n```\n' '${{ inputs.version }}' >> release-notes.md
           printf '\n## 本次附件\n\n- Windows 桌面安装包\n- Linux 桌面客户端压缩包及 SHA-256 校验文件\n- 已签名 Android APK 及 SHA-256 校验文件\n' >> release-notes.md
+      - name: 校验发布资产
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          required=(
+            "release-assets/TaskDock-${RELEASE_VERSION}-linux-x64.tar.gz"
+            "release-assets/TaskDock-${RELEASE_VERSION}-linux-x64.tar.gz.sha256"
+            "release-assets/TaskDock-${RELEASE_VERSION}-windows-x64.exe"
+            "release-assets/TaskDock-${RELEASE_VERSION}-android.apk"
+            "release-assets/TaskDock-${RELEASE_VERSION}-android.sha256"
+          )
+          for file in "${required[@]}"; do
+            test -s "$file" || { echo "缺少发布资产: $file" >&2; exit 1; }
+          done
       - name: 创建 Release
         env:
           GH_TOKEN: ${{ github.token }}
