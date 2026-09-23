@@ -107,14 +107,14 @@ test('calendar distinguishes a failed load from an empty day and recovers on ret
     await page.getByRole('button', { name: '登录' }).click();
 
     await page.goto('/time/calendar/2026-09-21');
-    await expect(page.getByRole('alert')).toContainText('数据库事务被拒绝');
+    await expect(page.locator('.m3e-alert--error')).toContainText('数据库事务被拒绝');
     await expect(page.getByText('这一天还没有安排')).toHaveCount(0);
 
     const addTask = page.getByRole('button', { name: '加入任务' });
     await expect(addTask).toBeDisabled();
     await page.getByRole('button', { name: '重试' }).click();
     await expect(page.getByText('这一天还没有安排')).toBeVisible();
-    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.locator('.m3e-alert--error')).toHaveCount(0);
     await expect(addTask).toBeEnabled();
     await addTask.click();
     await expect(page.getByRole('dialog', { name: '安排任务' })).toBeVisible();

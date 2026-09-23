@@ -125,12 +125,12 @@ test('tree separates load errors from empty folders and recovers task detail in 
     await page.getByRole('button', { name: '登录' }).click();
 
     await page.goto('/tree');
-    await expect(page.getByRole('alert')).toContainText('目录暂时不可用');
+    await expect(page.locator('.m3e-alert--error')).toContainText('目录暂时不可用');
     await expect(page.getByText('暂无当前目录项')).toHaveCount(0);
     await page.getByRole('button', { name: '重试' }).click();
     await page.getByRole('button', { name: '打开任务 验收任务' }).click();
 
-    await expect(page.getByRole('alert')).toContainText('任务详情暂时不可用');
+    await expect(page.locator('.m3e-alert--error')).toContainText('任务详情暂时不可用');
     await page.getByRole('button', { name: '重试' }).click();
     await expect(page.getByRole('textbox', { name: '任务标题' })).toHaveValue('验收任务');
   } finally {
