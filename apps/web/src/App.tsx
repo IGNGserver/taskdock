@@ -1284,30 +1284,48 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
 function useReloadable<T>(loader: () => Promise<T>, initial: T) {
   const [data, setData] = useState<T>(initial);
   const [loading, setLoading] = useState(true);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [hasData, setHasData] = useState(false);
   const [error, setError] = useState('');
+  const reloadSequence = useRef(0);
   const reload = useCallback(async () => {
+    const sequence = ++reloadSequence.current;
     setLoading(true);
     setError('');
     try {
-      setData(await loader());
+      const nextData = await loader();
+      if (sequence !== reloadSequence.current) return;
+      setData(nextData);
+      setHasData(true);
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : '加载失败，请重试');
+      if (sequence === reloadSequence.current)
+        setError(cause instanceof ApiError ? cause.message : '加载失败，请重试');
     } finally {
-      setLoading(false);
-      setHasLoaded(true);
+      if (sequence === reloadSequence.current) {
+        setLoading(false);
+      }
     }
   }, [loader]);
   useEffect(() => {
     void reload();
     const listener = () => void reload();
     window.addEventListener('devtodo:data-changed', listener);
-    return () => window.removeEventListener('devtodo:data-changed', listener);
+    return () => {
+      reloadSequence.current += 1;
+      window.removeEventListener('devtodo:data-changed', listener);
+    };
   }, [reload]);
   // `loading` stays true across background revalidation. Views that would swap
   // interactive content for a skeleton should gate on `initialLoading` instead,
   // so an in-flight refresh never unmounts a button mid-interaction.
-  return { data, setData, loading, initialLoading: loading && !hasLoaded, error, reload };
+  return {
+    data,
+    setData,
+    loading,
+    initialLoading: loading && !hasData,
+    hasData,
+    error,
+    reload,
+  };
 }
 
 function QuickCapture({
@@ -1636,7 +1654,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       ),
     };
   }, [localDate]);
-  const { data, loading, error, reload } = useReloadable<{
+  const { data, error, hasData, initialLoading, reload } = useReloadable<{
     point: TimePointDto | null;
     items: PlacementWithTask[];
     reachedEvents: TimePointDto[];
@@ -1732,91 +1750,93 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           </Toolbar>
         }
       />
-      <section className="today-stage" aria-label="今日工作区">
-        <section className="today-overview" aria-label="今日进度">
-          <div className="today-overview-identity">
-            <span className="today-day-marker" aria-hidden="true">
-              {dayNumber}
-            </span>
-            <div className="today-overview-copy">
-              <span className="today-overview-label">今天的焦点</span>
-              <strong>{total ? `${done.length} / ${total} 已完成` : '还没有安排任务'}</strong>
-              <span className="today-overview-supporting">
-                {total ? '完成一个任务，下一步会自然浮现' : '从捕获一个小任务开始'}
+      {hasData && (
+        <section className="today-stage" aria-label="今日工作区">
+          <section className="today-overview" aria-label="今日进度">
+            <div className="today-overview-identity">
+              <span className="today-day-marker" aria-hidden="true">
+                {dayNumber}
               </span>
+              <div className="today-overview-copy">
+                <span className="today-overview-label">今天的焦点</span>
+                <strong>{total ? `${done.length} / ${total} 已完成` : '还没有安排任务'}</strong>
+                <span className="today-overview-supporting">
+                  {total ? '完成一个任务，下一步会自然浮现' : '从捕获一个小任务开始'}
+                </span>
+              </div>
             </div>
-          </div>
-          <div className="today-overview-metric">
-            {total > 0 ? (
-              <>
-                <LinearProgress
-                  value={done.length}
-                  max={total}
-                  label="今日任务完成度"
-                  className="m3e-progress--today"
-                />
-                <span className="today-overview-percent">{completionPercent}%</span>
-              </>
-            ) : (
-              <span className="today-overview-empty-metric">等待第一个安排</span>
-            )}
-          </div>
-        </section>
-        <aside
-          className={`today-context${data.reachedEvents.length === 0 ? ' today-context--empty' : ''}`}
-          aria-labelledby="today-context-title"
-        >
-          <div className="today-context-heading">
-            <div>
-              <span className="today-context-eyebrow">上下文</span>
-              <h2 id="today-context-title">今天的上下文</h2>
-            </div>
-            <span className="today-context-mark" aria-hidden="true">
-              <Clock3 size={18} />
-            </span>
-          </div>
-          {data.reachedEvents.length > 0 ? (
-            <div className="today-context-events">
-              <span className="today-context-label">已到达的事件</span>
-              {data.reachedEvents.slice(0, 3).map((event) => (
-                <NavigationCard
-                  key={event.id}
-                  variant="context"
-                  to={`/time/events/${event.id}`}
-                  className="m3e-navigation-card--today-context-event"
-                >
-                  <span className="m3e-navigation-card__timeline-node is-reached" />
-                  <span className="m3e-navigation-card__content">
-                    <strong>{event.title}</strong>
-                    <small>{data.eventCounts[event.id]?.openCount ?? 0} 项未完成</small>
-                  </span>
-                  <ChevronRight
-                    className="m3e-navigation-card__trailing"
-                    size={16}
-                    aria-hidden="true"
+            <div className="today-overview-metric">
+              {total > 0 ? (
+                <>
+                  <LinearProgress
+                    value={done.length}
+                    max={total}
+                    label="今日任务完成度"
+                    className="m3e-progress--today"
                   />
-                </NavigationCard>
-              ))}
-              {data.reachedEvents.length > 3 && (
-                <NavigationCard
-                  variant="inline"
-                  to="/time/events"
-                  className="m3e-navigation-card--today-context-more"
-                >
-                  查看全部事件
-                </NavigationCard>
+                  <span className="today-overview-percent">{completionPercent}%</span>
+                </>
+              ) : (
+                <span className="today-overview-empty-metric">等待第一个安排</span>
               )}
             </div>
-          ) : (
-            <div className="today-context-note">
-              <span className="today-context-note-icon" aria-hidden="true">
-                <Target size={18} />
+          </section>
+          <aside
+            className={`today-context${data.reachedEvents.length === 0 ? ' today-context--empty' : ''}`}
+            aria-labelledby="today-context-title"
+          >
+            <div className="today-context-heading">
+              <div>
+                <span className="today-context-eyebrow">上下文</span>
+                <h2 id="today-context-title">今天的上下文</h2>
+              </div>
+              <span className="today-context-mark" aria-hidden="true">
+                <Clock3 size={18} />
               </span>
-              <p>没有已到达的事件。任务完成状态与事件到达状态始终独立。</p>
             </div>
-          )}
-        </aside>
-      </section>
+            {data.reachedEvents.length > 0 ? (
+              <div className="today-context-events">
+                <span className="today-context-label">已到达的事件</span>
+                {data.reachedEvents.slice(0, 3).map((event) => (
+                  <NavigationCard
+                    key={event.id}
+                    variant="context"
+                    to={`/time/events/${event.id}`}
+                    className="m3e-navigation-card--today-context-event"
+                  >
+                    <span className="m3e-navigation-card__timeline-node is-reached" />
+                    <span className="m3e-navigation-card__content">
+                      <strong>{event.title}</strong>
+                      <small>{data.eventCounts[event.id]?.openCount ?? 0} 项未完成</small>
+                    </span>
+                    <ChevronRight
+                      className="m3e-navigation-card__trailing"
+                      size={16}
+                      aria-hidden="true"
+                    />
+                  </NavigationCard>
+                ))}
+                {data.reachedEvents.length > 3 && (
+                  <NavigationCard
+                    variant="inline"
+                    to="/time/events"
+                    className="m3e-navigation-card--today-context-more"
+                  >
+                    查看全部事件
+                  </NavigationCard>
+                )}
+              </div>
+            ) : (
+              <div className="today-context-note">
+                <span className="today-context-note-icon" aria-hidden="true">
+                  <Target size={18} />
+                </span>
+                <p>没有已到达的事件。任务完成状态与事件到达状态始终独立。</p>
+              </div>
+            )}
+          </aside>
+        </section>
+      )}
       {rollover && (
         <Snackbar
           message={`已安排 ${rollover.count} 项到明天`}
@@ -1827,9 +1847,9 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         <ErrorState error={rolloverError} onRetry={() => void (rollover ? undo() : doRollover())} />
       )}
       {error && <ErrorState error={error} onRetry={() => void reload()} />}
-      {loading ? (
+      {initialLoading ? (
         <SkeletonList />
-      ) : (
+      ) : hasData ? (
         <section className="today-task-workspace">
           <section className="today-task-pane" aria-label="今天要做">
             <SectionTitle title="今天要做" count={active.length} />
@@ -1892,7 +1912,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             )}
           </aside>
         </section>
-      )}
+      ) : null}
       <section className="capture-zone" aria-labelledby="capture-zone-title">
         <div className="capture-zone-copy">
           <span className="capture-zone-eyebrow">捕获</span>
@@ -1949,7 +1969,7 @@ function EventsPage() {
       counts: Object.fromEntries(countResponse.map((item) => [item.timePointId, item])),
     };
   }, []);
-  const { data, loading, error, reload } = useReloadable(loader, {
+  const { data, initialLoading, hasData, error, reload } = useReloadable(loader, {
     active: [] as TimePointDto[],
     archived: [] as TimePointDto[],
     counts: {} as Record<string, TimePointPlacementCountDto>,
@@ -1959,6 +1979,7 @@ function EventsPage() {
   const [actionError, setActionError] = useState('');
   const [restoreBusyId, setRestoreBusyId] = useState<string | null>(null);
   const moveEvent = async (eventId: string, direction: 'up' | 'down') => {
+    setActionError('');
     try {
       const index = data.active.findIndex((point) => point.id === eventId);
       const targetIndex = direction === 'up' ? index - 1 : index + 1;
@@ -2046,10 +2067,22 @@ function EventsPage() {
         }
       />
       {error && <ErrorState error={error} onRetry={() => void reload()} />}
-      {actionError && <ErrorState error={actionError} onRetry={() => void reload()} />}
-      {loading ? (
+      {actionError && (
+        <Alert
+          tone="error"
+          title="事件操作失败"
+          action={
+            <Button variant="text" size="s" onClick={() => void reload()}>
+              刷新
+            </Button>
+          }
+        >
+          {actionError}
+        </Alert>
+      )}
+      {initialLoading ? (
         <SkeletonList />
-      ) : data.active.length || data.archived.length ? (
+      ) : !hasData ? null : data.active.length || data.archived.length ? (
         <>
           {data.active.length > 0 && (
             <div className="timeline-list">
@@ -2233,38 +2266,53 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const captureFolderId = readRecentCaptureFolder(settings?.defaultCaptureTarget);
   const [point, setPoint] = useState<TimePointDto | null>(null);
   const [items, setItems] = useState<PlacementWithTask[]>([]);
-  const [error, setError] = useState('');
+  const [loadedEventId, setLoadedEventId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const loadSequence = useRef(0);
   const [showAdd, setShowAdd] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const load = useCallback(async () => {
     if (!eventId) return;
+    const sequence = ++loadSequence.current;
+    setLoading(true);
+    setLoadError('');
     try {
       const [nextPoint, placements] = await Promise.all([
         requestV2<TimePointDto>(`/time-points/${eventId}`),
         requestV2<{ items: PlacementWithTask[] }>(`/time-points/${eventId}/placements`),
       ]);
+      if (sequence !== loadSequence.current) return;
       setPoint(nextPoint);
       setItems(placements.items);
-      setError('');
+      setLoadedEventId(eventId);
+      setActionError('');
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : '加载失败');
+      if (sequence === loadSequence.current)
+        setLoadError(cause instanceof ApiError ? cause.message : '加载失败');
+    } finally {
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }, [eventId]);
   useEffect(() => {
     void load();
     const listener = () => void load();
     window.addEventListener('devtodo:data-changed', listener);
-    return () => window.removeEventListener('devtodo:data-changed', listener);
+    return () => {
+      loadSequence.current += 1;
+      window.removeEventListener('devtodo:data-changed', listener);
+    };
   }, [load]);
-  if (error)
+  if (loadedEventId !== eventId && loadError)
     return (
       <div className="page">
-        <ErrorState error={error} onRetry={() => void load()} />
+        <ErrorState error={loadError} onRetry={() => void load()} />
       </div>
     );
-  if (!point)
+  if (loadedEventId !== eventId || !point)
     return (
       <div className="page">
         <SkeletonList />
@@ -2272,6 +2320,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
     );
   const changeEventState = async (): Promise<boolean> => {
     setActionBusy(true);
+    setActionError('');
     try {
       if (point.archivedAt)
         await mutationV2('POST', `/time-points/${point.id}/restore`, {
@@ -2287,7 +2336,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       window.dispatchEvent(new Event('devtodo:data-changed'));
       return true;
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : '操作失败');
+      setActionError(cause instanceof ApiError ? cause.message : '操作失败');
       return false;
     } finally {
       setActionBusy(false);
@@ -2306,7 +2355,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       await load();
       window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : '安排排序失败，请重试');
+      setActionError(cause instanceof ApiError ? cause.message : '安排排序失败，请重试');
     }
   };
   return (
@@ -2354,6 +2403,21 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         </span>
         <span>任务完成状态与事件到达状态互不影响</span>
       </div>
+      {loadError && <ErrorState error={loadError} onRetry={() => void load()} />}
+      {actionError && (
+        <Alert
+          tone="error"
+          title="事件操作失败"
+          action={
+            <Button variant="text" size="s" onClick={() => void load()}>
+              刷新
+            </Button>
+          }
+        >
+          {actionError}
+        </Alert>
+      )}
+      {loading && <LoadingState label="正在更新事件安排" />}
       <SectionTitle
         title="安排在这里"
         count={items.length}
@@ -2411,7 +2475,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           title="归档事件"
           description={`确定要归档“${point.title ?? ''}”吗？其中的任务安排会保留，但这个事件将从默认列表隐藏；之后可以从归档中心恢复。`}
           confirmLabel="归档事件"
-          error={error}
+          error={actionError}
           onClose={() => setArchiveConfirmOpen(false)}
           onConfirm={changeEventState}
         />
@@ -3178,6 +3242,8 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const [showAdd, setShowAdd] = useState(false);
   const [dateCounts, setDateCounts] = useState<Record<string, number>>({});
   const [detailError, setDetailError] = useState('');
+  const [loadingSelected, setLoadingSelected] = useState(true);
+  const selectedLoadId = useRef(0);
   const days = useMemo(
     () => calendarDays(month, settings?.weekStartsOn ?? 1),
     [month, settings?.weekStartsOn],
@@ -3187,6 +3253,13 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
     [days],
   );
   const selectDate = (date: string) => {
+    if (date === selected) return;
+    selectedLoadId.current += 1;
+    setLoadingSelected(true);
+    setDetailError('');
+    setPoint(null);
+    setItems([]);
+    setShowAdd(false);
     setSelected(date);
     setMonth(date.slice(0, 7));
   };
@@ -3228,23 +3301,36 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
     };
   }, [monthDates]);
   const loadSelected = useCallback(async () => {
-    const nextPoint = (await mutationV2('POST', '/time-points/date', {
-      localDate: selected,
-    })) as TimePointDto;
-    const result = await requestV2<{ items: PlacementWithTask[] }>(
-      `/time-points/${nextPoint.id}/placements`,
-    );
-    setPoint(nextPoint);
-    setItems(result.items);
+    const loadId = ++selectedLoadId.current;
+    setLoadingSelected(true);
     setDetailError('');
+    try {
+      const nextPoint = (await mutationV2('POST', '/time-points/date', {
+        localDate: selected,
+      })) as TimePointDto;
+      const result = await requestV2<{ items: PlacementWithTask[] }>(
+        `/time-points/${nextPoint.id}/placements`,
+      );
+      if (loadId !== selectedLoadId.current) return;
+      setPoint(nextPoint);
+      setItems(result.items);
+    } catch (cause) {
+      if (loadId !== selectedLoadId.current) return;
+      setPoint(null);
+      setItems([]);
+      setDetailError(cause instanceof ApiError ? cause.message : '日期任务加载失败');
+    } finally {
+      if (loadId === selectedLoadId.current) setLoadingSelected(false);
+    }
   }, [selected]);
   useEffect(() => {
-    void loadSelected().catch((cause) =>
-      setDetailError(cause instanceof ApiError ? cause.message : '日期任务加载失败'),
-    );
+    void loadSelected();
     const listener = () => void loadSelected();
     window.addEventListener('devtodo:data-changed', listener);
-    return () => window.removeEventListener('devtodo:data-changed', listener);
+    return () => {
+      selectedLoadId.current += 1;
+      window.removeEventListener('devtodo:data-changed', listener);
+    };
   }, [loadSelected]);
   const movePlacement = async (placementId: string, direction: 'up' | 'down') => {
     if (!point) return;
@@ -3336,22 +3422,28 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             <Button
               size="s"
               variant="tonal"
+              disabled={loadingSelected || !point}
               leadingIcon={<Plus size={16} />}
               onClick={() => setShowAdd(true)}
             >
               加入任务
             </Button>
           </div>
-          {detailError && <ErrorState error={detailError} onRetry={() => void loadSelected()} />}
-          <PlacementList
-            items={items}
-            pointId={point?.id}
-            onOpenTask={onOpenTask}
-            onChanged={() => void loadSelected()}
-            onMove={movePlacement}
-            emptyTitle="这一天还没有安排"
-            emptyDescription="从任务库添加已有任务，任务本体不会被复制。"
-          />
+          {detailError ? (
+            <ErrorState error={detailError} onRetry={() => void loadSelected()} />
+          ) : loadingSelected ? (
+            <LoadingState label="正在加载日期安排" />
+          ) : (
+            <PlacementList
+              items={items}
+              pointId={point?.id}
+              onOpenTask={onOpenTask}
+              onChanged={() => void loadSelected()}
+              onMove={movePlacement}
+              emptyTitle="这一天还没有安排"
+              emptyDescription="从任务库添加已有任务，任务本体不会被复制。"
+            />
+          )}
           {showAdd && point && (
             <AddTaskModal
               pointId={point.id}
@@ -3462,10 +3554,13 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           onRetry={() => void reloadAll()}
         />
       )}
-      <SectionTitle title="整棵目录归档" count={operations.data.length} />
+      <SectionTitle
+        title="整棵目录归档"
+        count={operations.hasData ? operations.data.length : undefined}
+      />
       {operations.initialLoading ? (
         <SkeletonList />
-      ) : operations.data.length === 0 ? (
+      ) : !operations.hasData ? null : operations.data.length === 0 ? (
         <div className="quiet-empty">没有整棵目录归档记录</div>
       ) : (
         <div className="archive-project-list">
@@ -3541,10 +3636,10 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           })}
         </div>
       )}
-      <SectionTitle title="单独归档的任务" count={looseTasks.length} />
+      <SectionTitle title="单独归档的任务" count={tasks.hasData ? looseTasks.length : undefined} />
       {tasks.initialLoading ? (
         <SkeletonList />
-      ) : (
+      ) : tasks.hasData ? (
         <div className="task-list">
           {looseTasks.length === 0 ? (
             <div className="quiet-empty">没有单独归档的任务</div>
@@ -3580,10 +3675,13 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             ))
           )}
         </div>
-      )}
-      {(folders.initialLoading || looseFolders.length > 0) && (
+      ) : null}
+      {(folders.initialLoading || (folders.hasData && looseFolders.length > 0)) && (
         <>
-          <SectionTitle title="单独归档的文件夹" count={looseFolders.length} />
+          <SectionTitle
+            title="单独归档的文件夹"
+            count={folders.hasData ? looseFolders.length : undefined}
+          />
           {folders.initialLoading ? (
             <SkeletonList />
           ) : (
@@ -3616,9 +3714,9 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           )}
         </>
       )}
-      {(events.initialLoading || events.data.length > 0) && (
+      {(events.initialLoading || (events.hasData && events.data.length > 0)) && (
         <>
-          <SectionTitle title="事件" count={events.data.length} />
+          <SectionTitle title="事件" count={events.hasData ? events.data.length : undefined} />
           {events.initialLoading ? (
             <SkeletonList />
           ) : (
