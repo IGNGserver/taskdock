@@ -364,10 +364,15 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_TYPE: ${{ inputs.release_type }}
         run: |
-          args=("v${RELEASE_VERSION}" --title "TaskDock ${RELEASE_VERSION}" --notes-file release-notes.md release-assets/*)
-          if [ "${RELEASE_TYPE}" = "prerelease" ]; then
-            args+=(--prerelease)
+          tag="v${RELEASE_VERSION}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" release-assets/* --clobber
+          else
+            args=("${tag}" --title "TaskDock ${RELEASE_VERSION}" --notes-file release-notes.md release-assets/*)
+            if [ "${RELEASE_TYPE}" = "prerelease" ]; then
+              args+=(--prerelease)
+            fi
+            gh release create "${args[@]}"
           fi
-          gh release create "${args[@]}"
 
 # 手动发布流程：默认生成预发布版本。
