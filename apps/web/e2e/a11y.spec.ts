@@ -249,17 +249,24 @@ for (const route of ROUTES) {
 }
 
 /**
- * Overlays animate in. Auditing a mid-animation frame makes axe composite the
- * colours against a partially transparent surface, which produces contrast
- * failures that do not exist in the settled UI (observed as dark on-surface text
- * measured over a light surface in Firefox). Wait for the element's animations
- * to finish first.
+ * Overlay and field transitions can overlap after focus moves into a dialog.
+ * Wait for the finite animations in the whole layer to finish instead of
+ * guessing a duration, so axe measures the settled colours in every browser.
  */
 async function waitForSettled(page: Page, selector: string): Promise<void> {
-  // The longest M3E entrance ramp is 600ms. A bounded settle window keeps
-  // intentionally looping status indicators from blocking the audit forever.
-  await page.waitForTimeout(650);
-  await page.waitForFunction((target) => Boolean(document.querySelector(target)), selector);
+  await page.waitForFunction(
+    (target) => {
+      const element = document.querySelector(target);
+      if (!element) return false;
+      const layer = element.parentElement ?? element;
+      const nodes = [layer, ...layer.querySelectorAll('*')];
+      return nodes
+        .flatMap((node) => node.getAnimations())
+        .every((animation) => animation.playState === 'finished' || animation.playState === 'idle');
+    },
+    selector,
+    { timeout: 5000 },
+  );
 }
 
 test('open overlays have no axe violations', async ({ page }) => {
