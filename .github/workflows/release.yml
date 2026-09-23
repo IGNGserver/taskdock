@@ -382,7 +382,7 @@ jobs:
               echo "所有发布资产已存在，跳过上传。"
             fi
           else
-            args=("${tag}" --title "TaskDock ${RELEASE_VERSION}" --notes-file release-notes.md release-assets/*)
+            args=("${tag}" --title "TaskDock ${RELEASE_VERSION}" --target "${GITHUB_SHA}" --notes-file release-notes.md release-assets/*)
             if [ "${RELEASE_TYPE}" = "prerelease" ]; then
               args+=(--prerelease)
             fi
