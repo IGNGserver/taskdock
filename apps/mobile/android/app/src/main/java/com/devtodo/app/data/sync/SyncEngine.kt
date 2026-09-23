@@ -10,6 +10,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import okhttp3.Response
@@ -24,6 +26,11 @@ enum class SyncState {
     IDLE, SYNCING, OFFLINE, AUTH_REQUIRED, INCOMPATIBLE, SERVER_UNAVAILABLE, ERROR
 }
 
+sealed interface SyncOutcome {
+    data object Success : SyncOutcome
+    data class Failure(val message: String) : SyncOutcome
+}
+
 class SyncEngine(
     private val db: AppDatabase,
     private val api: ApiClient,
@@ -35,6 +42,7 @@ class SyncEngine(
 
     private val _lastSyncError = MutableStateFlow<String?>(null)
     val lastSyncError: StateFlow<String?> = _lastSyncError.asStateFlow()
+    private val syncMutex = Mutex()
 
     private val socketLock = Any()
     @Volatile private var activeWebSocket: WebSocket? = null
@@ -287,96 +295,113 @@ class SyncEngine(
         }
     }
 
-    suspend fun triggerSync() = withContext(Dispatchers.IO) {
-        if (!authManager.isLoggedIn) return@withContext
-        val ownerId = authManager.ownerId ?: return@withContext
-        if (!networkAvailable) {
-            _syncState.value = SyncState.OFFLINE
-            return@withContext
-        }
-        if (_syncState.value == SyncState.SYNCING) return@withContext
-        _syncState.value = SyncState.SYNCING
-        _lastSyncError.value = null
-        try {
-            val cursorKey = v2SyncCursorKey(ownerId)
-            var cursor = db.syncMetaDao().get(cursorKey)
-            if (cursor == null) {
-                val snapshot = api.getSnapshotV2().getOrThrow()
-                applyV2Snapshot(snapshot, ownerId)
-                cursor = snapshot.cursor
-                db.syncMetaDao().set(SyncMetaEntity(cursorKey, cursor))
+    suspend fun triggerSync(): SyncOutcome = syncMutex.withLock {
+        withContext(Dispatchers.IO) {
+            if (!authManager.isLoggedIn) {
+                val message = "登录已失效，请重新登录"
+                _syncState.value = SyncState.AUTH_REQUIRED
+                _lastSyncError.value = message
+                return@withContext SyncOutcome.Failure(message)
             }
-
-            val pending = db.outboxDao().getPendingItems(ownerId)
-            val converted = buildList {
-                for (item in pending) {
-                    if (item.lastError?.startsWith("CLIENT_UPGRADE_REQUIRED") == true) continue
-                    val archiveOperationId = pending
-                        .firstOrNull { it.command == "project.archive" && it.entityId == item.entityId }
-                        ?.mutationId
-                    convertV1Outbox(item, archiveOperationId)?.let(::add)
-                }
+            val ownerId = authManager.ownerId
+            if (ownerId.isNullOrBlank()) {
+                val message = "账户信息不可用，请重新登录"
+                _syncState.value = SyncState.AUTH_REQUIRED
+                _lastSyncError.value = message
+                return@withContext SyncOutcome.Failure(message)
             }
-            if (converted.isNotEmpty()) {
-                val push = api.pushSyncV2(converted.map { it.mutation }).getOrThrow()
-                for (result in push.results) {
-                    val original = converted.firstOrNull { it.mutation.mutationId == result.mutationId }?.source
-                    if (original == null) continue
-                    if (result.status == "applied") {
-                        db.outboxDao().deleteByMutationId(result.mutationId, ownerId)
-                        // The optimistic row is now authoritative on the server,
-                        // so drop its pending flag. Without this the row stays
-                        // pendingSync=1 forever and clearNonPending can never
-                        // reconcile it away during a snapshot resync.
-                        markEntitySynced(ownerId, original)
-                    } else if (result.status == "conflict") {
-                        db.outboxDao().recordAttempt(original.id, ownerId, Long.MAX_VALUE, result.error?.toString() ?: result.message ?: "VERSION_CONFLICT")
-                        db.conflictDao().insert(
-                            ConflictEntity(
-                                mutationId = original.mutationId,
-                                ownerId = ownerId,
-                                command = original.command,
-                                entityType = original.command.substringBefore('.'),
-                                entityId = original.entityId,
-                                localJson = original.payloadJson,
-                                serverJson = result.error?.toString() ?: "{}",
-                                createdAt = isoFormat.format(Date()),
-                            ),
-                        )
-                    } else {
-                        val error = result.error?.toString() ?: result.message ?: "v2 mutation 未应用"
-                        db.outboxDao().recordAttempt(original.id, ownerId, Long.MAX_VALUE, error)
-                    }
-                }
+            if (!networkAvailable) {
+                val message = "当前处于离线状态，请检查网络后重试"
+                _syncState.value = SyncState.OFFLINE
+                _lastSyncError.value = message
+                return@withContext SyncOutcome.Failure(message)
             }
-
-            var currentCursor = db.syncMetaDao().get(cursorKey) ?: "0"
-            var hasMore = true
-            var resynced = false
-            while (hasMore) {
-                val result = try {
-                    api.pullSyncV2(currentCursor, 100).getOrThrow()
-                } catch (error: ApiClientException) {
-                    // The server dropped changes older than our cursor. Rebuild
-                    // from an authoritative snapshot instead of silently
-                    // skipping data, then replay the still-pending outbox.
-                    if (error.category != ApiFailureCategory.CURSOR_EXPIRED || resynced) throw error
+            _syncState.value = SyncState.SYNCING
+            _lastSyncError.value = null
+            try {
+                val cursorKey = v2SyncCursorKey(ownerId)
+                var cursor = db.syncMetaDao().get(cursorKey)
+                if (cursor == null) {
                     val snapshot = api.getSnapshotV2().getOrThrow()
                     applyV2Snapshot(snapshot, ownerId)
-                    currentCursor = snapshot.cursor
-                    db.syncMetaDao().set(SyncMetaEntity(cursorKey, currentCursor))
-                    resynced = true
-                    continue
+                    cursor = snapshot.cursor
+                    db.syncMetaDao().set(SyncMetaEntity(cursorKey, cursor))
                 }
-                applyV2Changes(result.changes, ownerId)
-                currentCursor = result.cursor
-                db.syncMetaDao().set(SyncMetaEntity(cursorKey, currentCursor))
-                hasMore = result.hasMore
+
+                val pending = db.outboxDao().getPendingItems(ownerId)
+                val converted = buildList {
+                    for (item in pending) {
+                        if (item.lastError?.startsWith("CLIENT_UPGRADE_REQUIRED") == true) continue
+                        val archiveOperationId = pending
+                            .firstOrNull { it.command == "project.archive" && it.entityId == item.entityId }
+                            ?.mutationId
+                        convertV1Outbox(item, archiveOperationId)?.let(::add)
+                    }
+                }
+                if (converted.isNotEmpty()) {
+                    val push = api.pushSyncV2(converted.map { it.mutation }).getOrThrow()
+                    for (result in push.results) {
+                        val original = converted.firstOrNull { it.mutation.mutationId == result.mutationId }?.source
+                        if (original == null) continue
+                        if (result.status == "applied") {
+                            db.outboxDao().deleteByMutationId(result.mutationId, ownerId)
+                            // The optimistic row is now authoritative on the server,
+                            // so drop its pending flag. Without this the row stays
+                            // pendingSync=1 forever and clearNonPending can never
+                            // reconcile it away during a snapshot resync.
+                            markEntitySynced(ownerId, original)
+                        } else if (result.status == "conflict") {
+                            db.outboxDao().recordAttempt(original.id, ownerId, Long.MAX_VALUE, result.error?.toString() ?: result.message ?: "VERSION_CONFLICT")
+                            db.conflictDao().insert(
+                                ConflictEntity(
+                                    mutationId = original.mutationId,
+                                    ownerId = ownerId,
+                                    command = original.command,
+                                    entityType = original.command.substringBefore('.'),
+                                    entityId = original.entityId,
+                                    localJson = original.payloadJson,
+                                    serverJson = result.error?.toString() ?: "{}",
+                                    createdAt = isoFormat.format(Date()),
+                                ),
+                            )
+                        } else {
+                            val error = result.error?.toString() ?: result.message ?: "v2 mutation 未应用"
+                            db.outboxDao().recordAttempt(original.id, ownerId, Long.MAX_VALUE, error)
+                        }
+                    }
+                }
+
+                var currentCursor = db.syncMetaDao().get(cursorKey) ?: "0"
+                var hasMore = true
+                var resynced = false
+                while (hasMore) {
+                    val result = try {
+                        api.pullSyncV2(currentCursor, 100).getOrThrow()
+                    } catch (error: ApiClientException) {
+                        // The server dropped changes older than our cursor. Rebuild
+                        // from an authoritative snapshot instead of silently
+                        // skipping data, then replay the still-pending outbox.
+                        if (error.category != ApiFailureCategory.CURSOR_EXPIRED || resynced) throw error
+                        val snapshot = api.getSnapshotV2().getOrThrow()
+                        applyV2Snapshot(snapshot, ownerId)
+                        currentCursor = snapshot.cursor
+                        db.syncMetaDao().set(SyncMetaEntity(cursorKey, currentCursor))
+                        resynced = true
+                        continue
+                    }
+                    applyV2Changes(result.changes, ownerId)
+                    currentCursor = result.cursor
+                    db.syncMetaDao().set(SyncMetaEntity(cursorKey, currentCursor))
+                    hasMore = result.hasMore
+                }
+                _syncState.value = SyncState.IDLE
+                SyncOutcome.Success
+            } catch (error: Exception) {
+                _syncState.value = classifyError(error)
+                val message = error.message?.takeIf { it.isNotBlank() } ?: "同步失败，请稍后重试"
+                _lastSyncError.value = message
+                SyncOutcome.Failure(message)
             }
-            _syncState.value = SyncState.IDLE
-        } catch (error: Exception) {
-            _syncState.value = classifyError(error)
-            _lastSyncError.value = error.message
         }
     }
 

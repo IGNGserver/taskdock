@@ -29,6 +29,7 @@ fun TodayV2Screen(
     val scheduled by viewModel.todayTasks.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val ready by viewModel.dataReady.collectAsStateWithLifecycle()
+    val refreshing by viewModel.todayRefreshing.collectAsStateWithLifecycle()
     val todayLabel =
         remember(settings?.timezone) {
             SimpleDateFormat("yyyy-MM-dd (EEE)", Locale.getDefault()).apply {
@@ -47,73 +48,79 @@ fun TodayV2Screen(
             )
         },
     ) { padding ->
-        LazyColumn(
-            Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(bottom = 96.dp),
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = viewModel::refreshToday,
+            modifier = Modifier.fillMaxSize().padding(padding),
         ) {
-            item {
-                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        todayLabel,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        if (scheduled.isEmpty()) "为今天留一点专注" else "${scheduled.size - done} 项待完成",
-                        style = MaterialTheme.typography.headlineMedium,
-                    )
-                    if (scheduled.isNotEmpty()) {
-                        LinearProgressIndicator(
-                            progress = { done.toFloat() / scheduled.size },
-                            modifier = Modifier.fillMaxWidth(),
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 96.dp),
+            ) {
+                item {
+                    Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            todayLabel,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            "已完成 $done / ${scheduled.size}",
-                            style = MaterialTheme.typography.bodyMedium,
+                            if (scheduled.isEmpty()) "为今天留一点专注" else "${scheduled.size - done} 项待完成",
+                            style = MaterialTheme.typography.headlineMedium,
                         )
+                        if (scheduled.isNotEmpty()) {
+                            LinearProgressIndicator(
+                                progress = { done.toFloat() / scheduled.size },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(
+                                "已完成 $done / ${scheduled.size}",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
                     }
                 }
-            }
-            if (!ready) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-            else if (scheduled.isEmpty())
-                item {
-                    if (onNavigateToTree != null) {
-                        EmptyState(
-                            Icons.Default.Today,
-                            "今天还没有安排",
-                            "先新建一个任务，或从任务库加入已有任务。",
-                            action = {
-                                FilledTonalButton(onClick = { onNavigateToTree.invoke(null, null) }) {
-                                    Text("打开任务库")
-                                }
-                            },
-                        )
-                    } else {
-                        EmptyState(
-                            Icons.Default.Today,
-                            "今天还没有安排",
-                            "先新建一个任务，或从任务库加入已有任务。",
-                        )
-                    }
-                }
-            listOf(TaskStatus.IN_PROGRESS, TaskStatus.TODO, TaskStatus.DONE).forEach { status ->
-                val group = scheduled.filter { it.first.status == status }
-                if (group.isNotEmpty()) {
-                    item(key = status.name) {
-                        SectionHeading("${taskStatusLabel(status)} · ${group.size}")
-                    }
-                    items(group, key = { it.second.id }) { (task, _) ->
-                        M3TaskRow(
-                            task,
-                            onClick = { onNavigateToDetail(task.id) },
-                            onStatusToggle = { viewModel.updateTaskStatus(task, it) },
-                            actions =
-                                listOf(
-                                    RowAction("在目录中显示") {
-                                        onNavigateToTree?.invoke(task.parentFolderId, task.id)
+                if (!ready) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                else if (scheduled.isEmpty())
+                    item {
+                        if (onNavigateToTree != null) {
+                            EmptyState(
+                                Icons.Default.Today,
+                                "今天还没有安排",
+                                "先新建一个任务，或从任务库加入已有任务。",
+                                action = {
+                                    FilledTonalButton(onClick = { onNavigateToTree.invoke(null, null) }) {
+                                        Text("打开任务库")
                                     }
-                                ),
-                        )
+                                },
+                            )
+                        } else {
+                            EmptyState(
+                                Icons.Default.Today,
+                                "今天还没有安排",
+                                "先新建一个任务，或从任务库加入已有任务。",
+                            )
+                        }
+                    }
+                listOf(TaskStatus.IN_PROGRESS, TaskStatus.TODO, TaskStatus.DONE).forEach { status ->
+                    val group = scheduled.filter { it.first.status == status }
+                    if (group.isNotEmpty()) {
+                        item(key = status.name) {
+                            SectionHeading("${taskStatusLabel(status)} · ${group.size}")
+                        }
+                        items(group, key = { it.second.id }) { (task, _) ->
+                            M3TaskRow(
+                                task,
+                                onClick = { onNavigateToDetail(task.id) },
+                                onStatusToggle = { viewModel.updateTaskStatus(task, it) },
+                                actions =
+                                    listOf(
+                                        RowAction("在目录中显示") {
+                                            onNavigateToTree?.invoke(task.parentFolderId, task.id)
+                                        }
+                                    ),
+                            )
+                        }
                     }
                 }
             }

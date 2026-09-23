@@ -5,6 +5,7 @@ import {
   uuidSchema,
   uuidv7,
   type DeviceDto,
+  type ErrorCode,
   type Mutation,
   type NoteDto,
   type PlacementDto,
@@ -47,6 +48,25 @@ import type {
 } from './store.js';
 
 type Row = Record<string, unknown>;
+
+export interface DatabaseConstraintDiagnostic {
+  sqlState: string;
+  constraint?: string;
+  table?: string;
+  schema?: string;
+}
+
+/** Carries safe PostgreSQL constraint metadata to the request logger only. */
+export class DatabaseConstraintError extends DomainError {
+  readonly diagnostic: DatabaseConstraintDiagnostic;
+
+  constructor(code: ErrorCode, message: string, error: unknown) {
+    super(code, message);
+    this.name = 'DatabaseConstraintError';
+    this.diagnostic = databaseConstraintDiagnostic(error);
+  }
+}
+
 interface TxContext {
   client: PoolClient;
   pending: Map<string, string>;
@@ -2906,11 +2926,28 @@ function throwSql(
     'code' in error &&
     typeof error.code === 'string'
   ) {
-    if (error.code === '23505') throw new DomainError(duplicateCode, message);
+    if (error.code === '23505') throw new DatabaseConstraintError(duplicateCode, message, error);
     if (error.code === '23503' || error.code === '23514')
-      throw new DomainError('VALIDATION_FAILED', message);
+      throw new DatabaseConstraintError('VALIDATION_FAILED', message, error);
   }
   throw error;
+}
+
+function databaseConstraintDiagnostic(error: unknown): DatabaseConstraintDiagnostic {
+  const read = (key: string): string | undefined => {
+    if (typeof error !== 'object' || error === null || !(key in error)) return undefined;
+    const value = (error as Record<string, unknown>)[key];
+    return typeof value === 'string' && value.length > 0 ? value.slice(0, 128) : undefined;
+  };
+  const constraint = read('constraint');
+  const table = read('table');
+  const schema = read('schema');
+  return {
+    sqlState: read('code') ?? 'unknown',
+    ...(constraint ? { constraint } : {}),
+    ...(table ? { table } : {}),
+    ...(schema ? { schema } : {}),
+  };
 }
 
 function hash(value: unknown): string {
