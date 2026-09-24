@@ -734,9 +734,7 @@ html.drawer-open .page-wrap {
     padding-inline-end: 8px;
   }
 
-  .m3e-list--all-tasks
-    .m3e-list-item__wrapper.has-actions
-    > .m3e-list-item__leading-control {
+  .m3e-list--all-tasks .m3e-list-item__wrapper.has-actions > .m3e-list-item__leading-control {
     padding-inline-start: 4px;
   }
 

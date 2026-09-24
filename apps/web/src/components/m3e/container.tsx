@@ -167,9 +167,7 @@ export function ListItem({
         Boolean(actions) && 'has-actions',
       )}
     >
-      {leadingControl && (
-        <span className="m3e-list-item__leading-control">{leadingControl}</span>
-      )}
+      {leadingControl && <span className="m3e-list-item__leading-control">{leadingControl}</span>}
       <button
         {...(props as HTMLAttributes<HTMLButtonElement>)}
         type="button"
