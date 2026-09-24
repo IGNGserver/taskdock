@@ -3248,9 +3248,7 @@ function AddTaskModal({
             {items.map((task) => (
               <ListItem
                 key={task.id}
-                className={`m3e-list-item--picker${
-                  task.status === 'DONE' ? ' is-task-done' : ''
-                }`}
+                className={`m3e-list-item--picker${task.status === 'DONE' ? ' is-task-done' : ''}`}
                 headline={task.title}
                 supporting={task.referenceId}
                 leadingControl={
@@ -3700,11 +3698,7 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                 }${task.status === 'DONE' ? ' is-done' : ''}`}
                 key={task.id}
               >
-                <TaskStatusControl
-                  status={task.status}
-                  disabled
-                  onStatusChange={() => undefined}
-                />
+                <TaskStatusControl status={task.status} disabled onStatusChange={() => undefined} />
                 <TaskRowAction
                   className="task-main"
                   onClick={() => onOpenTask(task.id)}
