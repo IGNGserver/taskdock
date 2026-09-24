@@ -208,8 +208,37 @@
   }
 
   .task-row {
-    min-block-size: 64px;
-    padding-inline-end: 6px;
+    display: grid;
+    grid-template-areas:
+      'status main actions'
+      'reorder reorder reorder';
+    grid-template-columns: auto minmax(0, 1fr) 44px;
+    gap: 4px 8px;
+    min-block-size: 0;
+    padding: 8px;
+  }
+
+  .task-row > .m3e-task-status-control {
+    grid-area: status;
+  }
+
+  .task-row > .task-main {
+    grid-area: main;
+    inline-size: 100%;
+    padding-inline: 0;
+  }
+
+  .task-row > .task-reorder-actions {
+    grid-area: reorder;
+    justify-self: end;
+  }
+
+  .task-row > .task-actions {
+    grid-area: actions;
+  }
+
+  .task-row .row-error {
+    grid-column: 1 / -1;
   }
 
   .task-title {
@@ -696,6 +725,32 @@ html.drawer-open .page-wrap {
   .all-tasks-toolbar {
     grid-template-columns: minmax(0, 1fr);
     gap: 14px;
+  }
+
+  .m3e-list--all-tasks .m3e-list-item__wrapper.has-actions {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 48px;
+    gap: 4px;
+    padding-inline-end: 8px;
+  }
+
+  .m3e-list--all-tasks
+    .m3e-list-item__wrapper.has-actions
+    > .m3e-list-item__leading-control {
+    padding-inline-start: 4px;
+  }
+
+  .m3e-list--all-tasks .m3e-list-item__wrapper.has-actions > .m3e-list-item {
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+
+  .m3e-list--all-tasks .m3e-list-item__actions {
+    justify-content: center;
+  }
+
+  .m3e-list--all-tasks .m3e-list-item__headline {
+    overflow-wrap: anywhere;
   }
 
   .tree-page .tree-capture-form > .m3e-field--tree-inline,

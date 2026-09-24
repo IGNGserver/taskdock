@@ -105,6 +105,7 @@ export {
   NavigationCard,
   TaskStatusIndicator,
   TaskStatusButton,
+  TaskStatusControl,
   TaskRowAction,
   type AlertTone,
   type NavigationCardVariant,

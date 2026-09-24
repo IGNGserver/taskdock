@@ -29,7 +29,6 @@ import {
   ChevronRight,
   Folder,
   FolderPlus,
-  ListChecks,
   MoreHorizontal,
   Plus,
   Trash2,
@@ -54,6 +53,7 @@ import {
   Menu,
   Select,
   SideSheet,
+  TaskStatusControl,
   TextArea,
   TextField,
   useDismissibleMenu,
@@ -342,6 +342,16 @@ export function TreePage() {
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '归档任务失败，请重试');
+    }
+  };
+  const changeTaskStatus = async (task: TreeTaskDto, status: TaskStatus) => {
+    setError('');
+    try {
+      await mutationV2('PATCH', `/tasks/${task.id}`, { status, baseVersion: task.version });
+      await load();
+      window.dispatchEvent(new Event('devtodo:data-changed'));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '更新任务状态失败，请重试');
     }
   };
   const deleteFolder = async (item: Extract<TreeItemDto, { kind: 'FOLDER' }>) => {
@@ -655,20 +665,18 @@ export function TreePage() {
                   ) : (
                     <ListItem
                       id={`task-${item.task.id}`}
-                      className="m3e-list-item--tree-row"
+                      className={`m3e-list-item--tree-row${
+                        item.task.status === 'DONE' ? ' is-task-done' : ''
+                      }`}
                       key={`task-${item.task.id}`}
-                      leading={<ListChecks size={20} />}
-                      headline={item.task.title}
-                      supporting={
-                        <>
-                          <code>{item.task.referenceId}</code>
-                          <Chip
-                            kind="assist"
-                            label={statusLabel(item.task.status)}
-                            className={`m3e-chip--task-status m3e-chip--task-status-${statusClass(item.task.status)}`}
-                          />
-                        </>
+                      leadingControl={
+                        <TaskStatusControl
+                          status={item.task.status}
+                          onStatusChange={(status) => changeTaskStatus(item.task, status)}
+                        />
                       }
+                      headline={item.task.title}
+                      supporting={<code>{item.task.referenceId}</code>}
                       selected={focusTaskId === item.task.id}
                       ariaLabel={`打开任务 ${item.task.title}`}
                       onClick={() => setSelectedTaskId(item.task.id)}
@@ -1729,11 +1737,6 @@ export function WorkflowsPage() {
                               ? (folders.find((folder) => folder.id === task.parentFolderId)
                                   ?.title ?? '目录')
                               : '根目录';
-                            const nextStatusMap: Record<TaskStatus, TaskStatus> = {
-                              TODO: 'IN_PROGRESS',
-                              IN_PROGRESS: 'DONE',
-                              DONE: 'TODO',
-                            };
                             const prevMember = taskIndex > 0 ? stage.tasks[taskIndex - 1] : null;
                             const nextMember =
                               taskIndex < stage.tasks.length - 1
@@ -1741,22 +1744,23 @@ export function WorkflowsPage() {
                                 : null;
                             return (
                               <ListItem
-                                className="m3e-list-item--workflow-task"
+                                className={`m3e-list-item--workflow-task${
+                                  task.status === 'DONE' ? ' is-task-done' : ''
+                                }`}
                                 key={task.id}
-                                leading={
-                                  <Chip
-                                    kind="assist"
-                                    label={statusLabel(task.status)}
+                                leadingControl={
+                                  <TaskStatusControl
+                                    status={task.status}
                                     disabled={archived}
-                                    className={`m3e-chip--workflow-task-status m3e-chip--workflow-task-status-${statusClass(task.status)}`}
-                                    onClick={() =>
-                                      void run(() =>
+                                    onStatusChange={async (status) => {
+                                      await run(() =>
                                         mutationV2('PATCH', `/tasks/${task.id}`, {
-                                          status: nextStatusMap[task.status],
+                                          status,
                                           baseVersion: task.version,
                                         }),
-                                      )
-                                    }
+                                      );
+                                      window.dispatchEvent(new Event('devtodo:data-changed'));
+                                    }}
                                   />
                                 }
                                 headline={
@@ -2021,7 +2025,13 @@ export function WorkflowsPage() {
 
 export function AllTasksV2Page() {
   const [tasks, setTasks] = useState<
-    Array<{ id: string; title: string; referenceId: string; status: string; version: number }>
+    Array<{
+      id: string;
+      title: string;
+      referenceId: string;
+      status: TaskStatus;
+      version: number;
+    }>
   >([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState('');
@@ -2072,6 +2082,16 @@ export function AllTasksV2Page() {
       await load();
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : '归档任务失败，请重试');
+    }
+  };
+  const changeTaskStatus = async (task: (typeof tasks)[number], status: TaskStatus) => {
+    setActionError('');
+    try {
+      await mutationV2('PATCH', `/tasks/${task.id}`, { status, baseVersion: task.version });
+      await load();
+      window.dispatchEvent(new Event('devtodo:data-changed'));
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : '更新任务状态失败，请重试');
     }
   };
   return (
@@ -2145,20 +2165,20 @@ export function AllTasksV2Page() {
             <List gap className="m3e-list--all-tasks">
               {visibleTasks.map((task) => (
                 <ListItem
-                  className="m3e-list-item--all-task"
+                  className={`m3e-list-item--all-task${
+                    task.status === 'DONE' ? ' is-task-done' : ''
+                  }`}
                   key={task.id}
                   onClick={() => setSelectedTaskId(task.id)}
                   ariaLabel={`打开任务 ${task.title}`}
-                  leading={<ListChecks size={20} />}
-                  headline={task.title}
-                  supporting={<code>{task.referenceId}</code>}
-                  trailing={
-                    <Chip
-                      kind="assist"
-                      label={statusLabel(task.status)}
-                      className={`m3e-chip--all-task-status m3e-chip--all-task-status-${statusClass(task.status)}`}
+                  leadingControl={
+                    <TaskStatusControl
+                      status={task.status}
+                      onStatusChange={(status) => changeTaskStatus(task, status)}
                     />
                   }
+                  headline={task.title}
+                  supporting={<code>{task.referenceId}</code>}
                   actions={
                     <IconButton
                       label={`归档任务 ${task.title}`}
