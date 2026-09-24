@@ -2640,7 +2640,7 @@ function PlacementRow({
       }${task.status === 'DONE' ? ' is-done' : ''}`}
       aria-busy={busy || undefined}
       aria-grabbed={dragging}
-      draggable={!readOnly}
+      draggable={!readOnly && !menu}
       onPointerDown={startLongPress}
       onPointerUp={cancelLongPress}
       onPointerLeave={cancelLongPress}
@@ -2703,7 +2703,7 @@ function PlacementRow({
         <div ref={menuRef} className="task-actions">
           <IconButton
             label="安排操作"
-            type="submit"
+            type="button"
             aria-expanded={menu}
             aria-haspopup="menu"
             onClick={() => setMenu(!menu)}
@@ -3132,7 +3132,8 @@ function AddTaskModal({
   const [searchError, setSearchError] = useState('');
   const [searchRetry, setSearchRetry] = useState(0);
   const [pickerLoading, setPickerLoading] = useState(false);
-  const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+  const [selectedTasks, setSelectedTasks] = useState<Map<string, TreeTaskDto>>(() => new Map());
+  const [addingSelected, setAddingSelected] = useState(false);
   const [creating, setCreating] = useState(false);
   const pickerLoadSequence = useRef(0);
   const searchLoadSequence = useRef(0);
@@ -3275,58 +3276,78 @@ function AddTaskModal({
       setCreating(false);
     }
   };
-  const add = async (task: TreeTaskDto) => {
-    if (busyTaskId) return;
-    setBusyTaskId(task.id);
+  const toggleTaskSelection = (task: TreeTaskDto) => {
+    setSelectedTasks((current) => {
+      const next = new Map(current);
+      if (next.has(task.id)) next.delete(task.id);
+      else next.set(task.id, task);
+      return next;
+    });
+  };
+  const addSelected = async () => {
+    if (addingSelected || selectedTasks.size === 0) return;
+    const tasks = [...selectedTasks.values()];
+    setAddingSelected(true);
     setError('');
+    const addedIds = new Set<string>();
+    const failures: unknown[] = [];
     try {
-      await mutationV2('POST', '/placements', { taskId: task.id, timePointId: pointId });
-      onAdded();
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : '安排任务失败，请重试');
+      for (const task of tasks) {
+        try {
+          await mutationV2('POST', '/placements', { taskId: task.id, timePointId: pointId });
+          addedIds.add(task.id);
+        } catch (cause) {
+          failures.push(cause);
+        }
+      }
+      if (addedIds.size) {
+        setSelectedTasks((current) => new Map([...current].filter(([id]) => !addedIds.has(id))));
+        window.dispatchEvent(new Event('devtodo:data-changed'));
+      }
+      if (failures.length) {
+        const cause = failures[0];
+        const detail = cause instanceof ApiError ? cause.message : '请检查后重试';
+        setError(`已加入 ${addedIds.size} 项，${failures.length} 项失败：${detail}`);
+      } else {
+        onAdded();
+      }
     } finally {
-      setBusyTaskId(null);
+      setAddingSelected(false);
     }
   };
-  const changeTaskStatus = async (task: TreeTaskDto, status: TaskStatus) => {
-    setError('');
-    try {
-      await mutationV2('PATCH', `/tasks/${task.id}`, { status, baseVersion: task.version });
-      window.dispatchEvent(new Event('devtodo:data-changed'));
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : '更新任务状态失败，请重试');
-    }
+  const renderTaskRow = (task: TreeTaskDto, showLocation: boolean) => {
+    const selected = selectedTasks.has(task.id);
+    return (
+      <ListItem
+        key={task.id}
+        className="m3e-list-item--picker m3e-list-item--tree-row"
+        headline={task.title}
+        supporting={
+          showLocation ? (
+            <>
+              <code>{task.referenceId}</code>
+              <span className="task-picker-location">{taskLocation(task)}</span>
+            </>
+          ) : (
+            task.referenceId
+          )
+        }
+        leading={
+          <span
+            className={`task-picker-selection${selected ? ' is-selected' : ''}`}
+            aria-hidden="true"
+          >
+            {selected && <Check size={15} strokeWidth={3} />}
+          </span>
+        }
+        trailing={!selected && <Plus size={18} aria-hidden="true" />}
+        selected={selected}
+        onClick={() => toggleTaskSelection(task)}
+        disabled={addingSelected}
+        ariaLabel={`${selected ? '取消选择' : '选择'}任务 ${task.title}`}
+      />
+    );
   };
-  const renderTaskRow = (task: TreeTaskDto, showLocation: boolean) => (
-    <ListItem
-      key={task.id}
-      className="m3e-list-item--picker m3e-list-item--tree-row"
-      headline={task.title}
-      supporting={
-        showLocation ? (
-          <>
-            <code>{task.referenceId}</code>
-            <span className="task-picker-location">{taskLocation(task)}</span>
-          </>
-        ) : (
-          task.referenceId
-        )
-      }
-      leadingControl={
-        <TaskStatusControl
-          status={task.status}
-          disabled={Boolean(busyTaskId)}
-          onStatusChange={(status) => changeTaskStatus(task, status)}
-        />
-      }
-      trailing={
-        busyTaskId === task.id ? <LoaderCircle className="spin" size={16} /> : <Plus size={16} />
-      }
-      onClick={() => void add(task)}
-      disabled={Boolean(busyTaskId)}
-      ariaLabel={`安排任务 ${task.title}`}
-    />
-  );
   const renderTreeItem = (item: TreeItemDto) =>
     item.kind === 'FOLDER' ? (
       <ListItem
@@ -3434,7 +3455,9 @@ function AddTaskModal({
             </Alert>
           )}
           {!query.trim() && (
-            <p className="field-help picker-hint">按目录浏览未完成任务，也可以搜索跨目录查找。</p>
+            <p className="field-help picker-hint">
+              点选任务可同时选择多项；选择会在切换目录时保留。
+            </p>
           )}
           {query.trim() ? (
             <div className="task-picker-scroll" role="region" aria-label="任务搜索结果">
@@ -3448,7 +3471,7 @@ function AddTaskModal({
                 <M3EmptyState
                   compact
                   icon={<ListChecksIcon size={20} />}
-                  title="没有可加入的任务"
+                  title="没有可选择的任务"
                   description="换一个标题、引用 ID 或目录名称再试。"
                 />
               )}
@@ -3522,6 +3545,29 @@ function AddTaskModal({
               </div>
             </>
           )}
+          <div className="task-picker-selection-footer">
+            <div className="task-picker-selection-summary" aria-live="polite">
+              <span>已选择 {selectedTasks.size} 项</span>
+              <Button
+                variant="text"
+                size="s"
+                disabled={selectedTasks.size === 0 || addingSelected}
+                onClick={() => setSelectedTasks(new Map())}
+              >
+                清空选择
+              </Button>
+            </div>
+            <Button
+              variant="filled"
+              className="m3e-button--wide"
+              disabled={selectedTasks.size === 0 || addingSelected}
+              onClick={() => void addSelected()}
+            >
+              {addingSelected
+                ? '正在加入…'
+                : `加入日程${selectedTasks.size ? `（${selectedTasks.size}）` : ''}`}
+            </Button>
+          </div>
         </>
       )}
     </Modal>
