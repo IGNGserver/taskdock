@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.*
@@ -26,6 +27,7 @@ fun TodayV2Screen(
     viewModel: MainViewModel,
     onNavigateToDetail: (String) -> Unit,
     onNavigateToTree: ((String?, String?) -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
 ) {
     val scheduled by viewModel.todayTasks.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -40,7 +42,18 @@ fun TodayV2Screen(
     var create by rememberSaveable { mutableStateOf(false) }
     val done = scheduled.count { it.first.status == TaskStatus.DONE }
     WorkspaceScaffold(
-        topBar = { TopAppBar(title = { Text("今日") }, windowInsets = WindowInsets(0, 0, 0, 0)) },
+        topBar = {
+            TopAppBar(
+                title = { Text("今天") },
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回目录")
+                        }
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { create = true },
@@ -88,10 +101,10 @@ fun TodayV2Screen(
                             EmptyState(
                                 Icons.Default.Today,
                                 "今天还没有安排",
-                                "先新建一个任务，或从任务库加入已有任务。",
+                                "先新建一个任务，或从目录加入已有任务。",
                                 action = {
                                     FilledTonalButton(onClick = { onNavigateToTree.invoke(null, null) }) {
-                                        Text("打开任务库")
+                                        Text("打开目录")
                                     }
                                 },
                             )
@@ -99,7 +112,7 @@ fun TodayV2Screen(
                             EmptyState(
                                 Icons.Default.Today,
                                 "今天还没有安排",
-                                "先新建一个任务，或从任务库加入已有任务。",
+                                "先新建一个任务，或从目录加入已有任务。",
                             )
                         }
                     }

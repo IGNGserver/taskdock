@@ -1,0 +1,20 @@
+--------- beginning of crash
+09-24 22:30:58.554   258   258 F libc    : Unwind request: crash_dump helper failed to exec, or was killed
+09-24 22:33:16.480  1209  1315 E AndroidRuntime: FATAL EXCEPTION: SystemUIBg-2
+09-24 22:33:16.480  1209  1315 E AndroidRuntime: Process: com.android.systemui, PID: 1209
+09-24 22:33:16.480  1209  1315 E AndroidRuntime: DeadSystemException: The system died; earlier logs will point to the root cause
+09-24 22:33:19.271  1344  1344 E AndroidRuntime: FATAL EXCEPTION: main
+09-24 22:33:19.271  1344  1344 E AndroidRuntime: Process: com.google.android.permissioncontroller, PID: 1344
+09-24 22:33:19.271  1344  1344 E AndroidRuntime: DeadSystemException: The system died; earlier logs will point to the root cause
+09-24 22:33:19.867  1429  1429 E AndroidRuntime: FATAL EXCEPTION: main
+09-24 22:33:19.867  1429  1429 E AndroidRuntime: PID: 1429
+09-24 22:33:19.867  1429  1429 E AndroidRuntime: DeadSystemException: The system died; earlier logs will point to the root cause
+09-24 22:33:20.039  1401  1401 E AndroidRuntime: FATAL EXCEPTION: main
+09-24 22:33:20.039  1401  1401 E AndroidRuntime: Process: com.android.se, PID: 1401
+09-24 22:33:20.039  1401  1401 E AndroidRuntime: DeadSystemException: The system died; earlier logs will point to the root cause
+09-24 22:33:20.205  1426  1426 E AndroidRuntime: FATAL EXCEPTION: main
+09-24 22:33:20.205  1426  1426 E AndroidRuntime: Process: com.android.phone, PID: 1426
+09-24 22:33:20.205  1426  1426 E AndroidRuntime: DeadSystemException: The system died; earlier logs will point to the root cause
+09-24 22:33:20.466  1341  1341 E AndroidRuntime: FATAL EXCEPTION: main
+09-24 22:33:20.466  1341  1341 E AndroidRuntime: Process: com.android.networkstack.process, PID: 1341
+09-24 22:33:20.466  1341  1341 E AndroidRuntime: DeadSystemException: The system died; earlier logs will point to the root cause

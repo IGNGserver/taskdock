@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.devtodo.app.ui.WorkspaceScreenTest" tests="1" failures="1" errors="0" skipped="0" time="13.216" timestamp="2026-09-24T12:24:52" hostname="localhost">
+  <properties>
+    <property name="device" value="taskdock_api35_review(AVD) - 15" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="directoryDrillDownAndSearchKeepTaskReachable" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="9.862">
+    <failure>java.lang.AssertionError: Assert failed: The component is not displayed!
+at androidx.compose.ui.test.AssertionsKt.assertIsDisplayed(Assertions.kt:34)
+at com.devtodo.app.ui.WorkspaceScreenTest.directoryDrillDownAndSearchKeepTaskReachable(WorkspaceScreenTest.kt:263)
+</failure>
+  </testcase>
+</testsuite>

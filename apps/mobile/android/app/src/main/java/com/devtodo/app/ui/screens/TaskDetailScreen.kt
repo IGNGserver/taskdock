@@ -121,7 +121,6 @@ fun TaskDetailScreen(taskId: String, viewModel: MainViewModel, onBack: () -> Uni
             Column {
                 TopAppBar(
                     title = { Text("任务详情") },
-                    windowInsets = WindowInsets(0, 0, 0, 0),
                     navigationIcon = {
                         IconButton(onClick = ::back, enabled = !isSaving) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
@@ -289,7 +288,7 @@ fun TaskDetailScreen(taskId: String, viewModel: MainViewModel, onBack: () -> Uni
                         )
                         if (placements.isEmpty()) {
                             Text(
-                                "还没有安排。可以添加日期，或从计划页安排到事件。",
+                                "还没有安排。可以添加日期，或从日程安排到事件。",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         } else {

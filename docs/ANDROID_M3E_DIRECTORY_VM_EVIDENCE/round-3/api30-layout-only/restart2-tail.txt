@@ -1,0 +1,605 @@
+--------- beginning of main
+09-24 23:01:37.267   448   540 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:37.268   289   498 W zygote64: Verification of java.lang.String com.android.org.conscrypt.PeerInfoProvider$1.getHostname() took 294.238ms (6.80 bytecodes/s) (1320B approximate peak alloc)
+09-24 23:01:37.386   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:37.399   448   540 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+--------- beginning of radio
+09-24 23:01:37.403   455   495 D AT      : AT> AT+CGACT?
+09-24 23:01:37.404   455   497 D AT      : AT< OK
+09-24 23:01:37.405   455   495 D AT      : AT> AT+CGDCONT?
+09-24 23:01:37.422   455   497 D AT      : AT< OK
+09-24 23:01:37.425   455   495 E RILC    : dataCallListChangedInd: radioService[0]->mRadioIndication == NULL
+09-24 23:01:37.494   289   498 W zygote64: Verification of java.lang.String com.android.org.conscrypt.SessionSnapshot.getProtocol() took 104.695ms (28.65 bytecodes/s) (1384B approximate peak alloc)
+09-24 23:01:37.517   290   506 W zygote  : Verification of byte[] com.android.org.conscrypt.TrustManagerImpl.getOcspDataFromSession(javax.net.ssl.SSLSession) took 195.450ms (419.54 bytecodes/s) (2352B approximate peak alloc)
+09-24 23:01:37.526   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:37.530   448   540 W ServiceManager: Service package_native didn't start. Returning NULL
+--------- beginning of system
+09-24 23:01:37.531   448   540 E storaged: getService package_native failed
+09-24 23:01:37.667   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:37.772   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:37.807   290   506 W zygote  : Verification of java.util.List com.android.org.conscrypt.TrustManagerImpl.verifyChain(java.util.List, java.util.List, java.lang.String, boolean, byte[], byte[]) took 157.327ms (1449.21 bytecodes/s) (5488B approximate peak alloc)
+09-24 23:01:37.884   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:38.071   290   506 W zygote  : Verification of com.android.org.conscrypt.ct.VerifiedSCT$Status com.android.org.conscrypt.ct.CTLogInfo.verifySingleSCT(com.android.org.conscrypt.ct.SignedCertificateTimestamp, com.android.org.conscrypt.ct.CertificateEntry) took 190.686ms (440.51 bytecodes/s) (2048B approximate peak alloc)
+09-24 23:01:38.083   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+--------- beginning of kernel
+09-24 23:01:38.268     0     0 I capability: warning: `hostapd_nohidl' uses 32-bit capabilities (legacy support in use)
+09-24 23:01:38.219   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:38.303   290   506 W zygote  : Verification of void com.android.org.conscrypt.ct.CertificateEntry.encode(java.io.OutputStream) took 105.933ms (273.76 bytecodes/s) (1192B approximate peak alloc)
+09-24 23:01:38.335   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:38.563   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 2 lines
+09-24 23:01:38.675   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:38.692   549   549 I hostapd : rfkill: Cannot get wiphy information
+09-24 23:01:38.740     0     0 I br0     : port 3(wlan1) entered blocking state
+09-24 23:01:38.740     0     0 I br0     : port 3(wlan1) entered disabled state
+09-24 23:01:38.741     0     0 I         : device wlan1 entered promiscuous mode
+09-24 23:01:38.742     0     0 I br0     : port 3(wlan1) entered blocking state
+09-24 23:01:38.742     0     0 I br0     : port 3(wlan1) entered forwarding state
+09-24 23:01:38.753   549   549 I hostapd : wlan1: interface state UNINITIALIZED->COUNTRY_UPDATE
+09-24 23:01:38.817     0     0 I init    : Service 'ranchu-net' (pid 410) exited with status 0 oneshot service took 49.919998 seconds in background
+09-24 23:01:38.818     0     0 I init    : Sending signal 9 to service 'ranchu-net' (pid 410) process group...
+09-24 23:01:38.825     0     0 I br0     : port 3(wlan1) entered disabled state
+09-24 23:01:38.865   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:38.888     0     0 I libprocessgroup: Successfully killed process cgroup uid 0 pid 410 in 69ms
+09-24 23:01:40.333   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 11 lines
+09-24 23:01:40.495   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:40.622   432   432 W ServiceManager: Service package_native didn't start. Returning NULL
+09-24 23:01:40.623   432   432 E iorapd  : Cannot get package manager service!
+09-24 23:01:41.624   432   432 W iorapd  : Reconnect to package manager service: 7 times
+09-24 23:01:41.642   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:43.784   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 18 lines
+09-24 23:01:43.897   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:43.911   549   549 I hostapd : wlan1: interface state COUNTRY_UPDATE->HT_SCAN
+09-24 23:01:44.058   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:44.908   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 7 lines
+09-24 23:01:45.016   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:45.094   289   289 E ActivityRecognitionHardware: activity_recognition HAL is deprecated. class_init is effectively a no-op
+09-24 23:01:45.148   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:45.524     0     0 I IPv6    : ADDRCONF(NETDEV_CHANGE): wlan1: link becomes ready
+09-24 23:01:45.524     0     0 I br0     : port 3(wlan1) entered blocking state
+09-24 23:01:45.524     0     0 I br0     : port 3(wlan1) entered forwarding state
+09-24 23:01:45.410   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 2 lines
+09-24 23:01:45.631   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:45.661   549   549 I hostapd : wlan1: interface state HT_SCAN->ENABLED
+09-24 23:01:45.674   549   549 I hostapd : wlan1: AP-ENABLED 
+09-24 23:01:45.767   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:45.872   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:45.888   289   498 I zygote64: Verified 1359 classes from mainline modules in 10.786s
+09-24 23:01:45.980   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:46.451   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 4 lines
+09-24 23:01:46.578   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:46.703   432   432 W ServiceManager: Service package_native didn't start. Returning NULL
+09-24 23:01:46.704   432   432 E iorapd  : Cannot get package manager service!
+09-24 23:01:47.304   290   506 I zygote  : Verified 1359 classes from mainline modules in 11.455s
+09-24 23:01:47.709   432   432 W iorapd  : Reconnect to package manager service: 8 times
+09-24 23:01:47.719   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:48.496   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 7 lines
+09-24 23:01:48.604   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:48.633   289   499 I zygote64: Background concurrent copying GC freed 57829(3768KB) AllocSpace objects, 19(656KB) LOS objects, 49% free, 4159KB/8318KB, paused 6.888ms total 481.845ms
+09-24 23:01:48.715   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:50.962   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 21 lines
+09-24 23:01:51.066   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:51.099   289   289 I zygote64: Thread[1,tid=289,Native,Thread*=0x7d95e5054380,peer=0x131c0078,"main"] recursive attempt to load library "libmedia_jni.so"
+09-24 23:01:51.114   289   289 I zygote64: Thread[1,tid=289,Native,Thread*=0x7d95e5054380,peer=0x131c0078,"main"] recursive attempt to load library "libmedia_jni.so"
+09-24 23:01:51.120   289   289 D MtpDeviceJNI: register_android_mtp_MtpDevice
+09-24 23:01:51.128   289   289 I zygote64: Thread[1,tid=289,Native,Thread*=0x7d95e5054380,peer=0x131c0078,"main"] recursive attempt to load library "libmedia_jni.so"
+09-24 23:01:51.131   289   289 I zygote64: Thread[1,tid=289,Native,Thread*=0x7d95e5054380,peer=0x131c0078,"main"] recursive attempt to load library "libmedia_jni.so"
+09-24 23:01:51.171   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:51.236   289   289 W Zygote  : Class not found for preloading: android.media.MediaRouter$Static$Client$1
+09-24 23:01:51.237   289   289 W Zygote  : Class not found for preloading: android.media.MediaRouter$Static$Client$2
+09-24 23:01:51.281   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:51.401   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:51.504   289   499 I zygote64: Background young concurrent copying GC freed 86948(3455KB) AllocSpace objects, 5(128KB) LOS objects, 48% free, 4272KB/8318KB, paused 1.750ms total 199.647ms
+09-24 23:01:51.515   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:51.601   289   289 W Zygote  : Class not found for preloading: android.net.shared.Inet4AddressUtils
+09-24 23:01:51.603   289   289 W Zygote  : Class not found for preloading: android.net.shared.InetAddressUtils
+09-24 23:01:51.619   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:51.716   289   289 D TelephonyManager: No /proc/cmdline exception=java.io.FileNotFoundException: /proc/cmdline: open failed: EACCES (Permission denied)
+09-24 23:01:51.717   289   289 D TelephonyManager: /proc/cmdline=
+09-24 23:01:52.275   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 6 lines
+09-24 23:01:52.380   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:52.438   289   289 W Zygote  : Class not found for preloading: android.view.-$$Lambda$cZhmLzK8aetUdx4VlP9w5jR7En0
+09-24 23:01:52.488   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:52.567   289   289 W Zygote  : Class not found for preloading: android.view.autofill.-$$Lambda$AutofillManager$AutofillManagerClient$vxNm6RuuD-r5pkiSxNSBBd1w_Qc
+09-24 23:01:52.581   289   289 W Zygote  : Class not found for preloading: android.view.contentcapture.-$$Lambda$MainContentCaptureSession$1$JPRO-nNGZpgXrKr4QC_iQiTbQx0
+09-24 23:01:52.582   289   289 W Zygote  : Class not found for preloading: android.view.contentcapture.-$$Lambda$MainContentCaptureSession$1$Xhq3WJibbalS1G_W3PRC2m7muhM
+09-24 23:01:52.589   289   289 W Zygote  : Class not found for preloading: android.view.contentcapture.MainContentCaptureSession$1
+09-24 23:01:52.591   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:52.695   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:52.799   432   432 W ServiceManager: Service package_native didn't start. Returning NULL
+09-24 23:01:52.800   432   432 E iorapd  : Cannot get package manager service!
+09-24 23:01:52.963   289   289 W Zygote  : Class not found for preloading: com.android.internal.telephony.-$$Lambda$SubscriptionController$VCQsMNqRHpN3RyoXYzh2YUwA2yc
+09-24 23:01:52.964   289   289 W Zygote  : Class not found for preloading: com.android.internal.telephony.-$$Lambda$SubscriptionController$u5xE-urXR6ElZ50305_6guo20Fc
+09-24 23:01:53.801   432   432 W iorapd  : Reconnect to package manager service: 9 times
+09-24 23:01:53.815   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:56.169   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 22 lines
+09-24 23:01:56.278   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:56.351   289   289 W Zygote  : Class not found for preloading: com.android.internal.telephony.IccSmsInterfaceManager$2
+09-24 23:01:56.386   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:56.489   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:56.554   289   289 W Zygote  : Class not found for preloading: com.android.internal.widget.-$$Lambda$gPQuiuEDuOmrh2MixBcV6a5gu5s
+09-24 23:01:56.561   289   289 W Zygote  : Class not found for preloading: com.android.internal.widget.LockPatternUtils$2
+09-24 23:01:56.596   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:56.817   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 2 lines
+09-24 23:01:56.925   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:57.019   289   289 I Zygote  : ...preloaded 12110 classes in 31745ms.
+09-24 23:01:57.023   289   289 I zygote64: VMRuntime.preloadDexCaches starting
+09-24 23:01:57.040   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:57.149   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:57.212   289   289 I zygote64: VMRuntime.preloadDexCaches strings total=418008 before=11374 after=11374
+09-24 23:01:57.213   289   289 I zygote64: VMRuntime.preloadDexCaches types total=40946 before=11206 after=11380
+09-24 23:01:57.218   289   289 I zygote64: VMRuntime.preloadDexCaches fields total=173619 before=14202 after=15086
+09-24 23:01:57.219   289   289 I zygote64: VMRuntime.preloadDexCaches methods total=315786 before=18080 after=18080
+09-24 23:01:57.219   289   289 I zygote64: VMRuntime.preloadDexCaches finished
+09-24 23:01:57.220   289   289 D Zygote64Timing: PreloadClasses took to complete: 31960ms
+09-24 23:01:57.259   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:57.293   289   289 I zygote64: The ClassLoaderContext is a special shared library.
+09-24 23:01:57.339   289   289 D ApplicationLoaders: Created zygote-cached class loader: /system/framework/android.hidl.base-V1.0-java.jar
+09-24 23:01:57.363   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:57.387   289   289 I zygote64: The ClassLoaderContext is a special shared library.
+09-24 23:01:57.409   289   289 D ApplicationLoaders: Created zygote-cached class loader: /system/framework/android.hidl.manager-V1.0-java.jar
+09-24 23:01:57.455   289   289 I zygote64: The ClassLoaderContext is a special shared library.
+09-24 23:01:57.474   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:57.479   289   289 D ApplicationLoaders: Created zygote-cached class loader: /system/framework/android.test.base.jar
+09-24 23:01:57.480   289   289 D Zygote64Timing: CacheNonBootClasspathClassLoaders took to complete: 259ms
+09-24 23:01:57.481   289   289 I Zygote  : Preloading resources...
+09-24 23:01:57.579   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:57.685   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:57.772   289   289 W Resources: Preloaded drawable resource #0x108028b (android:drawable/dialog_background_material) that varies with configuration!!
+09-24 23:01:57.791   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:57.894   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 1 line
+09-24 23:01:58.006   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:58.017   289   289 I Zygote  : ...preloaded 64 resources in 529ms.
+09-24 23:01:58.082   289   289 I Zygote  : ...preloaded 41 resources in 65ms.
+09-24 23:01:58.083   289   289 D Zygote64Timing: PreloadResources took to complete: 602ms
+09-24 23:01:58.109   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:58.213   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:58.232   289   289 I Zygote  : Preloading shared libraries...
+09-24 23:01:58.322   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:58.387   289   289 I Zygote  : Called ZygoteHooks.endPreload()
+09-24 23:01:58.399   289   289 I Zygote  : Installed AndroidKeyStoreProvider in 10ms.
+09-24 23:01:58.429   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:58.480   289   289 I Zygote  : Warmed up JCA providers in 80ms.
+09-24 23:01:58.480   289   289 D Zygote  : end preload
+--------- beginning of events
+09-24 23:01:58.481   289   289 I boot_progress_preload_end: 159462
+09-24 23:01:58.481   289   289 D Zygote64Timing: ZygotePreload took to complete: 35699ms
+09-24 23:01:58.538   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:58.641   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 1 line
+09-24 23:01:58.745   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:58.796   289   289 I zygote64: Explicit concurrent copying GC freed 42958(2221KB) AllocSpace objects, 0(0B) LOS objects, 49% free, 4923KB/9847KB, paused 412us total 309.177ms
+09-24 23:01:58.850   432   432 W ServiceManager: Service package_native didn't start. Returning NULL
+09-24 23:01:58.850   432   432 E iorapd  : Cannot get package manager service!
+09-24 23:01:59.007   289   289 I zygote64: Explicit concurrent copying GC freed 3607(166KB) AllocSpace objects, 0(0B) LOS objects, 49% free, 4789KB/9578KB, paused 87us total 194.027ms
+09-24 23:01:59.008   289   289 D Zygote64Timing: PostZygoteInitGC took to complete: 524ms
+09-24 23:01:59.008   289   289 D Zygote64Timing: ZygoteInit took to complete: 36558ms
+09-24 23:01:59.318   289   289 I zygote64: Background concurrent copying GC freed 109(47KB) AllocSpace objects, 0(0B) LOS objects, 49% free, 4789KB/9579KB, paused 112us total 233.055ms
+09-24 23:01:59.771   289   289 D Zygote  : Forked child process 553
+09-24 23:01:59.773   289   289 I Zygote  : System server process 553 has been created
+09-24 23:01:59.854   432   432 W iorapd  : Reconnect to package manager service: 10 times
+09-24 23:01:59.856   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:59.911   289   289 I Zygote  : Accepting command socket connections
+09-24 23:01:59.964   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:01:59.989   553   553 W system_server: Unexpected CPU variant for X86 using defaults: x86_64
+09-24 23:02:00.069   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:00.085   409   442 I adbd    : jdwp connection from 553
+09-24 23:02:00.176   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:00.216   553   553 I service_manager_slow: [28,installd]
+09-24 23:02:01.778   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 15 lines
+09-24 23:02:01.882   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:01.900   553   553 W system_server: Verification of void com.android.server.SystemServer.startOtherServices(com.android.server.utils.TimingsTraceAndSlog) took 158.882ms (27007.44 bytecodes/s) (103344B approximate peak alloc)
+09-24 23:02:01.989   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:02.010   553   553 I SystemServerTiming: InitBeforeStartServices
+09-24 23:02:02.044   553   553 I system_server_start: [1,162957,162957]
+09-24 23:02:02.062   553   553 I SystemServer: Entered the Android system server!
+09-24 23:02:02.063   553   553 I boot_progress_system_run: 163045
+09-24 23:02:02.112   553   563 I system_server: Background young concurrent copying GC freed 174(104KB) AllocSpace objects, 0(0B) LOS objects, 93% free, 1671KB/25MB, paused 484us total 130.714ms
+09-24 23:02:02.115   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:03.610   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 14 lines
+09-24 23:02:03.714   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:03.730   553   553 E UsbAlsaJackDetectorJNI: Can't register UsbAlsaJackDetector native methods
+09-24 23:02:03.818   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:03.928   553   553 I SystemServerInitThreadPool: Creating instance with 4 threads
+09-24 23:02:03.933   553   553 D SystemServerTiming: InitBeforeStartServices took to complete: 1922ms
+09-24 23:02:03.936   553   553 I SystemServerTiming: StartServices
+09-24 23:02:03.937   553   553 I SystemServerTiming: startBootstrapServices
+09-24 23:02:03.939   553   553 I SystemServerTiming: StartWatchdog
+09-24 23:02:04.058   553   553 D SystemServerTiming: StartWatchdog took to complete: 117ms
+09-24 23:02:04.059   553   553 I SystemServer: Reading configuration...
+09-24 23:02:04.059   553   553 I SystemServerTiming: ReadingSystemConfig
+09-24 23:02:04.064   553   553 D SystemServerTiming: ReadingSystemConfig took to complete: 5ms
+09-24 23:02:04.065   553   553 I SystemServerTiming: PlatformCompat
+09-24 23:02:04.071   553   577 I SystemServerTimingAsync: InitThreadPoolExec:ReadingSystemConfig
+09-24 23:02:04.072   553   577 D SystemServerInitThreadPool: Started executing ReadingSystemConfig
+09-24 23:02:04.108   553   577 I SystemConfig: Reading permissions from /system/etc/sysconfig/framework-sysconfig.xml
+09-24 23:02:04.147   553   577 I SystemConfig: Reading permissions from /system/etc/sysconfig/preinstalled-packages-platform.xml
+09-24 23:02:04.150   553   553 D CompatConfig: Found a config file: /system/etc/compatconfig/documents-ui-compat-config.xml
+09-24 23:02:04.171   553   577 I SystemConfig: Reading permissions from /system/etc/sysconfig/hiddenapi-package-whitelist.xml
+09-24 23:02:04.173   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@d34f189
+09-24 23:02:04.212   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/android.test.base.xml
+09-24 23:02:04.213   553   553 D CompatConfig: Found a config file: /system/etc/compatconfig/services-platform-compat-config.xml
+09-24 23:02:04.224   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.documentsui.xml
+09-24 23:02:04.227   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@1f21d45
+09-24 23:02:04.236   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@15fac9a
+09-24 23:02:04.259   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/org.apache.http.legacy.xml
+09-24 23:02:04.263   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@f6285a8
+09-24 23:02:04.268   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@99c48c1
+09-24 23:02:04.278   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@4dc07a7
+09-24 23:02:04.287   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.future.usb.accessory.xml
+09-24 23:02:04.291   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@e2e5454
+09-24 23:02:04.303   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@463affd
+09-24 23:02:04.308   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.timezone.updater.xml
+09-24 23:02:04.320   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@b77743
+09-24 23:02:04.328   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/android.test.runner.xml
+09-24 23:02:04.331   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@b404ef9
+09-24 23:02:04.336   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@7ae3e
+09-24 23:02:04.352   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.nfc_extras.xml
+09-24 23:02:04.356   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@50fd9ec
+09-24 23:02:04.369   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@4ade1b5
+09-24 23:02:04.371   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/javax.obex.xml
+09-24 23:02:04.381   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.location.provider.xml
+09-24 23:02:04.388   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@d16a8d8
+09-24 23:02:04.400   553   553 D CompatConfig: Found a config file: /system/etc/compatconfig/libcore-platform-compat-config.xml
+09-24 23:02:04.412   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/android.software.webview.xml
+09-24 23:02:04.417   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@d802897
+09-24 23:02:04.425   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@7b97a84
+09-24 23:02:04.430   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.mediadrm.signer.xml
+09-24 23:02:04.437   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@22abea2
+09-24 23:02:04.451   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.media.remotedisplay.xml
+09-24 23:02:04.460   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@855e869
+09-24 23:02:04.465   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/privapp-permissions-platform.xml
+09-24 23:02:04.471   553   553 D CompatConfig: Found a config file: /system/etc/compatconfig/framework-platform-compat-config.xml
+09-24 23:02:04.500   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@159938f
+09-24 23:02:04.511   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@db3961c
+09-24 23:02:04.523   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@2dba225
+09-24 23:02:04.531   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@897ffa
+09-24 23:02:04.542   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@4e5d9ab
+09-24 23:02:04.555   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@371f808
+09-24 23:02:04.563   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@f493ba1
+09-24 23:02:04.573   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@1dfa1c6
+09-24 23:02:04.595   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/android.software.live_wallpaper.xml
+09-24 23:02:04.605   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/android.test.mock.xml
+09-24 23:02:04.610   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@29cf0dd
+09-24 23:02:04.620   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@6241452
+09-24 23:02:04.631   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@4f9d323
+09-24 23:02:04.636   553   577 I SystemConfig: Reading permissions from /system/etc/permissions/platform.xml
+09-24 23:02:04.643   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@97cbdd9
+09-24 23:02:04.651   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@acb239e
+09-24 23:02:04.664   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@78c7e7f
+09-24 23:02:04.694   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@a96be4c
+09-24 23:02:04.718   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@e41dbaa
+09-24 23:02:04.726   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.camera.front.xml
+09-24 23:02:04.741   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.camera.flash-autofocus.xml
+09-24 23:02:04.745   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@977338
+09-24 23:02:04.765   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.bluetooth_le.xml
+09-24 23:02:04.777   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@6ba0876
+09-24 23:02:04.789   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.bluetooth.xml
+09-24 23:02:04.795   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@5ec8ae4
+09-24 23:02:04.809   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@860cb4d
+09-24 23:02:04.826   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@e95cb13
+09-24 23:02:04.831   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.vulkan.compute.xml
+09-24 23:02:04.843   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@d597150
+09-24 23:02:04.854   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@37bcf49
+09-24 23:02:04.864   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.fingerprint.xml
+09-24 23:02:04.874   553   553 D CompatConfig: Found a config file: /system/system_ext/etc/compatconfig/settings-platform-compat-config.xml
+09-24 23:02:04.884   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.wifi.direct.xml
+09-24 23:02:04.896   553   553 D CompatConfig: Adding: com.android.server.compat.config.Change@7291705
+09-24 23:02:04.910   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.camera.full.xml
+09-24 23:02:04.707   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 8 lines
+09-24 23:02:04.818   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:04.925   432   432 W ServiceManager: Service package_native didn't start. Returning NULL
+09-24 23:02:04.927   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/handheld_core_hardware.xml
+09-24 23:02:04.932   432   432 E iorapd  : Cannot get package manager service!
+09-24 23:02:04.976   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.wifi.passpoint.xml
+09-24 23:02:04.992   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.wifi.xml
+09-24 23:02:05.020   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.camera.raw.xml
+09-24 23:02:05.043   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.software.vulkan.deqp.level.xml
+09-24 23:02:05.050   553   553 I ApexManagerTiming: getActiveApexInfos_noCache
+09-24 23:02:05.060   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.touchscreen.multitouch.jazzhand.xml
+09-24 23:02:05.088   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.vulkan.version.xml
+09-24 23:02:05.112   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.camera.concurrent.xml
+09-24 23:02:05.136   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.software.autofill.xml
+09-24 23:02:05.156   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.vulkan.level.xml
+09-24 23:02:05.168   553   577 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.camera.ar.xml
+09-24 23:02:05.203   553   577 I SystemConfig: Reading permissions from /product/etc/sysconfig/preinstalled-packages-platform-handheld-product.xml
+09-24 23:02:05.223   553   577 I SystemConfig: Reading permissions from /product/etc/sysconfig/preinstalled-packages-platform-aosp-product.xml
+09-24 23:02:05.240   553   577 I SystemConfig: Reading permissions from /product/etc/sysconfig/preinstalled-packages-platform-overlays.xml
+09-24 23:02:05.293   553   577 I SystemConfig: Reading permissions from /product/etc/permissions/com.android.dialer.xml
+09-24 23:02:05.320   553   553 D ApexManagerTiming: getActiveApexInfos_noCache took to complete: 270ms
+09-24 23:02:05.323   553   577 I SystemConfig: Reading permissions from /product/etc/permissions/com.android.settings.intelligence.xml
+09-24 23:02:05.327   553   553 D CompatConfig: No directory /apex/com.android.extservices/etc/compatconfig, skipping
+09-24 23:02:05.331   553   553 D CompatConfig: No directory /apex/com.android.art/etc/compatconfig, skipping
+09-24 23:02:05.332   553   553 D CompatConfig: No directory /apex/com.android.permission/etc/compatconfig, skipping
+09-24 23:02:05.350   553   577 I SystemConfig: Reading permissions from /product/etc/permissions/android.software.verified_boot.xml
+09-24 23:02:05.353   553   553 D CompatConfig: No directory /apex/com.android.ipsec/etc/compatconfig, skipping
+09-24 23:02:05.364   553   553 D CompatConfig: No directory /apex/com.android.neuralnetworks/etc/compatconfig, skipping
+09-24 23:02:05.365   553   553 D CompatConfig: No directory /apex/com.android.cellbroadcast/etc/compatconfig, skipping
+09-24 23:02:05.372   553   553 D CompatConfig: No directory /apex/com.android.tethering/etc/compatconfig, skipping
+09-24 23:02:05.375   553   577 I SystemConfig: Reading permissions from /product/etc/permissions/privapp-permissions-goldfish.xml
+09-24 23:02:05.390   553   553 D CompatConfig: Found a config file: /apex/com.android.mediaprovider/etc/compatconfig/media-provider-platform-compat-config.xml
+09-24 23:02:05.394   553   577 I SystemConfig: Reading permissions from /product/etc/permissions/com.android.contacts.xml
+09-24 23:02:05.411   553   553 D CompatConfig: No directory /apex/com.android.resolv/etc/compatconfig, skipping
+09-24 23:02:05.412   553   553 D CompatConfig: No directory /apex/com.android.conscrypt/etc/compatconfig, skipping
+09-24 23:02:05.413   553   553 D CompatConfig: No directory /apex/com.android.vndk.v30/etc/compatconfig, skipping
+09-24 23:02:05.422   553   553 D CompatConfig: No directory /apex/com.android.wifi/etc/compatconfig, skipping
+09-24 23:02:05.430   553   553 D CompatConfig: No directory /apex/com.android.os.statsd/etc/compatconfig, skipping
+09-24 23:02:05.431   553   553 D CompatConfig: No directory /apex/com.android.apex.cts.shim/etc/compatconfig, skipping
+09-24 23:02:05.432   553   553 D CompatConfig: No directory /apex/com.android.sdkext/etc/compatconfig, skipping
+09-24 23:02:05.437   553   577 W SystemConfig: No directory /system_ext/etc/sysconfig, skipping
+09-24 23:02:05.456   553   577 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.settings.xml
+09-24 23:02:05.466   553   553 D CompatConfig: No directory /apex/com.android.tzdata/etc/compatconfig, skipping
+09-24 23:02:05.467   553   553 D CompatConfig: No directory /apex/com.android.i18n/etc/compatconfig, skipping
+09-24 23:02:05.468   553   553 D CompatConfig: No directory /apex/com.android.adbd/etc/compatconfig, skipping
+09-24 23:02:05.469   553   553 D CompatConfig: No directory /apex/com.android.media/etc/compatconfig, skipping
+09-24 23:02:05.482   553   553 D CompatConfig: No directory /apex/com.android.runtime/etc/compatconfig, skipping
+09-24 23:02:05.483   553   553 D CompatConfig: No directory /apex/com.android.media.swcodec/etc/compatconfig, skipping
+09-24 23:02:05.499   553   577 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.provision.xml
+09-24 23:02:05.506   553   553 D SystemServerTiming: PlatformCompat took to complete: 1440ms
+09-24 23:02:05.506   553   553 I SystemServerTiming: StartFileIntegrityService
+09-24 23:02:05.515   553   553 I SystemServiceManager: Starting com.android.server.security.FileIntegrityService
+09-24 23:02:05.538   553   577 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.carrierconfig.xml
+09-24 23:02:05.565   553   577 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.sdksetup.xml
+09-24 23:02:05.618   553   577 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.launcher3.xml
+09-24 23:02:05.649   553   577 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.emulator.radio.config.xml
+09-24 23:02:05.692   553   577 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.storagemanager.xml
+09-24 23:02:05.751   553   553 W SystemServiceManager: Service com.android.server.security.FileIntegrityService took 172 ms in onStart
+09-24 23:02:05.751   553   553 D SystemServerTiming: StartFileIntegrityService took to complete: 242ms
+09-24 23:02:05.752   553   553 I SystemServerTiming: StartInstaller
+09-24 23:02:05.752   553   553 I SystemServiceManager: Starting com.android.server.pm.Installer
+09-24 23:02:05.778   553   553 I service_manager_slow: [24,installd]
+09-24 23:02:05.787   553   577 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.systemui.xml
+09-24 23:02:05.812   553   577 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.emergency.xml
+09-24 23:02:05.831   553   577 I SystemConfig: Reading permissions from /system_ext/etc/permissions/androidx.window.sidecar.xml
+09-24 23:02:05.850   431   456 D installd: Found quota mount /dev/block/dm-5 at /data
+09-24 23:02:05.853   431   456 D installd: Found quota mount /dev/block/dm-5 at /data/user/0
+09-24 23:02:05.882   553   577 I SystemConfig: Reading permissions from /apex/com.android.ipsec/etc/permissions/android.net.ipsec.ike.xml
+09-24 23:02:05.902   553   553 W SystemServiceManager: Service com.android.server.pm.Installer took 148 ms in onStart
+09-24 23:02:05.902   553   553 D SystemServerTiming: StartInstaller took to complete: 150ms
+09-24 23:02:05.903   553   553 I SystemServerTiming: DeviceIdentifiersPolicyService
+09-24 23:02:05.903   553   553 I SystemServiceManager: Starting com.android.server.os.DeviceIdentifiersPolicyService
+09-24 23:02:05.915   553   553 D SystemServerTiming: DeviceIdentifiersPolicyService took to complete: 12ms
+09-24 23:02:05.922   553   553 I SystemServerTiming: UriGrantsManagerService
+09-24 23:02:05.923   553   553 I SystemServiceManager: Starting com.android.server.uri.UriGrantsManagerService$Lifecycle
+09-24 23:02:05.950   432   432 W iorapd  : Reconnect to package manager service: 11 times
+09-24 23:02:05.952   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:05.980   553   577 D SystemConfig: readAllPermissions took to complete: 1904ms
+09-24 23:02:05.981   553   577 D SystemServerInitThreadPool: Finished executing ReadingSystemConfig
+09-24 23:02:05.990   553   577 D SystemServerTimingAsync: InitThreadPoolExec:ReadingSystemConfig took to complete: 1918ms
+09-24 23:02:06.030   553   553 D SystemServerTiming: UriGrantsManagerService took to complete: 107ms
+09-24 23:02:06.030   553   553 I SystemServerTiming: StartActivityManager
+09-24 23:02:06.031   553   553 I SystemServiceManager: Starting com.android.server.wm.ActivityTaskManagerService$Lifecycle
+09-24 23:02:06.304   553   553 I SystemServiceManager: Starting com.android.server.am.ActivityManagerService$Lifecycle
+09-24 23:02:06.526   553   553 I ActivityManager: Memory class: 192
+09-24 23:02:06.837   553   553 I service_manager_slow: [98,platform_compat]
+09-24 23:02:08.220   553   553 D BatteryStatsImpl: Reading daily items from /data/system/batterystats-daily.xml
+09-24 23:02:08.485   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 21 lines
+09-24 23:02:08.602   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:08.698   553   593 I BatteryStatsService: Using power.stats HAL
+09-24 23:02:08.719   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:08.762   553   593 W BatteryStatsService: Rail information is not available
+09-24 23:02:08.763   553   593 W BatteryStatsService: Rail energy data is not available
+09-24 23:02:08.776   553   593 E BluetoothAdapter: Bluetooth binder is null
+09-24 23:02:08.836   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:08.911   553   593 I KernelCpuUidFreqTimeReader: mPerClusterTimesAvailable=false
+09-24 23:02:09.426   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 5 lines
+09-24 23:02:09.542   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:09.580   176   176 I servicemanager: Notifying apexservice they have clients: 1
+09-24 23:02:09.656     0     0 I AidlLazyServiceRegistrar: Process has 1 (of 1 available) client(s) in use after notification android.apex.IApexService has clients: 1
+09-24 23:02:09.686   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:09.666   211   211 I auditd  : type=1400 audit(0.0:6): avc: denied { read } for comm="Binder:211_2" name="wakeup32" dev="sysfs" ino=19216 scontext=u:r:system_suspend:s0 tcontext=u:object_r:sysfs:s0 tclass=dir permissive=0
+09-24 23:02:09.666   211   211 W Binder:211_2: type=1400 audit(0.0:6): avc: denied { read } for name="wakeup32" dev="sysfs" ino=19216 scontext=u:r:system_suspend:s0 tcontext=u:object_r:sysfs:s0 tclass=dir permissive=0
+09-24 23:02:09.710   211   215 E android.system.suspend@1.0-service: Error opening kernel wakelock stats for: wakeup32: Permission denied
+09-24 23:02:09.791   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:10.154   211   211 I auditd  : type=1400 audit(0.0:7): avc: denied { read } for comm="Binder:211_2" name="wakeup33" dev="sysfs" ino=19279 scontext=u:r:system_suspend:s0 tcontext=u:object_r:sysfs:s0 tclass=dir permissive=0
+09-24 23:02:10.007   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 2 lines
+09-24 23:02:10.123   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:10.154   211   211 W Binder:211_2: type=1400 audit(0.0:7): avc: denied { read } for name="wakeup33" dev="sysfs" ino=19279 scontext=u:r:system_suspend:s0 tcontext=u:object_r:sysfs:s0 tclass=dir permissive=0
+09-24 23:02:10.174   211   215 E android.system.suspend@1.0-service: Error opening kernel wakelock stats for: wakeup33: Permission denied
+09-24 23:02:10.258   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:10.415   553   593 W KernelMemoryBandwidthStats: No kernel memory bandwidth stats available
+09-24 23:02:10.411   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:10.503   177   177 I hwservicemanager: getTransport: Cannot find entry android.hardware.memtrack@1.0::IMemtrack/default in either framework or device manifest.
+09-24 23:02:10.518   553   553 E memtrack: Couldn't load memtrack module
+09-24 23:02:10.546   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:10.724   553   582 I commit_sys_config_file: [batterystats,159]
+09-24 23:02:10.811   553   582 I commit_sys_config_file: [batterystats,78]
+09-24 23:02:10.784   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 2 lines
+09-24 23:02:10.908   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:11.022   432   432 W ServiceManager: Service package_native didn't start. Returning NULL
+09-24 23:02:11.024   432   432 E iorapd  : Cannot get package manager service!
+09-24 23:02:11.306   553   553 I service_manager_stats: [100,743,172288]
+09-24 23:02:11.742   553   553 I IntentFirewall: Read new rules (A:0 B:0 S:0)
+09-24 23:02:11.998   553   553 D AppOps  : AppOpsService published
+09-24 23:02:12.036   432   432 W iorapd  : Reconnect to package manager service: 12 times
+09-24 23:02:12.064   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:12.084   553   553 W SystemServiceManager: Service com.android.server.am.ActivityManagerService$Lifecycle took 202 ms in onStart
+09-24 23:02:12.092   553   553 D SystemServerTiming: StartActivityManager took to complete: 6055ms
+09-24 23:02:12.093   553   553 I SystemServerTiming: StartDataLoaderManagerService
+09-24 23:02:12.101   553   553 I SystemServiceManager: Starting com.android.server.pm.DataLoaderManagerService
+09-24 23:02:12.123   553   553 D SystemServerTiming: StartDataLoaderManagerService took to complete: 23ms
+09-24 23:02:12.124   553   553 I SystemServerTiming: StartIncrementalService
+09-24 23:02:12.182   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:12.262   553   553 I incfs-mounts: [incfs] Loaded incremental-fs mount info: 0 instances, 0 mount points
+09-24 23:02:12.289   553   553 D SystemServerTiming: StartIncrementalService took to complete: 165ms
+09-24 23:02:12.292   553   553 I SystemServerTiming: StartPowerManager
+09-24 23:02:12.293   553   553 I SystemServiceManager: Starting com.android.server.power.PowerManagerService
+09-24 23:02:12.300   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:12.418   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 1 line
+09-24 23:02:12.531   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:12.544   176   176 I servicemanager: Found android.hardware.power.IPower/default in device VINTF manifest.
+09-24 23:02:12.582   177   177 I hw-BpHwBinder: onLastStrongRef automatically unlinking death recipients
+09-24 23:02:12.634   328   328 I android.hardware.power-service.example: Power isModeSupported: 7
+09-24 23:02:12.660   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:12.674   328   328 I android.hardware.power-service.example: Power isModeSupported: 0
+09-24 23:02:12.706   553   553 D SystemServerTiming: StartPowerManager took to complete: 414ms
+09-24 23:02:12.707   553   553 I SystemServerTiming: StartThermalManager
+09-24 23:02:12.708   553   553 I SystemServiceManager: Starting com.android.server.power.ThermalManagerService
+09-24 23:02:12.741   553   553 D SystemServerTiming: StartThermalManager took to complete: 34ms
+09-24 23:02:12.745   553   553 I SystemServerTiming: InitPowerManagement
+09-24 23:02:12.762   553   553 I service_manager_slow: [11,power]
+09-24 23:02:12.782   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:12.799   553   553 D SystemServerTiming: InitPowerManagement took to complete: 49ms
+09-24 23:02:12.800   553   553 I SystemServerTiming: StartRecoverySystemService
+09-24 23:02:12.800   553   553 I SystemServiceManager: Starting com.android.server.recoverysystem.RecoverySystemService$Lifecycle
+09-24 23:02:12.885   553   553 W SystemServiceManager: Service com.android.server.recoverysystem.RecoverySystemService$Lifecycle took 84 ms in onStart
+09-24 23:02:12.888   553   553 D SystemServerTiming: StartRecoverySystemService took to complete: 87ms
+09-24 23:02:12.938   553   553 I PackageWatchdog: Syncing state, reason: added new observer
+09-24 23:02:12.939   553   553 I PackageWatchdog: Not pruning observers, elapsed time: 0ms
+09-24 23:02:12.946   553   582 I PackageWatchdog: Saving observer state to file
+09-24 23:02:12.947   553   553 I PackageWatchdog: Cancelling state sync, nothing to sync
+09-24 23:02:12.968   553   553 I rescue_note: [0,1,173929]
+09-24 23:02:12.969   553   553 I SystemServerTiming: StartLightsService
+09-24 23:02:12.980   553   553 I SystemServiceManager: Starting com.android.server.lights.LightsService
+09-24 23:02:12.902   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 1 line
+09-24 23:02:13.019   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:13.060   176   176 I servicemanager: Found android.hardware.light.ILights/default in device VINTF manifest.
+09-24 23:02:13.131   325   325 I android.hardware.lights-service.example: Lights reporting supported lights
+09-24 23:02:13.142   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:13.171   553   553 D SystemServerTiming: StartLightsService took to complete: 202ms
+09-24 23:02:13.172   553   553 I SystemServerTiming: StartSidekickService
+09-24 23:02:13.173   553   553 D SystemServerTiming: StartSidekickService took to complete: 0ms
+09-24 23:02:13.173   553   553 I SystemServerTiming: StartDisplayManager
+09-24 23:02:13.179   553   553 I SystemServiceManager: Starting com.android.server.display.DisplayManagerService
+09-24 23:02:13.433   553   553 W SystemServiceManager: Service com.android.server.display.DisplayManagerService took 123 ms in onStart
+09-24 23:02:13.436   553   553 D SystemServerTiming: StartDisplayManager took to complete: 257ms
+09-24 23:02:13.437   553   553 I SystemServerTiming: WaitForDisplay
+09-24 23:02:13.442   553   553 I SystemServiceManager: Starting phase 100
+09-24 23:02:13.443   553   553 I SystemServerTiming: OnBootPhase_100
+09-24 23:02:13.444   553   553 I SystemServerTiming: OnBootPhase_100_com.android.server.security.FileIntegrityService
+09-24 23:02:13.444   553   553 D SystemServerTiming: OnBootPhase_100_com.android.server.security.FileIntegrityService took to complete: 0ms
+09-24 23:02:13.445   553   553 I SystemServerTiming: OnBootPhase_100_com.android.server.pm.Installer
+09-24 23:02:13.448   553   553 D SystemServerTiming: OnBootPhase_100_com.android.server.pm.Installer took to complete: 0ms
+09-24 23:02:13.450   553   553 I SystemServerTiming: OnBootPhase_100_com.android.server.os.DeviceIdentifiersPolicyService
+09-24 23:02:13.450   553   553 D SystemServerTiming: OnBootPhase_100_com.android.server.os.DeviceIdentifiersPolicyService took to complete: 0ms
+09-24 23:02:13.451   553   553 I SystemServerTiming: OnBootPhase_100_com.android.server.uri.UriGrantsManagerService$Lifecycle
+09-24 23:02:13.451   553   553 D SystemServerTiming: OnBootPhase_100_com.android.server.uri.UriGrantsManagerService$Lifecycle took to complete: 0ms
+09-24 23:02:13.452   553   553 I SystemServerTiming: OnBootPhase_100_com.android.server.wm.ActivityTaskManagerService$Lifecycle
+09-24 23:02:13.452   553   553 D SystemServerTiming: OnBootPhase_100_com.android.server.wm.ActivityTaskManagerService$Lifecycle took to complete: 0ms
+09-24 23:02:13.466   553   553 I SystemServerTiming: OnBootPhase_100_com.android.server.am.ActivityManagerService$Lifecycle
+09-24 23:02:13.474   553   553 D SystemServerTiming: OnBootPhase_100_com.android.server.am.ActivityManagerService$Lifecycle took to complete: 0ms
+09-24 23:02:13.475   553   553 I SystemServerTiming: OnBootPhase_100_com.android.server.pm.DataLoaderManagerService
+09-24 23:02:13.475   553   553 D SystemServerTiming: OnBootPhase_100_com.android.server.pm.DataLoaderManagerService took to complete: 0ms
+09-24 23:02:13.476   553   553 I SystemServerTiming: OnBootPhase_100_com.android.server.power.PowerManagerService
+09-24 23:02:13.476   553   553 D SystemServerTiming: OnBootPhase_100_com.android.server.power.PowerManagerService took to complete: 0ms
+09-24 23:02:13.477   553   553 I SystemServerTiming: OnBootPhase_100_com.android.server.power.ThermalManagerService
+09-24 23:02:13.486   553   553 D SystemServerTiming: OnBootPhase_100_com.android.server.power.ThermalManagerService took to complete: 0ms
+09-24 23:02:13.486   553   553 I SystemServerTiming: OnBootPhase_100_com.android.server.recoverysystem.RecoverySystemService$Lifecycle
+09-24 23:02:13.487   553   553 D SystemServerTiming: OnBootPhase_100_com.android.server.recoverysystem.RecoverySystemService$Lifecycle took to complete: 0ms
+09-24 23:02:13.488   553   553 I SystemServerTiming: OnBootPhase_100_com.android.server.lights.LightsService
+09-24 23:02:13.488   553   553 D SystemServerTiming: OnBootPhase_100_com.android.server.lights.LightsService took to complete: 0ms
+09-24 23:02:13.488   553   553 I SystemServerTiming: OnBootPhase_100_com.android.server.display.DisplayManagerService
+09-24 23:02:13.402   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 2 lines
+09-24 23:02:13.528   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:13.563   349   392 E HWComposer: getSupportedContentTypes: getSupportedContentTypes failed for display 8141241408256768: Unsupported (8)
+09-24 23:02:13.631   553   573 I DisplayManagerService: Display device added: DisplayDeviceInfo{"Built-in Screen": uniqueId="local:8141241408256768", 320 x 640, modeId 1, defaultModeId 1, supportedModes [{id=1, width=320, height=640, fps=60.000004}], colorMode 0, supportedColorModes [0], HdrCapabilities HdrCapabilities{mSupportedHdrTypes=[], mMaxLuminance=500.0, mMaxAverageLuminance=500.0, mMinLuminance=0.0}, allmSupported false, gameContentTypeSupported false, density 160, 160.0 x 160.0 dpi, appVsyncOff 1000000, presDeadline 16666666, touch INTERNAL, rotation 0, type INTERNAL, address {port=0, model=0x1cec6a7a2b7b}, deviceProductInfo DeviceProductInfo{name=EMU_display_0, manufacturerPnpId=GGL, productId=1, modelYear=null, manufactureDate=ManufactureDate{week=27, year=2006}, relativeAddress=null}, state UNKNOWN, FLAG_DEFAULT_DISPLAY, FLAG_ROTATES_WITH_CONTENT, FLAG_SECURE, FLAG_SUPPORTS_PROTECTED_BUFFERS}
+09-24 23:02:13.637   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:13.667   349   349 D SurfaceFlinger: Setting power mode 2 on display 8141241408256768
+09-24 23:02:13.679   553   573 I DisplayManagerService: Display device changed state: "Built-in Screen", ON
+09-24 23:02:13.708   553   553 W SystemServiceManager: Service com.android.server.display.DisplayManagerService took 220 ms in onBootPhase
+09-24 23:02:13.709   553   553 D SystemServerTiming: OnBootPhase_100_com.android.server.display.DisplayManagerService took to complete: 219ms
+09-24 23:02:13.709   553   553 D SystemServerTiming: OnBootPhase_100 took to complete: 266ms
+09-24 23:02:13.711   553   553 D SystemServerTiming: WaitForDisplay took to complete: 270ms
+09-24 23:02:13.713   553   553 I SystemServerTiming: StartPackageManagerService
+09-24 23:02:13.720   553   553 I Watchdog: Pausing HandlerChecker: main thread for reason: packagemanagermain. Pause count: 1
+09-24 23:02:13.754   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:13.839   553   553 I PackageManagerTiming: create package manager
+09-24 23:02:13.875   553   553 I boot_progress_pms_start: 174857
+09-24 23:02:13.876   553   553 I PackageManagerTiming: createSubComponents
+09-24 23:02:14.341   553   553 D PackageManagerTiming: createSubComponents took to complete: 465ms
+09-24 23:02:14.344   553   553 I PackageManagerTiming: addSharedUsers
+09-24 23:02:14.355   553   553 D PackageManagerTiming: addSharedUsers took to complete: 11ms
+09-24 23:02:14.378   553   553 I PackageManagerTiming: get system config
+09-24 23:02:14.389   553   553 D PackageManagerTiming: get system config took to complete: 6ms
+09-24 23:02:14.448   553   553 D PackageManager: Directories scanned as system partitions: [/system:0, /vendor:524288, /odm:4194304, /oem:262144, /product:1048576, /system_ext:2097152, /apex/com.android.extservices:8388608, /apex/com.android.art:8388608, /apex/com.android.permission:8388608, /apex/com.android.ipsec:8388608, /apex/com.android.neuralnetworks:8388608, /apex/com.android.cellbroadcast:8388608, /apex/com.android.tethering:8388608, /apex/com.android.mediaprovider:8388608, /apex/com.android.resolv:8388608, /apex/com.android.conscrypt:8388608, /apex/com.android.vndk.v30:8388608, /apex/com.android.wifi:8388608, /apex/com.android.os.statsd:8388608, /apex/com.android.apex.cts.shim:8388608, /apex/com.android.sdkext:8388608, /apex/com.android.tzdata:8388608, /apex/com.android.i18n:8388608, /apex/com.android.adbd:8388608, /apex/com.android.media:8388608, /apex/com.android.runtime:8388608, /apex/com.android.media.swcodec:8388608]
+09-24 23:02:14.466   553   553 D SELinuxMMAC: Using policy file /system/etc/selinux/plat_mac_permissions.xml
+09-24 23:02:14.491   553   553 D SELinuxMMAC: Using policy file /vendor/etc/selinux/vendor_mac_permissions.xml
+09-24 23:02:14.500   553   553 I PackageManagerTiming: loadFallbacks
+09-24 23:02:14.405   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 6 lines
+09-24 23:02:14.518   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:14.530   553   553 D FallbackCategoryProvider: Found 1 fallback categories
+09-24 23:02:14.531   553   553 D PackageManagerTiming: loadFallbacks took to complete: 30ms
+09-24 23:02:14.531   553   553 I PackageManagerTiming: read user settings
+09-24 23:02:14.622   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:16.377   553   553 W PackageSettings: Missing permission state for shared user: android.uid.log
+09-24 23:02:16.388   553   553 D PackageManagerTiming: read user settings took to complete: 1856ms
+09-24 23:02:16.509   553   553 I boot_progress_pms_system_scan_start: 177490
+09-24 23:02:16.529   553   553 D PackageManager: Destroying unknown cache 4e344c939c5c6a59ea1dfaf37af83167c80067c3
+09-24 23:02:17.042     0     0 E apexd   : Can't open /system_ext/apex for reading : No such file or directory
+09-24 23:02:17.043     0     0 E apexd   : Can't open /product/apex for reading : No such file or directory
+09-24 23:02:17.044     0     0 E apexd   : Can't open /vendor/apex for reading : No such file or directory
+09-24 23:02:16.906   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 21 lines
+09-24 23:02:17.010   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:17.118   432   432 W ServiceManager: Service package_native didn't start. Returning NULL
+09-24 23:02:17.119   432   432 E iorapd  : Cannot get package manager service!
+09-24 23:02:17.908   553   610 I service_manager_slow: [31,permissionmgr]
+09-24 23:02:17.908   553   610 I service_manager_stats: [134,418,6601]
+09-24 23:02:18.122   432   432 W iorapd  : Reconnect to package manager service: 13 times
+09-24 23:02:18.159   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:18.351   553   610 I PackageParser2: Parse times for '/system/apex/com.android.apex.cts.shim.apex': parse=1103ms, update_cache=185 ms
+09-24 23:02:19.603   553   612 I PackageParser2: Parse times for '/system/apex/com.android.cellbroadcast.apex': parse=2468ms, update_cache=53 ms
+09-24 23:02:20.567   553   610 I PackageParser2: Parse times for '/system/apex/com.android.conscrypt.apex': parse=2169ms, update_cache=24 ms
+09-24 23:02:20.731   553   609 I PackageParser2: Parse times for '/system/apex/com.android.adbd.apex': parse=3659ms, update_cache=12 ms
+09-24 23:02:21.145   553   609 I service_manager_slow: [31,platform_compat]
+09-24 23:02:21.374   553   609 I PackageParser2: Parse times for '/system/apex/com.android.ipsec.apex': parse=606ms, update_cache=35 ms
+09-24 23:02:21.689   553   612 I PackageParser2: Parse times for '/system/apex/com.android.extservices.apex': parse=2049ms, update_cache=35 ms
+09-24 23:02:22.943   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 40 lines
+09-24 23:02:23.056   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:23.178   432   432 W ServiceManager: Service package_native didn't start. Returning NULL
+09-24 23:02:23.179   432   432 E iorapd  : Cannot get package manager service!
+09-24 23:02:23.351   553   609 I PackageParser2: Parse times for '/system/apex/com.android.media.apex': parse=1923ms, update_cache=33 ms
+09-24 23:02:24.206   432   432 W iorapd  : Reconnect to package manager service: 14 times
+09-24 23:02:24.215   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:25.170   553   609 I PackageParser2: Parse times for '/system/apex/com.android.mediaprovider.apex': parse=1779ms, update_cache=34 ms
+09-24 23:02:27.603   553   610 I service_manager_slow: [20,platform_compat]
+09-24 23:02:28.459   553   609 I PackageParser2: Parse times for '/system/apex/com.android.neuralnetworks.apex': parse=3259ms, update_cache=21 ms
+09-24 23:02:29.101   553   612 I PackageParser2: Parse times for '/system/apex/com.android.media.swcodec.apex': parse=7376ms, update_cache=19 ms
+09-24 23:02:29.051   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 40 lines
+09-24 23:02:29.158   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:29.285   432   432 W ServiceManager: Service package_native didn't start. Returning NULL
+09-24 23:02:29.302   432   432 E iorapd  : Cannot get package manager service!
+09-24 23:02:29.468   553   609 I PackageParser2: Parse times for '/system/apex/com.android.os.statsd.apex': parse=958ms, update_cache=38 ms
+09-24 23:02:29.485   553   610 I PackageParser2: Parse times for '/system/apex/com.android.i18n.apex': parse=8880ms, update_cache=35 ms
+09-24 23:02:30.068     0     0 W healthd : battery l=100 v=5000 t=25.0 h=2 st=2 c=900000 fc=300000 cc=10 chg=a
+09-24 23:02:30.342   432   432 W iorapd  : Reconnect to package manager service: 15 times
+09-24 23:02:30.359   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:31.114   553   609 I PackageParser2: Parse times for '/system/apex/com.android.resolv.apex': parse=1565ms, update_cache=54 ms
+09-24 23:02:31.338   553   612 I service_manager_slow: [22,platform_compat]
+09-24 23:02:31.346   553   610 I service_manager_slow: [24,platform_compat]
+09-24 23:02:31.769   553   609 I PackageParser2: Parse times for '/system/apex/com.android.sdkext.apex': parse=620ms, update_cache=34 ms
+09-24 23:02:32.049   553   612 I PackageParser2: Parse times for '/system/apex/com.android.permission.apex': parse=2928ms, update_cache=13 ms
+09-24 23:02:32.081   553   610 I PackageParser2: Parse times for '/system/apex/com.android.runtime.apex': parse=2559ms, update_cache=18 ms
+09-24 23:02:32.640   553   609 I PackageParser2: Parse times for '/system/apex/com.android.tethering.apex': parse=839ms, update_cache=14 ms
+09-24 23:02:32.715   553   612 I service_manager_slow: [44,platform_compat]
+09-24 23:02:32.865   553   612 I PackageParser2: Parse times for '/system/apex/com.android.tzdata.apex': parse=781ms, update_cache=10 ms
+09-24 23:02:34.263   553   609 I PackageParser2: Parse times for '/system/apex/com.android.wifi.apex': parse=1591ms, update_cache=20 ms
+09-24 23:02:35.085   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 39 lines
+09-24 23:02:35.215   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:35.272   541   541 E netmgr  : qemu_pipe_open_ns:62: Could not connect to the 'pipe:qemud:network' service: Invalid argument
+09-24 23:02:35.273   541   541 E netmgr  : Failed to open QEMU pipe 'qemud:network': Invalid argument
+09-24 23:02:35.326   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:35.439   432   432 W ServiceManager: Service package_native didn't start. Returning NULL
+09-24 23:02:35.440   432   432 E iorapd  : Cannot get package manager service!
+09-24 23:02:35.883   544   544 E wifi_forwarder: qemu_pipe_open_ns:62: Could not connect to the 'pipe:qemud:wififorward' service: Invalid argument
+09-24 23:02:35.885   544   544 E wifi_forwarder: RemoteConnection failed to initialize: RemoteConnection failed to open pipe
+09-24 23:02:36.445   432   432 W iorapd  : Reconnect to package manager service: 16 times
+09-24 23:02:36.462   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:41.178   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 40 lines
+09-24 23:02:41.310   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:41.482   432   432 W ServiceManager: Service package_native didn't start. Returning NULL
+09-24 23:02:41.483   432   432 E iorapd  : Cannot get package manager service!
+09-24 23:02:42.486   432   432 W iorapd  : Reconnect to package manager service: 17 times
+09-24 23:02:42.494   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:47.029   553   611 I service_manager_slow: [30,platform_compat]
+09-24 23:02:47.334   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 39 lines
+09-24 23:02:47.447   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:47.578   432   432 W ServiceManager: Service package_native didn't start. Returning NULL
+09-24 23:02:47.579   432   432 E iorapd  : Cannot get package manager service!
+09-24 23:02:48.582   432   432 W iorapd  : Reconnect to package manager service: 18 times
+09-24 23:02:48.599   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:52.443   553   611 I PackageParser2: Parse times for '/system/apex/com.android.art.debug.apex': parse=35362ms, update_cache=23 ms
+09-24 23:02:53.396   432   432 I chatty  : uid=1071(iorapd) /system/bin/iorapd identical 42 lines
+09-24 23:02:53.505   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:53.626   432   432 W ServiceManager: Service package_native didn't start. Returning NULL
+09-24 23:02:53.627   432   432 E iorapd  : Cannot get package manager service!
+09-24 23:02:54.630   432   432 W iorapd  : Reconnect to package manager service: 19 times
+09-24 23:02:54.638   432   432 I ServiceManager: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:02:56.111     0     0 D logd    : logdr: UID=2000 GID=2000 PID=625 n tail=600 logMask=ff pid=0 start=0ns timeout=0ns

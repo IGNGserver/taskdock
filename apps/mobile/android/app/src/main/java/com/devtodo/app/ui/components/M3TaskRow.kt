@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -39,6 +40,7 @@ fun M3TaskRow(
     actions: List<RowAction> = emptyList(),
     highlighted: Boolean = false,
     showStatus: Boolean = true,
+    containerColorOverride: Color? = null,
 ) {
     val metadata =
         buildList {
@@ -50,6 +52,7 @@ fun M3TaskRow(
         animateColorAsState(
             when {
                 highlighted -> MaterialTheme.colorScheme.secondaryContainer
+                containerColorOverride != null -> containerColorOverride
                 task.status == TaskStatus.DONE -> MaterialTheme.colorScheme.surfaceContainerLow
                 else -> MaterialTheme.colorScheme.surface
             },

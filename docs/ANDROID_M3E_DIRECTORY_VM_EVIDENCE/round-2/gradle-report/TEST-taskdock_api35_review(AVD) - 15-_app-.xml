@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.devtodo.app.ExampleInstrumentedTest" tests="18" failures="1" errors="0" skipped="0" time="100.29" timestamp="2026-09-24T11:15:19" hostname="localhost">
+  <properties>
+    <property name="device" value="taskdock_api35_review(AVD) - 15" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="useAppContext" classname="com.devtodo.app.ExampleInstrumentedTest" time="0.026" />
+  <testcase name="migrateV7ToV8AddsIndexesToDatabasesCreatedWithoutThem" classname="com.devtodo.app.data.local.AppDatabaseMigrationTest" time="0.228" />
+  <testcase name="migrateV3ToV5PreservesLegacyRowsAndCreatesV2Tables" classname="com.devtodo.app.data.local.AppDatabaseMigrationTest" time="0.115" />
+  <testcase name="migratesPlaintextFallbackTokenIntoEncryptedStore" classname="com.devtodo.app.data.security.SecureAuthStorageMigrationTest" time="0.366" />
+  <testcase name="migratesCapacitorRefreshTokenToCurrentStore" classname="com.devtodo.app.data.security.SecureAuthStorageMigrationTest" time="0.646" />
+  <testcase name="captureProtectsDraftAndTrimsOnlyOnCreate" classname="com.devtodo.app.ui.MaterialWorkspaceTest" time="29.454" />
+  <testcase name="longTaskKeepsBothActionsAvailableInCompactWidth" classname="com.devtodo.app.ui.MaterialWorkspaceTest" time="5.855" />
+  <testcase name="checkboxCompletesWithoutOpeningDetailAndMenuSelectsInProgress" classname="com.devtodo.app.ui.MaterialWorkspaceTest" time="7.369" />
+  <testcase name="scheduleScreenReturnsToDirectory" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="5.044" />
+  <testcase name="deletedArchivedTaskIsExcludedFromArchiveQuery" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="2.599" />
+  <testcase name="plannerShowsTodayEventsAndKeepsOlderEmptyDatesReachable" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="6.274" />
+  <testcase name="workflowsScreenReturnsToDirectory" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="5.863" />
+  <testcase name="detailProtectsDraftAcrossTabsAndBackAndSavesToRoom" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="6.323" />
+  <testcase name="directoryDrillDownAndSearchKeepTaskReachable" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="6.359">
+    <failure>java.lang.IllegalStateException: Cannot call setContent twice per test!
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.setContent(ComposeUiTest.android.kt:471)
+at androidx.compose.ui.test.junit4.AndroidComposeTestRule.setContent(AndroidComposeTestRule.android.kt:348)
+at com.devtodo.app.ui.WorkspaceScreenTest.directoryDrillDownAndSearchKeepTaskReachable(WorkspaceScreenTest.kt:230)
+</failure>
+  </testcase>
+  <testcase name="settingsChoicesRemainSelectableInGroupedLayout" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="3.544" />
+  <testcase name="appStartsInDirectoryAndSmartViewsReturnToIt" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="11.12" />
+  <testcase name="todayScreenReturnsToDirectory" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="2.215" />
+  <testcase name="settingsLightModeKeepsAccountSummaryVisible" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="2.171" />
+</testsuite>

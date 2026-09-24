@@ -1,0 +1,82 @@
+# proto-message: google.testing.platform.proto.api.core.TestSuiteResult
+# 2026-09-24T12:36:01.872610006Z:
+test_suite_meta_data {
+  scheduled_test_case_count: 1
+  device {
+    id: "emulator-5554"
+    friendly_name: "primary"
+  }
+}
+test_status: FAILED
+test_result {
+  test_case {
+    test_class: "WorkspaceScreenTest"
+    test_package: "com.devtodo.app.ui"
+    test_method: "directoryDrillDownAndSearchKeepTaskReachable"
+    start_time {
+      seconds: 1790253339
+      nanos: 469000000
+    }
+    end_time {
+      seconds: 1790253358
+      nanos: 461000000
+    }
+    device {
+      id: "emulator-5554"
+      friendly_name: "primary"
+    }
+  }
+  test_status: FAILED
+  error {
+    error_message: "java.lang.AssertionError: expected:<today> but was:<null>\nat org.junit.Assert.fail(Assert.java:89)\nat org.junit.Assert.failNotEquals(Assert.java:835)\nat org.junit.Assert.assertEquals(Assert.java:120)\nat org.junit.Assert.assertEquals(Assert.java:146)\nat com.devtodo.app.ui.WorkspaceScreenTest.directoryDrillDownAndSearchKeepTaskReachable$lambda$12(WorkspaceScreenTest.kt:302)\nat com.devtodo.app.ui.WorkspaceScreenTest.$r8$lambda$Ak_G8b3VFFcrkzhqUH48Enss1sA(Unknown Source:0)\nat com.devtodo.app.ui.WorkspaceScreenTest$$ExternalSyntheticLambda4.invoke(D8$$SyntheticClass:0)\nat androidx.compose.ui.test.AndroidSynchronization_androidKt.runOnUiThread$lambda$0(AndroidSynchronization.android.kt:37)\nat androidx.compose.ui.test.AndroidSynchronization_androidKt.$r8$lambda$opyMdTZ52jorqLaIG4SKpPr_Zno(Unknown Source:0)\nat androidx.compose.ui.test.AndroidSynchronization_androidKt$$ExternalSyntheticLambda0.call(D8$$SyntheticClass:0)\nat java.util.concurrent.FutureTask.run(FutureTask.java:264)\nat java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:487)\nat java.util.concurrent.FutureTask.run(FutureTask.java:264)\nat android.app.Instrumentation$SyncRunnable.run(Instrumentation.java:2612)\nat android.os.Handler.handleCallback(Handler.java:959)\nat android.os.Handler.dispatchMessage(Handler.java:100)\nat android.os.Looper.loopOnce(Looper.java:232)\nat android.os.Looper.loop(Looper.java:317)\nat android.app.ActivityThread.main(ActivityThread.java:8705)\nat java.lang.reflect.Method.invoke(Native Method)\nat com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:580)\nat com.android.internal.os.ZygoteInit.main(ZygoteInit.java:886)\n"
+    error_type: "java.lang.AssertionError"
+    stack_trace: "java.lang.AssertionError: expected:<today> but was:<null>\nat org.junit.Assert.fail(Assert.java:89)\nat org.junit.Assert.failNotEquals(Assert.java:835)\nat org.junit.Assert.assertEquals(Assert.java:120)\nat org.junit.Assert.assertEquals(Assert.java:146)\nat com.devtodo.app.ui.WorkspaceScreenTest.directoryDrillDownAndSearchKeepTaskReachable$lambda$12(WorkspaceScreenTest.kt:302)\nat com.devtodo.app.ui.WorkspaceScreenTest.$r8$lambda$Ak_G8b3VFFcrkzhqUH48Enss1sA(Unknown Source:0)\nat com.devtodo.app.ui.WorkspaceScreenTest$$ExternalSyntheticLambda4.invoke(D8$$SyntheticClass:0)\nat androidx.compose.ui.test.AndroidSynchronization_androidKt.runOnUiThread$lambda$0(AndroidSynchronization.android.kt:37)\nat androidx.compose.ui.test.AndroidSynchronization_androidKt.$r8$lambda$opyMdTZ52jorqLaIG4SKpPr_Zno(Unknown Source:0)\nat androidx.compose.ui.test.AndroidSynchronization_androidKt$$ExternalSyntheticLambda0.call(D8$$SyntheticClass:0)\nat java.util.concurrent.FutureTask.run(FutureTask.java:264)\nat java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:487)\nat java.util.concurrent.FutureTask.run(FutureTask.java:264)\nat android.app.Instrumentation$SyncRunnable.run(Instrumentation.java:2612)\nat android.os.Handler.handleCallback(Handler.java:959)\nat android.os.Handler.dispatchMessage(Handler.java:100)\nat android.os.Looper.loopOnce(Looper.java:232)\nat android.os.Looper.loop(Looper.java:317)\nat android.app.ActivityThread.main(ActivityThread.java:8705)\nat java.lang.reflect.Method.invoke(Native Method)\nat com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:580)\nat com.android.internal.os.ZygoteInit.main(ZygoteInit.java:886)\n"
+  }
+  output_artifact {
+    label {
+      label: "logcat"
+      namespace: "android"
+    }
+    source_path {
+      path: "/home/lvziw/\351\241\271\347\233\256/todo-list\345\267\245\345\205\267/apps/mobile/android/app/build/outputs/androidTest-results/connected/debug/taskdock_api35_review(AVD) - 15/logcat-com.devtodo.app.ui.WorkspaceScreenTest-directoryDrillDownAndSearchKeepTaskReachable.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info"
+      namespace: "android"
+    }
+    source_path {
+      path: "/home/lvziw/\351\241\271\347\233\256/todo-list\345\267\245\345\205\267/apps/mobile/android/app/build/outputs/androidTest-results/connected/debug/taskdock_api35_review(AVD) - 15/device-info.pb"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.meminfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/home/lvziw/\351\241\271\347\233\256/todo-list\345\267\245\345\205\267/apps/mobile/android/app/build/outputs/androidTest-results/connected/debug/taskdock_api35_review(AVD) - 15/meminfo"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.cpuinfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/home/lvziw/\351\241\271\347\233\256/todo-list\345\267\245\345\205\267/apps/mobile/android/app/build/outputs/androidTest-results/connected/debug/taskdock_api35_review(AVD) - 15/cpuinfo"
+    }
+  }
+}
+output_artifact {
+  label {
+    label: "test-results.log"
+    namespace: "com.google.testing.platform.runtime.android.driver.AndroidInstrumentationDriver"
+  }
+  source_path {
+    path: "/home/lvziw/\351\241\271\347\233\256/todo-list\345\267\245\345\205\267/apps/mobile/android/app/build/outputs/androidTest-results/connected/debug/taskdock_api35_review(AVD) - 15/testlog/test-results.log"
+  }
+  type: TEST_DATA
+  mime_type: "text/plain"
+}

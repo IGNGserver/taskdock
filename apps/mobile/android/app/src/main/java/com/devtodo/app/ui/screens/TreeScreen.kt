@@ -6,18 +6,23 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,12 +32,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
@@ -58,10 +70,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -72,7 +90,9 @@ import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.ui.components.*
 import com.devtodo.app.ui.components.M3TaskRow
 import com.devtodo.app.ui.components.WorkspaceScaffold
+import com.devtodo.app.ui.navigation.Screen
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +102,9 @@ fun TreeScreen(
     initialFolderId: String? = null,
     highlightedTaskId: String? = null,
     locateRequest: Int = 0,
+    onNavigateToShortcut: (String) -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+    onOpenSearch: () -> Unit = {},
 ) {
     var currentFolderId by rememberSaveable { mutableStateOf<String?>(initialFolderId) }
     val allFolders by viewModel.foldersV2.collectAsStateWithLifecycle()
@@ -94,21 +117,18 @@ fun TreeScreen(
         allTasks.filter {
             it.parentFolderId == currentFolderId && it.archivedAt == null && it.deletedAt == null
         }
-    val tabState = rememberSaveableStateHolder()
-    var tab by rememberSaveable { mutableStateOf(0) }
     val useInlineTaskAction =
         LocalDensity.current.fontScale >= 1.3f || LocalConfiguration.current.screenHeightDp < 480
-    val listState = rememberLazyListState()
-    val allTasksListState = rememberLazyListState()
+    val listStateHolder = rememberSaveableStateHolder()
+    var isFabExpanded by rememberSaveable { mutableStateOf(true) }
     var handledLocateRequest by rememberSaveable { mutableStateOf(0) }
     LaunchedEffect(locateRequest) {
         if (locateRequest > handledLocateRequest) {
             currentFolderId = initialFolderId
-            tab = 0
             handledLocateRequest = locateRequest
         }
     }
-    BackHandler(currentFolderId != null && tab == 0) {
+    BackHandler(currentFolderId != null) {
         currentFolderId = allFolders.find { it.id == currentFolderId }?.parentFolderId
     }
     var showFolderDialog by rememberSaveable { mutableStateOf(false) }
@@ -137,30 +157,20 @@ fun TreeScreen(
         )
     }
 
-    LaunchedEffect(highlightedTaskId, rows, locateRequest) {
-        val index = rows.indexOfFirst { it.id == highlightedTaskId }
-        if (index >= 0) listState.animateScrollToItem(index)
-    }
-    val isFabExpanded by remember(tab, listState, allTasksListState) {
-        derivedStateOf {
-            val state = if (tab == 0) listState else allTasksListState
-            state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset < 24
-        }
-    }
     WorkspaceScaffold(
         topBar = {
             Column {
                 TopAppBar(
-                    windowInsets = WindowInsets(0, 0, 0, 0),
                     title = {
                         Text(
-                            if (tab == 0)
-                                currentFolderId?.let { folderTitle(it, allFolders) } ?: "任务库"
-                            else "任务库"
+                            currentFolderId?.let { folderTitle(it, allFolders) } ?: "任务",
+                            style = if (currentFolderId == null)
+                                MaterialTheme.typography.headlineSmall
+                            else MaterialTheme.typography.titleLarge,
                         )
                     },
                     navigationIcon = {
-                        if (currentFolderId != null && tab == 0)
+                        if (currentFolderId != null)
                             IconButton(
                                 onClick = {
                                     currentFolderId =
@@ -171,148 +181,255 @@ fun TreeScreen(
                             }
                     },
                     actions = {
-                        if (tab == 0)
+                        if (currentFolderId == null) {
+                            IconButton(
+                                onClick = onOpenSearch,
+                                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
+                            ) { Icon(Icons.Default.Search, "搜索全部任务") }
+                            IconButton(
+                                onClick = onOpenSettings,
+                                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
+                            ) { Icon(Icons.Default.Settings, "设置") }
+                        } else {
                             IconButton(
                                 onClick = { showFolderDialog = true },
                                 modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
                             ) { Icon(Icons.Default.CreateNewFolder, "新建文件夹") }
-                        if (useInlineTaskAction)
+                        }
+                        if (useInlineTaskAction && currentFolderId != null)
                             IconButton(
                                 onClick = { showTaskDialog = true },
                                 modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
                             ) { Icon(Icons.Default.Add, "新建任务") }
                     },
                 )
-                WorkspaceTabs(listOf("目录", "全部任务"), tab) { tab = it }
             }
         },
-        floatingActionButton = {
+        bottomBar = {
             if (!useInlineTaskAction) {
-                Crossfade(
-                    targetState = isFabExpanded,
-                    animationSpec = tween(140),
-                    label = "treeCreateFab",
+                Box(
+                Modifier.fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(vertical = 12.dp)
+                        .testTag("tree-create-bar"),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    if (it) {
-                        ExtendedFloatingActionButton(
-                            onClick = { showTaskDialog = true },
-                            icon = { Icon(Icons.Default.Add, null) },
-                            text = { Text("新建任务") },
-                        )
-                    } else {
-                        FloatingActionButton(onClick = { showTaskDialog = true }) {
-                            Icon(Icons.Default.Add, "新建任务")
+                    Crossfade(
+                        targetState = isFabExpanded,
+                        animationSpec = tween(140),
+                        label = "treeCreateFab",
+                        modifier = Modifier.testTag("tree-create-action"),
+                    ) {
+                        if (it) {
+                            ExtendedFloatingActionButton(
+                                onClick = { showTaskDialog = true },
+                                icon = { Icon(Icons.Default.Add, null) },
+                                text = { Text("新建任务") },
+                            )
+                        } else {
+                            FloatingActionButton(onClick = { showTaskDialog = true }) {
+                                Icon(Icons.Default.Add, "新建任务")
+                            }
                         }
                     }
                 }
             }
         },
     ) { padding ->
-        if (tab == 1)
-            tabState.SaveableStateProvider("all-tasks") {
-                AllTasksV2Screen(viewModel, onNavigateToDetail, allTasksListState)
+        listStateHolder.SaveableStateProvider(currentFolderId ?: "root-directory") {
+            val listState = rememberLazyListState()
+            LaunchedEffect(highlightedTaskId, rows, locateRequest) {
+                val index = rows.indexOfFirst { it.id == highlightedTaskId }
+                if (index >= 0) {
+                    listState.animateScrollToItem(index + if (currentFolderId == null) 2 else 1)
+                }
             }
-        else
+            LaunchedEffect(listState) {
+                snapshotFlow {
+                    listState.firstVisibleItemIndex == 0 &&
+                        listState.firstVisibleItemScrollOffset < 24
+                }.collect { isFabExpanded = it }
+            }
             LazyColumn(
-                Modifier.fillMaxSize().padding(padding),
+                Modifier.fillMaxSize().padding(padding).testTag("directory-tree-list"),
                 state = listState,
-                contentPadding = PaddingValues(bottom = 120.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
             ) {
-                item(key = "directory-overview") {
+                if (currentFolderId == null) {
+                    item(key = "directory-shortcuts") {
+                        DirectoryShortcuts(
+                            onNavigate = onNavigateToShortcut,
+                        )
+                    }
+                    item(key = "directory-heading") {
+                        DirectorySectionHeader(
+                            folderCount = folders.size,
+                            rootTaskCount = tasks.size,
+                            onCreateFolder = { showFolderDialog = true },
+                        )
+                    }
+                } else item(key = "directory-overview") {
                     DirectoryOverview(
                         folderCount = folders.size,
                         taskCount = tasks.size,
                         pendingCount = tasks.count { it.status != TaskStatus.DONE },
-                        isRoot = currentFolderId == null,
                     )
                 }
                 itemsIndexed(rows, key = { _, row -> "${row.kind}:${row.id}" }) { rowIndex, row ->
-                    Column {
-                    val siblings = rows.filter { it.status == row.status }
-                    val index = siblings.indexOfFirst { it.id == row.id }
-                    val actions =
-                        listOf(
-                            RowAction("上移", enabled = index > 0) { moveAdjacent(row, -1) },
-                            RowAction("下移", enabled = index < siblings.lastIndex) {
-                                moveAdjacent(row, 1)
-                            },
-                            RowAction("移动到目录") { pendingMoveRow = row },
-                        )
-                    if (row.folder != null) {
-                        val folder = row.folder
-                        ListItem(
-                            headlineContent = {
-                                Text(
-                                    folder.title,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                                )
-                            },
-                            supportingContent = {
-                                val folderHint =
-                                    when {
-                                        row.taskCount == 0 -> "空目录"
-                                        row.status == TaskStatus.IN_PROGRESS -> "进行中 · ${row.taskCount} 个任务"
-                                        row.status == TaskStatus.DONE -> "全部完成 · ${row.taskCount} 个任务"
-                                        else -> "${row.taskCount} 个待处理任务"
+                    Column(Modifier.testTag("tree-row-${row.id}")) {
+                        val siblings = rows.filter { it.status == row.status }
+                        val index = siblings.indexOfFirst { it.id == row.id }
+                        val actions =
+                            listOf(
+                                RowAction("上移", enabled = index > 0) { moveAdjacent(row, -1) },
+                                RowAction("下移", enabled = index < siblings.lastIndex) {
+                                    moveAdjacent(row, 1)
+                                },
+                                RowAction("移动到目录") { pendingMoveRow = row },
+                            )
+                        val startsStatusGroup = rowIndex == 0 || rows[rowIndex - 1].status != row.status
+                        val endsStatusGroup = rowIndex == rows.lastIndex || rows[rowIndex + 1].status != row.status
+                        if (currentFolderId != null && startsStatusGroup) {
+                            SectionHeading("${taskStatusLabel(row.status)} · ${siblings.size}")
+                        }
+                        val startsContainer = if (currentFolderId == null) rowIndex == 0 else startsStatusGroup
+                        val endsContainer = if (currentFolderId == null) rowIndex == rows.lastIndex else endsStatusGroup
+                        val groupShape =
+                            RoundedCornerShape(
+                                topStart = if (startsContainer) 24.dp else 0.dp,
+                                topEnd = if (startsContainer) 24.dp else 0.dp,
+                                bottomEnd = if (endsContainer) 24.dp else 0.dp,
+                                bottomStart = if (endsContainer) 24.dp else 0.dp,
+                            )
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            shape = groupShape,
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        ) {
+                            Column {
+                                if (row.folder != null) {
+                                    val folder = row.folder
+                                    val childFolderCount = allFolders.count {
+                                        it.parentFolderId == folder.id &&
+                                            it.archivedAt == null &&
+                                            it.deletedAt == null
                                     }
-                                Text(
-                                    folderHint,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            },
-                            leadingContent = {
-                                Surface(
-                                    shape = MaterialTheme.shapes.medium,
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                ) {
-                                    Icon(
-                                        Icons.Default.Folder,
-                                        null,
-                                        Modifier.padding(10.dp).size(22.dp),
-                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    val (folderContainer, folderTint) = when (folder.title.hashCode().ushr(1) % 3) {
+                                        0 -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+                                        1 -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+                                        else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+                                    }
+                                    ListItem(
+                                        headlineContent = {
+                                            Text(
+                                                folder.title,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                                            )
+                                        },
+                                        supportingContent = {
+                                            val folderHint =
+                                                when {
+                                                    row.taskCount == 0 && childFolderCount == 0 -> "空目录"
+                                                    row.taskCount == 0 -> "$childFolderCount 个子目录"
+                                                    row.status == TaskStatus.IN_PROGRESS -> "进行中 · ${row.taskCount} 个任务"
+                                                    row.status == TaskStatus.DONE -> "全部完成 · ${row.taskCount} 个任务"
+                                                    else -> "${row.taskCount} 个待处理任务"
+                                                }
+                                            Text(
+                                                folderHint,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                style = MaterialTheme.typography.bodySmall,
+                                            )
+                                        },
+                                        leadingContent = {
+                                            Surface(
+                                                shape = MaterialTheme.shapes.medium,
+                                                color = folderContainer,
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Folder,
+                                                    null,
+                                                    Modifier.padding(10.dp).size(22.dp),
+                                                    tint = folderTint,
+                                                )
+                                            }
+                                        },
+                                        trailingContent = {
+                                            ActionMenu(
+                                                "${folder.title}，更多操作",
+                                                actions +
+                                                    RowAction("归档或删除", destructive = true) {
+                                                        pendingDeleteFolder = folder
+                                                    },
+                                            )
+                                        },
+                                        modifier =
+                                            Modifier.fillMaxWidth().clickable(onClickLabel = "打开目录") {
+                                                currentFolderId = folder.id
+                                            },
+                                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    )
+                                } else {
+                                    val task = row.task!!
+                                    M3TaskRow(
+                                        task,
+                                        onClick = { onNavigateToDetail(task.id) },
+                                        onStatusToggle = { viewModel.updateTaskStatus(task, it) },
+                                        actions = actions,
+                                        highlighted = task.id == highlightedTaskId,
+                                        containerColorOverride = if (task.status == TaskStatus.DONE)
+                                            MaterialTheme.colorScheme.surfaceContainerLow
+                                        else Color.Transparent,
                                     )
                                 }
-                            },
-                            trailingContent = {
-                                ActionMenu(
-                                    "${folder.title}，更多操作",
-                                    actions +
-                                        RowAction("归档或删除", destructive = true) {
-                                            pendingDeleteFolder = folder
-                                        },
-                                )
-                            },
-                            modifier =
-                                Modifier.fillMaxWidth().clickable(onClickLabel = "打开目录") {
-                                    currentFolderId = folder.id
-                                },
-                            colors =
-                                ListItemDefaults.colors(
-                                    containerColor = MaterialTheme.colorScheme.surface,
-                                ),
-                        )
-                    } else {
-                        val task = row.task!!
-                        M3TaskRow(
-                            task,
-                            onClick = { onNavigateToDetail(task.id) },
-                            onStatusToggle = { viewModel.updateTaskStatus(task, it) },
-                            actions = actions,
-                            highlighted = task.id == highlightedTaskId,
-                        )
-                    }
-                        if (rowIndex < rows.lastIndex) {
-                            HorizontalDivider(Modifier.padding(start = 72.dp, end = 16.dp))
+                                if (!endsContainer) {
+                                    HorizontalDivider(
+                                        Modifier.padding(start = 72.dp, end = 16.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
                 if (rows.isEmpty())
-                    item { EmptyState(Icons.Default.Folder, "这个目录还是空的", "使用“新建文件夹”创建目录，或新建一条任务。") }
+                    item {
+                        EmptyState(
+                            Icons.Default.Folder,
+                            if (currentFolderId == null) "还没有目录或任务" else "这个目录还是空的",
+                            if (currentFolderId == null)
+                                "先创建一个目录，或添加一条根任务。"
+                            else "使用“新建文件夹”创建子目录，或新建一条任务。",
+                            action = {
+                                if (currentFolderId == null) {
+                                    TextButton(onClick = { showFolderDialog = true }) {
+                                        Icon(Icons.Default.CreateNewFolder, null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("新建目录")
+                                    }
+                                }
+                            },
+                        )
+                    }
+                if (useInlineTaskAction) {
+                    item(key = "inline-create-task") {
+                        Button(
+                            onClick = { showTaskDialog = true },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+                                .heightIn(min = 56.dp)
+                                .testTag("tree-inline-create-task"),
+                        ) {
+                            Icon(Icons.Default.Add, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("新建任务")
+                        }
+                    }
+                }
             }
+        }
     }
 
     if (showFolderDialog)
@@ -321,7 +438,7 @@ fun TreeScreen(
         }
     if (showTaskDialog)
         CaptureSheet("新建任务", onDismiss = { showTaskDialog = false }) {
-            viewModel.createTreeTaskV2(if (tab == 0) currentFolderId else null, it)
+            viewModel.createTreeTaskV2(currentFolderId, it)
         }
     pendingDeleteFolder?.let { folder ->
         AlertDialog(
@@ -454,10 +571,12 @@ fun TreeScreen(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun AllTasksV2Screen(
     viewModel: MainViewModel,
     onNavigateToDetail: (String) -> Unit,
-    listState: LazyListState,
+    listState: LazyListState = rememberLazyListState(),
+    onBack: () -> Unit = {},
 ) {
     val tasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
@@ -471,7 +590,19 @@ fun AllTasksV2Screen(
                 (it.title.contains(normalizedQuery, ignoreCase = true) ||
                     it.referenceId?.contains(normalizedQuery, ignoreCase = true) == true)
         }
-    Column(Modifier.fillMaxSize()) {
+    WorkspaceScaffold(
+      topBar = {
+        TopAppBar(
+            title = { Text("全部任务") },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                }
+            },
+        )
+      },
+    ) { padding ->
+      Column(Modifier.fillMaxSize().padding(padding)) {
         Surface(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             shape = MaterialTheme.shapes.extraLarge,
@@ -536,9 +667,9 @@ fun AllTasksV2Screen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         LazyColumn(
-            Modifier.weight(1f).imePadding(),
+            Modifier.weight(1f).imePadding().testTag("all-tasks-list"),
             state = listState,
-            contentPadding = PaddingValues(bottom = 120.dp),
+            contentPadding = PaddingValues(bottom = 24.dp),
         ) {
             items(visible, key = { it.id }) { task ->
                 M3TaskRow(
@@ -546,6 +677,7 @@ fun AllTasksV2Screen(
                     onClick = { onNavigateToDetail(task.id) },
                     onStatusToggle = { viewModel.updateTaskStatus(task, it) },
                     showStatus = filter == null,
+                    modifier = Modifier.testTag("all-task-${task.id}"),
                 )
             }
             if (visible.isEmpty()) {
@@ -569,6 +701,109 @@ fun AllTasksV2Screen(
                 }
             }
         }
+      }
+    }
+}
+
+@Composable
+private fun DirectoryShortcuts(onNavigate: (String) -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(
+            "快捷视图",
+            Modifier.padding(start = 8.dp, bottom = 8.dp)
+                .semantics { heading() },
+            style = MaterialTheme.typography.labelLarge,
+            color = scheme.onSurfaceVariant,
+        )
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = scheme.surfaceContainerLow,
+        ) {
+            Column {
+                QuickViewRow(
+                    "今天", Icons.Default.Today, Screen.Today.route,
+                    scheme.secondaryContainer, scheme.onSecondaryContainer, onNavigate,
+                )
+                HorizontalDivider(Modifier.padding(start = 72.dp, end = 16.dp), color = scheme.outlineVariant.copy(alpha = .45f))
+                QuickViewRow(
+                    "日程", Icons.Default.CalendarToday, Screen.Time.route,
+                    scheme.primaryContainer, scheme.onPrimaryContainer, onNavigate,
+                )
+                HorizontalDivider(Modifier.padding(start = 72.dp, end = 16.dp), color = scheme.outlineVariant.copy(alpha = .45f))
+                QuickViewRow(
+                    "流程", Icons.Default.AccountTree, Screen.Workflows.route,
+                    scheme.tertiaryContainer, scheme.onTertiaryContainer, onNavigate,
+                )
+                HorizontalDivider(Modifier.padding(start = 72.dp, end = 16.dp), color = scheme.outlineVariant.copy(alpha = .45f))
+                QuickViewRow(
+                    "全部任务", Icons.Default.Checklist, Screen.AllTasks.route,
+                    scheme.secondaryContainer, scheme.onSecondaryContainer, onNavigate,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickViewRow(
+    title: String,
+    icon: ImageVector,
+    route: String,
+    iconContainer: Color,
+    iconTint: Color,
+    onNavigate: (String) -> Unit,
+) {
+    ListItem(
+        headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) },
+        leadingContent = {
+            Surface(shape = MaterialTheme.shapes.medium, color = iconContainer) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.padding(10.dp).size(22.dp),
+                    tint = iconTint,
+                )
+            }
+        },
+        trailingContent = {
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        },
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClickLabel = "打开$title") {
+            onNavigate(route)
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
+}
+
+@Composable
+private fun DirectorySectionHeader(
+    folderCount: Int,
+    rootTaskCount: Int,
+    onCreateFolder: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 24.dp, top = 20.dp, end = 16.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                "目录",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            )
+            Text(
+                "$folderCount 个目录 · $rootTaskCount 条根任务",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(onClick = onCreateFolder, modifier = Modifier.heightIn(min = 48.dp)) {
+            Icon(Icons.Default.CreateNewFolder, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("新建目录")
+        }
     }
 }
 
@@ -577,7 +812,6 @@ private fun DirectoryOverview(
     folderCount: Int,
     taskCount: Int,
     pendingCount: Int,
-    isRoot: Boolean,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -600,7 +834,7 @@ private fun DirectoryOverview(
             }
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    if (isRoot) "目录概览" else "当前目录",
+                    "当前目录",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                 )

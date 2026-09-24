@@ -1,0 +1,922 @@
+--------- beginning of radio
+09-24 23:10:16.558   507   507 D RILC    : Publishing android.hardware.radio.voice.IRadioVoice/slot1
+--------- beginning of kernel
+09-24 23:10:16.609     0     0 I servicemanager: Caller(pid=507,uid=1001,sid=u:r:rild:s0) Found android.hardware.radio.voice.IRadioVoice/slot1 in device VINTF manifest.
+09-24 23:10:16.612     0     0 I servicemanager: Caller(pid=507,uid=1001,sid=u:r:rild:s0) Found android.hardware.radio.voice.IRadioVoice/slot1 in device VINTF manifest.
+09-24 23:10:16.619   507   507 D RILC    : Publishing android.hardware.radio.ims.IRadioIms/slot1
+09-24 23:10:16.677     0     0 I servicemanager: Caller(pid=507,uid=1001,sid=u:r:rild:s0) Found android.hardware.radio.ims.IRadioIms/slot1 in device VINTF manifest.
+09-24 23:10:16.680     0     0 I servicemanager: Caller(pid=507,uid=1001,sid=u:r:rild:s0) Found android.hardware.radio.ims.IRadioIms/slot1 in device VINTF manifest.
+09-24 23:10:16.670   507   507 D RILC    : Publishing android.hardware.radio.ims.media.IImsMedia/default
+09-24 23:10:16.703     0     0 I servicemanager: Caller(pid=507,uid=1001,sid=u:r:rild:s0) Found android.hardware.radio.ims.media.IImsMedia/default in device VINTF manifest.
+09-24 23:10:16.735     0     0 I servicemanager: Caller(pid=507,uid=1001,sid=u:r:rild:s0) Found android.hardware.radio.ims.media.IImsMedia/default in device VINTF manifest.
+09-24 23:10:16.754     0     0 I servicemanager: Caller(pid=507,uid=1001,sid=u:r:rild:s0) Found android.hardware.radio.modem.IRadioModem/slot1 in device VINTF manifest.
+--------- beginning of main
+09-24 23:10:16.710   499   499 V MediaUtils: physMem: 2592722944
+09-24 23:10:16.720   507   507 D RILC    : Publishing android.hardware.radio.modem.IRadioModem/slot1
+09-24 23:10:16.781     0     0 I servicemanager: Caller(pid=507,uid=1001,sid=u:r:rild:s0) Found android.hardware.radio.modem.IRadioModem/slot1 in device VINTF manifest.
+09-24 23:10:16.782     0     0 I servicemanager: Service 'android.hardware.radio.modem.IRadioModem/slot1' originally registered from PID 507 but it is being registered again from PID 507. Bad state? Late death notification? Multiple instances installed?
+09-24 23:10:16.783     0     0 I BpBinder: onLastStrongRef automatically unlinking death recipients:
+09-24 23:10:16.793   507   507 D RILC    : Publishing android.hardware.radio.sim.IRadioSim/slot1
+09-24 23:10:16.826     0     0 I servicemanager: Caller(pid=507,uid=1001,sid=u:r:rild:s0) Found android.hardware.radio.sim.IRadioSim/slot1 in device VINTF manifest.
+09-24 23:10:16.836   507   507 D RILC    : registerService: OemHook is enabled = true
+09-24 23:10:16.866     0     0 I servicemanager: Caller(pid=507,uid=1001,sid=u:r:rild:s0) Found android.hardware.radio.sim.IRadioSim/slot1 in device VINTF manifest.
+09-24 23:10:16.866     0     0 I servicemanager: Service 'android.hardware.radio.sim.IRadioSim/slot1' originally registered from PID 507 but it is being registered again from PID 507. Bad state? Late death notification? Multiple instances installed?
+09-24 23:10:16.867     0     0 I BpBinder: onLastStrongRef automatically unlinking death recipients:
+09-24 23:10:16.869   507   507 I RILC    : RILHIDL called registerService
+09-24 23:10:16.869   507   507 D RILC    : Entry registerConfigService
+09-24 23:10:16.870   507   507 D RILC    : registerConfigService: starting V1_2::IConfigRadio default
+09-24 23:10:16.949     0     0 I servicemanager: Caller(pid=507,uid=1001,sid=u:r:rild:s0) Found android.hardware.radio.config.IRadioConfig/default in device VINTF manifest.
+09-24 23:10:16.923   507   507 D RILC    : registerConfigService addService: status 0
+09-24 23:10:16.924   507   507 D RIL_SAP : registerService: starting ISap slot1 for slotId 0
+09-24 23:10:16.937   507   534 E RILC    : radioStateChangedInd: radioService[0]->mRadioIndication == NULL
+09-24 23:10:16.937   507   534 E RILC    : simStatusChangedInd: radioService[0]->mRadioIndication == NULL
+09-24 23:10:16.938   507   534 D AT      : AT> ATE0Q0V1
+09-24 23:10:16.941   507   536 D AT      : AT< OK
+09-24 23:10:16.922   499   499 V MediaUtils: requested limit: 134217728
+09-24 23:10:16.955   499   499 I libc    : malloc_limit: Allocation limit enabled, max size 134217728 bytes
+09-24 23:10:17.007     0     0 I servicemanager: Caller(pid=507,uid=1001,sid=u:r:rild:s0) Could not find android.hardware.radio.sap.ISap/slot1 in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 23:10:17.007   507   507 E RIL_SAP : failed to register sapService for instance android.hardware.radio.sap.ISap/slot1, status -3
+09-24 23:10:17.008   507   507 D RILD    : RIL_Init RIL_register completed
+09-24 23:10:17.008   507   507 D RILD    : RIL_register_socket completed
+09-24 23:10:17.169   502   502 I ServiceManagerCppClient: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:10:17.265   507   534 D RIL     : query_ctec. current: 0x76b65d915b0c, preferred: 0x76b65d915b08
+09-24 23:10:17.266   507   534 D AT      : AT> AT+CTEC?
+09-24 23:10:17.267   507   536 D AT      : AT< +CTEC: 2,201
+09-24 23:10:17.268   507   536 D AT      : AT< OK
+09-24 23:10:17.281   507   534 D RIL     : Response: +CTEC: 2,201
+09-24 23:10:17.281   507   534 D RIL     : line remaining after int: 201
+09-24 23:10:17.282   507   534 D RIL     : query_supported_techs
+09-24 23:10:17.282   507   534 D AT      : AT> AT+CTEC=?
+09-24 23:10:17.293   507   536 D AT      : AT< +CTEC: 0,1,5,6
+09-24 23:10:17.319   507   536 D AT      : AT< OK
+09-24 23:10:17.373   507   534 I RIL     : Found Multimode Modem. Supported techs mask: 00000063. Current tech: 2
+09-24 23:10:17.374   507   534 D AT      : AT> ATE0Q0V1
+09-24 23:10:17.375   507   536 D AT      : AT< OK
+09-24 23:10:17.392   507   534 D AT      : AT> ATS0=0
+09-24 23:10:17.394   507   536 D AT      : AT< OK
+09-24 23:10:17.401   507   534 D AT      : AT> AT+CMEE=1
+09-24 23:10:17.436   507   536 D AT      : AT< OK
+09-24 23:10:17.481   507   534 D AT      : AT> AT+CREG=2
+09-24 23:10:17.493   507   536 D AT      : AT< OK
+09-24 23:10:17.519   507   534 D AT      : AT> AT+CGREG=1
+09-24 23:10:17.529   507   536 D AT      : AT< OK
+09-24 23:10:17.573   507   534 D AT      : AT> AT+CCWA=1
+09-24 23:10:17.574   507   536 D AT      : AT< OK
+09-24 23:10:17.585   507   534 D AT      : AT> AT+CMOD=0
+09-24 23:10:17.597   507   536 D AT      : AT< OK
+09-24 23:10:17.609   507   534 D AT      : AT> AT+CMUT=0
+09-24 23:10:17.620   507   536 D AT      : AT< OK
+09-24 23:10:17.633   380   380 D AndroidRuntime: >>>>>> START com.android.internal.os.ZygoteInit uid 0 <<<<<<
+--------- beginning of events
+09-24 23:10:17.635   380   380 I boot_progress_start: 142059
+09-24 23:10:17.649   507   534 D AT      : AT> AT+CSSN=0,1
+09-24 23:10:17.661   507   536 D AT      : AT< OK
+09-24 23:10:17.662   507   534 D AT      : AT> AT+COLP=0
+09-24 23:10:17.685   507   536 D AT      : AT< OK
+09-24 23:10:17.686   507   534 D AT      : AT> AT+CSCS="HEX"
+09-24 23:10:17.694   507   536 D AT      : AT< OK
+09-24 23:10:17.695   507   534 D AT      : AT> AT+CUSD=1
+09-24 23:10:17.705   507   536 D AT      : AT< OK
+09-24 23:10:17.713   507   534 D AT      : AT> AT+CGEREP=1,0
+09-24 23:10:17.719   507   536 D AT      : AT< OK
+09-24 23:10:17.720   507   534 D AT      : AT> AT+CMGF=0
+09-24 23:10:17.742   507   536 D AT      : AT< OK
+09-24 23:10:17.743   507   534 D AT      : AT> AT+CFUN?
+09-24 23:10:17.753   507   536 D AT      : AT< +CFUN: 0
+09-24 23:10:17.753   507   536 D AT      : AT< OK
+09-24 23:10:17.822   427   427 I FastMixerState: sMaxFastTracks = 8
+09-24 23:10:17.891   499   499 D AudioPowerUsage: AudioPowerUsage
+09-24 23:10:17.965   499   499 D AudioAnalytics: AudioAnalytics
+09-24 23:10:17.968   499   499 D MediaMetricsService: MediaMetricsService
+09-24 23:10:18.918   427   427 D audioserver: main: starting
+09-24 23:10:18.918   427   427 V MediaUtils: physMem: 2592722944
+09-24 23:10:18.919   427   427 V MediaUtils: requested limit: 518544580
+09-24 23:10:18.978   427   427 I libc    : malloc_limit: Allocation limit enabled, max size 518544580 bytes
+09-24 23:10:19.083   380   380 I AndroidRuntime: Using default boot image
+09-24 23:10:19.093   380   380 I AndroidRuntime: Leaving lock profiling enabled
+09-24 23:10:19.342   427   427 D audio_utils::mutex: get_enable_flag: mutex_priority_inheritance: true
+09-24 23:10:19.445   380   380 I zygote64: option[0]=-Xzygote
+09-24 23:10:19.446   380   380 I zygote64: option[1]=exit
+09-24 23:10:19.446   380   380 I zygote64: option[2]=vfprintf
+09-24 23:10:19.446   380   380 I zygote64: option[3]=sensitiveThread
+09-24 23:10:19.447   380   380 I zygote64: option[4]=-verbose:gc
+09-24 23:10:19.447   380   380 I zygote64: option[5]=-XX:PerfettoHprof=true
+09-24 23:10:19.447   380   380 I zygote64: option[6]=-XX:PerfettoJavaHeapStackProf=true
+09-24 23:10:19.448   380   380 I zygote64: option[7]=-Xprimaryzygote
+09-24 23:10:19.460   380   380 I zygote64: option[8]=-Xms8m
+09-24 23:10:19.461   380   380 I zygote64: option[9]=-Xmx576m
+09-24 23:10:19.462   380   380 I zygote64: option[10]=-XX:HeapGrowthLimit=192m
+09-24 23:10:19.463   380   380 I zygote64: option[11]=-XX:HeapMinFree=512k
+09-24 23:10:19.464   380   380 I zygote64: option[12]=-XX:HeapMaxFree=8m
+09-24 23:10:19.476   380   380 I zygote64: option[13]=-XX:HeapTargetUtilization=0.75
+09-24 23:10:19.477   380   380 I zygote64: option[14]=-Xusejit:true
+09-24 23:10:19.478   380   380 I zygote64: option[15]=-Xjitsaveprofilinginfo
+09-24 23:10:19.479   380   380 I zygote64: option[16]=-XMadviseWillNeedVdexFileSize:104857600
+09-24 23:10:19.480   380   380 I zygote64: option[17]=-XMadviseWillNeedOdexFileSize:104857600
+09-24 23:10:19.492   380   380 I zygote64: option[18]=-XMadviseWillNeedArtFileSize:4294967295
+09-24 23:10:19.493   380   380 I zygote64: option[19]=-XjdwpOptions:suspend=n,server=y
+09-24 23:10:19.494   380   380 I zygote64: option[20]=-XjdwpProvider:default
+09-24 23:10:19.495   380   380 I zygote64: option[21]=-Xopaque-jni-ids:swapable
+09-24 23:10:19.495   380   380 I zygote64: option[22]=-Xlockprofthreshold:500
+09-24 23:10:19.495   380   380 I zygote64: option[23]=-Xcompiler-option
+09-24 23:10:19.496   380   380 I zygote64: option[24]=--instruction-set-variant=x86_64
+09-24 23:10:19.509   380   380 I zygote64: option[25]=-Xcompiler-option
+09-24 23:10:19.510   380   380 I zygote64: option[26]=--instruction-set-features=default
+09-24 23:10:19.510   380   380 I zygote64: option[27]=-Xcompiler-option
+09-24 23:10:19.511   380   380 I zygote64: option[28]=--generate-mini-debug-info
+09-24 23:10:19.512   380   380 I zygote64: option[29]=-Ximage-compiler-option
+09-24 23:10:19.533   380   380 I zygote64: option[30]=--runtime-arg
+09-24 23:10:19.533   380   380 I zygote64: option[31]=-Ximage-compiler-option
+09-24 23:10:19.533   380   380 I zygote64: option[32]=-Xms64m
+09-24 23:10:19.534   380   380 I zygote64: option[33]=-Ximage-compiler-option
+09-24 23:10:19.534   380   380 I zygote64: option[34]=--runtime-arg
+09-24 23:10:19.534   380   380 I zygote64: option[35]=-Ximage-compiler-option
+09-24 23:10:19.535   380   380 I zygote64: option[36]=-Xmx64m
+09-24 23:10:19.535   380   380 I zygote64: option[37]=-Ximage-compiler-option
+09-24 23:10:19.536   380   380 I zygote64: option[38]=--dirty-image-objects=/system/etc/dirty-image-objects
+09-24 23:10:19.536   380   380 I zygote64: option[39]=-Ximage-compiler-option
+09-24 23:10:19.549   380   380 I zygote64: option[40]=--instruction-set-variant=x86_64
+09-24 23:10:19.549   380   380 I zygote64: option[41]=-Ximage-compiler-option
+09-24 23:10:19.549   380   380 I zygote64: option[42]=--instruction-set-features=default
+09-24 23:10:19.550   380   380 I zygote64: option[43]=-Ximage-compiler-option
+09-24 23:10:19.550   380   380 I zygote64: option[44]=--generate-mini-debug-info
+09-24 23:10:19.550   380   380 I zygote64: option[45]=-Duser.locale=en-US
+09-24 23:10:19.551   380   380 I zygote64: option[46]=-XX:NativeBridge=libndk_translation.so
+09-24 23:10:19.551   380   380 I zygote64: option[47]=--cpu-abilist=x86_64,arm64-v8a
+09-24 23:10:19.551   380   380 I zygote64: option[48]=-Xcore-platform-api-policy:just-warn
+09-24 23:10:19.552   380   380 I zygote64: option[49]=-Xfingerprint:google/sdk_gphone64_x86_64/emu64xa:15/AE3A.240806.043/12960925:userdebug/dev-keys
+09-24 23:10:19.666   496   496 I main_extractorservice: enable media.extractor memory limits
+09-24 23:10:19.697   496   496 V MediaUtils: physMem: 2592722944
+09-24 23:10:19.698   496   496 V MediaUtils: requested limit: 518544580
+09-24 23:10:19.700   496   496 I libc    : malloc_limit: Allocation limit enabled, max size 518544580 bytes
+09-24 23:10:19.903   427   427 W FactoryHal: hasAidlHalService android.hardware.audio.core.IModule/default: false
+09-24 23:10:19.933     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.core.IModule/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 23:10:19.980   496   496 W mediaextractor: Could not read additional policy file '/vendor/etc/seccomp_policy/mediaextractor.policy'
+09-24 23:10:19.982   429   460 W GpuWork : Failed to attach bpf program to power/gpu_work_period tracepoint [2(No such file or directory)]
+09-24 23:10:20.027   496   496 W mediaextractor: libminijail[496]: failed to get path of fd 5: No such file or directory
+09-24 23:10:20.042   496   496 W mediaextractor: libminijail[496]: allowing syscall: socket
+09-24 23:10:20.043   496   496 W mediaextractor: libminijail[496]: allowing syscall: connect
+09-24 23:10:20.044   496   496 W mediaextractor: libminijail[496]: allowing syscall: fcntl
+09-24 23:10:20.057   496   496 W mediaextractor: libminijail[496]: allowing syscall: writev
+09-24 23:10:20.074   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(48): syscall readlinkat redefined here
+09-24 23:10:20.075   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(43): previous definition here
+09-24 23:10:20.089   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(54): syscall gettid redefined here
+09-24 23:10:20.090   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(51): previous definition here
+09-24 23:10:20.106   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(1): syscall read redefined here
+09-24 23:10:20.106   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(19): previous definition here
+09-24 23:10:20.107   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(2): syscall write redefined here
+09-24 23:10:20.133   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(6): previous definition here
+09-24 23:10:20.134   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(3): syscall exit redefined here
+09-24 23:10:20.134   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(29): previous definition here
+09-24 23:10:20.135   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(4): syscall rt_sigreturn redefined here
+09-24 23:10:20.136   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(31): previous definition here
+09-24 23:10:20.149   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(5): syscall exit_group redefined here
+09-24 23:10:20.150   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(30): previous definition here
+09-24 23:10:20.151   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(6): syscall clock_gettime redefined here
+09-24 23:10:20.161   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(15): previous definition here
+09-24 23:10:20.162   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(8): syscall futex redefined here
+09-24 23:10:20.163   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(4): previous definition here
+09-24 23:10:20.164   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(9): syscall getrandom redefined here
+09-24 23:10:20.169   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(36): previous definition here
+09-24 23:10:20.170   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(10): syscall getpid redefined here
+09-24 23:10:20.171   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(53): previous definition here
+09-24 23:10:20.185   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(11): syscall gettid redefined here
+09-24 23:10:20.186   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(51): previous definition here
+09-24 23:10:20.187   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(14): syscall openat redefined here
+09-24 23:10:20.188   380   380 I zygote64: Core platform API reporting enabled, enforcing=false
+09-24 23:10:20.188   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(13): previous definition here
+09-24 23:10:20.201   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(15): syscall dup redefined here
+09-24 23:10:20.207   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(9): previous definition here
+09-24 23:10:20.207   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(16): syscall close redefined here
+09-24 23:10:20.217   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(8): previous definition here
+09-24 23:10:20.218   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(17): syscall lseek redefined here
+09-24 23:10:20.219   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(20): previous definition here
+09-24 23:10:20.219   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(18): syscall getdents64 redefined here
+09-24 23:10:20.229   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(42): previous definition here
+09-24 23:10:20.230   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(19): syscall faccessat redefined here
+09-24 23:10:20.230   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(32): previous definition here
+09-24 23:10:20.231   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(29): syscall prctl redefined here
+09-24 23:10:20.241   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(5): previous definition here
+09-24 23:10:20.273   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(30): syscall madvise redefined here
+09-24 23:10:20.273   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(12): previous definition here
+09-24 23:10:20.274   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(31): syscall mprotect redefined here
+09-24 23:10:20.275   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(18): previous definition here
+09-24 23:10:20.276   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(32): syscall munmap redefined here
+09-24 23:10:20.289   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(10): previous definition here
+09-24 23:10:20.290   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(33): syscall getuid redefined here
+09-24 23:10:20.290   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(22): previous definition here
+09-24 23:10:20.291   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(34): syscall fstat redefined here
+09-24 23:10:20.291   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(25): previous definition here
+09-24 23:10:20.292   496   496 W mediaextractor: libminijail[496]: compile_file: /apex/com.android.media/etc/seccomp_policy/crash_dump.x86_64.policy(35): syscall mmap redefined here
+09-24 23:10:20.297   496   496 W mediaextractor: libminijail[496]: compile_file: <fd>(11): previous definition here
+09-24 23:10:20.311   496   496 W mediaextractor: libminijail[496]: logging seccomp filter failures
+09-24 23:10:20.315   380   380 I zygote64: Using CollectorTypeCMC GC.
+09-24 23:10:20.613     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.effect.IFactory/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 23:10:20.625   427   427 W FactoryHal: hasAidlHalService android.hardware.audio.effect.IFactory/default: false
+09-24 23:10:20.655   169   169 I hwservicemanager: getTransport: Cannot find entry android.hardware.audio.effect@7.1::IEffectsFactory/default in either framework or device VINTF manifest.
+09-24 23:10:20.668   508   508 I mediaswcodec: media swcodec service starting
+09-24 23:10:20.855   508   508 W mediaswcodec: Could not read additional policy file '/vendor/etc/seccomp_policy/mediaswcodec.policy'
+09-24 23:10:20.880   508   508 W mediaswcodec: libminijail[508]: failed to get path of fd 5: No such file or directory
+09-24 23:10:20.889   508   508 W mediaswcodec: libminijail[508]: allowing syscall: socket
+09-24 23:10:20.890   508   508 W mediaswcodec: libminijail[508]: allowing syscall: connect
+09-24 23:10:20.891   508   508 W mediaswcodec: libminijail[508]: allowing syscall: fcntl
+09-24 23:10:20.892   508   508 W mediaswcodec: libminijail[508]: allowing syscall: writev
+09-24 23:10:20.910   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(20): nonexistent syscall 'getuid32'
+09-24 23:10:20.911   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(26): nonexistent syscall 'mmap2'
+09-24 23:10:20.921   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(28): nonexistent syscall 'fstat64'
+09-24 23:10:20.922   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(31): nonexistent syscall 'stat64'
+09-24 23:10:20.923   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(32): nonexistent syscall 'statfs64'
+09-24 23:10:20.924   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(34): nonexistent syscall 'fstatat64'
+09-24 23:10:20.949   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(39): nonexistent syscall '_llseek'
+09-24 23:10:20.950   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(48): nonexistent syscall 'ugetrlimit'
+09-24 23:10:20.951   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(51): nonexistent syscall '_llseek'
+09-24 23:10:20.951   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(52): nonexistent syscall 'fstatfs64'
+09-24 23:10:20.958   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(64): nonexistent syscall 'ftruncate64'
+09-24 23:10:20.959   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(70): syscall gettid redefined here
+09-24 23:10:20.964   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(67): previous definition here
+09-24 23:10:21.033   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(1): syscall read redefined here
+09-24 23:10:21.034   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(15): previous definition here
+09-24 23:10:21.034   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(2): syscall write redefined here
+09-24 23:10:21.035   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(58): previous definition here
+09-24 23:10:21.035   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(3): syscall exit redefined here
+09-24 23:10:21.036   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(45): previous definition here
+09-24 23:10:21.062   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(4): syscall rt_sigreturn redefined here
+09-24 23:10:21.063   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(47): previous definition here
+09-24 23:10:21.086   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(5): syscall exit_group redefined here
+09-24 23:10:21.087   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(46): previous definition here
+09-24 23:10:21.088   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(8): syscall futex redefined here
+09-24 23:10:21.105   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(36): previous definition here
+09-24 23:10:21.106   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(10): syscall getpid redefined here
+09-24 23:10:21.106   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(69): previous definition here
+09-24 23:10:21.107   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(11): syscall gettid redefined here
+09-24 23:10:21.108   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(67): previous definition here
+09-24 23:10:21.173   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(14): syscall openat redefined here
+09-24 23:10:21.173   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(18): previous definition here
+09-24 23:10:21.174   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(15): syscall dup redefined here
+09-24 23:10:21.175   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(56): previous definition here
+09-24 23:10:21.175   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(16): syscall close redefined here
+09-24 23:10:21.176   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(25): previous definition here
+09-24 23:10:21.245   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(17): syscall lseek redefined here
+09-24 23:10:21.246   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(40): previous definition here
+09-24 23:10:21.247   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(19): syscall faccessat redefined here
+09-24 23:10:21.247   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(38): previous definition here
+09-24 23:10:21.248   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(29): syscall prctl redefined here
+09-24 23:10:21.278   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(17): previous definition here
+09-24 23:10:21.301   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(30): syscall madvise redefined here
+09-24 23:10:21.302   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(33): previous definition here
+09-24 23:10:21.302   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(31): syscall mprotect redefined here
+09-24 23:10:21.303   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(16): previous definition here
+09-24 23:10:21.333   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(32): syscall munmap redefined here
+09-24 23:10:21.333   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(37): previous definition here
+09-24 23:10:21.334   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(33): syscall getuid redefined here
+09-24 23:10:21.335   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(21): previous definition here
+09-24 23:10:21.335   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(34): syscall fstat redefined here
+09-24 23:10:21.336   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(29): previous definition here
+09-24 23:10:21.358   508   508 W mediaswcodec: libminijail[508]: compile_file: /apex/com.android.media.swcodec/etc/seccomp_policy/crash_dump.x86_64.policy(35): syscall mmap redefined here
+09-24 23:10:21.358   508   508 W mediaswcodec: libminijail[508]: compile_file: <fd>(27): previous definition here
+09-24 23:10:21.398   508   508 W mediaswcodec: libminijail[508]: logging seccomp filter failures
+09-24 23:10:21.478   508   508 I CodecServiceRegistrant: Creating software Codec2 service...
+09-24 23:10:21.534   508   508 D C2Store : Default ION heapmask = -1
+09-24 23:10:21.535   508   508 D C2Store : Default ION flags = 0
+09-24 23:10:21.535   508   508 D C2Store : Default ION align = 0
+09-24 23:10:21.721   508   508 I CodecServiceRegistrant: Preferred Codec2 HIDL store is set to "default".
+09-24 23:10:21.833     0     0 I servicemanager: Caller(pid=508,uid=1046,sid=u:r:mediaswcodec:s0) Found android.hardware.media.c2.IComponentStore/software in framework VINTF manifest.
+09-24 23:10:21.867     0     0 I servicemanager: Caller(pid=508,uid=1046,sid=u:r:mediaswcodec:s0) Found android.hardware.media.c2.IComponentStore/software in framework VINTF manifest.
+09-24 23:10:21.948   508   508 I HidlServiceManagement: Registered android.hardware.media.c2@1.2::IComponentStore/software
+09-24 23:10:21.955   508   508 I CodecServiceRegistrant: Software Codec2 service created and registered.
+09-24 23:10:22.226   502   502 W ServiceManagerCppClient: Service package_native didn't start. Returning NULL
+--------- beginning of system
+09-24 23:10:22.228   502   502 E storaged: getService package_native failed
+09-24 23:10:22.487   502   502 W BpBinder: Linking to death on android.hardware.health.IHealth but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+09-24 23:10:22.571   502   546 I storaged: storaged: Start
+09-24 23:10:22.699   502   546 I ServiceManagerCppClient: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:10:24.219   427   427 W FactoryHal: hasAidlHalService android.hardware.audio.effect.IFactory/default: false
+09-24 23:10:24.226   169   169 I hwservicemanager: getTransport: Cannot find entry android.hardware.audio.effect@7.1::IEffectsFactory/default in either framework or device VINTF manifest.
+09-24 23:10:24.239     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.effect.IFactory/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 23:10:24.319   427   427 W FactoryHal: hasAidlHalService android.hardware.audio.core.IModule/default: false
+09-24 23:10:24.350     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.core.IModule/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 23:10:24.638   496   496 I MediaExtractorFactory: plugin directory not present (/system/lib64/extractors)
+09-24 23:10:24.639   496   496 I MediaExtractorFactory: plugin directory not present (/system_ext/lib64/extractors)
+09-24 23:10:24.770   427   427 W BatteryNotifier: batterystats service unavailable!
+09-24 23:10:25.158   427   427 D audioserver: main: AudioFlinger created
+09-24 23:10:25.185   499   539 I ServiceManagerCppClient: Waiting for service 'package_native' on '/dev/binder'...
+09-24 23:10:25.382   427   427 E AudioFlinger: Function: getAudioPolicyConfig Line: 2493 Failed 
+09-24 23:10:26.769   427   427 D APM_EngineLoader: Loaded engine from libaudiopolicyenginedefault.so
+09-24 23:10:26.771   427   427 D APM::AudioPolicyEngine/Base: loadAudioPolicyEngineConfig: No configuration found, using default matching phone experience.
+09-24 23:10:27.578   427   427 W APM::AudioPolicyEngine/Base: processParsingResult: No configuration of AUDIO_STREAM_CALL_ASSISTANT found, using default volume configuration
+09-24 23:10:27.758   427   427 W DeviceHalHidl: getSoundDoseInterface service android.hardware.audio.sounddose.ISoundDoseFactory/default doesn't exist
+09-24 23:10:27.759   427   427 W MelReporter: activateHalSoundDoseComputation: HAL cannot provide sound dose interface for module primary
+09-24 23:10:27.759   427   427 W AudioFlinger: loadHwModule() sound dose reporting is not available
+09-24 23:10:27.813   502   546 W ServiceManagerCppClient: Service package_native didn't start. Returning NULL
+09-24 23:10:27.813   502   546 E storaged: getService package_native failed
+09-24 23:10:27.969     0     0 W healthd : battery l=100 v=5000 t=25.0 h=2 st=2 c=900000 fc=3000000 cc=10 chg=a
+09-24 23:10:28.050   427   427 I AudioFlinger: loadHwModule() Loaded primary audio interface, handle 10
+09-24 23:10:28.601   427   427 I AudioFlinger: openOutput() this 0x796935410010, module 10 Device AUDIO_DEVICE_OUT_SPEAKER, @:, SamplingRate 48000, Format 0x000001, Channels 0x3, flags 0x2
+09-24 23:10:28.868   427   427 I AudioFlinger: operator(): Using 3000 ms as standby time
+09-24 23:10:28.981   427   427 I AudioFlinger: HAL output buffer size 1088 frames, normal sink buffer size 1088 frames
+09-24 23:10:29.051   427   427 W FactoryHal: hasAidlHalService android.hardware.audio.effect.IFactory/default: false
+09-24 23:10:29.082     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.effect.IFactory/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 23:10:29.102   169   169 I hwservicemanager: getTransport: Cannot find entry android.hardware.audio.effect@7.1::IEffectsFactory/default in either framework or device VINTF manifest.
+09-24 23:10:29.168   427   427 W FactoryHal: hasAidlHalService android.hardware.audio.core.IModule/default: false
+09-24 23:10:29.198     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.core.IModule/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 23:10:30.166   499   539 W ServiceManagerCppClient: Service package_native didn't start. Returning NULL
+09-24 23:10:30.166   499   539 E ServiceUtilities: getInfo: Cannot find package_native
+09-24 23:10:30.315   427   427 I BufferProvider: found effect "Multichannel Downmix To Stereo" from The Android Open Source Project
+09-24 23:10:30.386   427   427 D AudioFlinger: Failed to add event callback
+09-24 23:10:30.403   427   561 I AudioFlinger: AudioFlinger's thread 0x796a9b1208e0 tid=561 ready to run
+09-24 23:10:30.499   427   561 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 23:10:30.509   427   561 D AudioFlinger: ro.audio.silent is ignored since no output device is set
+09-24 23:10:30.518   383   423 E android.hardware.audio@7.1-impl.ranchu: getPresentationPosition:510 failure: Result::INVALID_STATE
+09-24 23:10:31.093   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.095   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:31.095   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.096   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:31.096   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.137   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:31.138   427   427 V APM_AudioPolicyManager: checkAndSetVolume cannot set volume group 4 volume when is not requested for comm
+09-24 23:10:31.138   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.139   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:31.139   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.139   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:31.140   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.228   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:31.287   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.287   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:31.288   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.314   427   427 V APM_AudioPolicyManager: computeVolume volume source 9, index 0,  devices 0x2, compute internal 1 
+09-24 23:10:31.380     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Found android.system.suspend.ISystemSuspend/default in framework VINTF manifest.
+09-24 23:10:31.457   427   561 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 23:10:31.458   427   561 D AudioFlinger: ro.audio.silent is ignored since no output device is set
+09-24 23:10:31.487   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.487   427   427 V APM_AudioPolicyManager: computeVolume volume source 10, index 0,  devices 0x2, compute internal 1 
+09-24 23:10:31.542   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.553   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:31.554   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.554   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:31.555   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.555   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:31.556   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.573   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:31.574   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x2, need get index 0
+09-24 23:10:31.575   427   427 V APM_AudioPolicyManager: computeVolume volume source 23, index 0,  devices 0x2, compute internal 1 
+09-24 23:10:34.226   427   427 W AudioFlinger: moveEffects() AUDIO_SESSION_OUTPUT_MIX not found in orphans, checking other mix
+09-24 23:10:34.227   427   427 W AudioFlinger: moveEffects() bad srcIo 0
+09-24 23:10:34.228   427   427 V APM_AudioPolicyManager: selectOutputForMusicEffects selected output 13
+09-24 23:10:34.238   427   427 V APM_AudioPolicyManager: setOutputDevices caller onNewAudioModulesAvailableInt[[portId:1][io:13, primary output]] device {AUDIO_DEVICE_OUT_SPEAKER, @:} delayMs 0
+09-24 23:10:34.239   427   427 V APM_AudioPolicyManager: setOutputDevices caller onNewAudioModulesAvailableInt[[portId:1][io:13, primary output]] prevDevice {AUDIO_DEVICE_OUT_SPEAKER, @:}
+09-24 23:10:34.271   427   427 I APM::AudioPolicyEngine: getDevicesForStrategyInt no device found for strategy 9
+09-24 23:10:34.286   427   427 V APM_AudioPolicyManager: setOutputDevices caller onNewAudioModulesAvailableInt[[portId:1][io:13, primary output]] changing device to {AUDIO_DEVICE_OUT_SPEAKER, @:}
+09-24 23:10:34.475   427   561 D AudioFlinger: updateHalSupportedLatencyModes_l: thread(13) status -38 supported latency modes: { }
+09-24 23:10:34.566   427   427 V APM_AudioPolicyManager: setOutputDevices() AF::createAudioPatch returned 0 patchHandle 12 num_sources 1 num_sinks 1
+09-24 23:10:34.626   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:34.626   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:34.627   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:34.627   427   427 V APM_AudioPolicyManager: checkAndSetVolume cannot set volume group 4 volume when is not requested for comm
+09-24 23:10:34.628   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:34.666   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:34.666   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:34.667   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:34.667   427   427 V APM_AudioPolicyManager: computeVolume volume source 9, index 0,  devices 0x2, compute internal 1 
+09-24 23:10:34.668   427   427 V APM_AudioPolicyManager: computeVolume volume source 10, index 0,  devices 0x2, compute internal 1 
+09-24 23:10:34.697   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:34.697   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:34.698   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:34.698   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:34.699   427   427 V APM_AudioPolicyManager: computeVolume volume source 23, index 0,  devices 0x2, compute internal 1 
+09-24 23:10:34.725   427   427 I AudioFlinger: openOutput() this 0x796935410010, module 10 Device AUDIO_DEVICE_OUT_TELEPHONY_TX, @:, SamplingRate 48000, Format 0x000001, Channels 0x3, flags 0
+09-24 23:10:34.825   427   427 I AudioFlinger: HAL output buffer size 1088 frames, normal sink buffer size 1088 frames
+09-24 23:10:34.879   427   427 D AudioFlinger: Failed to add event callback
+09-24 23:10:34.947   427   570 I AudioFlinger: AudioFlinger's thread 0x796a9b05b8e0 tid=570 ready to run
+09-24 23:10:34.981   427   570 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 23:10:34.982   427   570 D AudioFlinger: ro.audio.silent is ignored since no output device is set
+09-24 23:10:34.994   383   423 E android.hardware.audio@7.1-impl.ranchu: getPresentationPosition:510 failure: Result::INVALID_STATE
+09-24 23:10:35.081   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.082   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.082   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.082   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.083   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.083   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.084   427   427 V APM_AudioPolicyManager: checkAndSetVolume cannot set volume group 4 volume when is not requested for comm
+09-24 23:10:35.125   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.125   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.126   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.126   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.127   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.127   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.127   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.128   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.128   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.149   427   427 V APM_AudioPolicyManager: computeVolume volume source 9, index 0,  devices 0x10000, compute internal 1 
+09-24 23:10:35.181   427   570 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 23:10:35.182   427   570 D AudioFlinger: ro.audio.silent is ignored since no output device is set
+09-24 23:10:35.200   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.241   427   427 V APM_AudioPolicyManager: computeVolume volume source 10, index 0,  devices 0x10000, compute internal 1 
+09-24 23:10:35.403   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.418   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.430   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.431   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.431   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.432   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.485   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.485   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.486   427   427 V APM_AudioPolicyManager: checkAndSetVolume if deviceTypes is change from none to device 0x10000, need get index 0
+09-24 23:10:35.487   427   427 V APM_AudioPolicyManager: computeVolume volume source 23, index 0,  devices 0x10000, compute internal 1 
+09-24 23:10:35.587   427   427 V APM_AudioPolicyManager: selectOutputForMusicEffects selected output 13
+09-24 23:10:35.597   427   427 V APM_AudioPolicyManager: setOutputDevices caller onNewAudioModulesAvailableInt[[portId:4][io:21, telephony_tx]] device {AUDIO_DEVICE_OUT_TELEPHONY_TX, @:} delayMs 0
+09-24 23:10:35.599   427   427 V APM_AudioPolicyManager: setOutputDevices caller onNewAudioModulesAvailableInt[[portId:4][io:21, telephony_tx]] prevDevice {AUDIO_DEVICE_OUT_TELEPHONY_TX, @:}
+09-24 23:10:35.612   427   427 V APM_AudioPolicyManager: setOutputDevices caller onNewAudioModulesAvailableInt[[portId:4][io:21, telephony_tx]] changing device to {AUDIO_DEVICE_OUT_TELEPHONY_TX, @:}
+09-24 23:10:35.658   427   570 D AudioFlinger: updateHalSupportedLatencyModes_l: thread(21) status -38 supported latency modes: { }
+09-24 23:10:35.704   427   427 V APM_AudioPolicyManager: setOutputDevices() AF::createAudioPatch returned 0 patchHandle 20 num_sources 1 num_sinks 1
+09-24 23:10:35.738   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.740   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.754   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.755   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.756   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.913   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.914   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.914   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.915   427   427 V APM_AudioPolicyManager: computeVolume volume source 9, index 0,  devices 0x10000, compute internal 1 
+09-24 23:10:35.915   427   427 V APM_AudioPolicyManager: computeVolume volume source 10, index 0,  devices 0x10000, compute internal 1 
+09-24 23:10:35.916   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:35.956   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:36.032   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:36.102   427   427 E APM_AudioPolicyManager: invalid volume index range
+09-24 23:10:36.104   427   427 V APM_AudioPolicyManager: computeVolume volume source 23, index 0,  devices 0x10000, compute internal 1 
+09-24 23:10:36.701   427   572 I AudioFlinger: AudioFlinger's thread 0x796a97a29b88 tid=572 ready to run
+09-24 23:10:36.725   427   572 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 23:10:36.784   500   500 I mediaserver: ServiceManager: 0x7d7c583cff60
+09-24 23:10:36.903   500   500 W BatteryNotifier: batterystats service unavailable!
+09-24 23:10:36.978   500   500 W BatteryNotifier: batterystats service unavailable!
+09-24 23:10:37.191   427   572 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 23:10:37.473   427   576 I AudioFlinger: AudioFlinger's thread 0x796a97a29b88 tid=576 ready to run
+09-24 23:10:37.501   427   576 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 23:10:37.893   427   576 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 23:10:38.070   427   579 I AudioFlinger: AudioFlinger's thread 0x796a97a29b88 tid=579 ready to run
+09-24 23:10:38.085   427   579 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 23:10:38.394   427   579 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 23:10:38.607   383   423 I r_submix: adev_open(name=audio_hw_if)
+09-24 23:10:38.668   427   427 W DeviceHalHidl: getSoundDoseInterface service android.hardware.audio.sounddose.ISoundDoseFactory/default doesn't exist
+09-24 23:10:38.733   427   427 W MelReporter: activateHalSoundDoseComputation: HAL cannot provide sound dose interface for module r_submix
+09-24 23:10:38.733   427   427 W AudioFlinger: loadHwModule() sound dose reporting is not available
+09-24 23:10:38.734   383   423 I r_submix: adev_init_check()
+09-24 23:10:38.790   427   427 I AudioFlinger: loadHwModule() Loaded r_submix audio interface, handle 18
+09-24 23:10:38.831   383   423 D r_submix: adev_open_input_stream(addr=0)
+09-24 23:10:38.849   383   423 I r_submix: adev_open_input_stream(): about to create pipe at index 9, rate 48000, pipe size 4096
+09-24 23:10:38.849   383   423 D r_submix: submix_audio_device_create_pipe_l(addr=0, idx=9)
+09-24 23:10:38.850   383   423 D r_submix:   now using address 0 for route 9
+09-24 23:10:39.049   427   581 I AudioFlinger: AudioFlinger's thread 0x796a97a29b88 tid=581 ready to run
+09-24 23:10:39.052   383   423 I r_submix: in_standby()
+09-24 23:10:39.255   427   581 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 23:10:39.281   383   423 I r_submix: in_standby()
+09-24 23:10:39.295   427   581 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 23:10:39.304   427   427 W libutils.threads: Thread (this=0x796a97a29b88): getTid() is undefined before run()
+09-24 23:10:39.310   383   423 D r_submix: adev_close_input_stream()
+09-24 23:10:39.312   383   423 D r_submix: submix_audio_device_release_pipe_l(idx=9) addr=0
+09-24 23:10:39.317   383   423 D r_submix: submix_audio_device_destroy_pipe_l(): pipe destroyed
+09-24 23:10:39.631   427   427 W DeviceHalHidl: getSoundDoseInterface service android.hardware.audio.sounddose.ISoundDoseFactory/default doesn't exist
+09-24 23:10:39.653   427   427 W MelReporter: activateHalSoundDoseComputation: HAL cannot provide sound dose interface for module bluetooth
+09-24 23:10:39.653   427   427 W AudioFlinger: loadHwModule() sound dose reporting is not available
+09-24 23:10:39.741   427   427 I AudioFlinger: loadHwModule() Loaded bluetooth audio interface, handle 26
+09-24 23:10:39.951   427   427 W FactoryHal: hasAidlHalService android.hardware.audio.effect.IFactory/default: false
+09-24 23:10:39.955   169   169 I hwservicemanager: getTransport: Cannot find entry android.hardware.audio.effect@7.1::IEffectsFactory/default in either framework or device VINTF manifest.
+09-24 23:10:39.981     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.effect.IFactory/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 23:10:39.990   427   427 W FactoryHal: hasAidlHalService android.hardware.audio.core.IModule/default: false
+09-24 23:10:40.020     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.core.IModule/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 23:10:40.246     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:40.361     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:40.349   168   583 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:40.394     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:41.381   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:41.415     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:41.503     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:41.510     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:41.477   168   586 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:42.509   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:42.550     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:42.567   168   587 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:42.598     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:42.600     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:43.535   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:43.581     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:43.653     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:43.656     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:43.623   168   588 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:44.602   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:44.645     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:44.685   168   591 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:44.709     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:44.718     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:44.844   380   380 D nativeloader: InitDefaultPublicLibraries for_preload=1: libandroid.so:libaaudio.so:libamidi.so:libbinder_ndk.so:libc.so:libcamera2ndk.so:libdl.so:libEGL.so:libGLESv1_CM.so:libGLESv2.so:libGLESv3.so:libicu.so:libicui18n.so:libicuuc.so:libjnigraphics.so:liblog.so:libmediandk.so:libm.so:libnativehelper.so:libnativewindow.so:libOpenMAXAL.so:libOpenSLES.so:libRS.so:libstdc++.so:libsync.so:libvulkan.so:libwebviewchromium_plat_support.so:libz.so
+09-24 23:10:45.625   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:45.658     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:45.687   168   592 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:45.718     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:45.719     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:46.685   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:46.720     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:46.735   168   593 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:46.766     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:46.789     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:47.717   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:47.766     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:47.780   168   596 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:47.810     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:47.835     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:48.385   380   380 D nativeloader: Load libicu_jni.so using APEX ns com_android_art for caller /apex/com.android.art/javalib/core-oj.jar: ok
+09-24 23:10:48.749   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:48.785     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:48.799   168   597 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:48.830     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:48.832     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:48.853   380   380 D zygote64: u_setTimeZoneFilesDirectory("/apex/com.android.tzdata/etc/tz/versioned/8/icu") succeeded. 
+09-24 23:10:48.878   380   380 D zygote64: I18n APEX ICU file found: /apex/com.android.i18n/etc/icu/icudt75l.dat
+09-24 23:10:49.363   486   486 I cameraserver: ServiceManager: 0x76e26d2bd160
+09-24 23:10:49.465   486   486 I CameraService: CameraService started (pid=486)
+09-24 23:10:49.467   486   486 I CameraService: CameraService process starting
+09-24 23:10:49.498     0     0 W cameraserver[486]: memfd_create() called without MFD_EXEC or MFD_NOEXEC_SEAL set
+09-24 23:10:49.526   486   486 W BatteryNotifier: batterystats service unavailable!
+09-24 23:10:49.541   486   486 W BatteryNotifier: batterystats service unavailable!
+09-24 23:10:49.765   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:49.802   168   600 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:49.805     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:49.824     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:49.835     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:49.878   380   380 D nativeloader: Load libjavacore.so using APEX ns com_android_art for caller /apex/com.android.art/javalib/core-oj.jar: ok
+09-24 23:10:50.251   486   486 I cameraserver: Connecting to new camera provider: android.hardware.camera.provider.ICameraProvider/internal/0, isRemote? 1
+09-24 23:10:50.346   486   486 W cameraserver: AIBinder_linkToDeath is being called with a non-null cookie and no onUnlink callback set. This might not be intended. AIBinder_DeathRecipient_setOnUnlinked should be called first.
+09-24 23:10:50.361   486   486 W BpBinder: Linking to death on android.hardware.camera.provider.ICameraProvider but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+09-24 23:10:50.492   486   486 I CameraProviderManager: Enumerating new camera device: device@1.1/internal/1
+09-24 23:10:50.502   380   380 D nativeloader: Load libopenjdk.so using APEX ns com_android_art for caller /apex/com.android.art/javalib/core-oj.jar: ok
+09-24 23:10:50.518   390   390 W StreamConfigurationMap: StreamConfigurationMap: ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS missing, maxResolution ? true!
+09-24 23:10:50.519   390   390 W StreamConfigurationMap: StreamConfigurationMap: ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS missing!, max resolution ? true
+09-24 23:10:50.519   390   390 W StreamConfigurationMap: StreamConfigurationMap: ANDROID_SCALER_AVAILABLE_STALL_DURATIONS missing! maxResolution ? true
+09-24 23:10:50.549   390   390 W EmulatedCameraDeviceInfo: InitializeControlDefaults: No available post RAW boost! Setting default!
+09-24 23:10:50.835   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:51.053   390   390 I EmulatedCameraDeviceHwlImpl: Create: Created EmulatedCameraDeviceHwlImpl for camera 1
+09-24 23:10:51.125   390   390 D GCH_Utils: FindLibraryPaths: Unable to open directory /vendor/lib64/camera/capture_sessions/ (No such file or directory)
+09-24 23:10:51.133   390   390 I GCH_CameraDevice: Create: Created a camera device for public(1)
+09-24 23:10:51.064     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:51.422   168   604 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:51.449     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:51.455     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:51.542   486   486 W CameraProviderManager: Camera provider android.hardware.camera.provider.ICameraProvider/internal/0 says an unknown camera device@1.1/internal/1 now has torch status 1. Curious.
+09-24 23:10:51.571   486   486 I CameraProviderManager: Camera provider android.hardware.camera.provider.ICameraProvider/internal/0 ready with 1 camera devices
+09-24 23:10:51.740   486   486 I cameraserver: Connecting to new camera provider: android.hardware.camera.provider.ICameraProvider/internal/1, isRemote? 1
+09-24 23:10:52.092   380   380 I snet_event_log: [200284993,-1,]
+09-24 23:10:52.106   486   486 W cameraserver: AIBinder_linkToDeath is being called with a non-null cookie and no onUnlink callback set. This might not be intended. AIBinder_DeathRecipient_setOnUnlinked should be called first.
+09-24 23:10:52.134   380   380 I zygote64: Using memfd for future sealing
+09-24 23:10:52.193   486   486 W BpBinder: Linking to death on android.hardware.camera.provider.ICameraProvider but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+09-24 23:10:52.241   486   486 I CameraProviderManager: Camera provider android.hardware.camera.provider.ICameraProvider/internal/1 ready with 0 camera devices
+09-24 23:10:52.301   380   380 W zygote64: Unexpected CPU variant for x86: x86_64.
+09-24 23:10:52.301   380   380 W zygote64: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, goldmont-without-sha-xsaves, tremont, kabylake, default
+09-24 23:10:52.306   486   486 D CameraProviderManager: tryGetService: AIDL Camera provider HAL 'android.hardware.camera.provider.ICameraProvider/virtual/0' is not actually available
+09-24 23:10:52.307   486   486 W CameraProviderManager: tryToInitializeAidlProviderLocked: AIDL Camera provider HAL 'android.hardware.camera.provider.ICameraProvider/virtual/0' is not actually available
+09-24 23:10:52.335   486   486 I CameraService: onDeviceStatusChanged: Status changed for cameraId=1, newStatus=1
+09-24 23:10:52.346   486   486 I CameraService: onDeviceStatusChanged: Unknown camera ID 1, a new camera is added
+09-24 23:10:52.464   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:52.521     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:52.549   168   606 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:52.551     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:52.593     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:53.319   486   486 I HidlServiceManagement: Registered android.frameworks.cameraservice.service@2.2::ICameraService/default
+09-24 23:10:53.395     0     0 I servicemanager: Caller(pid=486,uid=1047,sid=u:r:cameraserver:s0) Found android.frameworks.cameraservice.service.ICameraService/default in framework VINTF manifest.
+09-24 23:10:53.526     0     0 I servicemanager: Caller(pid=486,uid=1047,sid=u:r:cameraserver:s0) Found android.frameworks.cameraservice.service.ICameraService/default in framework VINTF manifest.
+09-24 23:10:53.516   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:53.521   486   486 I CameraService: CameraService pinged cameraservice proxy
+09-24 23:10:53.569     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:53.568   486   486 I cameraserver: ServiceManager: 0x76e26d2bd160 done instantiate
+09-24 23:10:53.578   168   611 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:53.599     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:53.610     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:53.626   486   486 W CameraProviderManager: addAidlProviderLocked: Camera provider HAL with name 'android.hardware.camera.provider.ICameraProvider/internal/1' already registered
+09-24 23:10:53.701   486   612 W CameraProviderManager: addAidlProviderLocked: Camera provider HAL with name 'android.hardware.camera.provider.ICameraProvider/internal/0' already registered
+09-24 23:10:53.963   526   526 I BootAnimation: boot animation disabled
+09-24 23:10:54.569   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:54.605     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:54.597   168   614 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:54.626     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:54.630     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:55.530     0     0 I init    : Service 'bootanim' (pid 526) exited with status 0 oneshot service took 44.896000 seconds in background
+09-24 23:10:55.531     0     0 I init    : Sending signal 9 to service 'bootanim' (pid 526) process group...
+09-24 23:10:55.577   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:55.610     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:55.616     0     0 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_1003/pid_526
+09-24 23:10:55.709     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:55.712     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:55.678   168   615 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:56.590   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:56.623     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:56.653   168   616 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:56.680     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:56.686     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:57.633   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:57.686     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:57.685   168   617 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:57.713     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:57.717     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:58.667   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:58.709     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:58.697   168   618 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:58.727     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:58.729     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:10:59.422   380   605 I zygote64: Background verification of 159 classes from boot classpath took 2.078s
+09-24 23:10:59.714     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:10:59.681   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:10:59.712   168   619 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:10:59.741     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:10:59.752     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:00.182   380   380 D nativeloader: Load libstats_jni.so using APEX ns com_android_os_statsd for caller /apex/com.android.os.statsd/javalib/framework-statsd.jar: ok
+09-24 23:11:00.209   380   380 I boot_progress_preload_start: 184632
+09-24 23:11:00.210   380   380 D Zygote  : begin preload
+09-24 23:11:00.211   380   380 I Zygote  : Calling ZygoteHooks.beginPreload()
+09-24 23:11:00.700   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:00.748     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:00.776     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:00.756   168   620 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:00.797     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:01.788   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:01.829     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:01.821   168   621 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:01.851     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:01.855     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:02.783   431   497 D RenderEngine: Shader cache generated 122 shaders in 52364.398438 ms
+09-24 23:11:02.808   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:02.842     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:02.833   168   622 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:02.861     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:02.865     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:03.282   380   380 V Zygote64Timing: BeginPreload took to complete: 3071ms
+09-24 23:11:03.285   380   380 I Zygote  : Preloading classes...
+09-24 23:11:03.518   380   380 W Zygote  : Class not found for preloading: android.app.PendingIntent$$ExternalSyntheticLambda3
+09-24 23:11:03.812   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:03.846     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:03.831   168   623 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:03.862     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:03.863     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:04.174   380   380 D nativeloader: Load libjavacrypto.so using APEX ns com_android_conscrypt for caller /apex/com.android.conscrypt/javalib/conscrypt.jar: ok
+09-24 23:11:04.539   380   380 I Typeface: Preloading /system/fonts/Roboto-Regular.ttf
+09-24 23:11:04.546   380   380 I Typeface: Preloading /system/fonts/RobotoStatic-Regular.ttf
+09-24 23:11:04.554   380   380 I SystemFonts: Loading font config from /system/etc/fonts.xml
+09-24 23:11:04.827   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:04.865     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:04.857   168   624 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:04.886     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:04.890     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:05.683   380   380 E ActivityRecognitionHardware: activity_recognition HAL is deprecated. class_init is effectively a no-op
+09-24 23:11:05.839   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:05.877     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:05.869   168   625 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:05.895     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:05.901     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:06.848   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:06.886     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:06.877   168   626 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:06.907     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:06.909     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:07.116   380   607 I zygote64: Background concurrent mark compact GC freed 5097KB AllocSpace bytes, 18(448KB) LOS objects, 49% free, 5087KB/10174KB, paused 11.990ms,13.559ms total 808.211ms
+09-24 23:11:07.865   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:07.898     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:07.883   168   627 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:07.913     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:07.915     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:08.880   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:08.914     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:08.931   168   628 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:08.961     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:08.963     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:09.189   380   607 I zygote64: Background concurrent mark compact GC freed 3696KB AllocSpace bytes, 2(36KB) LOS objects, 49% free, 6807KB/13MB, paused 2.652ms,8.336ms total 711.257ms
+09-24 23:11:09.913   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:09.948     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:09.970     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:09.973     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:09.941   168   629 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:10.166   380   380 D nativeloader: Load libmedia_jni.so using system ns (caller=/system/framework/framework.jar!classes2.dex): ok
+09-24 23:11:10.170   380   380 D MtpDeviceJNI: register_android_mtp_MtpDevice
+09-24 23:11:10.347   380   380 D nativeloader: Load libsoundpool.so using system ns (caller=/system/framework/framework.jar!classes2.dex): ok
+09-24 23:11:10.379   380   380 D nativeloader: Load libaudioeffect_jni.so using system ns (caller=/system/framework/framework.jar!classes2.dex): ok
+09-24 23:11:10.570   380   380 D nativeloader: Load librtp_jni.so using system ns (caller=/system/framework/voip-common.jar): ok
+09-24 23:11:10.578   380   380 I zygote64: Thread[1,tid=380,Native,Thread*=0x71d235ce2be0,peer=0x14000c60,"main"] recursive attempt to load library "librtp_jni.so"
+09-24 23:11:10.764   380   380 D nativeloader: Load libvintf_jni.so using system ns (caller=/system/framework/framework.jar!classes3.dex): ok
+09-24 23:11:10.929   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:10.963     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:10.979     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:10.983     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:10.951   168   630 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:11.200   380   380 D nativeloader: Load librs_jni.so using system ns (caller=/system/framework/framework.jar!classes3.dex): ok
+09-24 23:11:11.942   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:11.975     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:11.969   168   631 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:11.998     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:12.001     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:12.320   380   380 W Zygote  : Class not found for preloading: android.window.ImeOnBackInvokedDispatcher$$ExternalSyntheticLambda0
+09-24 23:11:12.335   380   380 W Zygote  : Class not found for preloading: android.window.WindowOnBackInvokedDispatcher$OnBackInvokedCallbackWrapper$CallbackRef
+09-24 23:11:12.363   380   380 W zygote64: Core platform API violation: Llibcore/io/Memory;->peekLong(JZ)J from Lcom/android/framework/protobuf/UnsafeUtil; using reflection
+09-24 23:11:12.364   380   380 W zygote64: Core platform API violation: Llibcore/io/Memory;->pokeLong(JJZ)V from Lcom/android/framework/protobuf/UnsafeUtil; using reflection
+09-24 23:11:12.364   380   380 W zygote64: Core platform API violation: Llibcore/io/Memory;->pokeInt(JIZ)V from Lcom/android/framework/protobuf/UnsafeUtil; using reflection
+09-24 23:11:12.366   380   380 W zygote64: Core platform API violation: Llibcore/io/Memory;->peekInt(JZ)I from Lcom/android/framework/protobuf/UnsafeUtil; using reflection
+09-24 23:11:12.366   380   380 W zygote64: Core platform API violation: Llibcore/io/Memory;->pokeByte(JB)V from Lcom/android/framework/protobuf/UnsafeUtil; using reflection
+09-24 23:11:12.370   380   380 W zygote64: Core platform API violation: Llibcore/io/Memory;->peekByte(J)B from Lcom/android/framework/protobuf/UnsafeUtil; using reflection
+09-24 23:11:12.371   380   380 W zygote64: Core platform API violation: Llibcore/io/Memory;->pokeByteArray(J[BII)V from Lcom/android/framework/protobuf/UnsafeUtil; using reflection
+09-24 23:11:12.371   380   380 W zygote64: Core platform API violation: Llibcore/io/Memory;->peekByteArray(J[BII)V from Lcom/android/framework/protobuf/UnsafeUtil; using reflection
+09-24 23:11:12.955   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:12.989     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:12.972   168   632 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:13.003     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:13.009     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:13.259   380   380 W OverlayConfig: partition_order.xml does not exist.
+09-24 23:11:13.960   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:14.000     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:13.985   168   633 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:14.015     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:14.018     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:14.975   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:15.009     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:14.997   168   635 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:15.023     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:15.029     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:15.682   636   636 W idmap2  : failed to create idmap
+09-24 23:11:15.980   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:16.017     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:16.003   168   637 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:16.033     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:16.036     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:16.329   380   380 D nativeloader: Load libframework-connectivity-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity.jar: ok
+09-24 23:11:16.962   380   380 W Zygote  : Class not found for preloading: sun.util.locale.BaseLocale$Key-IA
+09-24 23:11:16.994   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:17.027     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:17.059     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:17.033   168   638 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:17.043   380   380 I Zygote  : ...preloaded 17758 classes in 13757ms.
+09-24 23:11:17.044   380   380 V Zygote64Timing: PreloadClasses took to complete: 13761ms
+09-24 23:11:17.070     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:17.146   380   380 D nativeloader: InitApexLibraries:
+09-24 23:11:17.146   380   380 D nativeloader:   com_android_art: libnativehelper.so
+09-24 23:11:17.146   380   380 D nativeloader:   com_android_i18n: libicui18n.so:libicuuc.so:libicu.so
+09-24 23:11:17.146   380   380 D nativeloader:   com_android_neuralnetworks: libneuralnetworks.so
+09-24 23:11:17.147   380   380 D nativeloader: InitDefaultPublicLibraries for_preload=0: libandroid.so:libaaudio.so:libamidi.so:libbinder_ndk.so:libc.so:libcamera2ndk.so:libclang_rt.hwasan-aarch64-android.so:libdl.so:libEGL.so:libGLESv1_CM.so:libGLESv2.so:libGLESv3.so:libjnigraphics.so:liblog.so:libmediandk.so:libm.so:libnativewindow.so:libOpenMAXAL.so:libOpenSLES.so:libRS.so:libstdc++.so:libsync.so:libvulkan.so:libwebviewchromium_plat_support.so:libz.so
+09-24 23:11:17.150   380   380 D nativeloader: Configuring clns-shared-1 for other apk /system/framework/android.hidl.base-V1.0-java.jar. target_sdk_version=35, uses_libraries=, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:17.154   380   380 D nativeloader: InitExtendedPublicLibraries: 
+09-24 23:11:17.178   380   380 I nativeloader: InitVendorPublicLibraries skipped: Failed to read /vendor/etc/public.libraries.txt: No such file or directory
+09-24 23:11:17.179   380   380 D nativeloader: InitProductPublicLibraries: 
+09-24 23:11:17.182   380   380 D ApplicationLoaders: Created zygote-cached class loader: /system/framework/android.hidl.base-V1.0-java.jar
+09-24 23:11:17.231   380   380 D nativeloader: Configuring clns-shared-2 for other apk /system/framework/android.hidl.manager-V1.0-java.jar. target_sdk_version=35, uses_libraries=, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:17.241   380   380 D ApplicationLoaders: Created zygote-cached class loader: /system/framework/android.hidl.manager-V1.0-java.jar
+09-24 23:11:17.277   380   380 D nativeloader: Configuring clns-shared-3 for other apk /system/framework/android.test.base.jar. target_sdk_version=35, uses_libraries=, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:17.286   380   380 D ApplicationLoaders: Created zygote-cached class loader: /system/framework/android.test.base.jar
+09-24 23:11:17.370   380   380 D nativeloader: Configuring clns-shared-4 for other apk /system/framework/org.apache.http.legacy.jar. target_sdk_version=35, uses_libraries=, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:17.393   380   380 D ApplicationLoaders: Created zygote-cached class loader: /system/framework/org.apache.http.legacy.jar
+09-24 23:11:17.465   380   380 D nativeloader: Configuring clns-shared-5 for other apk /system_ext/framework/androidx.window.extensions.jar. target_sdk_version=35, uses_libraries=, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:17.479   380   380 D ApplicationLoaders: Created zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+09-24 23:11:17.515   380   380 D nativeloader: Configuring clns-shared-6 for other apk /system_ext/framework/androidx.window.sidecar.jar. target_sdk_version=35, uses_libraries=, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:17.532   380   380 D ApplicationLoaders: Created zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+09-24 23:11:17.533   380   380 V Zygote64Timing: CacheNonBootClasspathClassLoaders took to complete: 484ms
+09-24 23:11:17.535   380   380 I Resources: Preloading resources...
+09-24 23:11:17.757   380   380 W Resources: Preloaded drawable resource #0x10802cb (android:drawable/dialog_background_material) that varies with configuration!!
+09-24 23:11:17.893   380   380 W Resources: Preloaded drawable resource #0x1080846 (android:drawable/progress_horizontal_material) that varies with configuration!!
+09-24 23:11:17.922   380   380 W Resources: Preloaded drawable resource #0x108084a (android:drawable/progress_indeterminate_horizontal_material) that varies with configuration!!
+09-24 23:11:18.018   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:18.051     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:18.041   168   639 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:18.071     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:18.073     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:18.056   380   380 I Resources: ...preloaded 63 resources in 520ms.
+09-24 23:11:18.124   380   380 I Resources: ...preloaded 41 resources in 65ms.
+09-24 23:11:18.125   380   380 V Zygote64Timing: PreloadResources took to complete: 592ms
+09-24 23:11:18.282   380   380 I Zygote  : Preloading shared libraries...
+09-24 23:11:18.290   380   380 D nativeloader: Load libandroid.so using system ns (caller=/system/framework/framework.jar!classes5.dex): ok
+09-24 23:11:18.298   380   380 D nativeloader: Load libjnigraphics.so using system ns (caller=/system/framework/framework.jar!classes5.dex): ok
+09-24 23:11:18.321   380   380 D nativeloader: Load libcompiler_rt.so using system ns (caller=/system/framework/framework.jar!classes5.dex): ok
+09-24 23:11:18.329   380   380 E zygote64: Unable to find pattern file or unable to map it for am
+09-24 23:11:18.383   380   380 D nativeloader: Load libwebviewchromium_loader.so using system ns (caller=/system/framework/framework.jar!classes4.dex): ok
+09-24 23:11:18.403   380   380 I Zygote  : Called ZygoteHooks.endPreload()
+09-24 23:11:18.419   380   380 I Zygote  : Installed AndroidKeyStoreProvider in 16ms.
+09-24 23:11:18.440   380   380 I Zygote  : Warmed up JCA providers in 20ms.
+09-24 23:11:18.440   380   380 D Zygote  : end preload
+09-24 23:11:18.441   380   380 I boot_progress_preload_end: 202865
+09-24 23:11:18.442   380   380 V Zygote64Timing: ZygotePreload took to complete: 18233ms
+09-24 23:11:18.826   380   380 I zygote64: Explicit concurrent mark compact GC freed 3419KB AllocSpace bytes, 4(80KB) LOS objects, 49% free, 8173KB/15MB, paused 812us,26.011ms total 383.304ms
+09-24 23:11:19.032   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:19.068     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:19.055   168   640 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:19.085     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:19.094     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:19.099   380   380 I zygote64: Explicit concurrent mark compact GC freed 324KB AllocSpace bytes, 0(0B) LOS objects, 49% free, 7913KB/15MB, paused 509us,6.105ms total 250.588ms
+09-24 23:11:19.099   380   380 V Zygote64Timing: PostZygoteInitGC took to complete: 658ms
+09-24 23:11:19.100   380   380 V Zygote64Timing: ZygoteInit took to complete: 19185ms
+09-24 23:11:19.374   380   380 W zygote64: Waiting for a thread to finish unregistering
+09-24 23:11:20.050   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:20.093     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:20.120     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:20.129     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:20.097   168   643 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:20.543   380   380 I zygote64: Background concurrent mark compact GC freed 128KB AllocSpace bytes, 0(0B) LOS objects, 49% free, 7913KB/15MB, paused 520us,26.668ms total 671.601ms
+09-24 23:11:21.064   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:21.113     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:21.111   168   646 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:21.141     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:21.156     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:21.654   380   380 D Zygote  : Forked child process 647
+09-24 23:11:21.666   380   380 I Zygote  : System server process 647 has been created
+09-24 23:11:21.768   380   380 I Zygote  : Accepting command socket connections
+09-24 23:11:22.086   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:22.158     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:22.193     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:22.182   168   655 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:22.214     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:23.144   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:23.179     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:23.186   168   656 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:23.208     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:23.230     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:24.173   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:24.210     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:24.214   168   659 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:24.245     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:24.246     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:25.198   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:25.245   168   662 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:25.241     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:25.267     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:25.278     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:26.229   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:26.274     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:26.285   168   663 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:26.308     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:26.318     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:27.261   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:27.294     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:27.290   168   666 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:27.316     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:27.323     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:28.023     0     0 W healthd : battery l=100 v=5000 t=25.0 h=2 st=2 c=900000 fc=3000000 cc=10 chg=a
+09-24 23:11:28.272   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:28.313     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:28.300   168   667 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:28.331     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:28.339     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:29.020   647   647 D nativeloader: Configuring clns-shared-7 for other apk /system/framework/com.android.location.provider.jar:/system/framework/services.jar:/apex/com.android.adservices/javalib/service-adservices.jar:/apex/com.android.adservices/javalib/service-sdksandbox.jar:/apex/com.android.appsearch/javalib/service-appsearch.jar:/apex/com.android.art/javalib/service-art.jar:/apex/com.android.compos/javalib/service-compos.jar:/apex/com.android.configinfrastructure/javalib/service-configinfrastructure.jar:/apex/com.android.healthfitness/javalib/service-healthfitness.jar:/apex/com.android.media/javalib/service-media-s.jar:/apex/com.android.ondevicepersonalization/javalib/service-ondevicepersonalization.jar:/apex/com.android.permission/javalib/service-permission.jar:/apex/com.android.rkpd/javalib/service-rkp.jar:/apex/com.android.virt/javalib/service-virtualization.jar. target_sdk_version=10000, uses_libraries=ALL, library_path=/system/lib64:/system_ext/lib64, permitted_path=/data:/mnt/expand:/system/lib64:/system_ext/lib64
+09-24 23:11:29.046   647   647 D nativeloader: InitApexLibraries:
+09-24 23:11:29.046   647   647 D nativeloader:   com_android_adservices: libhpke_jni.so:libtflite_support_classifiers_native.so
+09-24 23:11:29.046   647   647 D nativeloader:   com_android_appsearch: libicing.so
+09-24 23:11:29.046   647   647 D nativeloader:   com_android_art: libartservice.so
+09-24 23:11:29.046   647   647 D nativeloader:   com_android_btservices: libbluetooth_jni.so
+09-24 23:11:29.046   647   647 D nativeloader:   com_android_conscrypt: libjavacrypto.so
+09-24 23:11:29.046   647   647 D nativeloader:   com_android_mediaprovider: libpdfclient.so
+09-24 23:11:29.046   647   647 D nativeloader:   com_android_nfcservices: libnfc_nci_jni.so
+09-24 23:11:29.046   647   647 D nativeloader:   com_android_ondevicepersonalization: libfcp_cpp_dep_jni.so:libfcp_hpke_jni.so
+09-24 23:11:29.046   647   647 D nativeloader:   com_android_os_statsd: libstats_jni.so
+09-24 23:11:29.046   647   647 D nativeloader:   com_android_tethering: libandroid_net_connectivity_com_android_net_module_util_jni.so:libcrypto.so:libframework-connectivity-jni.so:libframework-connectivity-tiramisu-jni.so:libmainlinecronet.121.0.6167.71.so:libservice-connectivity.so:libservice-thread-jni.so:libssl.so
+09-24 23:11:29.046   647   647 D nativeloader:   com_android_uwb: libuwb_uci_jni_rust.so
+09-24 23:11:29.046   647   647 D nativeloader:   com_android_virt: libvirtualizationservice_jni.so:libvirtualmachine_jni.so
+09-24 23:11:29.197   647   647 D nativeloader: Configuring clns-shared-8 for other apk /apex/com.android.btservices/javalib/service-bluetooth.jar. target_sdk_version=35, uses_libraries=ALL, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:29.288   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:29.322     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:29.306   168   668 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:29.337     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:29.339     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:29.391   647   647 D nativeloader: Configuring clns-shared-9 for other apk /apex/com.android.devicelock/javalib/service-devicelock.jar. target_sdk_version=35, uses_libraries=ALL, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:29.488   647   647 D nativeloader: Configuring clns-shared-10 for other apk /apex/com.android.os.statsd/javalib/service-statsd.jar. target_sdk_version=35, uses_libraries=ALL, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:29.619   647   647 D nativeloader: Configuring clns-shared-11 for other apk /apex/com.android.profiling/javalib/service-profiling.jar. target_sdk_version=35, uses_libraries=ALL, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:29.760   647   647 D nativeloader: Configuring clns-shared-12 for other apk /apex/com.android.scheduling/javalib/service-scheduling.jar. target_sdk_version=35, uses_libraries=ALL, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:30.007   647   647 D nativeloader: Configuring clns-shared-13 for other apk /apex/com.android.tethering/javalib/service-connectivity.jar. target_sdk_version=35, uses_libraries=ALL, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:30.300   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:30.334     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:30.323   168   669 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:30.354     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:30.361     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:30.570   647   647 D nativeloader: Configuring clns-shared-14 for other apk /apex/com.android.uwb/javalib/service-uwb.jar. target_sdk_version=35, uses_libraries=ALL, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:31.313   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:31.347     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:31.326   647   647 D nativeloader: Configuring clns-shared-15 for other apk /apex/com.android.wifi/javalib/service-wifi.jar. target_sdk_version=35, uses_libraries=ALL, library_path=, permitted_path=/data:/mnt/expand
+09-24 23:11:31.422   168   670 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:31.432     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:31.456     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:32.344   647   647 I system_server: Using CollectorTypeCMC GC.
+09-24 23:11:32.369   647   647 W system_server: Unexpected CPU variant for x86: x86_64.
+09-24 23:11:32.369   647   647 W system_server: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, goldmont-without-sha-xsaves, tremont, kabylake, default
+09-24 23:11:32.381   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:32.415     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:32.434   647   647 W system_server: Failed to upload odrefresh metrics: Unable to open or parse metrics file /data/misc/odrefresh/odrefresh-metrics.xml (error: Error=XML_ERROR_FILE_NOT_FOUND ErrorID=3 (0x3) Line number=0: filename=/data/misc/odrefresh/odrefresh-metrics.xml)
+09-24 23:11:32.465     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:32.436   168   675 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:32.475     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:32.484   647   647 E system_server: Not starting debugger since process cannot load the jdwp agent.
+09-24 23:11:32.532   647   677 W system_server: AIBinder_linkToDeath is being called with a non-null cookie and no onUnlink callback set. This might not be intended. AIBinder_DeathRecipient_setOnUnlinked should be called first.
+09-24 23:11:32.542   647   677 W BpBinder: Linking to death on android.os.IStatsd but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+09-24 23:11:32.642   647   647 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+09-24 23:11:32.698   378   385 I ServiceManagerCppClient: Waiting for service 'statscompanion' on '/dev/binder'...
+09-24 23:11:32.745   647   647 D SystemServerTiming: InitBeforeStartServices
+09-24 23:11:32.790   647   647 I system_server_start: [1,217157,217156]
+09-24 23:11:32.804   647   647 I SystemServer: Entered the Android system server!
+09-24 23:11:32.813   647   647 I boot_progress_system_run: 217236
+09-24 23:11:33.421   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:33.459     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:33.485     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:33.460   168   686 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:33.493     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:34.438   427   427 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 23:11:34.471     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 23:11:34.495     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 168 (/system/bin/servicemanager)
+09-24 23:11:34.487   168   689 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 23:11:34.520     0     0 I servicemanager: Caller(pid=427,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 23:11:35.067     0     0 I logd    : logdr: UID=2000 GID=2000 PID=687 n tail=900 logMask=bf pid=0 start=0ns deadline=0ns

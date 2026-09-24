@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.devtodo.app.ui.WorkspaceScreenTest" tests="1" failures="0" errors="0" skipped="0" time="27.627" timestamp="2026-09-24T10:48:45" hostname="localhost">
+  <properties>
+    <property name="device" value="taskdock_api35_review(AVD) - 15" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="appStartsInDirectoryAndSmartViewsReturnToIt" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="23.246" />
+</testsuite>

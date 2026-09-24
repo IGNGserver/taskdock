@@ -1,0 +1,29 @@
+Round 3 latest-source API35 targeted attempt
+Date: 2026-09-24 (local time, Asia/Shanghai)
+AVD: taskdock_api35_review, Android 15 / API 35, emulator-5554
+Command (from apps/mobile/android):
+./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.devtodo.app.ui.WorkspaceScreenTest#allTasksScreenShowsSearchAndRootTask --console=plain
+
+Build state: compileDebugKotlin and compileDebugAndroidTestKotlin were UP-TO-DATE; the latest APKs were used. The connected task did not execute the requested test.
+
+Gradle/ddmlib result:
+Starting 0 tests on taskdock_api35_review(AVD)
+Finished 0 tests on taskdock_api35_review(AVD)
+ErrorName: UNKNOWN
+NameSpace: DdmlibAndroidDeviceController
+ErrorCode: 1
+ErrorType: TEST
+Message: Failed to install split APK(s): [/home/lvziw/项目/todo-list工具/apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk]
+Device emulator-5554 API level=1. Cannot install split APKs with API level < 21
+java.lang.IllegalArgumentException: Device emulator-5554 API level=1. Cannot install split APKs with API level < 21
+BUILD FAILED in 2m 7s
+
+Contradictory device state observed immediately afterward: `ro.build.version.sdk=35`, `sys.boot_completed` empty. package/activity/window were briefly reported as found, then again `Service ... not found`; system_server/SystemUI processes existed but the Android framework was not stable. This is an emulator boot/ADB property-fetch failure, not an app assertion failure.
+
+Captured device diagnostics:
+- api35-extended-attempt-progress.txt
+- api35-extended-attempt-final.txt
+- api35-after-alltasks-failure.txt
+- api35-final-api-level1-tail.txt
+
+The AVD was stopped normally with `adb -s emulator-5554 emu kill`. `adb devices -l` then showed no connected devices. No Android settings were changed in this attempt.

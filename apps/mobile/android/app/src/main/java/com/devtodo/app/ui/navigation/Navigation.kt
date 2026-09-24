@@ -10,9 +10,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 sealed class Screen(val route: String, val title: String, val icon: ImageVector? = null) {
     data object Today : Screen("today", "今日", Icons.Default.CalendarToday)
 
-    data object Tree : Screen("tree", "任务库", Icons.Default.Folder)
+    data object Tree : Screen("tree", "任务", Icons.Default.Folder)
 
-    data object Time : Screen("time", "计划", Icons.Default.DateRange)
+    data object Time : Screen("time", "日程", Icons.Default.DateRange)
+
+    data object Workflows : Screen("workflows", "流程")
+
+    data object AllTasks : Screen("all_tasks", "全部任务")
 
     data object More : Screen("more", "设置", Icons.Default.Settings)
 
@@ -24,5 +28,3 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
 
     data object Login : Screen("login", "登录")
 }
-
-val BottomNavScreens = listOf(Screen.Today, Screen.Tree, Screen.Time, Screen.More)

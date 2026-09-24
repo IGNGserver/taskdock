@@ -13,6 +13,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.MoreTime
@@ -43,6 +44,7 @@ fun SettingsScreen(
     onPureBlackChange: (Boolean) -> Unit,
     onNavigateToArchived: () -> Unit,
     onLogout: () -> Unit,
+    onBack: (() -> Unit)? = null,
 ) {
     val sync by viewModel.syncState.collectAsStateWithLifecycle()
     val error by viewModel.lastSyncError.collectAsStateWithLifecycle()
@@ -60,7 +62,18 @@ fun SettingsScreen(
     var queue by rememberSaveable { mutableStateOf(false) }
     var showTimezone by rememberSaveable { mutableStateOf(false) }
     WorkspaceScaffold(
-        topBar = { TopAppBar(title = { Text("设置") }, windowInsets = WindowInsets(0, 0, 0, 0)) }
+        topBar = {
+            TopAppBar(
+                title = { Text("设置") },
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                        }
+                    }
+                },
+            )
+        }
     ) { padding ->
         Column(
             Modifier.fillMaxSize()

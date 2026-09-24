@@ -1,0 +1,10 @@
+--------- beginning of crash
+09-24 21:44:43.326  1288  1288 E AndroidRuntime: FATAL EXCEPTION: main
+09-24 21:44:43.326  1288  1288 E AndroidRuntime: Process: com.android.settings, PID: 1288
+09-24 21:44:43.326  1288  1288 E AndroidRuntime: DeadSystemException: The system died; earlier logs will point to the root cause
+09-24 21:44:43.517  1231  1231 E AndroidRuntime: FATAL EXCEPTION: main
+09-24 21:44:43.517  1231  1231 E AndroidRuntime: Process: com.google.android.bluetooth, PID: 1231
+09-24 21:44:43.517  1231  1231 E AndroidRuntime: DeadSystemException: The system died; earlier logs will point to the root cause
+09-24 21:44:46.054  1265  1265 E AndroidRuntime: FATAL EXCEPTION: main
+09-24 21:44:46.054  1265  1265 E AndroidRuntime: Process: com.android.phone, PID: 1265
+09-24 21:44:46.054  1265  1265 E AndroidRuntime: DeadSystemException: The system died; earlier logs will point to the root cause

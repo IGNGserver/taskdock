@@ -1,0 +1,26 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.devtodo.app.ExampleInstrumentedTest" tests="18" failures="0" errors="0" skipped="0" time="194.002" timestamp="2026-09-24T11:33:25" hostname="localhost">
+  <properties>
+    <property name="device" value="taskdock_api35_review(AVD) - 15" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="useAppContext" classname="com.devtodo.app.ExampleInstrumentedTest" time="0.088" />
+  <testcase name="migrateV7ToV8AddsIndexesToDatabasesCreatedWithoutThem" classname="com.devtodo.app.data.local.AppDatabaseMigrationTest" time="0.022" />
+  <testcase name="migrateV3ToV5PreservesLegacyRowsAndCreatesV2Tables" classname="com.devtodo.app.data.local.AppDatabaseMigrationTest" time="0.059" />
+  <testcase name="migratesPlaintextFallbackTokenIntoEncryptedStore" classname="com.devtodo.app.data.security.SecureAuthStorageMigrationTest" time="1.145" />
+  <testcase name="migratesCapacitorRefreshTokenToCurrentStore" classname="com.devtodo.app.data.security.SecureAuthStorageMigrationTest" time="0.674" />
+  <testcase name="captureProtectsDraftAndTrimsOnlyOnCreate" classname="com.devtodo.app.ui.MaterialWorkspaceTest" time="42.415" />
+  <testcase name="longTaskKeepsBothActionsAvailableInCompactWidth" classname="com.devtodo.app.ui.MaterialWorkspaceTest" time="16.577" />
+  <testcase name="checkboxCompletesWithoutOpeningDetailAndMenuSelectsInProgress" classname="com.devtodo.app.ui.MaterialWorkspaceTest" time="14.107" />
+  <testcase name="scheduleScreenReturnsToDirectory" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="20.02" />
+  <testcase name="deletedArchivedTaskIsExcludedFromArchiveQuery" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="7.735" />
+  <testcase name="plannerShowsTodayEventsAndKeepsOlderEmptyDatesReachable" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="11.183" />
+  <testcase name="workflowsScreenReturnsToDirectory" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="6.302" />
+  <testcase name="detailProtectsDraftAcrossTabsAndBackAndSavesToRoom" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="12.666" />
+  <testcase name="directoryDrillDownAndSearchKeepTaskReachable" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="13.746" />
+  <testcase name="settingsChoicesRemainSelectableInGroupedLayout" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="6.632" />
+  <testcase name="appStartsInDirectoryAndSmartViewsReturnToIt" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="21.972" />
+  <testcase name="todayScreenReturnsToDirectory" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="4.861" />
+  <testcase name="settingsLightModeKeepsAccountSummaryVisible" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="4.743" />
+</testsuite>

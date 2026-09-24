@@ -1,0 +1,1005 @@
+--------- beginning of main
+09-24 22:29:27.068   724   772 D MediaCodecsXmlParser: parsing /vendor/etc/media_codecs_google_video.xml...
+--------- beginning of kernel
+09-24 22:29:27.081     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:27.138   724   772 D MediaCodecsXmlParser: parsing /vendor/etc/media_codecs_performance.xml...
+09-24 22:29:27.201   724   772 I MediaCodecsXmlParser: Did not find media_codecs_shaping.xml in search path
+09-24 22:29:27.209   724   772 I MediaCodecsXmlParser: Did not find media_codecs_shaping.xml in search path
+09-24 22:29:27.269   486   541 I GoldfishComponentStore: in init
+09-24 22:29:27.269   486   541 I GoldfishComponentStore: loading dll of path libcodec2_goldfish_avcdec.so
+09-24 22:29:27.314   486   541 I GoldfishComponentStore: Create()
+09-24 22:29:27.323   486   541 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:29:27.331   486   541 I GoldfishComponentStore: created interface
+09-24 22:29:27.363   486   541 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:29:27.372   486   541 I GoldfishComponentStore: created interface
+09-24 22:29:27.399   724   772 I Codec2InfoBuilder: adding type 'video/avc'
+09-24 22:29:27.664   784   784 D nativeloader: Configuring clns-shared-16 for other apk /apex/com.android.uwb/javalib/service-uwb.jar. target_sdk_version=36, uses_libraries=ALL, library_path=, permitted_path=/data:/mnt/expand
+09-24 22:29:27.740   486   541 I GoldfishComponentStore: in ~ComponentModule
+09-24 22:29:27.741   486   541 I GoldfishComponentStore: unloading dll
+09-24 22:29:27.749   486   541 I GoldfishComponentStore: in init
+09-24 22:29:27.750   486   541 I GoldfishComponentStore: loading dll of path libcodec2_goldfish_hevcdec.so
+09-24 22:29:27.781   486   541 I GoldfishComponentStore: Create()
+09-24 22:29:27.814   486   541 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:29:27.814   486   541 I GoldfishComponentStore: created interface
+09-24 22:29:27.834   486   541 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:29:27.834   486   541 I GoldfishComponentStore: created interface
+09-24 22:29:27.880   724   772 I Codec2InfoBuilder: adding type 'video/hevc'
+09-24 22:29:27.966   486   540 I GoldfishComponentStore: in init
+09-24 22:29:27.966   486   540 I GoldfishComponentStore: loading dll of path libcodec2_goldfish_vp8dec.so
+09-24 22:29:27.971   486   541 I GoldfishComponentStore: in ~ComponentModule
+09-24 22:29:27.971   486   541 I GoldfishComponentStore: unloading dll
+09-24 22:29:27.986   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:27.994   486   540 I GoldfishComponentStore: Create()
+09-24 22:29:27.995   486   540 I C2GoldfishVpxDec: platform store is 0x7603be5895a8, reflector is 0x76041e587418
+09-24 22:29:27.965     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:28.019   227   827 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:27.995     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:28.023   486   540 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:29:28.028   486   540 I GoldfishComponentStore: created interface
+09-24 22:29:28.003     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:28.038   486   540 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:29:28.038   486   540 I GoldfishComponentStore: created interface
+09-24 22:29:28.046   724   772 I Codec2InfoBuilder: adding type 'video/x-vnd.on2.vp8'
+09-24 22:29:28.074   486   826 I GoldfishComponentStore: in ~ComponentModule
+09-24 22:29:28.075   486   826 I GoldfishComponentStore: unloading dll
+09-24 22:29:28.081   486   541 I GoldfishComponentStore: in init
+09-24 22:29:28.082   486   541 I GoldfishComponentStore: loading dll of path libcodec2_goldfish_vp9dec.so
+09-24 22:29:28.094   486   541 I GoldfishComponentStore: Create()
+09-24 22:29:28.095   486   541 I C2GoldfishVpxDec: platform store is 0x7603be58c048, reflector is 0x76041e587418
+09-24 22:29:28.116   486   541 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:29:28.117   486   541 I GoldfishComponentStore: created interface
+09-24 22:29:28.126   486   541 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:29:28.127   486   541 I GoldfishComponentStore: created interface
+09-24 22:29:28.141   724   772 I Codec2InfoBuilder: adding type 'video/x-vnd.on2.vp9'
+09-24 22:29:28.191   784   784 D nativeloader: Configuring clns-shared-17 for other apk /apex/com.android.uwb/javalib/service-ranging.jar. target_sdk_version=36, uses_libraries=ALL, library_path=, permitted_path=/data:/mnt/expand
+09-24 22:29:28.197   486   826 I GoldfishComponentStore: in ~ComponentModule
+09-24 22:29:28.198   486   826 I GoldfishComponentStore: unloading dll
+09-24 22:29:28.353   724   772 I Codec2InfoBuilder: adding type 'audio/mp4a-latm'
+09-24 22:29:28.529   724   772 I Codec2InfoBuilder: adding type 'audio/mp4a-latm'
+09-24 22:29:28.644   724   772 I Codec2InfoBuilder: adding type 'audio/3gpp'
+09-24 22:29:28.743   724   772 I Codec2InfoBuilder: adding type 'audio/3gpp'
+09-24 22:29:28.825   724   772 I Codec2InfoBuilder: adding type 'audio/amr-wb'
+09-24 22:29:28.889   724   772 I Codec2InfoBuilder: adding type 'audio/amr-wb'
+09-24 22:29:28.929   736   828 I isAtLeastRelease: device sdk 36, minsdk 36
+09-24 22:29:28.930   736   828 I isAtLeastRelease: active codename REL, to match Baklava
+09-24 22:29:28.930   736   828 D C2SoftApvDec: isAtLeastRelease(36, Baklava) says enable: yes
+09-24 22:29:29.000   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:28.979     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:29.028     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:29.073   227   829 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:29.051     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:29.127   724   772 I Codec2InfoBuilder: adding type 'video/apv'
+09-24 22:29:29.200   736   780 I isAtLeastRelease: device sdk 36, minsdk 36
+09-24 22:29:29.200   736   780 I isAtLeastRelease: active codename REL, to match Baklava
+09-24 22:29:29.201   736   780 D C2SoftApvEnc: isAtLeastRelease(36, Baklava) says enable: yes
+09-24 22:29:29.337   724   772 I Codec2InfoBuilder: adding type 'video/apv'
+09-24 22:29:29.522   784   784 D nativeloader: Configuring clns-shared-18 for other apk /apex/com.android.wifi/javalib/service-wifi.jar. target_sdk_version=36, uses_libraries=ALL, library_path=, permitted_path=/data:/mnt/expand
+09-24 22:29:29.643   724   772 I Codec2InfoBuilder: adding type 'video/av01'
+09-24 22:29:30.156   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:30.165   724   772 I Codec2InfoBuilder: adding type 'video/av01'
+09-24 22:29:30.176     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:30.220   227   831 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:30.194     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:30.198     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:30.459   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:29:30.534   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:29:30.559   724   772 I Codec2InfoBuilder: adding type 'video/av01'
+09-24 22:29:30.603   736   828 D C2SoftAomEnc: Given level 0 does not cover current configuration: adjusting to 9000
+09-24 22:29:30.817   784   784 I system_server: Using CollectorTypeCMC GC.
+09-24 22:29:30.838   724   772 I Codec2InfoBuilder: adding type 'video/avc'
+09-24 22:29:30.893   784   784 W system_server: Unexpected CPU variant for x86: x86_64.
+09-24 22:29:30.893   784   784 W system_server: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, goldmont-without-sha-xsaves, tremont, kabylake, alderlake, default
+09-24 22:29:30.942   784   784 W system_server: Failed to upload odrefresh metrics: Unable to open or parse metrics file /data/misc/odrefresh/odrefresh-metrics.xml (error: Error=XML_ERROR_FILE_NOT_FOUND ErrorID=3 (0x3) Line number=0: filename=/data/misc/odrefresh/odrefresh-metrics.xml)
+09-24 22:29:30.946   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--004) for field values of struct #Param::CoreIndex(F-12004)
+09-24 22:29:30.947   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:29:30.974   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--004) for field values of struct #Param::CoreIndex(F-12004)
+09-24 22:29:30.975   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:29:30.995   784   784 E system_server: Not starting debugger since process cannot load the jdwp agent.
+09-24 22:29:31.001   724   772 I Codec2InfoBuilder: adding type 'video/avc'
+09-24 22:29:31.029   736   780 D C2SoftAvcEnc: Given level 0 does not cover current configuration: adjusting to 5000
+09-24 22:29:31.122   784   784 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+09-24 22:29:31.137   724   772 I Codec2InfoBuilder: adding type 'audio/flac'
+09-24 22:29:31.213   724   772 I Codec2InfoBuilder: adding type 'audio/flac'
+09-24 22:29:31.220   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:31.199     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:31.258   227   843 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:31.234     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:31.247     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:31.280   724   772 I Codec2InfoBuilder: adding type 'audio/g711-alaw'
+--------- beginning of system
+09-24 22:29:31.326   784   784 D SystemServerTiming: InitBeforeStartServices
+09-24 22:29:31.364   724   772 I Codec2InfoBuilder: adding type 'audio/g711-mlaw'
+--------- beginning of events
+09-24 22:29:31.386   784   784 I system_server_start: [1,285267,285267]
+09-24 22:29:31.411   784   784 I SystemServer: Entered the Android system server!
+09-24 22:29:31.417   784   784 I boot_progress_system_run: 285392
+09-24 22:29:31.461   724   772 D Codec2InfoBuilder: codec entry for 'c2.android.gsm.decoder' is disabled
+09-24 22:29:31.471   784   784 I SystemServerInitThreadPool: Creating instance with 4 threads
+09-24 22:29:31.479   784   784 I SystemServer: Reading configuration...
+09-24 22:29:31.479   784   784 D SystemServerTiming: ReadingSystemConfig
+09-24 22:29:31.498   784   784 V SystemServerTiming: ReadingSystemConfig took to complete: 19ms
+09-24 22:29:31.515   724   772 I Codec2InfoBuilder: adding type 'video/3gpp'
+09-24 22:29:31.516   784   845 D SystemServerTimingAsync: InitThreadPoolExec:ReadingSystemConfig
+09-24 22:29:31.522   784   845 D SystemServerInitThreadPool: Started executing ReadingSystemConfig
+09-24 22:29:31.585   784   845 I SystemConfig: Reading permissions from /system/etc/sysconfig/hiddenapi-package-whitelist.xml
+09-24 22:29:31.630   784   845 I SystemConfig: Reading permissions from /system/etc/sysconfig/preinstalled-packages-asl-files.xml
+09-24 22:29:31.655   736   828 D C2SoftH263Enc: Given level 3004 does not cover current configuration: adjusting to 3003
+09-24 22:29:31.658   784   845 I SystemConfig: Reading permissions from /system/etc/sysconfig/package-shareduid-allowlist.xml
+09-24 22:29:31.677   736   828 D C2SoftH263Enc: Given level 3004 does not cover current configuration: adjusting to 3003
+09-24 22:29:31.682   784   845 I SystemConfig: Reading permissions from /system/etc/sysconfig/initial-package-stopped-states.xml
+09-24 22:29:31.694   724   772 I Codec2InfoBuilder: adding type 'video/3gpp'
+09-24 22:29:31.711   784   845 I SystemConfig: Reading permissions from /system/etc/sysconfig/preinstalled-packages-platform.xml
+09-24 22:29:31.726   736   828 D C2SoftH263Enc: Given level 0 does not cover current configuration: adjusting to 3003
+09-24 22:29:31.731   784   845 I SystemConfig: Reading permissions from /system/etc/sysconfig/framework-sysconfig.xml
+09-24 22:29:31.762   784   845 I SystemConfig: Reading permissions from /system/etc/sysconfig/enhanced-confirmation.xml
+09-24 22:29:31.775   784   845 I SystemConfig: Reading permissions from /system/etc/sysconfig/preinstalled-packages-strict-signature.xml
+09-24 22:29:31.799   784   845 I SystemConfig: Reading permissions from /system/etc/sysconfig/preinstalled-packages-platform-generic-system.xml
+09-24 22:29:31.819   784   845 I SystemConfig: Reading permissions from /system/etc/sysconfig/preinstalled-packages-platform-handheld-system.xml
+09-24 22:29:31.845   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/android.test.mock.xml
+09-24 22:29:31.859   724   772 I Codec2InfoBuilder: adding type 'video/hevc'
+09-24 22:29:31.873   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.intentresolver.xml
+09-24 22:29:31.905   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.media.remotedisplay.xml
+09-24 22:29:31.927   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/javax.obex.xml
+09-24 22:29:31.943   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/org.apache.http.legacy.xml
+09-24 22:29:31.959   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/android.software.credentials.xml
+09-24 22:29:31.978   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--004) for field values of struct #Param::CoreIndex(F-12004)
+09-24 22:29:31.996   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:29:32.011   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/android.test.runner.xml
+09-24 22:29:32.027   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.future.usb.accessory.xml
+09-24 22:29:32.029   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--004) for field values of struct #Param::CoreIndex(F-12004)
+09-24 22:29:32.039   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:29:32.047   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/android.software.window_magnification.xml
+09-24 22:29:32.056   724   772 I Codec2InfoBuilder: adding type 'video/hevc'
+09-24 22:29:32.066   736   804 D C2SoftHevcEnc: Given level 0 does not cover current configuration: adjusting to 6000
+09-24 22:29:32.081   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/android.software.webview.xml
+09-24 22:29:32.095   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/privapp-permissions-platform.xml
+09-24 22:29:32.196   724   772 I Codec2InfoBuilder: adding type 'audio/mpeg'
+09-24 22:29:32.245   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:32.223     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:32.281   227   846 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:32.251     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:32.259     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:32.296   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.nfc_extras.xml
+09-24 22:29:32.325   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.location.provider.xml
+09-24 22:29:32.346   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.mediadrm.signer.xml
+09-24 22:29:32.369   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/privapp-permissions-google.xml
+09-24 22:29:32.384   724   772 D Codec2InfoBuilder: codec entry for 'c2.android.mpeg2.decoder' is disabled
+09-24 22:29:32.396   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/android.test.base.xml
+09-24 22:29:32.424   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/android.software.live_wallpaper.xml
+09-24 22:29:32.441   724   772 I Codec2InfoBuilder: adding type 'video/mp4v-es'
+09-24 22:29:32.466   784   845 I SystemConfig: Reading permissions from /system/etc/permissions/platform.xml
+09-24 22:29:32.518   784   845 I AconfigFlags: Using new flag storage
+09-24 22:29:32.575   724   772 I Codec2InfoBuilder: adding type 'video/mp4v-es'
+09-24 22:29:32.602   736   780 D C2SoftMpeg4Enc: Given level 0 does not cover current configuration: adjusting to 4003
+09-24 22:29:32.601   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.identity_credential.xml
+09-24 22:29:32.618   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.uwb.xml
+09-24 22:29:32.635   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.vulkan.version.xml
+09-24 22:29:32.647   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.keystore.app_attest_key.xml
+09-24 22:29:32.693   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.camera.concurrent.prebuilt.xml
+09-24 22:29:32.706   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.vulkan.level.xml
+09-24 22:29:32.742   724   772 I Codec2InfoBuilder: adding type 'audio/opus'
+09-24 22:29:32.749   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.camera.flash-autofocus.prebuilt.xml
+09-24 22:29:32.767   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.bluetooth_le.xml
+09-24 22:29:32.797   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/handheld_core_hardware.xml
+09-24 22:29:32.818   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.software.vulkan.deqp.level.xml
+09-24 22:29:32.849   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.hardware_keystore.xml
+09-24 22:29:32.858   724   772 I Codec2InfoBuilder: adding type 'audio/opus'
+09-24 22:29:32.873   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.software.opengles.deqp.level.xml
+09-24 22:29:32.895   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.camera.raw.prebuilt.xml
+09-24 22:29:32.918   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.wifi.xml
+09-24 22:29:32.935   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/features_com.android.virt.xml
+09-24 22:29:32.957   724   772 I Codec2InfoBuilder: adding type 'audio/raw'
+09-24 22:29:32.963   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.fingerprint.prebuilt.xml
+09-24 22:29:32.979   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.vulkan.compute.xml
+09-24 22:29:33.013   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.wifi.passpoint.xml
+09-24 22:29:33.028   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.bluetooth.xml
+09-24 22:29:33.062   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.software.autofill.xml
+09-24 22:29:33.067   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.camera.front.prebuilt.xml
+09-24 22:29:33.079   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.touchscreen.multitouch.jazzhand.xml
+09-24 22:29:33.080   724   772 I Codec2InfoBuilder: adding type 'audio/vorbis'
+09-24 22:29:33.095   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.camera.full.prebuilt.xml
+09-24 22:29:33.115   784   845 I SystemConfig: Reading permissions from /vendor/etc/permissions/android.hardware.wifi.direct.xml
+09-24 22:29:33.149   784   845 I SystemConfig: Reading permissions from /product/etc/sysconfig/preinstalled-packages-platform-handheld-product.xml
+09-24 22:29:33.167   784   845 I SystemConfig: Reading permissions from /product/etc/sysconfig/google-staged-installer-whitelist.xml
+09-24 22:29:33.182   724   772 I Codec2InfoBuilder: adding type 'video/x-vnd.on2.vp8'
+09-24 22:29:33.188   784   845 I SystemConfig: Reading permissions from /product/etc/sysconfig/google.xml
+09-24 22:29:33.204   784   845 I SystemConfig: Adding association: com.google.android.as <- com.android.bluetooth
+09-24 22:29:33.205   784   845 I SystemConfig: Adding association: com.google.android.as <- com.android.bluetooth.services
+09-24 22:29:33.206   784   845 I SystemConfig: Adding association: com.google.android.as <- com.android.phone
+09-24 22:29:33.207   784   845 I SystemConfig: Adding association: com.google.android.as <- com.android.providers.contacts
+09-24 22:29:33.207   784   845 I SystemConfig: Adding association: com.google.android.as <- com.android.providers.media
+09-24 22:29:33.224   784   845 I SystemConfig: Adding association: com.google.android.as <- com.android.providers.telephony
+09-24 22:29:33.225   784   845 I SystemConfig: Adding association: com.google.android.as <- com.android.systemui
+09-24 22:29:33.226   784   845 I SystemConfig: Adding association: com.google.android.as <- com.google.android.bluetooth
+09-24 22:29:33.226   784   845 I SystemConfig: Adding association: com.google.android.as <- com.google.android.bluetooth.services
+09-24 22:29:33.227   784   845 I SystemConfig: Adding association: com.google.android.as <- com.google.android.providers.media.module
+09-24 22:29:33.227   784   845 I SystemConfig: Adding association: com.google.android.as <- com.google.android.as.oss
+09-24 22:29:33.238   784   845 I SystemConfig: Adding association: com.google.android.as.oss <- com.google.android.as
+09-24 22:29:33.239   784   845 I SystemConfig: Adding association: com.google.android.as.oss <- com.google.android.aicore
+09-24 22:29:33.248   784   845 I SystemConfig: Adding association: com.google.android.as.oss <- com.google.android.apps.nexuslauncher
+09-24 22:29:33.263   736   780 I C2SoftVpxEnc: setting temporal layering 0 + 0
+09-24 22:29:33.267   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:33.269   784   845 W SystemConfig: Tag automatic-rollback-denylisted-app is unknown in /product/etc/sysconfig/google.xml at START_TAG (empty) <automatic-rollback-denylisted-app package='com.android.vending'>@146:72 in java.io.FileReader@1f9f52d
+09-24 22:29:33.270   784   845 W SystemConfig: Tag automatic-rollback-denylisted-app is unknown in /product/etc/sysconfig/google.xml at START_TAG (empty) <automatic-rollback-denylisted-app package='com.google.android.gms'>@147:75 in java.io.FileReader@1f9f52d
+09-24 22:29:33.279   736   780 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:29:33.281   784   845 I SystemConfig: Reading permissions from /product/etc/sysconfig/disable-zero-touch.xml
+09-24 22:29:33.291   784   845 I SystemConfig: Reading permissions from /product/etc/sysconfig/preinstalled-packages-platform-telephony-product.xml
+09-24 22:29:33.307   784   845 I SystemConfig: Reading permissions from /product/etc/sysconfig/google-hiddenapi-package-whitelist.xml
+09-24 22:29:33.274     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:33.294     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:33.323   227   847 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:33.326   736   780 I C2SoftVpxEnc: setting temporal layering 0 + 0
+09-24 22:29:33.338   736   780 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:29:33.346   784   845 I SystemConfig: Reading permissions from /product/etc/sysconfig/google_build.xml
+09-24 22:29:33.306     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:33.350   724   772 I Codec2InfoBuilder: adding type 'video/x-vnd.on2.vp8'
+09-24 22:29:33.371   784   845 I SystemConfig: Reading permissions from /product/etc/sysconfig/preinstalled-packages-platform-aosp-product.xml
+09-24 22:29:33.395   784   845 I SystemConfig: Reading permissions from /product/etc/sysconfig/preinstalled-packages-platform-overlays.xml
+09-24 22:29:33.434   784   845 I SystemConfig: Reading permissions from /product/etc/sysconfig/initial-package-stopped-states-aosp.xml
+09-24 22:29:33.447   784   845 I SystemConfig: Reading permissions from /product/etc/sysconfig/personal-safety.xml
+09-24 22:29:33.481   784   845 I SystemConfig: Reading permissions from /product/etc/sysconfig/wellbeing.xml
+09-24 22:29:33.506   724   772 I Codec2InfoBuilder: adding type 'video/x-vnd.on2.vp9'
+09-24 22:29:33.517   784   845 I SystemConfig: Reading permissions from /product/etc/permissions/privapp-permissions-sdk-google.xml
+09-24 22:29:33.535   784   845 I SystemConfig: Reading permissions from /product/etc/permissions/android.software.verified_boot.xml
+09-24 22:29:33.548   784   845 I SystemConfig: Reading permissions from /product/etc/permissions/privapp-permissions-goldfish.xml
+09-24 22:29:33.573   784   845 I SystemConfig: Reading permissions from /product/etc/permissions/com.google.android.dialer.support.xml
+09-24 22:29:33.590   784   845 I SystemConfig: Reading permissions from /product/etc/permissions/com.android.imsserviceentitlement.xml
+09-24 22:29:33.612   784   845 I SystemConfig: Reading permissions from /product/etc/permissions/android.hardware.telephony.euicc.xml
+09-24 22:29:33.623   784   845 I SystemConfig: Reading permissions from /product/etc/permissions/com.google.android.odad.xml
+09-24 22:29:33.646   736   828 I C2SoftVpxEnc: setting temporal layering 0 + 0
+09-24 22:29:33.651   784   845 I SystemConfig: Reading permissions from /product/etc/permissions/split-permissions-google.xml
+09-24 22:29:33.659   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:29:33.675   784   845 I SystemConfig: Reading permissions from /product/etc/permissions/privapp-permissions-google-p.xml
+09-24 22:29:33.693   736   828 I C2SoftVpxEnc: setting temporal layering 0 + 0
+09-24 22:29:33.695   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:29:33.724   724   772 I Codec2InfoBuilder: adding type 'video/x-vnd.on2.vp9'
+09-24 22:29:33.734   736   780 D C2SoftVpxEnc: Given level 0 does not cover current configuration: adjusting to 7000
+09-24 22:29:33.850   709   709 W BpBinder: Linking to death on android.media.IMediaPlayerService but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+09-24 22:29:33.930   784   845 I SystemConfig: Reading permissions from /system_ext/etc/sysconfig/preinstalled-packages-com.android.google.avatarpicker.xml
+09-24 22:29:33.943   784   845 I SystemConfig: Reading permissions from /system_ext/etc/sysconfig/android.telephony.satellite.xml
+09-24 22:29:33.972   784   845 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.settings.xml
+09-24 22:29:33.986   784   845 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.systemui.xml
+09-24 22:29:33.988   709   709 E CameraProviderManager: deriveBlobDurationEntries: Unexpected number of available blob durations! 0 vs. 0 with filteredSizes size: 0
+09-24 22:29:33.991   709   709 E cameraserver: AidlDeviceInfo3: Unable to derive Heic UltraHDR tags based on camera and media capabilities: Invalid argument (-22)
+09-24 22:29:34.000   709   709 W CameraProviderManager: Camera provider android.hardware.camera.provider.ICameraProvider/internal/0 says an unknown camera device@1.1/internal/1 now has torch status 1. Curious.
+09-24 22:29:34.017   784   845 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.extensions.appfunctions.xml
+09-24 22:29:34.021   709   709 I CameraProviderManager: Camera provider android.hardware.camera.provider.ICameraProvider/internal/0 ready with 1 camera devices
+09-24 22:29:34.041   784   845 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.carrierconfig.xml
+09-24 22:29:34.062   784   845 I SystemConfig: Reading permissions from /system_ext/etc/permissions/privapp-permissions-google-se.xml
+09-24 22:29:34.064   709   709 W cameraserver: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: android.hardware.camera.provider.ICameraProvider/internal/1
+09-24 22:29:34.074   709   709 I cameraserver: Connecting to new camera provider: android.hardware.camera.provider.ICameraProvider/internal/1, isRemote? 1
+09-24 22:29:34.097   709   709 W BpBinder: Linking to death on android.hardware.camera.provider.ICameraProvider but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+09-24 22:29:34.152   709   709 I CameraProviderManager: Camera provider android.hardware.camera.provider.ICameraProvider/internal/1 ready with 0 camera devices
+09-24 22:29:34.186   709   709 D CameraProviderManager: tryGetService: AIDL Camera provider HAL 'android.hardware.camera.provider.ICameraProvider/virtual/0' is not actually available
+09-24 22:29:34.186   709   709 W CameraProviderManager: tryToInitializeAidlProviderLocked: AIDL Camera provider HAL 'android.hardware.camera.provider.ICameraProvider/virtual/0' is not actually available
+09-24 22:29:34.199   709   709 I CameraService: onDeviceStatusChanged: Status changed for cameraId=1, newStatus=1
+09-24 22:29:34.199   709   709 I CameraService: onDeviceStatusChanged: Unknown camera ID 1, a new camera is added
+09-24 22:29:34.204   784   845 I SystemConfig: Reading permissions from /system_ext/etc/permissions/appfunctions.extension.xml
+09-24 22:29:34.228   784   845 I SystemConfig: Reading permissions from /system_ext/etc/permissions/androidx.window.sidecar.xml
+09-24 22:29:34.271   784   845 I SystemConfig: Reading permissions from /system_ext/etc/permissions/androidx.window.extensions.xml
+09-24 22:29:34.304   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:34.290     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:34.307   784   845 I SystemConfig: Reading permissions from /system_ext/etc/permissions/android.software.theme_picker.xml
+09-24 22:29:34.303     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:34.332   227   849 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:34.310     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:34.360   784   845 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.launcher3.xml
+09-24 22:29:34.375   228   228 I hwservicemanager: getTransport: Cannot find entry android.frameworks.cameraservice.service@2.2::ICameraService/default in either framework or device VINTF manifest.
+09-24 22:29:34.378   784   845 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.storagemanager.xml
+09-24 22:29:34.382   709   709 E HidlServiceManagement: Service android.frameworks.cameraservice.service@2.2::ICameraService/default must be in VINTF manifest in order to register/get.
+09-24 22:29:34.382   709   709 W CameraService: onFirstRef: Did not register default android.frameworks.cameraservice.service@2.2
+09-24 22:29:34.387   784   845 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.android.emulator.radio.config.xml
+09-24 22:29:34.403   784   845 I SystemConfig: Reading permissions from /system_ext/etc/permissions/com.google.android.googlesdksetup.xml
+09-24 22:29:34.377     0     0 I servicemanager: Caller(pid=709,uid=1047,sid=u:r:cameraserver:s0) Found android.frameworks.cameraservice.service.ICameraService/default in framework VINTF manifest.
+09-24 22:29:34.418   709   709 W cameraserver: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: android.frameworks.cameraservice.service.ICameraService/default
+09-24 22:29:34.392     0     0 I servicemanager: Caller(pid=709,uid=1047,sid=u:r:cameraserver:s0) Found android.frameworks.cameraservice.service.ICameraService/default in framework VINTF manifest.
+09-24 22:29:34.424   709   709 I CameraService: CameraService pinged cameraservice proxy
+09-24 22:29:34.435   709   709 W cameraserver: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: media.camera
+09-24 22:29:34.435   709   709 I cameraserver: ServiceManager: 0x7d961603a320 done instantiate
+09-24 22:29:34.453   709   709 W CameraProviderManager: addAidlProviderLocked: Camera provider HAL with name 'android.hardware.camera.provider.ICameraProvider/internal/1' already registered
+09-24 22:29:34.472   709   850 W CameraProviderManager: addAidlProviderLocked: Camera provider HAL with name 'android.hardware.camera.provider.ICameraProvider/internal/0' already registered
+09-24 22:29:34.488   784   845 I SystemConfig: Reading permissions from /apex/com.android.hardware.rebootescrow/etc/permissions/android.hardware.reboot_escrow.prebuilt.xml
+09-24 22:29:34.522   784   845 I SystemConfig: Reading permissions from /apex/com.android.hardware.threadnetwork/etc/permissions/android.hardware.thread_network.prebuilt.xml
+09-24 22:29:34.544   784   845 I SystemConfig: Reading permissions from /apex/com.android.devicelock/etc/permissions/com.android.devicelockcontroller.xml
+09-24 22:29:34.563   784   845 I SystemConfig: Reading permissions from /apex/com.android.apex.cts.shim/etc/permissions/signature-permission-allowlist.xml
+09-24 22:29:34.592   784   845 I SystemConfig: Reading permissions from /apex/com.android.bt/etc/permissions/privapp_allowlist_com.google.android.bluetooth.xml
+09-24 22:29:34.618   784   845 I SystemConfig: Reading permissions from /apex/com.android.mediaprovider/etc/permissions/privapp_allowlist_com.google.android.providers.media.module.xml
+09-24 22:29:34.632   784   845 I SystemConfig: Reading permissions from /apex/com.android.mediaprovider/etc/permissions/privapp_allowlist_com.google.android.photopicker.xml
+09-24 22:29:34.649   784   845 I SystemConfig: Reading permissions from /apex/com.android.hardware.contexthub/etc/permissions/android.hardware.context_hub.prebuilt.xml
+09-24 22:29:34.677   784   845 I SystemConfig: Reading permissions from /apex/com.android.adservices/etc/permissions/privapp_allowlist_com.google.android.adservices.api.xml
+09-24 22:29:34.702   784   845 I SystemConfig: Reading permissions from /apex/com.android.permission/etc/permissions/privapp_allowlist_com.google.android.permissioncontroller.xml
+09-24 22:29:34.738   784   845 I SystemConfig: Reading permissions from /apex/com.android.ipsec/etc/permissions/android.net.ipsec.ike.xml
+09-24 22:29:34.758   784   845 I SystemConfig: Reading permissions from /apex/com.android.tethering/etc/permissions/privapp_allowlist_com.google.android.networkstack.tethering.xml
+09-24 22:29:34.779   784   845 I SystemConfig: Reading permissions from /apex/com.android.nfcservices/etc/permissions/privapp_allowlist_com.google.android.nfc.xml
+09-24 22:29:34.795   784   845 I SystemConfig: Reading permissions from /apex/com.android.nfcservices/etc/permissions/privapp_allowlist_com.android.nfc.xml
+09-24 22:29:34.814   784   845 I SystemConfig: Reading permissions from /apex/com.android.healthfitness/etc/permissions/privapp_allowlist_com.google.android.healthconnect.controller.xml
+09-24 22:29:34.826   784   845 I SystemConfig: Reading permissions from /apex/com.android.cellbroadcast/etc/permissions/privapp_allowlist_com.google.android.cellbroadcastreceiver.xml
+09-24 22:29:34.835   784   845 I SystemConfig: Reading permissions from /apex/com.android.cellbroadcast/etc/permissions/privapp_allowlist_com.google.android.cellbroadcastservice.xml
+09-24 22:29:34.884   784   845 I SystemConfig: Reading permissions from /apex/com.android.extservices/etc/permissions/privapp_allowlist_com.google.android.ext.services.xml
+09-24 22:29:34.911   784   845 I incfs   : Initial API level of the device: 36
+09-24 22:29:34.918   784   845 I incfs   : ro.incremental.enable: yes
+09-24 22:29:34.922   784   845 I incfs   : isFsAvailable: true
+09-24 22:29:34.923   784   845 I incfs   : isFsAvailable: true
+09-24 22:29:34.931   784   845 I incfs   : IncFs_Features: v2
+09-24 22:29:34.992   784   845 D SystemConfig: /vendor/etc/public.libraries.txt does not exist
+09-24 22:29:34.998   784   845 V SystemConfig: readAllPermissions took to complete: 3460ms
+09-24 22:29:34.999   784   845 D SystemServerInitThreadPool: Finished executing ReadingSystemConfig
+09-24 22:29:35.009   784   845 V SystemServerTimingAsync: InitThreadPoolExec:ReadingSystemConfig took to complete: 3487ms
+09-24 22:29:35.317   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:35.336   227   852 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:35.296     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:35.312     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:35.314     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:36.332   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:36.310     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:36.357   227   853 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:36.331     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:36.335     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:36.909   784   784 D nativeloader: Load /system/lib64/libandroid_servers.so using ns default for caller /system/framework/services.jar in same partition (is_bridged=0): ok
+09-24 22:29:37.116   784   784 I service_manager_slow: [19,display]
+09-24 22:29:37.117   784   784 V Configuration: Updating configuration, locales updated from [] to [en_US]
+09-24 22:29:37.144   784   784 V Configuration: Updating configuration, locales updated from [] to [en_US]
+09-24 22:29:37.145   784   784 I system_server: AssetManager2(0x77d9917d68d8) locale list changing from [] to [en-US]
+09-24 22:29:37.198   784   784 V SystemServerTiming: InitBeforeStartServices took to complete: 5871ms
+09-24 22:29:37.209   784   784 D SystemServerTiming: StartServices
+09-24 22:29:37.210   784   784 D SystemServerTiming: startBootstrapServices
+09-24 22:29:37.210   784   784 D SystemServerTiming: ArtModuleServiceInitializer
+09-24 22:29:37.217   784   784 V SystemServerTiming: ArtModuleServiceInitializer took to complete: 7ms
+09-24 22:29:37.218   784   784 D SystemServerTiming: StartWatchdog
+09-24 22:29:37.314   784   784 V SystemServerTiming: StartWatchdog took to complete: 96ms
+09-24 22:29:37.314   784   784 D SystemServerTiming: InitializeProtoLog
+09-24 22:29:37.319     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:37.341   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:37.345     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:37.372   227   863 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:37.359     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:37.386   784   784 V SystemServerTiming: InitializeProtoLog took to complete: 72ms
+09-24 22:29:37.388   784   784 D SystemServerTiming: PlatformCompat
+09-24 22:29:37.401   784   784 D CompatConfig: Found a config file: /system/etc/compatconfig/services-platform-compat-config.xml
+09-24 22:29:37.429   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ddba5ef
+09-24 22:29:37.430   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8eea8fc
+09-24 22:29:37.431   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@402eb85
+09-24 22:29:37.431   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@6defdda
+09-24 22:29:37.434   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ee6b20b
+09-24 22:29:37.434   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1fb58e8
+09-24 22:29:37.434   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@88bbb01
+09-24 22:29:37.435   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a3f1da6
+09-24 22:29:37.435   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c4c63e7
+09-24 22:29:37.439   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ea11b94
+09-24 22:29:37.442   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@978063d
+09-24 22:29:37.443   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a2f6e32
+09-24 22:29:37.443   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@6715783
+09-24 22:29:37.447   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@93e5d00
+09-24 22:29:37.447   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@de3c939
+09-24 22:29:37.448   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c623b7e
+09-24 22:29:37.450   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@567e8df
+09-24 22:29:37.451   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1ac492c
+09-24 22:29:37.451   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8aebff5
+09-24 22:29:37.456   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@d62918a
+09-24 22:29:37.457   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@60c33fb
+09-24 22:29:37.457   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a2acc18
+09-24 22:29:37.457   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@f86671
+09-24 22:29:37.458   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@5603c56
+09-24 22:29:37.459   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ce014d7
+09-24 22:29:37.459   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@70c91c4
+09-24 22:29:37.459   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@65bf8ad
+09-24 22:29:37.468   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@dbbc7e2
+09-24 22:29:37.469   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@aa72773
+09-24 22:29:37.469   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@d230630
+09-24 22:29:37.476   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@cec72a9
+09-24 22:29:37.476   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@352802e
+09-24 22:29:37.477   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ec2c7cf
+09-24 22:29:37.477   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@aea555c
+09-24 22:29:37.478   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@cf09065
+09-24 22:29:37.478   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@18a713a
+09-24 22:29:37.479   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@34e11eb
+09-24 22:29:37.479   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8756b48
+09-24 22:29:37.479   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@25ecde1
+09-24 22:29:37.484   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@21e6706
+09-24 22:29:37.487   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ef9e1c7
+09-24 22:29:37.487   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a19f3f4
+09-24 22:29:37.492   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@819671d
+09-24 22:29:37.493   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@da9ed92
+09-24 22:29:37.494   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8a8d363
+09-24 22:29:37.495   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1dc5b60
+09-24 22:29:37.495   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@aea5819
+09-24 22:29:37.499   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8f550de
+09-24 22:29:37.500   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8cb42bf
+09-24 22:29:37.503   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b9bcd8c
+09-24 22:29:37.505   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@3f5cd5
+09-24 22:29:37.506   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b019cea
+09-24 22:29:37.507   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@47b4bdb
+09-24 22:29:37.510   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ffe3678
+09-24 22:29:37.510   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ca5f151
+09-24 22:29:37.512   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@7d49db6
+09-24 22:29:37.513   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@e58cab7
+09-24 22:29:37.513   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a1c4224
+09-24 22:29:37.513   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@607518d
+09-24 22:29:37.514   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c04df42
+09-24 22:29:37.514   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@9255b53
+09-24 22:29:37.515   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@bed5c90
+09-24 22:29:37.515   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@da47989
+09-24 22:29:37.516   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@505ad8e
+09-24 22:29:37.519   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@82059af
+09-24 22:29:37.521   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@d73b1bc
+09-24 22:29:37.522   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@dd22545
+09-24 22:29:37.522   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@233149a
+09-24 22:29:37.523   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@922e1cb
+09-24 22:29:37.523   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@2a82da8
+09-24 22:29:37.523   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@774d0c1
+09-24 22:29:37.529   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a9de066
+09-24 22:29:37.530   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@47bcfa7
+09-24 22:29:37.530   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@4267c54
+09-24 22:29:37.531   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b3cb7fd
+09-24 22:29:37.531   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@3979cf2
+09-24 22:29:37.537   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@e8bbf43
+09-24 22:29:37.538   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@69909c0
+09-24 22:29:37.539   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@aa1d6f9
+09-24 22:29:37.539   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@3fe963e
+09-24 22:29:37.540   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@7210c9f
+09-24 22:29:37.544   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ce501ec
+09-24 22:29:37.545   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c9fe9b5
+09-24 22:29:37.545   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@49d84a
+09-24 22:29:37.546   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@293d3bb
+09-24 22:29:37.546   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@11650d8
+09-24 22:29:37.547   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@2326c31
+09-24 22:29:37.547   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b552f16
+09-24 22:29:37.548   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8a1f097
+09-24 22:29:37.551   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ba284
+09-24 22:29:37.551   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@6909a6d
+09-24 22:29:37.551   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@7ed26a2
+09-24 22:29:37.554   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@50aff33
+09-24 22:29:37.554   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@3e262f0
+09-24 22:29:37.555   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@7297069
+09-24 22:29:37.555   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@71b0aee
+09-24 22:29:37.560   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@5ec5b8f
+09-24 22:29:37.561   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@922be1c
+09-24 22:29:37.561   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@f5faa25
+09-24 22:29:37.562   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@f30e7fa
+09-24 22:29:37.562   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@3dd21ab
+09-24 22:29:37.563   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@aaba008
+09-24 22:29:37.563   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@405c3a1
+09-24 22:29:37.563   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@79589c6
+09-24 22:29:37.568   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@fca2d87
+09-24 22:29:37.569   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@5eb4b4
+09-24 22:29:37.569   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a99f8dd
+09-24 22:29:37.572   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@5507c52
+09-24 22:29:37.573   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@2921b23
+09-24 22:29:37.573   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c8c6820
+09-24 22:29:37.573   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@84245d9
+09-24 22:29:37.574   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@4560b9e
+09-24 22:29:37.574   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a61467f
+09-24 22:29:37.575   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@41fe64c
+09-24 22:29:37.575   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@4886695
+09-24 22:29:37.576   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@99343aa
+09-24 22:29:37.580   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1cdcb9b
+09-24 22:29:37.590   784   784 D CompatConfig: Found a config file: /system/etc/compatconfig/SystemUI-core-compat-config.xml
+09-24 22:29:37.609   784   784 D CompatConfig: Found a config file: /system/etc/compatconfig/framework-platform-compat-config.xml
+09-24 22:29:37.626   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@9b9f076
+09-24 22:29:37.626   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@cb38677
+09-24 22:29:37.627   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@272b2e4
+09-24 22:29:37.627   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@dafd34d
+09-24 22:29:37.629   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@cc9e02
+09-24 22:29:37.629   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@6d01313
+09-24 22:29:37.630   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1a1950
+09-24 22:29:37.630   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@2b35749
+09-24 22:29:37.631   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@66a984e
+09-24 22:29:37.631   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1ecd6f
+09-24 22:29:37.638   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@28f7a7c
+09-24 22:29:37.638   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@6511f05
+09-24 22:29:37.639   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@adbeb5a
+09-24 22:29:37.639   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@2f4d18b
+09-24 22:29:37.640   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@697c268
+09-24 22:29:37.647   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@49a681
+09-24 22:29:37.647   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8dd6326
+09-24 22:29:37.648   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@fdcfb67
+09-24 22:29:37.649   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@e5a9d14
+09-24 22:29:37.649   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@9e929bd
+09-24 22:29:37.650   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@82c8bb2
+09-24 22:29:37.651   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b33e703
+09-24 22:29:37.651   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@4ce7680
+09-24 22:29:37.651   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b03a4b9
+09-24 22:29:37.658   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@cd3b0fe
+09-24 22:29:37.658   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@883f05f
+09-24 22:29:37.659   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@be47aac
+09-24 22:29:37.659   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ab0d375
+09-24 22:29:37.660   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@f35df0a
+09-24 22:29:37.668   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@fa1337b
+09-24 22:29:37.671   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1749598
+09-24 22:29:37.671   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@fc831f1
+09-24 22:29:37.672   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8dae1d6
+09-24 22:29:37.678   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@7858c57
+09-24 22:29:37.679   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@6e97344
+09-24 22:29:37.679   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@d1cfc2d
+09-24 22:29:37.680   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1fb4562
+09-24 22:29:37.683   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@2ec96f3
+09-24 22:29:37.683   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@7ac7fb0
+09-24 22:29:37.686   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@57a2e29
+09-24 22:29:37.689   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@bcc55ae
+09-24 22:29:37.690   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@aafaf4f
+09-24 22:29:37.690   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a51e6dc
+09-24 22:29:37.691   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@35e83e5
+09-24 22:29:37.691   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@38c1eba
+09-24 22:29:37.692   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1e1f16b
+09-24 22:29:37.696   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@88494c8
+09-24 22:29:37.697   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@787961
+09-24 22:29:37.697   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a4d6c86
+09-24 22:29:37.698   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@fac3947
+09-24 22:29:37.698   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@9b23574
+09-24 22:29:37.699   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8e24a9d
+09-24 22:29:37.699   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@d83cb12
+09-24 22:29:37.700   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ae922e3
+09-24 22:29:37.703   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c7734e0
+09-24 22:29:37.708   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@61df399
+09-24 22:29:37.709   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c4f865e
+09-24 22:29:37.709   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@3810a3f
+09-24 22:29:37.710   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@acabf0c
+09-24 22:29:37.710   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@dd13055
+09-24 22:29:37.711   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@589aa6a
+09-24 22:29:37.711   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@5860b5b
+09-24 22:29:37.714   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@4eabff8
+09-24 22:29:37.715   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@417cd1
+09-24 22:29:37.715   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a900336
+09-24 22:29:37.720   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@2100237
+09-24 22:29:37.721   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@f07e3a4
+09-24 22:29:37.721   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@290150d
+09-24 22:29:37.722   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@2d11cc2
+09-24 22:29:37.722   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@9d88ad3
+09-24 22:29:37.723   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@db19610
+09-24 22:29:37.723   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b5f509
+09-24 22:29:37.728   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c18430e
+09-24 22:29:37.729   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@597012f
+09-24 22:29:37.729   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@d02033c
+09-24 22:29:37.730   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@33fd8c5
+09-24 22:29:37.730   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@399821a
+09-24 22:29:37.731   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@81c814b
+09-24 22:29:37.731   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@e8a1728
+09-24 22:29:37.736   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@4ca3c41
+09-24 22:29:37.737   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@3bda5e6
+09-24 22:29:37.737   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@62fe727
+09-24 22:29:37.738   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@9fd7dd4
+09-24 22:29:37.738   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@33d5b7d
+09-24 22:29:37.739   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@2ae3a72
+09-24 22:29:37.739   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@29cec3
+09-24 22:29:37.740   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c9ea340
+09-24 22:29:37.745   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8c93279
+09-24 22:29:37.745   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@da18bbe
+09-24 22:29:37.745   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@950941f
+09-24 22:29:37.746   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@36ab36c
+09-24 22:29:37.746   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8a17d35
+09-24 22:29:37.752   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ce6a5ca
+09-24 22:29:37.753   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8f4533b
+09-24 22:29:37.753   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c059a58
+09-24 22:29:37.753   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b79b7b1
+09-24 22:29:37.754   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@cb15496
+09-24 22:29:37.754   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@14ae817
+09-24 22:29:37.755   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8660404
+09-24 22:29:37.755   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@7c11ded
+09-24 22:29:37.756   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@6a62422
+09-24 22:29:37.760   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@80beeb3
+09-24 22:29:37.761   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1415c70
+09-24 22:29:37.761   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@19eabe9
+09-24 22:29:37.762   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@826606e
+09-24 22:29:37.762   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@cccc30f
+09-24 22:29:37.763   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@337cf9c
+09-24 22:29:37.763   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ead1da5
+09-24 22:29:37.764   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@15c157a
+09-24 22:29:37.768   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@91c812b
+09-24 22:29:37.769   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@2c04988
+09-24 22:29:37.769   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@976ef21
+09-24 22:29:37.770   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@9060f46
+09-24 22:29:37.770   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@6600507
+09-24 22:29:37.771   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@2d47634
+09-24 22:29:37.771   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b25c5d
+09-24 22:29:37.776   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@103d9d2
+09-24 22:29:37.777   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@56deaa3
+09-24 22:29:37.777   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a5cc1a0
+09-24 22:29:37.777   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@e3d6159
+09-24 22:29:37.778   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@7a1c11e
+09-24 22:29:37.778   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@3ea8dff
+09-24 22:29:37.779   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@45c57cc
+09-24 22:29:37.779   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1d9ba15
+09-24 22:29:37.783   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1a4d12a
+09-24 22:29:37.792   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b640b1b
+09-24 22:29:37.793   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@6dd24b8
+09-24 22:29:37.793   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ba8e291
+09-24 22:29:37.793   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@916d5f6
+09-24 22:29:37.794   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@62e3df7
+09-24 22:29:37.794   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c9bd464
+09-24 22:29:37.795   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@26816cd
+09-24 22:29:37.795   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@cd25b82
+09-24 22:29:37.799   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@5fec293
+09-24 22:29:37.800   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@d73d2d0
+09-24 22:29:37.805   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@16c52c9
+09-24 22:29:37.806   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@cceadce
+09-24 22:29:37.806   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@848f4ef
+09-24 22:29:37.807   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@18b4bfc
+09-24 22:29:37.807   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a5e5285
+09-24 22:29:37.808   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@f2bd8da
+09-24 22:29:37.816   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@459f10b
+09-24 22:29:37.817   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b3f2be8
+09-24 22:29:37.817   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@6b69201
+09-24 22:29:37.817   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@9fea8a6
+09-24 22:29:37.818   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@f3492e7
+09-24 22:29:37.818   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@3cf1e94
+09-24 22:29:37.819   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@4f94d3d
+09-24 22:29:37.819   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ddca932
+09-24 22:29:37.825   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@12d7683
+09-24 22:29:37.825   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@6c99000
+09-24 22:29:37.826   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@db28039
+09-24 22:29:37.826   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@d28267e
+09-24 22:29:37.827   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@946f7df
+09-24 22:29:37.827   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@837ac2c
+09-24 22:29:37.827   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c31e6f5
+09-24 22:29:37.837   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c1c2c8a
+09-24 22:29:37.837   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a4d32fb
+09-24 22:29:37.838   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1895f18
+09-24 22:29:37.838   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@706fd71
+09-24 22:29:37.838   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@5988756
+09-24 22:29:37.839   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@db203d7
+09-24 22:29:37.839   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@14154c4
+09-24 22:29:37.840   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@43cffad
+09-24 22:29:37.845   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@adc2e2
+09-24 22:29:37.846   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8290673
+09-24 22:29:37.847   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@960f930
+09-24 22:29:37.848   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@556e9a9
+09-24 22:29:37.850   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@2e92b2e
+09-24 22:29:37.850   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@c0396cf
+09-24 22:29:37.851   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@894785c
+09-24 22:29:37.857   784   784 D CompatConfig: Found a config file: /system/etc/compatconfig/documents-ui-compat-config.xml
+09-24 22:29:37.869   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b60cc3a
+09-24 22:29:37.871   784   784 D CompatConfig: Found a config file: /system/etc/compatconfig/icu4j-platform-compat-config.xml
+09-24 22:29:37.882   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a1ebe48
+09-24 22:29:37.883   784   784 D CompatConfig: Found a config file: /system/etc/compatconfig/calendar-provider-compat-config.xml
+09-24 22:29:37.899   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@27f7206
+09-24 22:29:37.901   784   784 D CompatConfig: Found a config file: /system/etc/compatconfig/contacts-provider-platform-compat-config.xml
+09-24 22:29:37.908   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@88576f4
+09-24 22:29:37.910   784   784 D CompatConfig: Found a config file: /system/etc/compatconfig/framework-ondeviceintelligence-platform-compat-config.xml
+09-24 22:29:37.918   784   784 D CompatConfig: Found a config file: /system/etc/compatconfig/framework-location-compat-config.xml
+09-24 22:29:37.925   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@5e07263
+09-24 22:29:37.925   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@efd0e60
+09-24 22:29:37.926   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a608f19
+09-24 22:29:37.926   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@d0cbbde
+09-24 22:29:37.927   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b5dd1bf
+09-24 22:29:37.927   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@594b08c
+09-24 22:29:37.928   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@66203d5
+09-24 22:29:37.931   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a4b7ea
+09-24 22:29:37.932   784   784 D CompatConfig: Found a config file: /system/etc/compatconfig/TeleService-platform-compat-config.xml
+09-24 22:29:37.945   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@4224978
+09-24 22:29:37.945   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@fcc0851
+09-24 22:29:37.946   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@40e68b6
+09-24 22:29:37.946   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ce39b7
+09-24 22:29:37.947   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@7ee8524
+09-24 22:29:37.947   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@af7d88d
+09-24 22:29:37.955   784   784 D CompatConfig: Found a config file: /system/system_ext/etc/compatconfig/settings-platform-compat-config.xml
+09-24 22:29:37.963   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@f02ba53
+09-24 22:29:37.967   784   784 D ApexManagerTiming: getActiveApexInfos_noCache
+09-24 22:29:37.954     0     0 I servicemanager: Notifying apexservice they do (previously: don't) have clients when service is guaranteed to be in use
+09-24 22:29:37.964     0     0 I AidlLazyServiceRegistrar: Process has 1 (of 1 available) client(s) in use after notification apexservice has clients: 1
+09-24 22:29:37.965     0     0 I AidlLazyServiceRegistrar: Shutdown prevented by forcePersist override flag.
+09-24 22:29:37.979     0     0 I apexd   : getActivePackages received by ApexService
+09-24 22:29:38.263   784   784 V ApexManagerTiming: getActiveApexInfos_noCache took to complete: 292ms
+09-24 22:29:38.271   784   784 D CompatConfig: Found a config file: /apex/com.android.wifi/etc/compatconfig/wifi-compat-config.xml
+09-24 22:29:38.278   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@350769e
+09-24 22:29:38.279   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@99ad57f
+09-24 22:29:38.279   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@333c94c
+09-24 22:29:38.285   784   784 D CompatConfig: No directory /apex/com.android.media.swcodec/etc/compatconfig, skipping
+09-24 22:29:38.286   784   784 D CompatConfig: No directory /apex/com.android.cellbroadcast/etc/compatconfig, skipping
+09-24 22:29:38.293   784   784 D CompatConfig: Found a config file: /apex/com.android.bt/etc/compatconfig/bluetoothapk-platform-compat-config.xml
+09-24 22:29:38.299   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@5495eaa
+09-24 22:29:38.300   784   784 D CompatConfig: Found a config file: /apex/com.android.bt/etc/compatconfig/bluetooth-compat-config.xml
+09-24 22:29:38.309   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@d7a2e38
+09-24 22:29:38.310   784   784 D CompatConfig: Found a config file: /apex/com.android.bt/etc/compatconfig/framework-bluetooth-compat-config.xml
+09-24 22:29:38.318   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a36bb76
+09-24 22:29:38.318   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@9aff577
+09-24 22:29:38.319   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@dbff5e4
+09-24 22:29:38.323   784   784 D CompatConfig: No directory /apex/com.android.hardware.contexthub/etc/compatconfig, skipping
+09-24 22:29:38.327   784   784 D CompatConfig: No directory /apex/com.android.hardware.neuralnetworks/etc/compatconfig, skipping
+09-24 22:29:38.329   784   784 D CompatConfig: No directory /apex/com.android.runtime/etc/compatconfig, skipping
+09-24 22:29:38.331   784   784 D CompatConfig: No directory /apex/com.android.resolv/etc/compatconfig, skipping
+09-24 22:29:38.332   784   784 D CompatConfig: No directory /apex/com.android.i18n/etc/compatconfig, skipping
+09-24 22:29:38.335   784   784 D CompatConfig: No directory /apex/com.android.devicelock/etc/compatconfig, skipping
+09-24 22:29:38.338   784   784 D CompatConfig: No directory /apex/com.android.hardware.vibrator/etc/compatconfig, skipping
+09-24 22:29:38.339   784   784 D CompatConfig: No directory /apex/com.android.os.statsd/etc/compatconfig, skipping
+09-24 22:29:38.346   784   784 D CompatConfig: No directory /apex/com.google.android.widevine/etc/compatconfig, skipping
+09-24 22:29:38.347   784   784 D CompatConfig: No directory /apex/com.android.compos/etc/compatconfig, skipping
+09-24 22:29:38.350   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:38.353   784   784 D CompatConfig: No directory /apex/com.android.hardware.gatekeeper/etc/compatconfig, skipping
+09-24 22:29:38.357   784   784 D CompatConfig: No directory /apex/com.android.uwb/etc/compatconfig, skipping
+09-24 22:29:38.358   784   784 D CompatConfig: No directory /apex/com.android.healthfitness/etc/compatconfig, skipping
+09-24 22:29:38.359   784   784 D CompatConfig: No directory /apex/com.android.rkpd/etc/compatconfig, skipping
+09-24 22:29:38.339     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:38.368   784   784 D CompatConfig: No directory /apex/com.android.hardware.cas/etc/compatconfig, skipping
+09-24 22:29:38.369   784   784 D CompatConfig: No directory /apex/com.android.ipsec/etc/compatconfig, skipping
+09-24 22:29:38.376   784   784 D CompatConfig: No directory /apex/com.android.virt/etc/compatconfig, skipping
+09-24 22:29:38.382   227   865 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:38.358     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:38.360     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:38.394   784   784 D CompatConfig: Found a config file: /apex/com.android.art/etc/compatconfig/libcore-platform-compat-config.xml
+09-24 22:29:38.402   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@3cb1902
+09-24 22:29:38.402   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8a47213
+09-24 22:29:38.402   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@6788c50
+09-24 22:29:38.405   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@1f44e49
+09-24 22:29:38.405   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a55c34e
+09-24 22:29:38.406   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@45a1c6f
+09-24 22:29:38.406   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@be21d7c
+09-24 22:29:38.406   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@e2a8605
+09-24 22:29:38.407   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@9cec65a
+09-24 22:29:38.407   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@116108b
+09-24 22:29:38.416   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@5f19568
+09-24 22:29:38.417   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@9d27d81
+09-24 22:29:38.417   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@3a2ee26
+09-24 22:29:38.418   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8532a67
+09-24 22:29:38.418   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@4fea014
+09-24 22:29:38.419   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@8a870bd
+09-24 22:29:38.419   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@13fc6b2
+09-24 22:29:38.421   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@65e0603
+09-24 22:29:38.431   784   784 D CompatConfig: Found a config file: /apex/com.android.tethering/etc/compatconfig/connectivity-platform-compat-config.xml
+09-24 22:29:38.438   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@3f05bb9
+09-24 22:29:38.438   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@35f9bfe
+09-24 22:29:38.439   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@5b0ff5f
+09-24 22:29:38.439   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ca5ddac
+09-24 22:29:38.442   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b31fa75
+09-24 22:29:38.443   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a157a0a
+09-24 22:29:38.443   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@410327b
+09-24 22:29:38.443   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@692898
+09-24 22:29:38.446   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@4b4c8f1
+09-24 22:29:38.451   784   784 D CompatConfig: No directory /apex/com.android.neuralnetworks/etc/compatconfig, skipping
+09-24 22:29:38.452   784   784 D CompatConfig: No directory /apex/com.android.tzdata/etc/compatconfig, skipping
+09-24 22:29:38.458   784   784 D CompatConfig: No directory /apex/com.android.uprobestats/etc/compatconfig, skipping
+09-24 22:29:38.464   784   784 D CompatConfig: No directory /apex/com.android.conscrypt/etc/compatconfig, skipping
+09-24 22:29:38.465   784   784 D CompatConfig: No directory /apex/com.android.appsearch/etc/compatconfig, skipping
+09-24 22:29:38.473   784   784 D CompatConfig: Found a config file: /apex/com.android.permission/etc/compatconfig/framework-permission-s-compat-config.xml
+09-24 22:29:38.480   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@d657b57
+09-24 22:29:38.482   784   784 D CompatConfig: No directory /apex/com.android.sdkext/etc/compatconfig, skipping
+09-24 22:29:38.483   784   784 D CompatConfig: No directory /apex/com.android.adbd/etc/compatconfig, skipping
+09-24 22:29:38.486   784   784 D CompatConfig: No directory /apex/com.android.hardware.power/etc/compatconfig, skipping
+09-24 22:29:38.489   784   784 D CompatConfig: No directory /apex/com.android.extservices/etc/compatconfig, skipping
+09-24 22:29:38.490   784   784 D CompatConfig: No directory /apex/com.android.nfcservices/etc/compatconfig, skipping
+09-24 22:29:38.491   784   784 D CompatConfig: No directory /apex/com.android.crashrecovery/etc/compatconfig, skipping
+09-24 22:29:38.495   784   784 D CompatConfig: No directory /apex/com.android.ondevicepersonalization/etc/compatconfig, skipping
+09-24 22:29:38.502   784   784 D CompatConfig: Found a config file: /apex/com.android.mediaprovider/etc/compatconfig/framework-pdf-v-platform-compat-config.xml
+09-24 22:29:38.509   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@9bc032d
+09-24 22:29:38.510   784   784 D CompatConfig: Found a config file: /apex/com.android.mediaprovider/etc/compatconfig/media-provider-platform-compat-config.xml
+09-24 22:29:38.518   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@85c75f3
+09-24 22:29:38.518   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@84072b0
+09-24 22:29:38.519   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@a82a529
+09-24 22:29:38.519   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@ea900ae
+09-24 22:29:38.521   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@be7e4f
+09-24 22:29:38.521   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@bb209dc
+09-24 22:29:38.521   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@5f76ae5
+09-24 22:29:38.522   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@f0879ba
+09-24 22:29:38.522   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@b8eb06b
+09-24 22:29:38.523   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@343e7c8
+09-24 22:29:38.523   784   784 D CompatConfig: Adding: com.android.server.compat.config.Change@138d061
+09-24 22:29:38.529   784   784 D CompatConfig: No directory /apex/com.android.hardware.thermal/etc/compatconfig, skipping
+09-24 22:29:38.530   784   784 D CompatConfig: No directory /apex/com.android.hardware.dumpstate/etc/compatconfig, skipping
+09-24 22:29:38.531   784   784 D CompatConfig: No directory /apex/com.android.hardware.authsecret/etc/compatconfig, skipping
+09-24 22:29:38.537   784   784 D CompatConfig: No directory /apex/com.android.configinfrastructure/etc/compatconfig, skipping
+09-24 22:29:38.538   784   784 D CompatConfig: No directory /apex/com.android.media/etc/compatconfig, skipping
+09-24 22:29:38.540   784   784 D CompatConfig: No directory /apex/com.android.adservices/etc/compatconfig, skipping
+09-24 22:29:38.543   784   784 D CompatConfig: No directory /apex/com.android.hardware.rebootescrow/etc/compatconfig, skipping
+09-24 22:29:38.547   784   784 D CompatConfig: No directory /apex/com.android.profiling/etc/compatconfig, skipping
+09-24 22:29:38.551   784   784 D CompatConfig: No directory /apex/com.android.apex.cts.shim/etc/compatconfig, skipping
+09-24 22:29:38.552   784   784 D CompatConfig: No directory /apex/com.android.scheduling/etc/compatconfig, skipping
+09-24 22:29:38.554   784   784 D CompatConfig: No directory /apex/com.android.hardware.uwb/etc/compatconfig, skipping
+09-24 22:29:38.555   784   784 D CompatConfig: No directory /apex/com.android.hardware.threadnetwork/etc/compatconfig, skipping
+09-24 22:29:38.586   784   784 W CompatConfig: Change ID 203673428 not found. Skipping overrides for it.
+09-24 22:29:38.586   784   784 W CompatConfig: Change ID 200324021 not found. Skipping overrides for it.
+09-24 22:29:38.734   784   784 V SystemServerTiming: PlatformCompat took to complete: 1346ms
+09-24 22:29:38.735   784   784 D SystemServerTiming: StartFileIntegrityService
+09-24 22:29:38.737   784   784 I SystemServiceManager: Starting com.android.server.security.FileIntegrityService
+09-24 22:29:38.751   784   784 V SystemServerTiming: StartFileIntegrityService took to complete: 16ms
+09-24 22:29:38.751   784   784 D SystemServerTiming: StartInstaller
+09-24 22:29:38.755   784   784 I SystemServiceManager: Starting com.android.server.pm.Installer
+09-24 22:29:38.789   719   737 D installd: Found quota mount /dev/block/dm-55 at /data
+09-24 22:29:38.811   719   737 D installd: Found quota mount /dev/block/dm-55 at /data/user/0
+09-24 22:29:38.852   784   784 W SystemServiceManager: Service com.android.server.pm.Installer took 93 ms in onStart
+09-24 22:29:38.853   784   784 V SystemServerTiming: StartInstaller took to complete: 102ms
+09-24 22:29:38.853   784   784 D SystemServerTiming: DeviceIdentifiersPolicyService
+09-24 22:29:38.854   784   784 I SystemServiceManager: Starting com.android.server.os.DeviceIdentifiersPolicyService
+09-24 22:29:38.868   784   784 V SystemServerTiming: DeviceIdentifiersPolicyService took to complete: 14ms
+09-24 22:29:38.869   784   784 D SystemServerTiming: StartFeatureFlagsService
+09-24 22:29:38.869   784   784 I SystemServiceManager: Starting com.android.server.flags.FeatureFlagsService
+09-24 22:29:38.875   784   784 D FeatureFlagsService: Started Feature Flag Service
+09-24 22:29:38.905   784   784 V SystemServerTiming: StartFeatureFlagsService took to complete: 36ms
+09-24 22:29:38.906   784   784 D SystemServerTiming: UriGrantsManagerService
+09-24 22:29:38.907   784   784 I SystemServiceManager: Starting com.android.server.uri.UriGrantsManagerService$Lifecycle
+09-24 22:29:38.919   784   784 V SystemServerTiming: UriGrantsManagerService took to complete: 13ms
+09-24 22:29:38.921   784   784 D SystemServerTiming: StartPowerStatsService
+09-24 22:29:38.922   784   784 I SystemServiceManager: Starting com.android.server.powerstats.PowerStatsService
+09-24 22:29:38.926     0     0 I servicemanager: Caller(pid=784,uid=1000,sid=u:r:system_server:s0) Found android.hardware.power.stats.IPowerStats/default in device VINTF manifest.
+09-24 22:29:38.964   784   784 V SystemServerTiming: StartPowerStatsService took to complete: 43ms
+09-24 22:29:38.965   784   784 D SystemServerTiming: StartIStatsService
+09-24 22:29:38.980   228   228 I hwservicemanager: getTransport: Cannot find entry android.frameworks.stats@1.0::IStats/default in either framework or device VINTF manifest.
+09-24 22:29:38.983   784   784 E HidlServiceManagement: Service android.frameworks.stats@1.0::IStats/default must be in VINTF manifest in order to register/get.
+09-24 22:29:38.983   784   784 W system_server: Cannot register HIDL android.frameworks.stats@1.0::IStats: -2147483648
+09-24 22:29:38.971     0     0 I servicemanager: Caller(pid=784,uid=1000,sid=u:r:system_server:s0) Found android.frameworks.stats.IStats/default in framework VINTF manifest.
+09-24 22:29:38.997   784   784 V SystemServerTiming: StartIStatsService took to complete: 32ms
+09-24 22:29:38.998   784   784 D SystemServerTiming: MemtrackProxyService
+09-24 22:29:39.011   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.memtrack@1.0::IMemtrack/default in either framework or device VINTF manifest.
+09-24 22:29:38.984     0     0 I servicemanager: Caller(pid=784,uid=1000,sid=u:r:system_server:s0) Could not find android.hardware.memtrack.IMemtrack/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 22:29:39.014   784   784 I Stability: Interface set with vintf stability downgraded to system stability stability
+09-24 22:29:39.019   784   784 V SystemServerTiming: MemtrackProxyService took to complete: 20ms
+09-24 22:29:39.019   784   784 D SystemServerTiming: StartAccessCheckingService
+09-24 22:29:39.023   784   784 I SystemServiceManager: Starting com.android.server.permission.access.AccessCheckingService
+09-24 22:29:39.064   784   784 V SystemServerTiming: StartAccessCheckingService took to complete: 44ms
+09-24 22:29:39.064   784   784 D SystemServerTiming: StartActivityManager
+09-24 22:29:39.065   784   784 I SystemServiceManager: Starting com.android.server.wm.ActivityTaskManagerService$Lifecycle
+09-24 22:29:39.130   784   784 I SystemServiceManager: Starting com.android.server.am.ActivityManagerService$Lifecycle
+09-24 22:29:39.197   784   784 I ActivityManager: Memory class: 192
+09-24 22:29:39.243   784   868 I Binder  : Setting heavy hitter watcher config: false, 0, 0.0
+09-24 22:29:39.367   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:39.355     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:39.389   227   876 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:39.365     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:39.367     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:39.522   784   784 W PowerProfile: ambient.on is deprecated! Use ambient.on.display0 instead.
+09-24 22:29:39.523   784   784 W PowerProfile: screen.on is deprecated! Use screen.on.display0 instead.
+09-24 22:29:39.523   784   784 W PowerProfile: screen.full is deprecated! Use screen.full.display0 instead.
+09-24 22:29:39.529   784   784 W ModemPowerProfile: getAverageBatteryDrainMaH called with unexpected key: 0x0, drain:SLEEP,RAT:DEFAULT
+09-24 22:29:39.530   784   784 W ModemPowerProfile: getAverageBatteryDrainMaH called with unexpected key: 0x10000000, drain:IDLE,RAT:DEFAULT
+09-24 22:29:39.531   784   784 W ModemPowerProfile: getAverageBatteryDrainMaH called with unexpected key: 0x20000000, drain:RX,RAT:DEFAULT
+09-24 22:29:39.531   784   784 W ModemPowerProfile: getAverageBatteryDrainMaH called with unexpected key: 0x30000000, drain:TX,level:0,RAT:DEFAULT
+09-24 22:29:39.536   784   784 W ModemPowerProfile: getAverageBatteryDrainMaH called with unexpected key: 0x31000000, drain:TX,level:1,RAT:DEFAULT
+09-24 22:29:39.537   784   784 W ModemPowerProfile: getAverageBatteryDrainMaH called with unexpected key: 0x32000000, drain:TX,level:2,RAT:DEFAULT
+09-24 22:29:39.538   784   784 W ModemPowerProfile: getAverageBatteryDrainMaH called with unexpected key: 0x33000000, drain:TX,level:3,RAT:DEFAULT
+09-24 22:29:39.538   784   784 W ModemPowerProfile: getAverageBatteryDrainMaH called with unexpected key: 0x34000000, drain:TX,level:4,RAT:DEFAULT
+09-24 22:29:39.690   784   784 D BatteryStatsImpl: Reading daily items from /data/system/batterystats-daily.xml
+09-24 22:29:40.381   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:40.360     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:40.382     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:40.407   227   880 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:40.392     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:40.963   784   784 I IntentFirewall: Read new rules (A:0 B:0 S:0)
+09-24 22:29:41.110   784   784 D OomAdjuster: Not killing cached processes
+09-24 22:29:41.183   784   784 D AppOps  : AppOpsService published
+09-24 22:29:41.243   784   842 W android.permission.PermissionManager: Missing ActivityManager; assuming 1047 does not hold android.permission.MANAGE_APP_OPS_MODES
+09-24 22:29:41.296   784   784 W SystemServiceManager: Service com.android.server.am.ActivityManagerService$Lifecycle took 142 ms in onStart
+09-24 22:29:41.299   784   784 V SystemServerTiming: StartActivityManager took to complete: 2234ms
+09-24 22:29:41.317   784   784 D SystemServerTiming: StartDataLoaderManagerService
+09-24 22:29:41.318   784   784 I SystemServiceManager: Starting com.android.server.pm.DataLoaderManagerService
+09-24 22:29:41.405   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:41.415   784   784 V SystemServerTiming: StartDataLoaderManagerService took to complete: 97ms
+09-24 22:29:41.415   784   784 D SystemServerTiming: StartIncrementalService
+09-24 22:29:41.399     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:41.491   227   886 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:41.466     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:41.500     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:41.755   784   784 I incfs-mounts: [incfs] Loaded incremental-fs mount info: 0 instances, 0 mount points
+09-24 22:29:41.811   784   784 V SystemServerTiming: StartIncrementalService took to complete: 395ms
+09-24 22:29:41.822   784   784 D SystemServerTiming: StartPowerManager
+09-24 22:29:41.858   784   784 I SystemServiceManager: Starting com.android.server.power.PowerManagerService
+09-24 22:29:42.032   784   836 I system_server: Background concurrent mark compact GC freed 4401KB AllocSpace bytes, 34(864KB) LOS objects, 49% free, 3042KB/6084KB, paused 61.267ms,43.052ms total 1.020s
+09-24 22:29:42.075     0     0 I servicemanager: Caller(pid=784,uid=1000,sid=u:r:system_server:s0) Found android.system.suspend.ISystemSuspend/default in framework VINTF manifest.
+09-24 22:29:42.155     0     0 I servicemanager: Caller(pid=784,uid=1000,sid=u:r:system_server:s0) Found android.hardware.power.IPower/default in device VINTF manifest.
+09-24 22:29:42.196   784   784 I PowerHalLoader: Successfully connected to Power HAL AIDL service.
+09-24 22:29:42.246   525   525 I android.hardware.power-service.example: Power isModeSupported: 7
+09-24 22:29:42.253   525   525 I android.hardware.power-service.example: Power isModeSupported: 0
+09-24 22:29:42.279   784   784 V SystemServerTiming: StartPowerManager took to complete: 456ms
+09-24 22:29:42.280   784   784 D SystemServerTiming: StartThermalManager
+09-24 22:29:42.287   784   784 I SystemServiceManager: Starting com.android.server.power.ThermalManagerService
+09-24 22:29:42.310   784   784 V SystemServerTiming: StartThermalManager took to complete: 27ms
+09-24 22:29:42.311   784   784 D SystemServerTiming: InitPowerManagement
+09-24 22:29:42.349   784   784 V SystemServerTiming: InitPowerManagement took to complete: 38ms
+09-24 22:29:42.349   784   784 D SystemServerTiming: StartRecoverySystemService
+09-24 22:29:42.350   784   784 I SystemServiceManager: Starting com.android.server.recoverysystem.RecoverySystemService$Lifecycle
+09-24 22:29:42.421   784   784 W SystemServiceManager: Service com.android.server.recoverysystem.RecoverySystemService$Lifecycle took 69 ms in onStart
+09-24 22:29:42.421   784   784 V SystemServerTiming: StartRecoverySystemService took to complete: 71ms
+09-24 22:29:42.422   784   784 D SystemServerTiming: StartLightsService
+09-24 22:29:42.422   784   784 I SystemServiceManager: Starting com.android.server.lights.LightsService
+09-24 22:29:42.416     0     0 I servicemanager: Caller(pid=784,uid=1000,sid=u:r:system_server:s0) Found android.hardware.light.ILights/default in device VINTF manifest.
+09-24 22:29:42.460   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:42.451     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:42.498   496   496 I lights_service_example_rust: main::lights: Lights reporting supported lights
+09-24 22:29:42.516   227   894 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:42.483     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:42.495     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:42.551   784   784 V SystemServerTiming: StartLightsService took to complete: 128ms
+09-24 22:29:42.551   784   784 D SystemServerTiming: StartDisplayOffloadService
+09-24 22:29:42.552   784   784 V SystemServerTiming: StartDisplayOffloadService took to complete: 0ms
+09-24 22:29:42.558   784   784 D SystemServerTiming: StartDisplayManager
+09-24 22:29:42.566   784   784 I SystemServiceManager: Starting com.android.server.display.DisplayManagerService
+09-24 22:29:42.839   784   784 D PluginManager: loading plugins from:
+09-24 22:29:42.840   784   784 D PluginManager: loaded Plugins:[]
+09-24 22:29:42.909   784   784 W SystemServiceManager: Service com.android.server.display.DisplayManagerService took 61 ms in onStart
+09-24 22:29:42.909   784   784 V SystemServerTiming: StartDisplayManager took to complete: 351ms
+09-24 22:29:42.910   784   784 D SystemServerTiming: WaitForDisplay
+09-24 22:29:42.910   784   784 I SystemServiceManager: Starting phase 100
+09-24 22:29:42.911   784   784 D SystemServerTiming: OnBootPhase_100
+09-24 22:29:42.911   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.security.FileIntegrityService
+09-24 22:29:42.918   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.security.FileIntegrityService took to complete: 0ms
+09-24 22:29:42.918   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.pm.Installer
+09-24 22:29:42.919   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.pm.Installer took to complete: 0ms
+09-24 22:29:42.933   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.os.DeviceIdentifiersPolicyService
+09-24 22:29:42.934   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.os.DeviceIdentifiersPolicyService took to complete: 0ms
+09-24 22:29:42.935   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.flags.FeatureFlagsService
+09-24 22:29:42.944   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.flags.FeatureFlagsService took to complete: 0ms
+09-24 22:29:42.945   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.uri.UriGrantsManagerService$Lifecycle
+09-24 22:29:42.945   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.uri.UriGrantsManagerService$Lifecycle took to complete: 0ms
+09-24 22:29:42.946   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.powerstats.PowerStatsService
+09-24 22:29:42.946   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.powerstats.PowerStatsService took to complete: 0ms
+09-24 22:29:42.946   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.permission.access.AccessCheckingService
+09-24 22:29:42.947   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.permission.access.AccessCheckingService took to complete: 1ms
+09-24 22:29:42.947   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.wm.ActivityTaskManagerService$Lifecycle
+09-24 22:29:42.948   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.wm.ActivityTaskManagerService$Lifecycle took to complete: 0ms
+09-24 22:29:42.957   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.am.ActivityManagerService$Lifecycle
+09-24 22:29:42.958   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.am.ActivityManagerService$Lifecycle took to complete: 0ms
+09-24 22:29:42.959   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.pm.DataLoaderManagerService
+09-24 22:29:42.959   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.pm.DataLoaderManagerService took to complete: 0ms
+09-24 22:29:42.970   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.power.PowerManagerService
+09-24 22:29:42.971   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.power.PowerManagerService took to complete: 0ms
+09-24 22:29:42.971   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.power.ThermalManagerService
+09-24 22:29:42.981   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.power.ThermalManagerService took to complete: 0ms
+09-24 22:29:42.981   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.recoverysystem.RecoverySystemService$Lifecycle
+09-24 22:29:42.981   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.recoverysystem.RecoverySystemService$Lifecycle took to complete: 0ms
+09-24 22:29:42.982   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.lights.LightsService
+09-24 22:29:42.982   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.lights.LightsService took to complete: 0ms
+09-24 22:29:42.983   784   784 D SystemServerTiming: OnBootPhase_100_com.android.server.display.DisplayManagerService
+09-24 22:29:43.095   784   859 W LocalDisplayAdapter: DisplayModeSpecs base mode no longer available, using currently active mode.
+09-24 22:29:43.130   784   859 E DisplayManagerService: Default display is null for info request from uid 1000
+09-24 22:29:43.279   784   859 I DisplayDeviceRepository: Display device added: DisplayDeviceInfo{"Built-in Screen": uniqueId="local:4619827259835644672", 1080 x 2400, modeId 1, renderFrameRate 60.000004, hasArrSupport false, frameRateCategoryRate FrameRateCategoryRate {normal=60.0, high=90.0}, supportedRefreshRates [60.000004], defaultModeId 1, userPreferredModeId -1, supportedModes [{id=1, width=1080, height=2400, fps=60.000004, vsync=60.000004, synthetic=false, alternativeRefreshRates=[], supportedHdrTypes=[]}], colorMode 0, supportedColorModes [0], hdrCapabilities HdrCapabilities{mSupportedHdrTypes=[], mMaxLuminance=500.0, mMaxAverageLuminance=500.0, mMinLuminance=0.0}, isForceSdr false, allmSupported false, gameContentTypeSupported false, density 420, 420.0 x 420.0 dpi, appVsyncOff 1000000, presDeadline 16666666, touch INTERNAL, rotation 0, type INTERNAL, address {port=0, model=0x401cec6a7a2b7b}, deviceProductInfo DeviceProductInfo{name=EMU_display_0, manufacturerPnpId=GGL, productId=1, modelYear=null, manufactureDate=ManufactureDate{week=27, year=2006}, connectionToSinkType=1}, state UNKNOWN, committedState UNKNOWN, frameRateOverride , brightnessMinimum 0.035433073, brightnessMaximum 1.0, brightnessDefault 0.39763778, brightnessDim 0.05, hdrSdrRatio NaN, FLAG_ALLOWED_TO_BE_DEFAULT_DISPLAY, FLAG_ROTATES_WITH_CONTENT, FLAG_SECURE, FLAG_SUPPORTS_PROTECTED_BUFFERS, FLAG_TRUSTED, installOrientation 0, displayShape DisplayShape{ spec=-1893857183 displayWidth=1080 displayHeight=2400 physicalPixelDisplaySizeRatio=1.0 rotation=0 offsetX=0 offsetY=0 scale=1.0}}
+09-24 22:29:43.291   784   859 I LogicalDisplayMapper: Applying layout: [{dispId: 0(ON), displayGroupName: , addr: {port=0, model=0x401cec6a7a2b7b}, mThermalBrightnessThrottlingMapId: null, mRefreshRateZoneId: null, mLeadDisplayId: -1, mLeadDisplayAddress: null, mThermalRefreshRateThrottlingMapId: null, mPowerThrottlingMapId: null}], Previous layout: null
+09-24 22:29:43.304   784   859 I LogicalDisplayMapper: Setting new display group 0 for display 0, from previous group: null
+09-24 22:29:43.428   784   784 W SystemServiceManager: Service com.android.server.display.DisplayManagerService took 446 ms in onBootPhase
+09-24 22:29:43.429   784   784 V SystemServerTiming: OnBootPhase_100_com.android.server.display.DisplayManagerService took to complete: 445ms
+09-24 22:29:43.429   784   784 V SystemServerTiming: OnBootPhase_100 took to complete: 518ms
+09-24 22:29:43.429   784   784 V SystemServerTiming: WaitForDisplay took to complete: 519ms
+09-24 22:29:43.430   784   784 D SystemServerTiming: StartDomainVerificationService
+09-24 22:29:43.476   784   859 W StrictMode: No activity manager; failed to Dropbox violation.
+09-24 22:29:43.498   784   859 W StrictMode: No activity manager; failed to Dropbox violation.
+09-24 22:29:43.506   784   859 W StrictMode: No activity manager; failed to Dropbox violation.
+09-24 22:29:43.508   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:43.487     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:43.537   784   859 I service_manager_slow: [21,activity]
+09-24 22:29:43.537   784   859 W StrictMode: No activity manager; failed to Dropbox violation.
+09-24 22:29:43.546   784   859 W StrictMode: No activity manager; failed to Dropbox violation.
+09-24 22:29:43.557   227   895 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:43.530     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:43.562   784   859 W StrictMode: No activity manager; failed to Dropbox violation.
+09-24 22:29:43.572   784   859 W StrictMode: No activity manager; failed to Dropbox violation.
+09-24 22:29:43.581   784   784 V SystemServerTiming: StartDomainVerificationService took to complete: 138ms
+09-24 22:29:43.550     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:43.582   784   784 D SystemServerTiming: StartPackageManagerService
+09-24 22:29:43.583   784   784 I Watchdog: Pausing HandlerChecker: main thread for reason: packagemanagermain. Pause count: 1
+09-24 22:29:43.613   784   784 D PackageManagerTiming: create package manager
+09-24 22:29:43.697   784   784 I boot_progress_pms_start: 297673
+09-24 22:29:43.701   784   784 D PackageManagerTiming: createSubComponents
+09-24 22:29:43.841   784   784 I UserManagerService: Upgrading users from userVersion 11 to 11
+09-24 22:29:43.957   784   784 V PackageManagerTiming: createSubComponents took to complete: 256ms
+09-24 22:29:43.958   784   784 D PackageManagerTiming: get system config
+09-24 22:29:43.958   784   784 V PackageManagerTiming: get system config took to complete: 0ms
+09-24 22:29:43.959   784   784 D PackageManagerTiming: addSharedUsers
+09-24 22:29:43.971   784   784 V PackageManagerTiming: addSharedUsers took to complete: 12ms
+09-24 22:29:44.055   784   784 D SELinuxMMAC: Using policy file /system/etc/selinux/plat_mac_permissions.xml
+09-24 22:29:44.082   784   784 D SELinuxMMAC: Using policy file /system_ext/etc/selinux/system_ext_mac_permissions.xml
+09-24 22:29:44.085   784   784 D SELinuxMMAC: Using policy file /product/etc/selinux/product_mac_permissions.xml
+09-24 22:29:44.091   784   784 D SELinuxMMAC: Using policy file /vendor/etc/selinux/vendor_mac_permissions.xml
+09-24 22:29:44.099   784   784 D SELinuxMMAC: Using policy file /odm/etc/selinux/odm_mac_permissions.xml
+09-24 22:29:44.102   784   784 D PackageManagerTiming: loadFallbacks
+09-24 22:29:44.112   784   784 V Configuration: Updating configuration, locales updated from [] to [en_US]
+09-24 22:29:44.114   784   784 I system_server: AssetManager2(0x77d9917def38) locale list changing from [] to [en-US]
+09-24 22:29:44.134   784   784 D FallbackCategoryProvider: Found 387 fallback categories
+09-24 22:29:44.135   784   784 V PackageManagerTiming: loadFallbacks took to complete: 32ms
+09-24 22:29:44.135   784   784 D PackageManagerTiming: read user settings
+09-24 22:29:44.523     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:44.544   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:44.540     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:44.544     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:44.566   227   899 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:45.350   784   836 I system_server: Background concurrent mark compact GC freed 2098KB AllocSpace bytes, 5(148KB) LOS objects, 49% free, 3699KB/7398KB, paused 4.309ms,5.585ms total 548.141ms
+09-24 22:29:45.568   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:45.547     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:45.592   227   902 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:45.567     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:45.571     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:46.418     0     0 W healthd : battery l=100 v=5000 t=25.0 h=2 st=2 c=900000 fc=3000000 cc=10 chg=a
+09-24 22:29:46.554     0     0 I servicemanager: Notifying apexservice they don't (previously: do) have clients when we now have no record of a client
+09-24 22:29:46.557     0     0 I AidlLazyServiceRegistrar: Process has 0 (of 1 available) client(s) in use after notification apexservice has clients: 0
+09-24 22:29:46.557     0     0 I AidlLazyServiceRegistrar: Shutdown prevented by forcePersist override flag.
+09-24 22:29:46.589   536   536 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:29:46.570     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:29:46.606     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:29:46.630   227   903 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:29:46.618     0     0 I servicemanager: Caller(pid=536,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:29:46.856     0     0 I logd    : logdr: UID=2000 GID=2000 PID=900 n tail=1000 logMask=bf pid=0 start=0ns deadline=0ns

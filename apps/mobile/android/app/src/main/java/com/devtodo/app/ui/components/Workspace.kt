@@ -21,19 +21,23 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-/** The root owns system insets; pages own their app bar and content padding. */
+/** Each page scaffold owns safe-area padding while its surface draws edge to edge. */
 @Composable
 fun WorkspaceScaffold(
     topBar: @Composable () -> Unit = {},
+    bottomBar: @Composable () -> Unit = {},
     floatingActionButton: @Composable () -> Unit = {},
+    floatingActionButtonPosition: FabPosition = FabPosition.End,
     snackbarHost: @Composable () -> Unit = {},
-    contentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0),
+    contentWindowInsets: WindowInsets = WindowInsets.safeDrawing,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     Scaffold(
         contentWindowInsets = contentWindowInsets,
         topBar = topBar,
+        bottomBar = bottomBar,
         floatingActionButton = floatingActionButton,
+        floatingActionButtonPosition = floatingActionButtonPosition,
         snackbarHost = snackbarHost,
     ) { padding ->
         Box(
