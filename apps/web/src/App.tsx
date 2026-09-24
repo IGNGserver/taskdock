@@ -126,7 +126,7 @@ import {
 } from './components/m3e/index.js';
 import { useDismissibleMenu } from './components/m3e/behavior.js';
 import { PwaLifecycleNotice } from './pwa.js';
-import { AllTasksV2Page, TaskDetailV2Overlay, TreePage, WorkflowsPage } from './TreePage.js';
+import { TaskDetailV2Overlay, TreePage, WorkflowsPage } from './TreePage.js';
 import { readRecentCaptureFolder } from './folder-preference.js';
 
 type PlacementWithTask = PlacementDto & { task: TreeTaskDto };
@@ -586,7 +586,6 @@ function AuthenticatedApp() {
     () => [
       { to: '/today', label: '今日', icon: <Target size={20} /> },
       { to: '/tree', label: '任务库', icon: <LayoutList size={20} /> },
-      { to: '/tasks', label: '全部任务', icon: <ListChecksIcon size={20} /> },
       { to: '/workflows', label: '流程', icon: <WorkflowIcon size={20} /> },
       { to: '/time/calendar', label: '日历', icon: <CalendarDays size={20} /> },
       { to: '/time/events', label: '事件', icon: <Clock3 size={20} /> },
@@ -734,13 +733,11 @@ function AuthenticatedApp() {
                     }}
                     options={[
                       { id: 'search', label: '搜索任务和备注', icon: <Search size={18} /> },
-                      { id: 'tasks', label: '打开全部任务', icon: <ListChecksIcon size={18} /> },
                     ]}
                     onSelect={(id) => {
                       if (id === 'search') setCommandOpen(true);
-                      if (id === 'tasks') navigate('/tasks');
                     }}
-                    menuLabel="更多创建操作"
+                    menuLabel="更多快捷操作"
                   />
                 </Toolbar>
               ) : (
@@ -758,7 +755,7 @@ function AuthenticatedApp() {
               <Route path="/today" element={<TodayPage onOpenTask={openTask} />} />
               <Route path="/tree" element={<TreePage />} />
               <Route path="/tree/:folderId" element={<TreePage />} />
-              <Route path="/tasks" element={<AllTasksV2Page />} />
+              <Route path="/tasks" element={<Navigate to="/tree" replace />} />
               <Route path="/workflows" element={<WorkflowsPage />} />
               <Route path="/projects" element={<Navigate to="/tree" replace />} />
               <Route path="/projects/:projectId" element={<Navigate to="/tree" replace />} />
@@ -1130,7 +1127,7 @@ function TimeHubPage() {
 
 function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
   const links = [
-    { to: '/tasks', label: '任务库', description: '浏览和整理完整任务库。', icon: LayoutList },
+    { to: '/tree', label: '任务库', description: '按目录浏览和整理任务。', icon: LayoutList },
     {
       to: '/archive',
       label: '归档',
@@ -1887,7 +1884,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               onChanged={reload}
               onMove={movePlacement}
               emptyTitle="今天还没有安排"
-              emptyDescription="可以从全部任务中安排内容，或先捕获一个位于最近目录的任务。"
+              emptyDescription="可以从任务库中安排内容，或先捕获一个位于最近目录的任务。"
               emptyAction={
                 data.point ? (
                   <Button
@@ -3114,10 +3111,127 @@ function AddTaskModal({
   const [activeTab, setActiveTab] = useState<'existing' | 'create'>('create');
   const [createTitle, setCreateTitle] = useState('');
   const [query, setQuery] = useState('');
-  const [items, setItems] = useState<TreeTaskDto[]>([]);
+  const [tasks, setTasks] = useState<TreeTaskDto[]>([]);
+  const [folders, setFolders] = useState<FolderDto[]>([]);
   const [error, setError] = useState('');
+  const [pickerError, setPickerError] = useState('');
+  const [pickerLoading, setPickerLoading] = useState(false);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set());
+  const initializedTree = useRef(false);
+
+  const loadPicker = useCallback(async () => {
+    setPickerLoading(true);
+    setError('');
+    setPickerError('');
+    try {
+      const [taskResult, folderResult] = await Promise.all([
+        requestV2<{ items: TreeTaskDto[] }>('/tasks?archived=false'),
+        requestV2<{ items: FolderDto[] }>('/folders?archived=false'),
+      ]);
+      setTasks(taskResult.items);
+      setFolders(folderResult.items);
+      if (!initializedTree.current) {
+        setExpandedFolderIds(
+          new Set(
+            folderResult.items
+              .filter((folder) => !folder.parentFolderId)
+              .map((folder) => folder.id),
+          ),
+        );
+        initializedTree.current = true;
+      }
+    } catch (cause) {
+      setPickerError(cause instanceof ApiError ? cause.message : '任务目录加载失败，请重试');
+    } finally {
+      setPickerLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'existing') return;
+    void loadPicker();
+    const listener = () => void loadPicker();
+    window.addEventListener('devtodo:data-changed', listener);
+    return () => window.removeEventListener('devtodo:data-changed', listener);
+  }, [activeTab, loadPicker]);
+
+  const activeTasks = useMemo(
+    () => tasks.filter((task) => !task.archivedAt && !task.deletedAt && task.status !== 'DONE'),
+    [tasks],
+  );
+  const activeFolders = useMemo(
+    () => folders.filter((folder) => !folder.archivedAt && !folder.deletedAt),
+    [folders],
+  );
+  const foldersById = useMemo(() => {
+    const byId = new Map<string, FolderDto>();
+    for (const folder of activeFolders) byId.set(folder.id, folder);
+    return byId;
+  }, [activeFolders]);
+  const foldersByParent = useMemo(() => {
+    const grouped = new Map<string | null, FolderDto[]>();
+    for (const folder of activeFolders) {
+      const siblings = grouped.get(folder.parentFolderId) ?? [];
+      siblings.push(folder);
+      grouped.set(folder.parentFolderId, siblings);
+    }
+    return grouped;
+  }, [activeFolders]);
+  const tasksByParent = useMemo(() => {
+    const grouped = new Map<string | null, TreeTaskDto[]>();
+    for (const task of activeTasks) {
+      const siblings = grouped.get(task.parentFolderId) ?? [];
+      siblings.push(task);
+      grouped.set(task.parentFolderId, siblings);
+    }
+    return grouped;
+  }, [activeTasks]);
+  type PickerNode = { kind: 'FOLDER'; folder: FolderDto } | { kind: 'TASK'; task: TreeTaskDto };
+  const nodesUnder = useCallback(
+    (parentFolderId: string | null): PickerNode[] => {
+      const nodes: PickerNode[] = [
+        ...(foldersByParent.get(parentFolderId) ?? []).map((folder) => ({
+          kind: 'FOLDER' as const,
+          folder,
+        })),
+        ...(tasksByParent.get(parentFolderId) ?? []).map((task) => ({ kind: 'TASK' as const, task })),
+      ];
+      return nodes.sort((left, right) => {
+        const leftRank = BigInt(left.kind === 'FOLDER' ? left.folder.rank : left.task.rank);
+        const rightRank = BigInt(right.kind === 'FOLDER' ? right.folder.rank : right.task.rank);
+        return leftRank < rightRank ? -1 : leftRank > rightRank ? 1 : 0;
+      });
+    },
+    [foldersByParent, tasksByParent],
+  );
+  const taskLocation = useCallback(
+    (task: TreeTaskDto) => {
+      const path: string[] = [];
+      let parentId = task.parentFolderId;
+      let visited = 0;
+      while (parentId && visited < activeFolders.length) {
+        const folder = foldersById.get(parentId);
+        if (!folder) break;
+        path.unshift(folder.title);
+        parentId = folder.parentFolderId;
+        visited += 1;
+      }
+      return path.join(' / ') || '根目录';
+    },
+    [activeFolders.length, foldersById],
+  );
+  const matchingTasks = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase();
+    if (!needle) return activeTasks;
+    return activeTasks.filter(
+      (task) =>
+        task.title.toLocaleLowerCase().includes(needle) ||
+        task.referenceId.toLocaleLowerCase().includes(needle) ||
+        taskLocation(task).toLocaleLowerCase().includes(needle),
+    );
+  }, [activeTasks, query, taskLocation]);
 
   const handleCreateNew = async (e: FormEvent) => {
     e.preventDefault();
@@ -3140,34 +3254,6 @@ function AddTaskModal({
       setCreating(false);
     }
   };
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (query.trim()) {
-        void requestV2<{ items: TreeTaskDto[] }>('/tasks?archived=false')
-          .then((result) => {
-            const needle = query.trim().toLocaleLowerCase();
-            setItems(
-              result.items
-                .filter(
-                  (task) =>
-                    task.status !== 'DONE' &&
-                    (task.title.toLocaleLowerCase().includes(needle) ||
-                      task.referenceId.toLocaleLowerCase().includes(needle)),
-                )
-                .slice(0, 12),
-            );
-          })
-          .catch(() => setItems([]));
-        return;
-      }
-      void requestV2<{ items: TreeTaskDto[] }>('/tasks?archived=false')
-        .then((result) =>
-          setItems(result.items.filter((task) => task.status !== 'DONE').slice(0, 12)),
-        )
-        .catch(() => setItems([]));
-    }, 150);
-    return () => window.clearTimeout(timer);
-  }, [query]);
   const add = async (task: TreeTaskDto) => {
     if (busyTaskId) return;
     setBusyTaskId(task.id);
@@ -3185,24 +3271,88 @@ function AddTaskModal({
     setError('');
     try {
       await mutationV2('PATCH', `/tasks/${task.id}`, { status, baseVersion: task.version });
-      const result = await requestV2<{ items: TreeTaskDto[] }>('/tasks?archived=false');
-      const needle = query.trim().toLocaleLowerCase();
-      setItems(
-        result.items
-          .filter(
-            (item) =>
-              item.status !== 'DONE' &&
-              (!needle ||
-                item.title.toLocaleLowerCase().includes(needle) ||
-                item.referenceId.toLocaleLowerCase().includes(needle)),
-          )
-          .slice(0, 12),
-      );
       window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '更新任务状态失败，请重试');
     }
   };
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolderIds((current) => {
+      const next = new Set(current);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  };
+  const renderTaskRow = (task: TreeTaskDto, showLocation: boolean) => (
+    <ListItem
+      key={task.id}
+      className="m3e-list-item--picker"
+      headline={task.title}
+      supporting={
+        showLocation ? (
+          <>
+            <code>{task.referenceId}</code>
+            <span className="task-picker-location">{taskLocation(task)}</span>
+          </>
+        ) : (
+          task.referenceId
+        )
+      }
+      leadingControl={
+        <TaskStatusControl
+          status={task.status}
+          disabled={Boolean(busyTaskId)}
+          onStatusChange={(status) => changeTaskStatus(task, status)}
+        />
+      }
+      trailing={
+        busyTaskId === task.id ? (
+          <LoaderCircle className="spin" size={16} />
+        ) : (
+          <Plus size={16} />
+        )
+      }
+      onClick={() => void add(task)}
+      disabled={Boolean(busyTaskId)}
+      ariaLabel={`安排任务 ${task.title}`}
+    />
+  );
+  const renderBranch = (parentFolderId: string | null): ReactNode => {
+    const nodes = nodesUnder(parentFolderId);
+    if (!nodes.length) return null;
+    return (
+      <ul className="m3e-list m3e-list--gap m3e-list--picker" role="list">
+        {nodes.map((node) => {
+          if (node.kind === 'TASK') return renderTaskRow(node.task, false);
+          const expanded = expandedFolderIds.has(node.folder.id);
+          return (
+            <li className="task-picker-tree__folder" key={node.folder.id}>
+              <button
+                type="button"
+                className="task-picker-folder"
+                aria-expanded={expanded}
+                aria-label={`${expanded ? '收起' : '展开'}目录 ${node.folder.title}`}
+                onClick={() => toggleFolder(node.folder.id)}
+              >
+                {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                <Folder size={18} aria-hidden="true" />
+                <span>{node.folder.title}</span>
+              </button>
+              {expanded && (
+                <div className="task-picker-tree__children">
+                  {renderBranch(node.folder.id) ?? (
+                    <p className="task-picker-empty-folder">此目录没有未完成任务</p>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
+
   return (
     <Modal title="安排任务" onClose={onClose}>
       <ButtonGroup
@@ -3234,51 +3384,61 @@ function AddTaskModal({
       ) : (
         <>
           <SearchBar
-            label="搜索任务"
+            label="搜索任务或目录"
             variant="view"
             autoFocus
             value={query}
             onChange={setQuery}
-            placeholder="输入标题或引用 ID"
+            placeholder="搜索标题、引用 ID 或目录"
             leadingIcon={<Search size={20} />}
           />
-          {error && <Alert tone="error">{error}</Alert>}
-          {!query && <p className="field-help picker-hint">最近未完成的任务</p>}
-          <List className="m3e-list--picker" gap>
-            {items.map((task) => (
-              <ListItem
-                key={task.id}
-                className={`m3e-list-item--picker${task.status === 'DONE' ? ' is-task-done' : ''}`}
-                headline={task.title}
-                supporting={task.referenceId}
-                leadingControl={
-                  <TaskStatusControl
-                    status={task.status}
-                    disabled={Boolean(busyTaskId)}
-                    onStatusChange={(status) => changeTaskStatus(task, status)}
-                  />
-                }
-                trailing={
-                  busyTaskId === task.id ? (
-                    <LoaderCircle className="spin" size={16} />
-                  ) : (
-                    <Plus size={16} />
-                  )
-                }
-                onClick={() => void add(task)}
-                disabled={Boolean(busyTaskId)}
-                ariaLabel={`安排任务 ${task.title}`}
-              />
-            ))}
-          </List>
-          {!items.length && (
-            <M3EmptyState
-              compact
-              icon={<ListChecksIcon size={20} />}
-              title={query ? '没有可加入的任务' : '没有未完成任务'}
-              description={query ? '换一个标题或引用 ID 再试。' : '可以切换到新建任务并立即安排。'}
-            />
+          {error && (
+            <Alert tone="error" title="任务操作失败">
+              {error}
+            </Alert>
           )}
+          {pickerError && (
+            <Alert
+              tone="error"
+              action={
+                <Button variant="text" size="s" onClick={() => void loadPicker()}>
+                  重试
+                </Button>
+              }
+            >
+              {pickerError}
+            </Alert>
+          )}
+          {!query.trim() && (
+            <p className="field-help picker-hint">按目录浏览未完成任务，也可以搜索跨目录查找。</p>
+          )}
+          <div className="task-picker-scroll" role="region" aria-label="可安排任务">
+            {pickerLoading ? (
+              <LoadingState label="正在加载任务目录" />
+            ) : pickerError && !tasks.length && !folders.length ? null : query.trim() ? (
+              matchingTasks.length ? (
+                <List className="m3e-list--picker" gap>
+                  {matchingTasks.map((task) => renderTaskRow(task, true))}
+                </List>
+              ) : (
+                <M3EmptyState
+                  compact
+                  icon={<ListChecksIcon size={20} />}
+                  title="没有可加入的任务"
+                  description="换一个标题、引用 ID 或目录名称再试。"
+                />
+              )
+            ) : activeTasks.length ? (
+              renderBranch(null)
+            ) : (
+              <M3EmptyState
+                compact
+                icon={<ListChecksIcon size={20} />}
+                title="没有未完成任务"
+                description="可以切换到新建任务并立即安排。"
+              />
+            )}
+          </div>
         </>
       )}
     </Modal>
@@ -4269,7 +4429,6 @@ function isHttpOrigin(value: string): boolean {
 function breadcrumb(pathname: string): string {
   if (pathname.startsWith('/today')) return '今日';
   if (pathname.startsWith('/tree')) return '任务库';
-  if (pathname.startsWith('/tasks')) return '任务库 / 全部任务';
   if (pathname.startsWith('/workflows')) return '流程';
   if (
     pathname.startsWith('/projects') ||

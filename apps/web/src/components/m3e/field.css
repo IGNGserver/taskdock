@@ -512,7 +512,6 @@
   min-inline-size: 0;
 }
 
-.m3e-select--all-tasks-filter,
 .m3e-select--step-status,
 .m3e-select--task-folder,
 .m3e-select--tree-view,
@@ -520,7 +519,6 @@
   min-inline-size: 0;
 }
 
-.m3e-select--all-tasks-filter .m3e-select__trigger,
 .m3e-select--step-status .m3e-select__trigger,
 .m3e-select--task-folder .m3e-select__trigger,
 .m3e-select--tree-view .m3e-select__trigger,

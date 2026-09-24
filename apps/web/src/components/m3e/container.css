@@ -755,15 +755,12 @@
   padding: 16px;
 }
 
-.m3e-list--all-tasks,
 .m3e-list--command-results,
-.m3e-list--picker,
 .m3e-list--tree-group,
 .m3e-list--workflow-stage {
   overflow: hidden;
 }
 
-.m3e-list-item--all-task,
 .m3e-list-item--picker,
 .m3e-list-item--tree-row,
 .m3e-list-item--workflow-task {

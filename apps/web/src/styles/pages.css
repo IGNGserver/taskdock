@@ -76,25 +76,8 @@
 /* -------------------------------------------------------------------------- */
 
 .tree-page,
-.workflows-page,
-.all-tasks-page {
+.workflows-page {
   position: relative;
-}
-
-.all-tasks-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
-  align-items: end;
-  gap: 12px;
-  margin-block: 24px;
-}
-
-.all-tasks-toolbar > * {
-  min-inline-size: 0;
-}
-
-.all-tasks-toolbar .m3e-field {
-  min-inline-size: 0;
 }
 
 .select-field {
@@ -1863,7 +1846,6 @@
 }
 
 .m3e-list--tree-group,
-.m3e-list--all-tasks,
 .m3e-list--workflow-stage {
   gap: 8px;
   overflow: visible;
@@ -1871,13 +1853,11 @@
 }
 
 .m3e-list--tree-group .m3e-list-item,
-.m3e-list--all-tasks .m3e-list-item,
 .m3e-list--workflow-stage .m3e-list-item {
   border-radius: var(--m3-shape-md);
 }
 
 .m3e-list--tree-group .m3e-list-item__wrapper,
-.m3e-list--all-tasks .m3e-list-item__wrapper,
 .m3e-list--workflow-stage .m3e-list-item__wrapper {
   border: 1px solid color-mix(in srgb, var(--m3-outline-variant) 46%, transparent);
   border-radius: var(--m3-shape-md);
@@ -1889,40 +1869,8 @@
 }
 
 .m3e-list--tree-group .m3e-list-item__headline,
-.m3e-list--all-tasks .m3e-list-item__headline,
 .m3e-list--workflow-stage .m3e-list-item__headline {
   font-weight: 600;
-}
-
-.m3e-list--all-tasks .m3e-list-item__supporting code {
-  color: var(--m3-on-surface-variant);
-  font-family: var(--m3-font-sans);
-  font-size: var(--m3-type-body-small-size);
-  letter-spacing: 0.02em;
-}
-
-.all-tasks-query {
-  display: grid;
-  gap: 5px;
-  min-inline-size: 0;
-}
-
-.m3e-field--all-tasks-query {
-  min-inline-size: 0;
-}
-
-.m3e-field--all-tasks-query .m3e-field__box {
-  min-block-size: 48px;
-  border-radius: var(--m3-shape-md);
-}
-
-.m3e-field--all-tasks-query .m3e-field__input {
-  min-block-size: 48px;
-  padding: 0 14px;
-}
-
-.m3e-field--all-tasks-query .m3e-field__input::placeholder {
-  color: var(--m3-on-surface-variant);
 }
 
 .today-task-pane .m3e-empty-state {

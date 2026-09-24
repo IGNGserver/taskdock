@@ -751,7 +751,6 @@
   min-inline-size: 180px;
 }
 
-.m3e-list--all-tasks:has(.m3e-task-status-control.is-open),
 .m3e-list--command-results:has(.m3e-task-status-control.is-open),
 .m3e-list--picker:has(.m3e-task-status-control.is-open),
 .m3e-list--tree-group:has(.m3e-task-status-control.is-open),
