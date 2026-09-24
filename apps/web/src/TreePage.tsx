@@ -21,7 +21,6 @@ import {
 } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  Archive,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
