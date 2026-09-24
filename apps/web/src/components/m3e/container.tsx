@@ -79,6 +79,7 @@ export function ListItem({
   supporting,
   trailingSupporting,
   leading,
+  leadingControl,
   trailing,
   actions,
   onClick,
@@ -93,6 +94,8 @@ export function ListItem({
   supporting?: ReactNode;
   trailingSupporting?: ReactNode;
   leading?: ReactNode;
+  /** Independent leading action, kept outside the row's interactive button. */
+  leadingControl?: ReactNode;
   trailing?: ReactNode;
   /** Interactive actions rendered beside an interactive row, never nested in its button. */
   actions?: ReactNode;
@@ -127,7 +130,7 @@ export function ListItem({
     className,
   );
 
-  if (!onClick) {
+  if (!onClick && !leadingControl) {
     const Component = as;
     return (
       <Component {...props} className={classes} aria-label={ariaLabel}>
@@ -136,8 +139,37 @@ export function ListItem({
     );
   }
 
+  if (!onClick && leadingControl) {
+    const Component = as;
+    return (
+      <Component
+        {...props}
+        className={joinClasses(
+          'm3e-list-item__wrapper',
+          'has-leading-control',
+          Boolean(actions) && 'has-actions',
+          className,
+        )}
+        aria-label={ariaLabel}
+      >
+        <span className="m3e-list-item__leading-control">{leadingControl}</span>
+        <span className={classes}>{content}</span>
+        {actions && <span className="m3e-list-item__actions">{actions}</span>}
+      </Component>
+    );
+  }
+
   return (
-    <li className={joinClasses('m3e-list-item__wrapper', Boolean(actions) && 'has-actions')}>
+    <li
+      className={joinClasses(
+        'm3e-list-item__wrapper',
+        Boolean(leadingControl) && 'has-leading-control',
+        Boolean(actions) && 'has-actions',
+      )}
+    >
+      {leadingControl && (
+        <span className="m3e-list-item__leading-control">{leadingControl}</span>
+      )}
       <button
         {...(props as HTMLAttributes<HTMLButtonElement>)}
         type="button"

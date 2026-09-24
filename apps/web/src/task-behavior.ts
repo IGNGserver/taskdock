@@ -1,20 +1,18 @@
 import type { TaskStatus } from '@devtodo/contracts';
 
-/**
- * TaskDock keeps status on the Task entity (not on a Placement). The compact
- * row control therefore cycles through the three supported states so that
- * IN_PROGRESS is reachable without opening the detail drawer.
- */
-export function nextTaskStatus(status: TaskStatus): TaskStatus {
-  if (status === 'TODO') return 'IN_PROGRESS';
-  if (status === 'IN_PROGRESS') return 'DONE';
-  return 'TODO';
+/** A checkbox-style primary action completes any open task or reopens it. */
+export function toggleTaskCompletion(status: TaskStatus): TaskStatus {
+  return status === 'DONE' ? 'TODO' : 'DONE';
+}
+
+export function taskStatusLabel(status: TaskStatus): string {
+  if (status === 'IN_PROGRESS') return '进行中';
+  if (status === 'DONE') return '已完成';
+  return '待开始';
 }
 
 export function taskStatusActionLabel(status: TaskStatus): string {
-  if (status === 'TODO') return '标记为进行中';
-  if (status === 'IN_PROGRESS') return '标记为已完成';
-  return '重新打开任务';
+  return status === 'DONE' ? '重新打开任务' : '标记为已完成';
 }
 
 export function reorderIds(ids: string[], sourceId: string, targetId: string): string[] {

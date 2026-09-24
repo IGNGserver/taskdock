@@ -2,6 +2,7 @@ import type {
   ArchiveOperationSummaryDto,
   FolderDto,
   PlacementDto,
+  TaskStatus,
   TimePointDto,
   TimePointPlacementCountDto,
   TreeTaskDto,
@@ -113,8 +114,7 @@ import {
   Snackbar,
   Switch,
   TaskRowAction,
-  TaskStatusIndicator,
-  TaskStatusButton,
+  TaskStatusControl,
   TextArea,
   TextField,
   TopAppBar,
@@ -128,7 +128,6 @@ import { useDismissibleMenu } from './components/m3e/behavior.js';
 import { PwaLifecycleNotice } from './pwa.js';
 import { AllTasksV2Page, TaskDetailV2Overlay, TreePage, WorkflowsPage } from './TreePage.js';
 import { readRecentCaptureFolder } from './folder-preference.js';
-import { nextTaskStatus, taskStatusActionLabel } from './task-behavior.js';
 
 type PlacementWithTask = PlacementDto & { task: TreeTaskDto };
 type PresenceState = 'entering' | 'present' | 'exiting';
@@ -1511,6 +1510,7 @@ function CommandPalette({
   const [includeArchived, setIncludeArchived] = useState(false);
   const [items, setItems] = useState<TreeTaskDto[]>([]);
   const [actionError, setActionError] = useState('');
+  const [statusError, setStatusError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const presence = usePresence(open);
   useEffect(() => {
@@ -1521,6 +1521,7 @@ function CommandPalette({
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }, [open]);
   useEffect(() => {
+    setStatusError('');
     if (!query.trim()) {
       setItems([]);
       return;
@@ -1548,6 +1549,19 @@ function CommandPalette({
       setActionError(cause instanceof ApiError ? cause.message : '安排到今天失败，请重试');
     }
   };
+  const changeTaskStatus = async (task: TreeTaskDto, status: TaskStatus) => {
+    setStatusError('');
+    try {
+      await mutationV2('PATCH', `/tasks/${task.id}`, { status, baseVersion: task.version });
+      const result = await requestV2<{ items: TreeTaskDto[] }>(
+        `/tasks?archived=${includeArchived ? 'true' : 'false'}&q=${encodeURIComponent(query.trim())}`,
+      );
+      setItems(result.items);
+      window.dispatchEvent(new Event('devtodo:data-changed'));
+    } catch (cause) {
+      setStatusError(cause instanceof ApiError ? cause.message : '更新任务状态失败，请重试');
+    }
+  };
   if (!presence.mounted) return null;
   return (
     <Modal title="搜索和命令面板" onClose={onClose} state={presence.state}>
@@ -1573,12 +1587,24 @@ function CommandPalette({
         {query ? (
           <div className="command-results-wrap">
             {actionError && <Alert tone="success">{actionError}</Alert>}
+            {statusError && (
+              <Alert tone="error" title="更新任务状态失败">
+                {statusError}
+              </Alert>
+            )}
             {items.length ? (
               <List className="m3e-list--command-results" gap>
                 {items.map((task) => (
                   <ListItem
                     key={task.id}
-                    leading={<TaskStatusIndicator status={task.status} />}
+                    className={task.status === 'DONE' ? 'is-task-done' : undefined}
+                    leadingControl={
+                      <TaskStatusControl
+                        status={task.status}
+                        disabled={Boolean(task.archivedAt || task.deletedAt)}
+                        onStatusChange={(status) => changeTaskStatus(task, status)}
+                      />
+                    }
                     headline={task.title}
                     supporting={`${task.referenceId} · ${task.archivedAt ? '已归档' : '目录任务'}`}
                     trailing={<ChevronRight size={16} />}
@@ -1858,7 +1884,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               reorderItems={data.items}
               pointId={data.point?.id}
               onOpenTask={onOpenTask}
-              onChanged={() => void reload()}
+              onChanged={reload}
               onMove={movePlacement}
               emptyTitle="今天还没有安排"
               emptyDescription="可以从全部任务中安排内容，或先捕获一个位于最近目录的任务。"
@@ -1900,7 +1926,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                     placement={item}
                     task={item.task}
                     onOpen={onOpenTask}
-                    onChanged={() => void reload()}
+                    onChanged={reload}
                     onToggleStatus
                   />
                 ))}
@@ -2437,7 +2463,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         items={items}
         pointId={point.id}
         onOpenTask={onOpenTask}
-        onChanged={() => void load()}
+        onChanged={load}
         onMove={point.archivedAt ? undefined : movePlacement}
         readOnly={Boolean(point.archivedAt)}
         emptyTitle="这个事件还没有安排"
@@ -2499,7 +2525,7 @@ function PlacementRow({
   placement: PlacementDto;
   task: TreeTaskDto;
   onOpen: (id: string) => void;
-  onChanged: () => void;
+  onChanged: () => void | Promise<void>;
   onDrop?: (event: ReactDragEvent<HTMLElement>) => void;
   onMove?: (direction: 'up' | 'down') => Promise<void> | void;
   canMoveUp?: boolean;
@@ -2540,7 +2566,7 @@ function PlacementRow({
     setBusy(true);
     try {
       await mutationV2('DELETE', `/placements/${placement.id}`, { baseVersion: placement.version });
-      onChanged();
+      await onChanged();
       window.dispatchEvent(new Event('devtodo:data-changed'));
       setMenu(false);
     } catch (cause) {
@@ -2561,16 +2587,16 @@ function PlacementRow({
       setBusy(false);
     }
   };
-  const toggleStatus = async () => {
+  const updateStatus = async (status: TaskStatus) => {
     if (busy) return;
     setBusy(true);
     setError('');
     try {
       await mutationV2('PATCH', `/tasks/${task.id}`, {
-        status: nextTaskStatus(task.status),
+        status,
         baseVersion: task.version,
       });
-      onChanged();
+      await onChanged();
       window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '更新任务失败');
@@ -2603,7 +2629,9 @@ function PlacementRow({
   };
   return (
     <div
-      className={`task-row${dragging ? ' dragging' : ''}`}
+      className={`task-row${dragging ? ' dragging' : ''}${
+        task.status === 'IN_PROGRESS' ? ' is-progress' : ''
+      }${task.status === 'DONE' ? ' is-done' : ''}`}
       aria-busy={busy || undefined}
       aria-grabbed={dragging}
       draggable={!readOnly}
@@ -2630,11 +2658,10 @@ function PlacementRow({
         onDrop(event);
       }}
     >
-      <TaskStatusButton
+      <TaskStatusControl
         status={task.status}
-        label={onToggleStatus ? taskStatusActionLabel(task.status) : '打开任务'}
-        onClick={() => (onToggleStatus && !readOnly ? void toggleStatus() : onOpen(task.id))}
-        disabled={busy}
+        onStatusChange={updateStatus}
+        disabled={busy || !onToggleStatus || readOnly}
       />
       {onMove && !readOnly && (
         <div className="task-reorder-actions" aria-label="调整安排顺序">
@@ -2693,9 +2720,9 @@ function PlacementRow({
           placement={placement}
           mode={targetMode}
           onClose={() => setTargetMode(null)}
-          onDone={() => {
+          onDone={async () => {
             setTargetMode(null);
-            onChanged();
+            await onChanged();
           }}
         />
       )}
@@ -2718,7 +2745,7 @@ function PlacementList({
   items: PlacementWithTask[];
   pointId?: string;
   onOpenTask: (id: string) => void;
-  onChanged: () => void;
+  onChanged: () => void | Promise<void>;
   onMove?: (placementId: string, direction: 'up' | 'down') => Promise<void> | void;
   reorderItems?: PlacementWithTask[];
   emptyTitle: string;
@@ -2746,7 +2773,7 @@ function PlacementList({
           await mutationV2('POST', `/time-points/${pointId}/placements/reorder`, {
             ids: next.map((item) => item.id),
           });
-          onChanged();
+          await onChanged();
           window.dispatchEvent(new Event('devtodo:data-changed'));
         } catch (cause) {
           setDropError(cause instanceof ApiError ? cause.message : '安排排序失败，请重试');
@@ -2760,7 +2787,7 @@ function PlacementList({
     setDropError('');
     try {
       await moveDraggedPlacement(event, pointId);
-      onChanged();
+      await onChanged();
     } catch (cause) {
       setDropError(cause instanceof ApiError ? cause.message : '安排操作失败，请重试');
     } finally {
@@ -3154,6 +3181,28 @@ function AddTaskModal({
       setBusyTaskId(null);
     }
   };
+  const changeTaskStatus = async (task: TreeTaskDto, status: TaskStatus) => {
+    setError('');
+    try {
+      await mutationV2('PATCH', `/tasks/${task.id}`, { status, baseVersion: task.version });
+      const result = await requestV2<{ items: TreeTaskDto[] }>('/tasks?archived=false');
+      const needle = query.trim().toLocaleLowerCase();
+      setItems(
+        result.items
+          .filter(
+            (item) =>
+              item.status !== 'DONE' &&
+              (!needle ||
+                item.title.toLocaleLowerCase().includes(needle) ||
+                item.referenceId.toLocaleLowerCase().includes(needle)),
+          )
+          .slice(0, 12),
+      );
+      window.dispatchEvent(new Event('devtodo:data-changed'));
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : '更新任务状态失败，请重试');
+    }
+  };
   return (
     <Modal title="安排任务" onClose={onClose}>
       <ButtonGroup
@@ -3199,10 +3248,18 @@ function AddTaskModal({
             {items.map((task) => (
               <ListItem
                 key={task.id}
-                className="m3e-list-item--picker"
+                className={`m3e-list-item--picker${
+                  task.status === 'DONE' ? ' is-task-done' : ''
+                }`}
                 headline={task.title}
                 supporting={task.referenceId}
-                leading={<TaskStatusIndicator status={task.status} />}
+                leadingControl={
+                  <TaskStatusControl
+                    status={task.status}
+                    disabled={Boolean(busyTaskId)}
+                    onStatusChange={(status) => changeTaskStatus(task, status)}
+                  />
+                }
                 trailing={
                   busyTaskId === task.id ? (
                     <LoaderCircle className="spin" size={16} />
@@ -3430,7 +3487,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               items={items}
               pointId={point?.id}
               onOpenTask={onOpenTask}
-              onChanged={() => void loadSelected()}
+              onChanged={loadSelected}
               onMove={movePlacement}
               emptyTitle="这一天还没有安排"
               emptyDescription="从任务库添加已有任务，任务本体不会被复制。"
@@ -3637,8 +3694,19 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             <div className="quiet-empty">没有单独归档的任务</div>
           ) : (
             looseTasks.map((task) => (
-              <div className="task-row" key={task.id}>
+              <div
+                className={`task-row${
+                  task.status === 'IN_PROGRESS' ? ' is-progress' : ''
+                }${task.status === 'DONE' ? ' is-done' : ''}`}
+                key={task.id}
+              >
+                <TaskStatusControl
+                  status={task.status}
+                  disabled
+                  onStatusChange={() => undefined}
+                />
                 <TaskRowAction
+                  className="task-main"
                   onClick={() => onOpenTask(task.id)}
                   aria-label={`打开已归档任务 ${task.title}`}
                 >
@@ -3648,21 +3716,23 @@ function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                     <span className="status-label">已归档</span>
                   </span>
                 </TaskRowAction>
-                <Button
-                  variant="tonal"
-                  size="s"
-                  type="submit"
-                  disabled={busyId === task.id}
-                  onClick={() =>
-                    void runAction(task.id, async () => {
-                      await mutationV2('POST', `/tasks/${task.id}/restore`, {
-                        baseVersion: task.version,
-                      });
-                    })
-                  }
-                >
-                  {busyId === task.id ? '恢复中…' : '恢复任务'}
-                </Button>
+                <div className="task-actions">
+                  <Button
+                    variant="tonal"
+                    size="s"
+                    type="submit"
+                    disabled={busyId === task.id}
+                    onClick={() =>
+                      void runAction(task.id, async () => {
+                        await mutationV2('POST', `/tasks/${task.id}/restore`, {
+                          baseVersion: task.version,
+                        });
+                      })
+                    }
+                  >
+                    {busyId === task.id ? '恢复中…' : '恢复任务'}
+                  </Button>
+                </div>
               </div>
             ))
           )}
