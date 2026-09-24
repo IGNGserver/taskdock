@@ -1,0 +1,1537 @@
+--------- beginning of system
+09-24 22:37:56.402  1564  1564 D SystemServerTimingAsync: ssm.onStartUser-0_com.android.server.media.MediaCommunicationService
+09-24 22:37:56.414  1564  1564 V SystemServerTimingAsync: ssm.onStartUser-0_com.android.server.media.MediaCommunicationService took to complete: 11ms
+09-24 22:37:56.415  1564  1564 D SystemServerTimingAsync: ssm.onStartUser-0_com.android.server.compat.overrides.AppCompatOverridesService$Lifecycle
+09-24 22:37:56.421  1564  1564 V SystemServerTimingAsync: ssm.onStartUser-0_com.android.server.compat.overrides.AppCompatOverridesService$Lifecycle took to complete: 0ms
+09-24 22:37:56.447  1564  1564 D SystemServerTimingAsync: ssm.onStartUser-0_com.android.server.healthconnect.HealthConnectManagerService
+09-24 22:37:56.454  1564  1564 V SystemServerTimingAsync: ssm.onStartUser-0_com.android.server.healthconnect.HealthConnectManagerService took to complete: 0ms
+09-24 22:37:56.488  1564  1564 D SystemServerTimingAsync: ssm.onStartUser-0_com.android.server.devicelock.DeviceLockService
+09-24 22:37:56.491  1564  1564 V SystemServerTimingAsync: ssm.onStartUser-0_com.android.server.devicelock.DeviceLockService took to complete: 1ms
+09-24 22:37:56.498  1564  1564 D SystemServerTimingAsync: ssm.onStartUser-0_com.android.server.SensitiveContentProtectionManagerService
+09-24 22:37:56.500  1564  1564 V SystemServerTimingAsync: ssm.onStartUser-0_com.android.server.SensitiveContentProtectionManagerService took to complete: 0ms
+09-24 22:37:56.513  1564  1564 V SystemServerTimingAsync: ssm.StartUser-0 took to complete: 49847ms
+--------- beginning of events
+09-24 22:37:56.520  1564  1564 I um_user_visibility_changed: [0,1]
+09-24 22:37:56.527  1564  1564 D SystemServerTiming: startPersistentApps
+09-24 22:37:56.646  1964  1964 V SystemUIBootTiming: StartServices com.android.keyguard.KeyguardUpdateMonitor took to complete: 2271ms
+--------- beginning of main
+09-24 22:37:56.647  1964  1964 W SystemUIService: Initialization of com.android.keyguard.KeyguardUpdateMonitor took 2272 ms
+09-24 22:37:56.690  1564  1564 I am_uid_running: 1068
+09-24 22:37:56.845  1964  1964 V SystemUIBootTiming: StartServices com.android.systemui.KairosCoreStartable took to complete: 73ms
+09-24 22:37:56.874  1964  1964 V SystemUIBootTiming: StartServices com.android.systemui.LatencyTester took to complete: 27ms
+09-24 22:37:56.890  1564  1564 V GrammaticalInflectionUtils: AttributionSource: AttributionSource { uid = 1068, packageName = null, attributionTag = null, token = android.os.Binder@c34bf74, deviceId = 0, next = null } does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+09-24 22:37:56.985  1564  1564 D OomAdjuster: Not killing cached processes
+09-24 22:37:57.018  1478  1501 I netd    : tetherGetStats() -> {[]} <26.68ms>
+09-24 22:37:57.040  1564  2079 I dvm_lock_sample: [system_server,1,binder:1564_8,98,BroadcastController.java,314,android.content.Intent com.android.server.am.BroadcastController.registerReceiverWithFeatureTraced(android.app.IApplicationThread, java.lang.String, java.lang.String, java.lang.String, android.content.IIntentReceiver, android.content.IntentFilter, java.lang.String, int, int),ProcessList.java,3303,void com.android.server.am.ProcessList.addProcessNameLocked(com.android.server.am.ProcessRecord),19]
+09-24 22:37:57.181  1564  1907 I service_manager_slow: [117,tethering]
+09-24 22:37:57.201  1564  1564 W ActivityManager: Slow operation: 148ms so far, now at startProcess: building args
+09-24 22:37:57.231  1564  1564 I am_uid_running: 1001
+09-24 22:37:57.262  1564  1601 W ActivityManager: Slow operation: 185ms so far, now at startProcess: asking zygote to start proc
+09-24 22:37:57.281  1564  1564 V SystemServerTiming: startPersistentApps took to complete: 741ms
+09-24 22:37:57.282  1564  1564 D SystemServerTiming: startHomeOnAllDisplays
+09-24 22:37:57.448  1564  1564 W ActivityTaskManager: callingPackage for (uid=-1, pid=0) has no WPC
+09-24 22:37:57.597  1564  1564 W ActivityStartInterceptor: Starting home with component specified, uid=0
+09-24 22:37:57.678  1474  1474 D Zygote  : Forked child process 2193
+09-24 22:37:57.710  1564  1601 W ActivityManager: Slow operation: 658ms so far, now at startProcess: returned from zygote!
+09-24 22:37:57.877  1964  1964 V SystemUIBootTiming: StartServices com.android.systemui.ScreenDecorations took to complete: 1003ms
+09-24 22:37:57.878  1964  1964 W SystemUIService: Initialization of com.android.systemui.ScreenDecorations took 1004 ms
+09-24 22:37:57.879  1964  1964 V SystemUIBootTiming: StartServices com.android.systemui.SliceBroadcastRelayHandler took to complete: 1ms
+09-24 22:37:57.931  1964  1964 D NavigationModeController: getCurrentInteractionMode: mode=2 contextUser=0
+09-24 22:37:58.151  1964  1964 D NavigationModeController: getCurrentInteractionMode: mode=2 contextUser=0
+09-24 22:37:58.387   544   576 E HwcComposer: getDisplayDecorationSupport failed Status(-8, EX_SERVICE_SPECIFIC): '8: '
+09-24 22:37:58.396   544   576 E HWComposer: getDisplayDecorationSupport: getDisplayDecorationSupport failed for display 4619827259835644672: UNSUPPORTED (8)
+09-24 22:37:58.685  2193  2193 I com.android.se: Using CollectorTypeCMC GC.
+09-24 22:37:58.751  2193  2193 W com.android.se: Unexpected CPU variant for x86: x86_64.
+09-24 22:37:58.751  2193  2193 W com.android.se: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, goldmont-without-sha-xsaves, tremont, kabylake, alderlake, default
+--------- beginning of kernel
+09-24 22:37:58.892     0     0 I sysrq   : Show Blocked State
+09-24 22:37:58.903     0     0 I task    : Signal Catcher  state:D stack:0     pid:1572  ppid:1474   flags:0x00004000
+09-24 22:37:58.904     0     0 I Call Trace:  
+09-24 22:37:58.904     0     0 I         : <TASK>
+09-24 22:37:58.904     0     0 I         : __schedule+0x5a6/0x910
+09-24 22:37:58.905     0     0 I         : schedule+0x6a/0xc0
+09-24 22:37:58.905     0     0 I         : schedule_preempt_disabled+0x14/0x30
+09-24 22:37:58.932  2193  2193 E com.android.se: Not starting debugger since process cannot load the jdwp agent.
+09-24 22:37:58.918     0     0 I         : rwsem_down_read_slowpath+0x37c/0x8c0
+09-24 22:37:58.918     0     0 I         : down_read+0x4a/0x80
+09-24 22:37:58.918     0     0 I         : process_vm_rw+0x549/0x820
+09-24 22:37:58.918     0     0 I         : __x64_sys_process_vm_readv+0x28/0x40
+09-24 22:37:58.918     0     0 I         : x64_sys_call+0x2536/0x2e10
+09-24 22:37:58.918     0     0 I         : do_syscall_64+0x4a/0xa0
+09-24 22:37:58.919     0     0 I         : ? irqentry_exit+0x16/0x60
+09-24 22:37:58.919     0     0 I         : entry_SYSCALL_64_after_hwframe+0x78/0xe2
+09-24 22:37:58.919     0     0 I RIP     : 0033:0x77c029b89d2a
+09-24 22:37:58.919     0     0 I RSP     : 002b:000077bd43c7a028 EFLAGS: 00000246 ORIG_RAX: 0000000000000136
+09-24 22:37:58.919     0     0 I RAX     : ffffffffffffffda RBX: 0000000000000000 RCX: 000077c029b89d2a
+09-24 22:37:58.920     0     0 I RDX     : 0000000000000001 RSI: 000077bd43c7a040 RDI: 000000000000061c
+09-24 22:37:58.920     0     0 I RBP     : 000077bd43c7a480 R08: 0000000000000001 R09: 0000000000000000
+09-24 22:37:58.920     0     0 I         : R10: 000077bd43c7a050 R11: 0000000000000246 R12: 000077bcd1088000
+09-24 22:37:58.920     0     0 I         : R13: 000077bd43c7a058 R14: 0000000000000000 R15: 0000000000000000
+09-24 22:37:58.920     0     0 I         : </TASK>
+09-24 22:37:58.990  1564  1564 I system_server: AssetManager2(0x77be4bc31518) locale list changing from [] to [en-US]
+09-24 22:37:59.032  1964  2194 E ViewRootImpl: SensitiveContentProtectionService shouldn't be null
+09-24 22:37:59.088  1564  2192 I DisplayManager: Choreographer implicitly registered for the refresh rate.
+09-24 22:37:59.061     0     0 I sysrq   : Show Memory
+09-24 22:37:59.062     0     0 W Mem-Info:  
+09-24 22:37:59.062     0     0 W active_anon: 87512 inactive_anon:0 isolated_anon:0
+09-24 22:37:59.062     0     0 W active_file: 143390 inactive_file:79059 isolated_file:0
+09-24 22:37:59.062     0     0 W unevictable: 9766 dirty:43 writeback:0
+09-24 22:37:59.062     0     0 W slab_reclaimable: 10894 slab_unreclaimable:22138
+09-24 22:37:59.062     0     0 W mapped  : 125634 shmem:1417 pagetables:7271
+09-24 22:37:59.062     0     0 W sec_pagetables: 0 bounce:0
+09-24 22:37:59.062     0     0 W kernel_misc_reclaimable: 0
+09-24 22:37:59.062     0     0 W free    : 253885 free_pcp:5224 free_cma:0
+09-24 22:37:59.062     0     0 W         : Node 0 active_anon:350048kB inactive_anon:0kB active_file:573560kB inactive_file:316236kB unevictable:39064kB isolated(anon):0kB isolated(file):0kB mapped:502536kB dirty:172kB writeback:0kB shmem:5668kB shmem_thp:0kB shmem_pmdmapped:0kB anon_thp:0kB writeback_tmp:0kB kernel_stack:13008kB pagetables:29084kB sec_pagetables:0kB all_unreclaimable? no
+09-24 22:37:59.063     0     0 W DMA32 free: 1015540kB boost:0kB min:45056kB low:86576kB high:128096kB reserved_highatomic:0KB active_anon:350048kB inactive_anon:0kB active_file:573560kB inactive_file:316236kB unevictable:39064kB writepending:172kB present:2620880kB managed:2531840kB mlocked:39064kB bounce:0kB free_pcp:20896kB local_pcp:1976kB free_cma:0kB
+09-24 22:37:59.063     0     0 W lowmem_reserve[]: 0 0 0 0 0
+09-24 22:37:59.123  2193  2193 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+09-24 22:37:59.063     0     0 W DMA32   : 233*4kB (U) 154*8kB (UM) 4*16kB (UM) 30*32kB (UME) 2*64kB (UM) 2*128kB (UE) 1*256kB (E) 2*512kB (UM) 1*1024kB (U) 1*2048kB (M) 246*4096kB (M) = 1015540kB
+09-24 22:37:59.064     0     0 W         : 233360 total pagecache pages
+09-24 22:37:59.064     0     0 W         : 0 pages in swap cache
+09-24 22:37:59.064     0     0 W         : Free swap  = 0kB
+09-24 22:37:59.064     0     0 W         : Total swap = 0kB
+09-24 22:37:59.064     0     0 W         : 655220 pages RAM
+09-24 22:37:59.064     0     0 W         : 0 pages HighMem/MovableOnly
+09-24 22:37:59.064     0     0 W         : 22260 pages reserved
+09-24 22:37:59.064     0     0 W         : 0 pages cma reserved
+09-24 22:37:59.238     0     0 I sysrq   : Show backtrace of all active CPUs
+09-24 22:37:59.238     0     0 W         : NMI backtrace for cpu 1
+09-24 22:37:59.296  2193  2193 I service_manager_slow: [58,activity]
+09-24 22:37:59.238     0     0 W         : CPU: 1 PID: 1595 Comm: watchdog Tainted: G           O       6.6.66-android15-8-gd0c43a640eab-ab13812146 #1 9592eff3681f964c3aaa9b2de4b01b365bba3985
+09-24 22:37:59.239     0     0 W Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.11.1-0-g0551a4be2c-prebuilt.qemu-project.org 04/01/2014
+09-24 22:37:59.239     0     0 W Call Trace:  
+09-24 22:37:59.239     0     0 W         : <TASK>
+09-24 22:37:59.239     0     0 W         : dump_stack_lvl+0x6d/0xa0
+09-24 22:37:59.239     0     0 W         : dump_stack+0x14/0x20
+09-24 22:37:59.239     0     0 W         : nmi_cpu_backtrace+0xf2/0x130
+09-24 22:37:59.239     0     0 W         : ? __cfi_nmi_raise_cpu_backtrace+0x10/0x10
+09-24 22:37:59.239     0     0 W         : nmi_trigger_cpumask_backtrace+0x6a/0x100
+09-24 22:37:59.239     0     0 W         : arch_trigger_cpumask_backtrace+0x14/0x20
+09-24 22:37:59.239     0     0 W         : sysrq_handle_showallcpus+0x19/0x20
+09-24 22:37:59.239     0     0 W         : __handle_sysrq+0x169/0x180
+09-24 22:37:59.239     0     0 W         : write_sysrq_trigger+0x31/0x50
+09-24 22:37:59.240     0     0 W         : proc_reg_write+0x5a/0xc0
+09-24 22:37:59.240     0     0 W         : vfs_write+0x150/0x410
+09-24 22:37:59.240     0     0 W         : ? __fget_files+0x91/0xb0
+09-24 22:37:59.240     0     0 W         : ksys_write+0x70/0xe0
+09-24 22:37:59.240     0     0 W         : __x64_sys_write+0x1a/0x30
+09-24 22:37:59.240     0     0 W         : x64_sys_call+0x27e2/0x2e10
+09-24 22:37:59.240     0     0 W         : do_syscall_64+0x4a/0xa0
+09-24 22:37:59.240     0     0 W         : ? exc_page_fault+0x65/0xc0
+09-24 22:37:59.240     0     0 W         : entry_SYSCALL_64_after_hwframe+0x78/0xe2
+09-24 22:37:59.240     0     0 W RIP     : 0033:0x77c029b888c7
+09-24 22:37:59.240     0     0 W Code    : 00 00 00 b8 00 00 00 00 0f 05 48 3d 01 f0 ff ff 72 09 f7 d8 89 c7 e8 e8 fa ff ff c3 0f 1f 80 00 00 00 00 b8 01 00 00 00 0f 05 <48> 3d 01 f0 ff ff 72 09 f7 d8 89 c7 e8 c8 fa ff ff c3 0f 1f 80 00
+09-24 22:37:59.240     0     0 W RSP     : 002b:000077bcd9163db8 EFLAGS: 00000213 ORIG_RAX: 0000000000000001
+09-24 22:37:59.240     0     0 W RAX     : ffffffffffffffda RBX: 000077bd8bc7c7d0 RCX: 000077c029b888c7
+09-24 22:37:59.240     0     0 W RDX     : 0000000000000001 RSI: 000077bf1bca8830 RDI: 00000000000001d6
+09-24 22:37:59.241     0     0 W RBP     : 000077bcd9163e30 R08: ffffffffffffffff R09: 0000000000000000
+09-24 22:37:59.241     0     0 W         : R10: 0000000000020000 R11: 0000000000000213 R12: 0000000000000000
+09-24 22:37:59.241     0     0 W         : R13: 0000000070cad120 R14: 00000000000001d6 R15: 000077bcd9163eac
+09-24 22:37:59.241     0     0 W         : </TASK>
+09-24 22:37:59.249     0     0 I         : Sending NMI from CPU 1 to CPUs 0,2-3:
+09-24 22:37:59.250     0     0 W         : NMI backtrace for cpu 2
+09-24 22:37:59.251     0     0 W         : CPU: 2 PID: 2058 Comm: AnrAuxiliaryTas Tainted: G           O       6.6.66-android15-8-gd0c43a640eab-ab13812146 #1 9592eff3681f964c3aaa9b2de4b01b365bba3985
+09-24 22:37:59.251     0     0 W Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.11.1-0-g0551a4be2c-prebuilt.qemu-project.org 04/01/2014
+09-24 22:37:59.251     0     0 W RIP     : 0010:lookup_fast+0xf5/0x140
+09-24 22:37:59.252     0     0 W Code    : c0 49 c7 c7 f6 ff ff ff 4c 0f 45 f9 eb d1 41 8b 76 38 48 8b 43 60 4c 8b 18 48 89 df 41 ba d1 b5 f3 85 45 03 53 f1 74 02 0f 0b <2e> e8 c5 99 d0 00 85 c0 7f a8 41 89 c4 4c 89 f7 48 89 de e8 b3 f5
+09-24 22:37:59.252     0     0 W RSP     : 0018:ffffb4d884befb00 EFLAGS: 00000257
+09-24 22:37:59.252     0     0 W RAX     : ffffffffa7251f80 RBX: ffff9e2c816f6dd0 RCX: 0000000000000002
+09-24 22:37:59.303  1564  1907 I service_manager_slow: [231,tethering]
+09-24 22:37:59.253     0     0 W RDX     : ffffb4d884befc1c RSI: 0000000000000051 RDI: ffff9e2c816f6dd0
+09-24 22:37:59.253     0     0 W RBP     : ffffb4d884befb20 R08: 000000042a7e8e1a R09: 0000000000000004
+09-24 22:37:59.253     0     0 W         : R10: 0000000000000000 R11: ffffffffa6198560 R12: 0000000000000000
+09-24 22:37:59.253     0     0 W         : R13: 2f2f2f2f2f2f2f01 R14: ffffb4d884befbd8 R15: fffffffffffffff6
+09-24 22:37:59.253     0     0 W FS      : 000077bcc54ac9d0(0000) GS:ffff9e2cdd500000(0000) knlGS:000077bebbd97c80
+09-24 22:37:59.253     0     0 W CS      : 0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+09-24 22:37:59.253     0     0 W CR2     : 000077bdabc73f4c CR3: 000000004f8f4000 CR4: 00000000000006a0
+09-24 22:37:59.253     0     0 W Call Trace:  
+09-24 22:37:59.253     0     0 W         : <NMI>
+09-24 22:37:59.253     0     0 W         : ? show_regs+0x5c/0x80
+09-24 22:37:59.253     0     0 W         : ? nmi_cpu_backtrace+0x10a/0x130
+09-24 22:37:59.253     0     0 W         : ? nmi_cpu_backtrace_handler+0x10/0x20
+09-24 22:37:59.253     0     0 W         : ? nmi_handle+0x91/0x180
+09-24 22:37:59.253     0     0 W         : ? lookup_fast+0xf5/0x140
+09-24 22:37:59.253     0     0 W         : ? default_do_nmi+0x46/0x110
+09-24 22:37:59.253     0     0 W         : ? exc_nmi+0xc4/0x130
+09-24 22:37:59.254     0     0 W         : ? end_repeat_nmi+0x16/0x67
+09-24 22:37:59.254     0     0 W         : ? __cfi_pid_revalidate+0x10/0x10
+09-24 22:37:59.254     0     0 W         : ? lookup_fast+0xf5/0x140
+09-24 22:37:59.254     0     0 W         : ? lookup_fast+0xf5/0x140
+09-24 22:37:59.254     0     0 W         : ? lookup_fast+0xf5/0x140
+09-24 22:37:59.254     0     0 W         : </NMI>
+09-24 22:37:59.254     0     0 W         : <TASK>
+09-24 22:37:59.254     0     0 W         : link_path_walk+0x210/0x440
+09-24 22:37:59.254     0     0 W         : ? path_init+0xb8/0x360
+09-24 22:37:59.254     0     0 W         : path_lookupat+0x5c/0x100
+09-24 22:37:59.254     0     0 W         : filename_lookup+0xee/0x220
+09-24 22:37:59.254     0     0 W         : vfs_statx+0x84/0x1c0
+09-24 22:37:59.254     0     0 W         : vfs_fstatat+0xba/0xf0
+09-24 22:37:59.254     0     0 W         : __se_sys_newfstatat+0x54/0x240
+09-24 22:37:59.254     0     0 W         : __x64_sys_newfstatat+0x20/0x40
+09-24 22:37:59.254     0     0 W         : x64_sys_call+0x147a/0x2e10
+09-24 22:37:59.254     0     0 W         : do_syscall_64+0x4a/0xa0
+09-24 22:37:59.254     0     0 W         : ? exc_page_fault+0x65/0xc0
+09-24 22:37:59.254     0     0 W         : entry_SYSCALL_64_after_hwframe+0x78/0xe2
+09-24 22:37:59.254     0     0 W RIP     : 0033:0x77c029b88eaa
+09-24 22:37:59.254     0     0 W Code    : 49 89 ca b8 04 01 00 00 0f 05 48 3d 01 f0 ff ff 72 09 f7 d8 89 c7 e8 05 f5 ff ff c3 0f 1f 40 00 49 89 ca b8 06 01 00 00 0f 05 <48> 3d 01 f0 ff ff 72 09 f7 d8 89 c7 e8 e5 f4 ff ff c3 0f 1f 40 00
+09-24 22:37:59.254     0     0 W RSP     : 002b:000077bcc54abb78 EFLAGS: 00000246 ORIG_RAX: 0000000000000106
+09-24 22:37:59.254     0     0 W RAX     : ffffffffffffffda RBX: 000077bf5bccaa70 RCX: 000077c029b88eaa
+09-24 22:37:59.254     0     0 W RDX     : 000077bcc54abb90 RSI: 000077bd8bc831c0 RDI: 00000000ffffff9c
+09-24 22:37:59.254     0     0 W RBP     : 000077bcc54abc50 R08: 0000000000000000 R09: 0000000000000000
+09-24 22:37:59.254     0     0 W         : R10: 0000000000000000 R11: 0000000000000246 R12: 000077bd481b65ed
+09-24 22:37:59.254     0     0 W         : R13: 0000000000000000 R14: 000077bcc54abb90 R15: 000077bd8bc831c0
+09-24 22:37:59.254     0     0 W         : </TASK>
+09-24 22:37:59.257     0     0 W         : NMI backtrace for cpu 3
+09-24 22:37:59.257     0     0 W         : CPU: 3 PID: 1564 Comm: system_server Tainted: G           O       6.6.66-android15-8-gd0c43a640eab-ab13812146 #1 9592eff3681f964c3aaa9b2de4b01b365bba3985
+09-24 22:37:59.257     0     0 W Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.11.1-0-g0551a4be2c-prebuilt.qemu-project.org 04/01/2014
+09-24 22:37:59.257     0     0 W RIP     : 0010:smp_call_function_many_cond+0x3bf/0x570
+09-24 22:37:59.257     0     0 W Code    : f3 48 0f bc 8d 78 ff ff ff f7 c1 e0 ff ff ff 75 25 89 ca 49 8b 06 48 8b 14 d5 00 19 8c a7 f7 44 02 08 01 00 00 00 74 ba f3 90 <8b> 74 10 08 40 f6 c6 01 75 f4 eb ac 65 48 8b 04 25 28 00 00 00 48
+09-24 22:37:59.257     0     0 W RSP     : 0000:ffffb4d884317c08 EFLAGS: 00000202
+09-24 22:37:59.257     0     0 W RAX     : 0000000000032f00 RBX: 0000000000000003 RCX: 0000000000000001
+09-24 22:37:59.257     0     0 W RDX     : ffff9e2cdd480000 RSI: 0000000000000003 RDI: 0000000000000001
+09-24 22:37:59.257     0     0 W RBP     : ffffb4d884317ca8 R08: ffffffffa5d3b610 R09: 0000000000000003
+09-24 22:37:59.257     0     0 W         : R10: 0000000000000000 R11: ffffffffa5d3b410 R12: ffffffffa5d3b410
+09-24 22:37:59.257     0     0 W         : R13: 0000000000000001 R14: ffff9e2cdd5aebc0 R15: 0000000000000202
+09-24 22:37:59.257     0     0 W FS      : 000077c046cf69d0(0000) GS:ffff9e2cdd580000(0000) knlGS:000077bebbc2c7b0
+09-24 22:37:59.257     0     0 W CS      : 0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+09-24 22:37:59.257     0     0 W CR2     : 000077bf3bc28020 CR3: 000000004f8f4000 CR4: 00000000000006a0
+09-24 22:37:59.257     0     0 W Call Trace:  
+09-24 22:37:59.257     0     0 W         : <NMI>
+09-24 22:37:59.257     0     0 W         : ? show_regs+0x5c/0x80
+09-24 22:37:59.257     0     0 W         : ? nmi_cpu_backtrace+0x10a/0x130
+09-24 22:37:59.257     0     0 W         : ? nmi_cpu_backtrace_handler+0x10/0x20
+09-24 22:37:59.257     0     0 W         : ? nmi_handle+0x91/0x180
+09-24 22:37:59.257     0     0 W         : ? smp_call_function_many_cond+0x3bf/0x570
+09-24 22:37:59.257     0     0 W         : ? default_do_nmi+0x46/0x110
+09-24 22:37:59.257     0     0 W         : ? exc_nmi+0xc4/0x130
+09-24 22:37:59.257     0     0 W         : ? end_repeat_nmi+0x16/0x67
+09-24 22:37:59.257     0     0 W         : ? __cfi_flush_tlb_func+0x10/0x10
+09-24 22:37:59.257     0     0 W         : ? __cfi_flush_tlb_func+0x10/0x10
+09-24 22:37:59.257     0     0 W         : ? __cfi_tlb_is_not_lazy+0x10/0x10
+09-24 22:37:59.257     0     0 W         : ? smp_call_function_many_cond+0x3bf/0x570
+09-24 22:37:59.257     0     0 W         : ? smp_call_function_many_cond+0x3bf/0x570
+09-24 22:37:59.257     0     0 W         : ? smp_call_function_many_cond+0x3bf/0x570
+09-24 22:37:59.257     0     0 W         : </NMI>
+09-24 22:37:59.257     0     0 W         : <TASK>
+09-24 22:37:59.257     0     0 W         : ? __cfi_flush_tlb_func+0x10/0x10
+09-24 22:37:59.258     0     0 W         : on_each_cpu_cond_mask+0x20/0x40
+09-24 22:37:59.258     0     0 W         : native_flush_tlb_multi+0x9d/0x100
+09-24 22:37:59.258     0     0 W         : flush_tlb_mm_range+0xdd/0x140
+09-24 22:37:59.258     0     0 W         : ptep_clear_flush+0x40/0x50
+09-24 22:37:59.258     0     0 W         : do_wp_page+0xb6d/0xf60
+09-24 22:37:59.258     0     0 W         : handle_mm_fault+0x836/0xa90
+09-24 22:37:59.258     0     0 W         : do_user_addr_fault+0x204/0x790
+09-24 22:37:59.258     0     0 W         : ? exit_to_user_mode_prepare+0x36/0xa0
+09-24 22:37:59.258     0     0 W         : exc_page_fault+0x58/0xc0
+09-24 22:37:59.258     0     0 W         : asm_exc_page_fault+0x2b/0x30
+09-24 22:37:59.258     0     0 W RIP     : 0033:0x77c029b067d5
+09-24 22:37:59.258     0     0 W Code    : d1 4c 09 d1 48 09 c1 48 81 c9 00 01 00 00 8b 06 f2 48 0f 38 f1 c3 f2 48 0f 38 f1 c1 89 c2 c1 ea 10 31 c2 48 c1 e2 30 48 09 ca <48> 89 53 f0 48 89 d8 48 83 c4 38 5b 41 5c 41 5d 41 5e 41 5f 5d c3
+09-24 22:37:59.258     0     0 W RSP     : 002b:00007ffe01c27220 EFLAGS: 00000202
+09-24 22:37:59.258     0     0 W RAX     : 00000000ac12d351 RBX: 000077bf3bc28030 RCX: 00000000041f811c
+09-24 22:37:59.258     0     0 W RDX     : 7f430000041f811c RSI: 000077c029ba6340 RDI: 000077c029bacf04
+09-24 22:37:59.258     0     0 W RBP     : 00007ffe01c27280 R08: 0000000000000000 R09: 0000000000000000
+09-24 22:37:59.258     0     0 W         : R10: 00000000041f8000 R11: 000077c046cf69d0 R12: 000000000000001c
+09-24 22:37:59.258     0     0 W         : R13: 000077bf3bc28020 R14: 000077bf3bc28030 R15: 000077c029bacf04
+09-24 22:37:59.258     0     0 W         : </TASK>
+09-24 22:37:59.261     0     0 W         : NMI backtrace for cpu 0
+09-24 22:37:59.261     0     0 W         : CPU: 0 PID: 2193 Comm: re-initialized> Tainted: G           O       6.6.66-android15-8-gd0c43a640eab-ab13812146 #1 9592eff3681f964c3aaa9b2de4b01b365bba3985
+09-24 22:37:59.261     0     0 W Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS rel-1.11.1-0-g0551a4be2c-prebuilt.qemu-project.org 04/01/2014
+09-24 22:37:59.261     0     0 W RIP     : 0010:common_interrupt_return+0x94/0xa2
+09-24 22:37:59.261     0     0 W Code    : 73 0f 65 48 0f b3 3c 25 d6 d0 02 00 48 89 c7 eb 08 48 89 c7 48 0f ba ef 3f 48 81 cf 00 08 00 00 48 81 cf 00 10 00 00 0f 22 df <58> 5f 0f 01 f8 0f 00 2d 90 e7 ff ff eb 1b 41 5f 41 5e 41 5d 41 5c
+09-24 22:37:59.261     0     0 W RSP     : 0000:fffffe09f8f5efc8 EFLAGS: 00000006
+09-24 22:37:59.261     0     0 W RAX     : 000000000a1a019c RBX: 000077bd9bc5c800 RCX: 0000000000098108
+09-24 22:37:59.261     0     0 W RDX     : 0b86000000098108 RSI: 000077c029ba6340 RDI: 000000005a4b7000
+09-24 22:37:59.261     0     0 W RBP     : 00007ffe01c28a30 R08: 0000000000000000 R09: 0000000000000000
+09-24 22:37:59.261     0     0 W         : R10: 0000000000098000 R11: 0000000000000206 R12: 0000000000000008
+09-24 22:37:59.261     0     0 W         : R13: 000077bd9bc5c7f0 R14: 000077bd9bc5c800 R15: 000077c029bacf04
+09-24 22:37:59.261     0     0 W FS      : 000077c046cf69d0(0000) GS:ffff9e2cdd400000(0000) knlGS:000077bebbc2c7b0
+09-24 22:37:59.261     0     0 W CS      : 0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+09-24 22:37:59.261     0     0 W CR2     : 000077bd9bc5c7f0 CR3: 000000005a4b6000 CR4: 00000000000006b0
+09-24 22:37:59.261     0     0 W Call Trace:  
+09-24 22:37:59.261     0     0 W         : <NMI>
+09-24 22:37:59.261     0     0 W         : ? show_regs+0x5c/0x80
+09-24 22:37:59.261     0     0 W         : ? nmi_cpu_backtrace+0x10a/0x130
+09-24 22:37:59.261     0     0 W         : ? nmi_cpu_backtrace_handler+0x10/0x20
+09-24 22:37:59.261     0     0 W         : ? nmi_handle+0x91/0x180
+09-24 22:37:59.261     0     0 W         : ? common_interrupt_return+0x94/0xa2
+09-24 22:37:59.261     0     0 W         : ? default_do_nmi+0x46/0x110
+09-24 22:37:59.261     0     0 W         : ? exc_nmi+0xc4/0x130
+09-24 22:37:59.261     0     0 W         : ? end_repeat_nmi+0x16/0x67
+09-24 22:37:59.261     0     0 W         : ? common_interrupt_return+0x94/0xa2
+09-24 22:37:59.261     0     0 W         : ? common_interrupt_return+0x94/0xa2
+09-24 22:37:59.261     0     0 W         : ? common_interrupt_return+0x94/0xa2
+09-24 22:37:59.261     0     0 W         : </NMI>
+09-24 22:37:59.261     0     0 W         : <ENTRY_TRAMPOLINE>
+09-24 22:37:59.261     0     0 W         : </ENTRY_TRAMPOLINE>
+09-24 22:37:59.768  1564  2205 I DropBoxManagerService: add tag=system_server_watchdog isTagEnabled=true flags=0x2
+09-24 22:37:59.795  1564  1564 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_OVERRIDE
+09-24 22:37:59.810  1564  1564 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_FULLSCREEN_OVERRIDE
+09-24 22:37:59.876  1564  1595 W Watchdog: *** WATCHDOG KILLING SYSTEM PROCESS: Blocked in handler on main thread (main) for 60s
+09-24 22:38:00.229  1564  2058 W ProcessCpuTracker: Failed to stat(/proc/2182): android.system.ErrnoException: stat failed: ENOENT (No such file or directory)
+09-24 22:38:00.229  1564  2058 W ProcessCpuTracker: Skipping unknown process pid 2182
+09-24 22:38:00.247  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 1564
+09-24 22:38:00.255  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 1964
+09-24 22:38:00.260  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 548
+09-24 22:38:00.261  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 225
+09-24 22:38:00.261  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 494
+09-24 22:38:00.262  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 544
+09-24 22:38:00.262  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 227
+09-24 22:38:00.262  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 705
+09-24 22:38:00.263  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 370
+09-24 22:38:00.263  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 16
+09-24 22:38:00.263  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 489
+09-24 22:38:00.264  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 936
+09-24 22:38:00.285  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 215
+09-24 22:38:00.285  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 296
+09-24 22:38:00.285  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 469
+09-24 22:38:00.286  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 1476
+09-24 22:38:00.286  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 604
+09-24 22:38:00.286  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 485
+09-24 22:38:00.287  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 38
+09-24 22:38:00.287  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 26
+09-24 22:38:00.288  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 17
+09-24 22:38:00.317  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 32
+09-24 22:38:00.319  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 50
+09-24 22:38:00.328  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 289
+09-24 22:38:00.342  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 1
+09-24 22:38:00.343  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 8
+09-24 22:38:00.364  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 237
+09-24 22:38:00.366  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 377
+09-24 22:38:00.377  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 388
+09-24 22:38:00.377  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 1478
+09-24 22:38:00.377  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 1923
+09-24 22:38:00.378  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 15
+09-24 22:38:00.378  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 25
+09-24 22:38:00.378  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 33
+09-24 22:38:00.379  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 226
+09-24 22:38:00.379  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 232
+09-24 22:38:00.380  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 1005
+09-24 22:38:00.437  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 1475
+09-24 22:38:00.439  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 1889
+09-24 22:38:00.467  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 27
+09-24 22:38:00.476  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 46
+09-24 22:38:00.477  1564  1595 W Watchdog: main annotated stack trace:
+09-24 22:38:00.483  1564  1595 W Watchdog:     at java.util.LinkedHashMap.afterNodeInsertion(LinkedHashMap.java:342)
+09-24 22:38:00.493  1564  1564 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_RESIZEABLE_ACTIVITY_OVERRIDES
+09-24 22:38:00.500  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 223
+09-24 22:38:00.501  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 258
+09-24 22:38:00.501  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 529
+09-24 22:38:00.502  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 1305
+09-24 22:38:00.502  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 1481
+09-24 22:38:00.502  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 2080
+09-24 22:38:00.503  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 2096
+09-24 22:38:00.503  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 2107
+09-24 22:38:00.503  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 2129
+09-24 22:38:00.504  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 2171
+09-24 22:38:00.517  1564  2058 I ActivityManager: Skipping next CPU consuming process, not a java proc: 2181
+09-24 22:38:00.539  1564  1595 W Watchdog:     at java.util.HashMap.putVal(HashMap.java:669)
+09-24 22:38:00.561  1564  1595 W Watchdog:     at java.util.HashMap.put(HashMap.java:617)
+09-24 22:38:00.561  1564  1595 W Watchdog:     at android.app.PropertyInvalidatedCache$CacheMap.put(PropertyInvalidatedCache.java:558)
+09-24 22:38:00.561  1564  1595 W Watchdog:     at android.app.PropertyInvalidatedCache.query(PropertyInvalidatedCache.java:1786)
+09-24 22:38:00.562  1564  1595 W Watchdog:     - locked <0x00030169> (a java.lang.Object)
+09-24 22:38:00.563  1564  1595 W Watchdog:     at android.app.compat.CompatChanges.isChangeEnabled(CompatChanges.java:79)
+09-24 22:38:00.564  1564  1595 W Watchdog:     at android.content.pm.ApplicationInfo.isChangeEnabled(ApplicationInfo.java:2793)
+09-24 22:38:00.579  1564  1595 W Watchdog:     at android.content.pm.ActivityInfo.isChangeEnabled(ActivityInfo.java:2063)
+09-24 22:38:00.592  1564  1595 W Watchdog:     at com.android.server.wm.AppCompatUtils.isChangeEnabled(AppCompatUtils.java:99)
+09-24 22:38:00.593  1564  1595 W Watchdog:     at com.android.server.wm.AppCompatAspectRatioOverrides.isSystemOverrideToFullscreenEnabled(AppCompatAspectRatioOverrides.java:166)
+09-24 22:38:00.594  1564  1595 W Watchdog:     at com.android.server.wm.AppCompatAspectRatioOverrides.hasFullscreenOverride(AppCompatAspectRatioOverrides.java:189)
+09-24 22:38:00.594  1564  1595 W Watchdog:     at com.android.server.wm.AppCompatSizeCompatModePolicy.shouldCreateAppCompatDisplayInsets(AppCompatSizeCompatModePolicy.java:445)
+09-24 22:38:00.595  1564  1595 W Watchdog:     at com.android.server.wm.ActivityRecord.shouldCreateAppCompatDisplayInsets(ActivityRecord.java:7553)
+09-24 22:38:00.596  1564  1595 W Watchdog:     at com.android.server.wm.ActivityRecord.providesMaxBounds(ActivityRecord.java:8191)
+09-24 22:38:00.603  1564  1564 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_MIN_ASPECT_RATIO_OVERRIDE
+09-24 22:38:00.640  1564  1595 W Watchdog:     at com.android.server.wm.ConfigurationContainer.updateRequestedOverrideConfiguration(ConfigurationContainer.java:361)
+09-24 22:38:00.643  1564  1595 W Watchdog:     at com.android.server.wm.ConfigurationContainer.onRequestedOverrideConfigurationChanged(ConfigurationContainer.java:348)
+09-24 22:38:00.652  1564  1595 W Watchdog:     at com.android.server.wm.WindowContainer.onRequestedOverrideConfigurationChanged(WindowContainer.java:1076)
+09-24 22:38:00.667  1564  1564 V GrammaticalInflectionUtils: AttributionSource: AttributionSource { uid = 10181, packageName = null, attributionTag = null, token = android.os.Binder@c34bf74, deviceId = 0, next = null } does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+09-24 22:38:00.692  1564  1595 W Watchdog:     at com.android.server.wm.ConfigurationContainer.setActivityType(ConfigurationContainer.java:655)
+09-24 22:38:00.709  1564  1595 W Watchdog:     at com.android.server.wm.ActivityRecord.setActivityType(ActivityRecord.java:2895)
+09-24 22:38:00.710  1564  1595 W Watchdog:     at com.android.server.wm.ActivityRecord.<init>(ActivityRecord.java:1995)
+09-24 22:38:00.712  1564  1595 W Watchdog:     at com.android.server.wm.ActivityRecord.<init>(ActivityRecord.java:0)
+09-24 22:38:00.747  1564  1595 W Watchdog:     at com.android.server.wm.ActivityRecord$Builder.build(ActivityRecord.java:9729)
+09-24 22:38:00.785  1564  1595 W Watchdog:     at com.android.server.wm.ActivityStarter.executeRequest(ActivityStarter.java:1488)
+09-24 22:38:00.786  1564  1595 W Watchdog:     at com.android.server.wm.ActivityStarter.execute(ActivityStarter.java:870)
+09-24 22:38:00.801  1564  1595 W Watchdog:     - locked <0x0a62d48f> (a com.android.server.wm.WindowManagerGlobalLock)
+09-24 22:38:00.809  1564  1595 W Watchdog:     at com.android.server.wm.ActivityStartController.startHomeActivity(ActivityStartController.java:206)
+09-24 22:38:00.810  1564  1595 W Watchdog:     at com.android.server.wm.RootWindowContainer.startHomeOnTaskDisplayArea(RootWindowContainer.java:1402)
+09-24 22:38:00.825  1564  1595 W Watchdog:     at com.android.server.wm.RootWindowContainer.lambda$startHomeOnDisplay$11(RootWindowContainer.java:1330)
+09-24 22:38:00.825  1564  1595 W Watchdog:     at com.android.server.wm.RootWindowContainer.$r8$lambda$DFaa7QLApF8rlf4uiy_4K0Hxf2Y(RootWindowContainer.java:0)
+09-24 22:38:00.826  1564  1595 W Watchdog:     at com.android.server.wm.RootWindowContainer$$ExternalSyntheticLambda31.apply(R8$$SyntheticClass:0)
+09-24 22:38:00.826  1564  1595 W Watchdog:     at com.android.server.wm.TaskDisplayArea.reduceOnAllTaskDisplayAreas(TaskDisplayArea.java:513)
+09-24 22:38:00.827  1564  1595 W Watchdog:     at com.android.server.wm.DisplayArea.reduceOnAllTaskDisplayAreas(DisplayArea.java:558)
+09-24 22:38:00.890  1564  1595 W Watchdog:     at com.android.server.wm.DisplayArea.reduceOnAllTaskDisplayAreas(DisplayArea.java:558)
+09-24 22:38:00.945  1564  1595 W Watchdog:     at com.android.server.wm.DisplayArea.reduceOnAllTaskDisplayAreas(DisplayArea.java:558)
+09-24 22:38:00.946  1564  1595 W Watchdog:     at com.android.server.wm.DisplayArea.reduceOnAllTaskDisplayAreas(DisplayArea.java:558)
+09-24 22:38:00.946  1564  1595 W Watchdog:     at com.android.server.wm.DisplayArea.reduceOnAllTaskDisplayAreas(DisplayArea.java:558)
+09-24 22:38:00.947  1564  1595 W Watchdog:     at com.android.server.wm.WindowContainer.reduceOnAllTaskDisplayAreas(WindowContainer.java:2462)
+09-24 22:38:00.947  1564  1595 W Watchdog:     at com.android.server.wm.RootWindowContainer.startHomeOnDisplay(RootWindowContainer.java:1329)
+09-24 22:38:00.994  1564  1595 W Watchdog:     at com.android.server.wm.RootWindowContainer.startHomeOnDisplay(RootWindowContainer.java:1316)
+09-24 22:38:00.994  1564  1595 W Watchdog:     at com.android.server.wm.RootWindowContainer.startHomeOnAllDisplays(RootWindowContainer.java:1300)
+09-24 22:38:00.995  1564  1595 W Watchdog:     at com.android.server.wm.ActivityTaskManagerService$LocalService.startHomeOnAllDisplays(ActivityTaskManagerService.java:6639)
+09-24 22:38:00.995  1564  1595 W Watchdog:     - locked <0x0a62d48f> (a com.android.server.wm.WindowManagerGlobalLock)
+09-24 22:38:01.041  1564  1595 W Watchdog:     at com.android.server.am.ActivityManagerService.systemReady(ActivityManagerService.java:9137)
+09-24 22:38:01.042  1564  1595 W Watchdog:     - locked <0x0b90da51> (a com.android.server.am.ActivityManagerService)
+09-24 22:38:01.042  1564  1595 W Watchdog:     at com.android.server.SystemServer.startOtherServices(SystemServer.java:3222)
+09-24 22:38:01.043  1564  1595 W Watchdog:     at com.android.server.SystemServer.run(SystemServer.java:988)
+09-24 22:38:01.043  1564  1595 W Watchdog:     at com.android.server.SystemServer.main(SystemServer.java:689)
+09-24 22:38:01.044  1564  1595 W Watchdog:     at java.lang.reflect.Method.invoke(Native Method)
+09-24 22:38:01.082  1564  1595 W Watchdog:     at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:593)
+09-24 22:38:01.083  1564  1595 W Watchdog:     at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:910)
+09-24 22:38:01.083  1564  1595 W Watchdog: *** GOODBYE!
+09-24 22:38:01.146   525   525 I android.hardware.power-service.example: Power isModeSupported: 5
+09-24 22:38:01.185  1564  1564 I wm_task_created: 5
+09-24 22:38:01.191  1564  1595 I Process : Sending signal. PID: 1564 SIG: 9
+09-24 22:38:02.439   258   268 W keystore2: system/security/keystore2/watchdog/src/lib.rs:143 - ### Keystore Watchdog report - BEGIN ###
+09-24 22:38:02.439   258   268 W keystore2: system/security/keystore2/watchdog/src/lib.rs:152 - When extracting from a bug report, please include this header and all 1 records below (to footer)
+09-24 22:38:02.451   258   268 W keystore2: system/security/keystore2/watchdog/src/lib.rs:199 - ThreadId(3) await_boot_completed Started: 09-24 14:25:34.240 UTC Pending: 748.210143495s Overdue 448.210263594s
+09-24 22:38:02.451   258   268 W keystore2: system/security/keystore2/watchdog/src/lib.rs:211 - ### Keystore Watchdog report - END ###
+09-24 22:38:03.377   226   226 I lowmemorykiller: lmkd data connection dropped
+09-24 22:38:03.378   226   226 I lowmemorykiller: closing lmkd data connection
+09-24 22:38:03.492     0     0 I binder  : release 1564:1580 transaction 67795 in, still active
+09-24 22:38:03.492     0     0 I binder  : send failed reply for transaction 67795 to 1964:1964
+09-24 22:38:03.497     0     0 I binder  : release 1564:1701 transaction 67976 in, still active
+09-24 22:38:03.497     0     0 I binder  : send failed reply for transaction 67976 to 1964:2194
+09-24 22:38:03.497     0     0 I binder  : release 1564:1702 transaction 67987 in, still active
+09-24 22:38:03.497     0     0 I binder  : send failed reply for transaction 67987 to 2193:2193
+09-24 22:38:03.498     0     0 I binder  : release 1564:2079 transaction 67561 in, still active
+09-24 22:38:03.498     0     0 I binder  : send failed reply for transaction 67561 to 1964:2061
+09-24 22:38:03.498     0     0 I binder  : release 1564:2151 transaction 68276 in, still active
+09-24 22:38:03.498     0     0 I binder  : send failed reply for transaction 68276 to 2096:2096
+09-24 22:38:03.546   469  1337 W statsd  : statscompanion service died
+09-24 22:38:03.547   469  1337 W statsd  : Reset statsd upon system server restarts.
+09-24 22:38:03.550  1964  1964 D ActivityThread: Too many transaction errors, throttling freezer binder callback.
+09-24 22:38:03.595  1478  1498 E IPCThreadState: attemptIncStrongHandle(5): Not supported
+09-24 22:38:03.622   492   514 E IPCThreadState: attemptIncStrongHandle(2): Not supported
+09-24 22:38:03.624  1942  1942 E wpa_supplicant: Client died. Terminating...
+09-24 22:38:03.626  1942  1942 E wpa_supplicant: unlinkToDeath: removed reference to death recipient but unlink failed: DEAD_OBJECT
+09-24 22:38:03.634   485   485 E android.hardware.health-service.example: unlinkToDeath: removed reference to death recipient but unlink failed: DEAD_OBJECT
+09-24 22:38:03.638  1889  1898 D fingerprint-service.ranchu: 0x72e9322ea4a0:~Session:147: Terminating session
+09-24 22:38:03.640  1478  1497 E IPCThreadState: attemptIncStrongHandle(6): Not supported
+09-24 22:38:03.641   492  1154 E IPCThreadState: attemptIncStrongHandle(3): Not supported
+09-24 22:38:03.647   492   492 E IPCThreadState: attemptIncStrongHandle(1): Not supported
+09-24 22:38:03.655  1476  1815 E IPCThreadState: Binder transaction failure. id: 68426, BR_*: 29189, error: -22 (Invalid argument)
+09-24 22:38:03.665  1923  1923 F ot-daemon: [CRIT]-BINDER--: system_server is dead, removing configs and callbacks...
+09-24 22:38:03.666  1923  1923 I ot-daemon: [INFO]-MDNS----: Set INsdPublisher 0x0
+09-24 22:38:03.677   469  1337 E IPCThreadState: attemptIncStrongHandle(125): Not supported
+09-24 22:38:03.628  1942  1942 D wpa_supplicant: p2p-dev-wlan0: Removing interface p2p-dev-wlan0
+09-24 22:38:03.679  1942  1942 D wpa_supplicant: nl80211: Getting wowlan status
+09-24 22:38:03.685   485   485 E IPCThreadState: attemptIncStrongHandle(2): Not supported
+09-24 22:38:03.704   492   492 E IPCThreadState: binder thread pool (1 threads) starved for 135 ms
+09-24 22:38:03.707  1474  1474 E Zygote  : Zygote failed to write to system_server FD: Connection refused
+09-24 22:38:03.720  1964  2194 D ActivityThread: Too many transaction errors, throttling freezer binder callback.
+09-24 22:38:03.731  1475  2146 I CaptureStateNotifier: Listener binder died
+09-24 22:38:03.708  1474  1474 I Zygote  : Process 1564 exited due to signal 9 (Killed)
+09-24 22:38:03.759   736  1241 D BufferPoolAccessor2.0: bufferpool2 0x704fdcaae3d8 : 0(0 size) total buffers - 0(0 size) used buffers - 8/11 (recycle/alloc) - 3/10 (fetch/transfer)
+09-24 22:38:03.760   736  1241 D BufferPoolAccessor2.0: Destruction - bufferpool2 0x704fdcaae3d8 cached: 0/0M, 0/0% in use; allocs: 11, 73% recycled; transfers: 10, 70% unfetched
+09-24 22:38:03.773  1474  1474 E Zygote  : Exit zygote because system server (pid 1564) has terminated
+09-24 22:38:03.783  1964  1964 D AndroidRuntime: Shutting down VM
+09-24 22:38:03.793  1477  1515 E ResourceManagerMetrics: UidObserver: ActivityManager has died
+--------- beginning of crash
+09-24 22:38:03.795  1964  1964 E AndroidRuntime: FATAL EXCEPTION: main
+09-24 22:38:03.795  1964  1964 E AndroidRuntime: Process: com.android.systemui, PID: 1964
+09-24 22:38:03.795  1964  1964 E AndroidRuntime: DeadSystemException: The system died; earlier logs will point to the root cause
+09-24 22:38:03.801  1476  1815 E CameraService: UidPolicy: Failed to remove uid from observer: 0xffffffe0
+09-24 22:38:03.862  1964  1964 D ActivityThread: Too many transaction errors, throttling freezer binder callback.
+09-24 22:38:03.868  1964  1964 I Process : Sending signal. PID: 1964 SIG: 9
+09-24 22:38:03.931   736  1241 D BufferPoolAccessor2.0: bufferpool2 0x704fdcaad158 : 0(0 size) total buffers - 0(0 size) used buffers - 8/10 (recycle/alloc) - 2/9 (fetch/transfer)
+09-24 22:38:03.951  2193  2193 D AndroidRuntime: Shutting down VM
+09-24 22:38:03.959  2193  2193 E AndroidRuntime: FATAL EXCEPTION: main
+09-24 22:38:03.959  2193  2193 E AndroidRuntime: PID: 2193
+09-24 22:38:03.959  2193  2193 E AndroidRuntime: DeadSystemException: The system died; earlier logs will point to the root cause
+09-24 22:38:03.964   736  1241 D BufferPoolAccessor2.0: Destruction - bufferpool2 0x704fdcaad158 cached: 0/0M, 0/0% in use; allocs: 10, 80% recycled; transfers: 9, 78% unfetched
+09-24 22:38:03.993  2096  2096 D ActivityThread: Too many transaction errors, throttling freezer binder callback.
+09-24 22:38:04.078  1942  1942 D wpa_supplicant: nl80211: Getting wowlan status failed
+09-24 22:38:04.098  1923  1923 E IPCThreadState: attemptIncStrongHandle(3): Not supported
+09-24 22:38:04.080  1942  1942 D wpa_supplicant: p2p-dev-wlan0: Request to deauthenticate - bssid=00:00:00:00:00:00 pending_bssid=00:00:00:00:00:00 reason=3 (DEAUTH_LEAVING) state=DISCONNECTED valid_links=0x0 ap_mld_addr=00:00:00:00:00:00
+09-24 22:38:04.108  1942  1942 D wpa_supplicant: TDLS: Tear down peers
+09-24 22:38:04.111  1942  1942 D wpa_supplicant: p2p-dev-wlan0: State: DISCONNECTED -> DISCONNECTED
+09-24 22:38:04.136  1942  1942 D wpa_supplicant: nl80211: Set p2p-dev-wlan0 operstate 0->0 (DORMANT)
+09-24 22:38:04.137  1942  1942 D wpa_supplicant: netlink: Operstate: ifindex=0 linkmode=-1 (no change), operstate=5 (IF_OPER_DORMANT)
+09-24 22:38:04.138  1942  1942 D wpa_supplicant: EAPOL: External notification - portEnabled=0
+09-24 22:38:04.139  1942  1942 D wpa_supplicant: EAPOL: External notification - portValid=0
+09-24 22:38:04.140  1942  1942 D wpa_supplicant: QM: Clear all active DSCP policies
+09-24 22:38:04.158  2193  2193 I Process : Sending signal. PID: 2193 SIG: 9
+09-24 22:38:04.176  1942  1942 I wpa_supplicant: p2p-dev-wlan0: CTRL-EVENT-DSCP-POLICY clear_all
+09-24 22:38:04.177  1942  1942 I wpa_supplicant: Deinit sm=0x7ed033a4d790
+09-24 22:38:04.179  1942  1942 D wpa_supplicant: PTKSA: Deinit. n_ptksa=0
+09-24 22:38:04.208  1942  1942 D wpa_supplicant: p2p-dev-wlan0: WPA: Clear old PMK and PTK
+09-24 22:38:04.209  1942  1942 D wpa_supplicant: p2p-dev-wlan0: Cancelling scan request
+09-24 22:38:04.210  1942  1942 D wpa_supplicant: p2p-dev-wlan0: Cancelling authentication timeout
+09-24 22:38:04.211  1942  1942 D wpa_supplicant: Off-channel: Clear pending Action frame TX (pending_action_tx=0x0
+09-24 22:38:04.239  1942  1942 D wpa_supplicant: Off-channel: Action frame sequence done notification: pending_action_tx=0x0 drv_offchan_tx=1 action_tx_wait_time=0 off_channel_freq=0 roc_waiting_drv_freq=0
+09-24 22:38:04.280  1942  1942 D wpa_supplicant: QM: Clear all active DSCP policies
+09-24 22:38:04.281  1942  1942 I wpa_supplicant: p2p-dev-wlan0: CTRL-EVENT-DSCP-POLICY clear_all
+09-24 22:38:04.281  1942  1942 D wpa_supplicant: p2p-dev-wlan0: P2P: Disable P2P since removing the management interface is being removed
+09-24 22:38:04.282  1942  1942 D wpa_supplicant: P2P: All ASP advertisements flushed
+09-24 22:38:04.282  1942  1942 D wpa_supplicant: P2P: Disabling Extended Listen Timing
+09-24 22:38:04.283  1942  1942 D wpa_supplicant: P2P: Stopping find
+09-24 22:38:04.283  1942  1942 D wpa_supplicant: P2P: Clear timeout (state=IDLE)
+09-24 22:38:04.283  1942  1942 D wpa_supplicant: P2P: State IDLE -> IDLE
+09-24 22:38:04.312  1942  1942 D wpa_supplicant: P2P: p2p_stop_listen_for_freq(freq=0) pending_listen_freq=0 in_listen=0 drv_in_listen=0
+09-24 22:38:04.313  1942  1942 D wpa_supplicant: P2P: All ASP advertisements flushed
+09-24 22:38:04.313  1942  1942 D wpa_supplicant: Remove interface p2p-dev-wlan0 from radio phy1
+09-24 22:38:04.314  1942  1942 I wpa_supplicant: nl80211: deinit ifname=p2p-dev-wlan0 disabled_11b_rates=0
+09-24 22:38:04.314  1942  1942 D wpa_supplicant: netlink: Operstate: ifindex=0 linkmode=0 (kernel-control), operstate=6 (IF_OPER_UP)
+09-24 22:38:04.288  2096  2096 E AndroidRuntime: FATAL EXCEPTION: main
+09-24 22:38:04.288  2096  2096 E AndroidRuntime: Process: com.google.android.permissioncontroller, PID: 2096
+09-24 22:38:04.288  2096  2096 E AndroidRuntime: DeadSystemException: The system died; earlier logs will point to the root cause
+09-24 22:38:04.362     0     0 I init    : Service 'zygote' (pid 1474) received signal 9
+09-24 22:38:04.387     0     0 I init    : Sending signal 9 to service 'zygote' (pid 1474) process group...
+09-24 22:38:04.465  1942  1942 D wpa_supplicant: nl80211: Stop P2P Device p2p-dev-wlan0 (0x100000003): Success
+09-24 22:38:04.466  1942  1942 D wpa_supplicant: nl80211: Unsubscribe mgmt frames handle 0x8888f6593b2c73d9 (deinit)
+09-24 22:38:04.462     0     0 I libprocessgroup: Removed cgroup /sys/fs/cgroup/system/uid_0/pid_1474
+09-24 22:38:04.543  2171  2171 E crash_dump64: failed to notify tombstoned of completion
+09-24 22:38:04.535     0     0 I init    : starting service 'exec 21 (/system/bin/vdc volume abort_fuse)'...
+09-24 22:38:04.765  1942  1942 D wpa_supplicant: nl80211: Delete P2P Device p2p-dev-wlan0 (0x100000003): Success
+09-24 22:38:04.766  1942  1942 D wpa_supplicant: Deregistering interface from aidl control: p2p-dev-wlan0
+09-24 22:38:04.767  1942  1942 I wpa_supplicant: p2p-dev-wlan0: CTRL-EVENT-TERMINATING 
+09-24 22:38:04.783  1942  1942 D wpa_supplicant: wlan0: Removing interface wlan0
+09-24 22:38:04.783  1942  1942 D wpa_supplicant: nl80211: Getting wowlan status
+09-24 22:38:04.808  1942  1942 D wpa_supplicant: nl80211: Getting wowlan status failed
+09-24 22:38:04.809  1942  1942 D wpa_supplicant: wlan0: Request to deauthenticate - bssid=00:00:00:00:00:00 pending_bssid=00:00:00:00:00:00 reason=3 (DEAUTH_LEAVING) state=DISCONNECTED valid_links=0x0 ap_mld_addr=00:00:00:00:00:00
+09-24 22:38:04.809  1942  1942 D wpa_supplicant: TDLS: Tear down peers
+09-24 22:38:04.810  1942  1942 D wpa_supplicant: nl80211: Data frame filter flags=0x0
+09-24 22:38:04.826  1942  1942 D wpa_supplicant: wlan0: State: DISCONNECTED -> DISCONNECTED
+09-24 22:38:04.827  1942  1942 D wpa_supplicant: nl80211: Set wlan0 operstate 0->0 (DORMANT)
+09-24 22:38:04.827  1942  1942 D wpa_supplicant: netlink: Operstate: ifindex=16 linkmode=-1 (no change), operstate=5 (IF_OPER_DORMANT)
+09-24 22:38:04.837  1942  1942 D wpa_supplicant: EAPOL: External notification - portEnabled=0
+09-24 22:38:04.837  1942  1942 D wpa_supplicant: EAPOL: External notification - portValid=0
+09-24 22:38:04.838  1942  1942 D wpa_supplicant: QM: Clear all active DSCP policies
+09-24 22:38:04.838  1942  1942 I wpa_supplicant: wlan0: CTRL-EVENT-DSCP-POLICY clear_all
+09-24 22:38:04.870     0     0 I servicemanager: Caller(pid=1476,uid=1047,sid=u:r:cameraserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:04.954     0     0 I init    : ... started service 'exec 21 (/system/bin/vdc volume abort_fuse)' has pid 2217
+09-24 22:38:04.956     0     0 I init    : Command 'exec_background - system system -- /system/bin/vdc volume abort_fuse' action=onrestart (<Service 'zygote' onrestart>:1) took 490ms and succeeded
+09-24 22:38:05.011  1942  1942 I wpa_supplicant: Deinit sm=0x7ed033a4d950
+09-24 22:38:05.051   548   548 I adbd    : Remote process closed the socket (on MSG_PEEK)
+09-24 22:38:05.016     0     0 I init    : Command 'write /sys/power/state on' action=onrestart (<Service 'zygote' onrestart>:2) took 59ms and failed: Unable to write to file '/sys/power/state': Unable to write file contents: Invalid argument
+09-24 22:38:05.034     0     0 I init    : Sending signal 9 to service 'audioserver' (pid 1475) process group...
+09-24 22:38:05.198  1942  1942 D wpa_supplicant: PTKSA: Deinit. n_ptksa=0
+09-24 22:38:05.198  1942  1942 D wpa_supplicant: wlan0: WPA: Clear old PMK and PTK
+09-24 22:38:05.199  1942  1942 D wpa_supplicant: wlan0: Cancelling scan request
+09-24 22:38:05.199  1942  1942 D wpa_supplicant: wlan0: Cancelling authentication timeout
+09-24 22:38:05.199  1942  1942 D wpa_supplicant: Off-channel: Clear pending Action frame TX (pending_action_tx=0x0
+09-24 22:38:05.223  1942  1942 D wpa_supplicant: nl80211: Data frame filter flags=0x0
+09-24 22:38:05.250  1942  1942 D wpa_supplicant: Off-channel: Action frame sequence done notification: pending_action_tx=0x0 drv_offchan_tx=1 action_tx_wait_time=0 off_channel_freq=0 roc_waiting_drv_freq=0
+09-24 22:38:05.250  1942  1942 D wpa_supplicant: QM: Clear all active DSCP policies
+09-24 22:38:05.250  1942  1942 I wpa_supplicant: wlan0: CTRL-EVENT-DSCP-POLICY clear_all
+09-24 22:38:05.251  1942  1942 D wpa_supplicant: Remove interface wlan0 from radio phy1
+09-24 22:38:05.251  1942  1942 D wpa_supplicant: Remove radio phy1
+09-24 22:38:05.251  1942  1942 I wpa_supplicant: nl80211: deinit ifname=wlan0 disabled_11b_rates=0
+09-24 22:38:05.252  1942  1942 D wpa_supplicant: netlink: Operstate: ifindex=16 linkmode=0 (kernel-control), operstate=6 (IF_OPER_UP)
+09-24 22:38:05.289  1942  1942 D wpa_supplicant: nl80211: Set mode ifindex 16 iftype 2 (STATION)
+09-24 22:38:05.291  1942  1942 D wpa_supplicant: nl80211: Unsubscribe mgmt frames handle 0x8888f6593b2c7299 (mode change)
+09-24 22:38:05.305  1942  1942 D wpa_supplicant: Deregistering interface from aidl control: wlan0
+09-24 22:38:05.307  1942  1942 E wpa_supplicant: Error deregistering for death notification for iface callback object
+09-24 22:38:05.321  1942  1942 I wpa_supplicant: wlan0: CTRL-EVENT-TERMINATING 
+09-24 22:38:05.322  1942  1942 D wpa_supplicant: Deiniting aidl control
+09-24 22:38:05.412     0     0 I libprocessgroup: Removed cgroup /sys/fs/cgroup/system/uid_1041/pid_1475
+09-24 22:38:05.483     0     0 I init    : Command 'restart audioserver' action=onrestart (<Service 'zygote' onrestart>:4) took 448ms and succeeded
+09-24 22:38:05.484     0     0 I init    : Sending signal 9 to service 'cameraserver' (pid 1476) process group...
+09-24 22:38:05.548  1480  1487 I r_submix: adev_close()
+09-24 22:38:05.618     0     0 I libprocessgroup: Removed cgroup /sys/fs/cgroup/system/uid_1047/pid_1476
+09-24 22:38:05.638     0     0 I init    : Command 'restart cameraserver' action=onrestart (<Service 'zygote' onrestart>:5) took 154ms and succeeded
+09-24 22:38:05.638     0     0 I init    : Sending signal 9 to service 'media' (pid 1477) process group...
+09-24 22:38:05.759     0     0 I libprocessgroup: Removed cgroup /sys/fs/cgroup/system/uid_1013/pid_1477
+09-24 22:38:05.798     0     0 I init    : Command 'restart media' action=onrestart (<Service 'zygote' onrestart>:6) took 159ms and succeeded
+09-24 22:38:05.799     0     0 I init    : Command 'restart --only-if-running media.tuner' action=onrestart (<Service 'zygote' onrestart>:7) took 0ms and failed: service media.tuner not found
+09-24 22:38:05.799     0     0 I init    : Sending signal 9 to service 'netd' (pid 1478) process group...
+09-24 22:38:05.862     0     0 I libprocessgroup: Removed cgroup /sys/fs/cgroup/system/uid_0/pid_1478
+09-24 22:38:05.876     0     0 I init    : Command 'restart netd' action=onrestart (<Service 'zygote' onrestart>:8) took 76ms and succeeded
+09-24 22:38:05.876     0     0 I init    : Sending signal 9 to service 'wificond' (pid 1479) process group...
+09-24 22:38:05.916     0     0 I libprocessgroup: Removed cgroup /sys/fs/cgroup/system/uid_1010/pid_1479
+09-24 22:38:05.942     0     0 I init    : Command 'restart wificond' action=onrestart (<Service 'zygote' onrestart>:9) took 65ms and succeeded
+09-24 22:38:05.971     0     0 I init    : Service 'audioserver' (pid 1475) received signal 9
+09-24 22:38:05.972     0     0 I init    : Sending signal 9 to service 'audioserver' (pid 1475) process group...
+09-24 22:38:05.977     0     0 E libprocessgroup: Failed to write 1 to /sys/fs/cgroup/system/uid_1041/pid_1475/cgroup.kill: No such file or directory
+09-24 22:38:05.978     0     0 E libprocessgroup: Failed to open /sys/fs/cgroup/system/uid_1041/pid_1475/cgroup.procs: No such file or directory
+09-24 22:38:05.979     0     0 I init    : Sending signal 9 to service 'vendor.audio-hal' (pid 1480) process group...
+09-24 22:38:06.039     0     0 I libprocessgroup: Removed cgroup /sys/fs/cgroup/system/uid_1041/pid_1480
+09-24 22:38:06.056     0     0 I init    : Command 'restart vendor.audio-hal' action=onrestart (<Service 'audioserver' onrestart>:1) took 77ms and succeeded
+09-24 22:38:06.066     0     0 I init    : Command 'restart vendor.audio-hal-aidl' action=onrestart (<Service 'audioserver' onrestart>:2) took 9ms and failed: service vendor.audio-hal-aidl not found
+09-24 22:38:06.067     0     0 I init    : Command 'restart vendor.audio-effect-hal-aidl' action=onrestart (<Service 'audioserver' onrestart>:3) took 0ms and failed: service vendor.audio-effect-hal-aidl not found
+09-24 22:38:06.067     0     0 I init    : Command 'restart vendor.audio-hal-4-0-msd' action=onrestart (<Service 'audioserver' onrestart>:4) took 0ms and failed: service vendor.audio-hal-4-0-msd not found
+09-24 22:38:06.068     0     0 I init    : Command 'restart audio_proxy_service' action=onrestart (<Service 'audioserver' onrestart>:5) took 0ms and failed: service audio_proxy_service not found
+09-24 22:38:06.098     0     0 I init    : Service 'cameraserver' (pid 1476) received signal 9
+09-24 22:38:06.098     0     0 I init    : Sending signal 9 to service 'cameraserver' (pid 1476) process group...
+09-24 22:38:06.099     0     0 E libprocessgroup: Failed to write 1 to /sys/fs/cgroup/system/uid_1047/pid_1476/cgroup.kill: No such file or directory
+09-24 22:38:06.099     0     0 E libprocessgroup: Failed to open /sys/fs/cgroup/system/uid_1047/pid_1476/cgroup.procs: No such file or directory
+09-24 22:38:06.124     0     0 I init    : Service 'media' (pid 1477) received signal 9
+09-24 22:38:06.124     0     0 I init    : Sending signal 9 to service 'media' (pid 1477) process group...
+09-24 22:38:06.125     0     0 E libprocessgroup: Failed to write 1 to /sys/fs/cgroup/system/uid_1013/pid_1477/cgroup.kill: No such file or directory
+09-24 22:38:06.134     0     0 E libprocessgroup: Failed to open /sys/fs/cgroup/system/uid_1013/pid_1477/cgroup.procs: No such file or directory
+09-24 22:38:06.154     0     0 I init    : Service 'netd' (pid 1478) received signal 9
+09-24 22:38:06.155     0     0 I init    : Sending signal 9 to service 'netd' (pid 1478) process group...
+09-24 22:38:06.156     0     0 E libprocessgroup: Failed to write 1 to /sys/fs/cgroup/system/uid_0/pid_1478/cgroup.kill: No such file or directory
+09-24 22:38:06.156     0     0 E libprocessgroup: Failed to open /sys/fs/cgroup/system/uid_0/pid_1478/cgroup.procs: No such file or directory
+09-24 22:38:06.170     0     0 I init    : Command 'restart zygote_secondary' action=onrestart (<Service 'netd' onrestart>:2) took 0ms and failed: service zygote_secondary not found
+09-24 22:38:06.178     0     0 I init    : Service 'wificond' (pid 1479) received signal 9
+09-24 22:38:06.179     0     0 I init    : Sending signal 9 to service 'wificond' (pid 1479) process group...
+09-24 22:38:06.180     0     0 E libprocessgroup: Failed to write 1 to /sys/fs/cgroup/system/uid_1010/pid_1479/cgroup.kill: No such file or directory
+09-24 22:38:06.180     0     0 E libprocessgroup: Failed to open /sys/fs/cgroup/system/uid_1010/pid_1479/cgroup.procs: No such file or directory
+09-24 22:38:06.210     0     0 I init    : Service 'vendor.audio-hal' (pid 1480) received signal 9
+09-24 22:38:06.210     0     0 I init    : Sending signal 9 to service 'vendor.audio-hal' (pid 1480) process group...
+09-24 22:38:06.211     0     0 E libprocessgroup: Failed to write 1 to /sys/fs/cgroup/system/uid_1041/pid_1480/cgroup.kill: No such file or directory
+09-24 22:38:06.212     0     0 E libprocessgroup: Failed to open /sys/fs/cgroup/system/uid_1041/pid_1480/cgroup.procs: No such file or directory
+09-24 22:38:06.252     0     0 I init    : Service 'wpa_supplicant' (pid 1942) exited with status 0 oneshot service took 114.427002 seconds in background
+09-24 22:38:06.257     0     0 I init    : Sending signal 9 to service 'wpa_supplicant' (pid 1942) process group...
+09-24 22:38:06.259     0     0 I libprocessgroup: Removed cgroup /sys/fs/cgroup/system/uid_0/pid_1942
+09-24 22:38:06.284     0     0 I init    : Untracked pid 2171 exited with status 0
+09-24 22:38:06.293     0     0 I init    : Untracked pid 2171 did not have an associated service entry and will not be reaped
+09-24 22:38:06.304     0     0 I init    : Untracked pid 2181 received signal 9
+09-24 22:38:06.304     0     0 I init    : Untracked pid 2181 did not have an associated service entry and will not be reaped
+09-24 22:38:06.314     0     0 I init    : Untracked pid 1964 received signal 9
+09-24 22:38:06.314     0     0 I init    : Untracked pid 1964 did not have an associated service entry and will not be reaped
+09-24 22:38:06.316     0     0 I init    : Untracked pid 2015 received signal 9
+09-24 22:38:06.316     0     0 I init    : Untracked pid 2015 did not have an associated service entry and will not be reaped
+09-24 22:38:06.324     0     0 I init    : Untracked pid 2080 received signal 9
+09-24 22:38:06.324     0     0 I init    : Untracked pid 2080 did not have an associated service entry and will not be reaped
+09-24 22:38:06.336     0     0 I init    : Untracked pid 2096 received signal 9
+09-24 22:38:06.337     0     0 I init    : Untracked pid 2096 did not have an associated service entry and will not be reaped
+09-24 22:38:06.342     0     0 I init    : Untracked pid 2107 received signal 9
+09-24 22:38:06.342     0     0 I init    : Untracked pid 2107 did not have an associated service entry and will not be reaped
+09-24 22:38:06.344     0     0 I init    : Untracked pid 2193 received signal 9
+09-24 22:38:06.344     0     0 I init    : Untracked pid 2193 did not have an associated service entry and will not be reaped
+09-24 22:38:06.385   227  2218 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:06.347     0     0 I init    : Untracked pid 1481 received signal 9
+09-24 22:38:06.348     0     0 I init    : Untracked pid 1481 did not have an associated service entry and will not be reaped
+09-24 22:38:06.349     0     0 I init    : Untracked pid 1482 received signal 9
+09-24 22:38:06.358     0     0 I init    : Untracked pid 1482 did not have an associated service entry and will not be reaped
+09-24 22:38:06.360     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:06.371     0     0 I init    : processing action (init.svc.media=*) from (/system/etc/init/mediaserver.rc:1)
+09-24 22:38:06.374     0     0 I servicemanager: Caller(pid=1476,uid=1047,sid=u:r:cameraserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:06.404     0     0 I init    : starting service 'zygote'...
+09-24 22:38:06.432     0     0 I init    : Created socket '/dev/socket/zygote', mode 660, user 0, group 1000
+09-24 22:38:06.445     0     0 I init    : Created socket '/dev/socket/usap_pool_primary', mode 660, user 0, group 1000
+09-24 22:38:06.579  2065  2070 I AidlLazyServiceRegistrar: Process has 0 (of 1 available) client(s) in use after notification android.hardware.gnss.IGnss/default has clients: 0
+09-24 22:38:06.554     0     0 I servicemanager: Notifying android.hardware.biometrics.fingerprint.IFingerprint/default they don't (previously: do) have clients when we now have no record of a client
+09-24 22:38:06.555     0     0 I servicemanager: Notifying android.hardware.gnss.IGnss/default they don't (previously: do) have clients when we now have no record of a client
+09-24 22:38:06.583  1889  1898 I AidlLazyServiceRegistrar: Process has 0 (of 1 available) client(s) in use after notification android.hardware.biometrics.fingerprint.IFingerprint/default has clients: 0
+09-24 22:38:06.590  1889  1898 I AidlLazyServiceRegistrar: Trying to shut down the service. No clients in use for any service in process.
+09-24 22:38:06.605  2065  2070 I AidlLazyServiceRegistrar: Trying to shut down the service. No clients in use for any service in process.
+09-24 22:38:06.578     0     0 I init    : ... started service 'zygote' has pid 2222
+09-24 22:38:06.584     0     0 I servicemanager: Notifying ot_daemon they don't (previously: do) have clients when we now have no record of a client
+09-24 22:38:06.596     0     0 I servicemanager: Caller(pid=2065,uid=1021,sid=u:r:hal_gnss_default:s0) Unregistering android.hardware.gnss.IGnss/default
+09-24 22:38:06.631  1923  1923 I AidlLazyServiceRegistrar: Process has 0 (of 1 available) client(s) in use after notification ot_daemon has clients: 0
+09-24 22:38:06.600     0     0 I init    : starting service 'audioserver'...
+09-24 22:38:06.632  1923  1923 I AidlLazyServiceRegistrar: Trying to shut down the service. No clients in use for any service in process.
+09-24 22:38:06.630     0     0 I BpBinder: onLastStrongRef automatically unlinking death recipients:
+09-24 22:38:06.656  2065  2070 I AidlLazyServiceRegistrar: Unregistered all clients and exiting
+09-24 22:38:06.642     0     0 I servicemanager: Caller(pid=1889,uid=1000,sid=u:r:hal_fingerprint_default:s0) Unregistering android.hardware.biometrics.fingerprint.IFingerprint/default
+09-24 22:38:06.642     0     0 I BpBinder: onLastStrongRef automatically unlinking death recipients:
+09-24 22:38:06.659     0     0 I servicemanager: Caller(pid=1923,uid=1084,sid=u:r:ot_daemon:s0) Unregistering ot_daemon
+09-24 22:38:06.659     0     0 I BpBinder: onLastStrongRef automatically unlinking death recipients:
+09-24 22:38:06.698  1923  1923 I AidlLazyServiceRegistrar: Unregistered all clients and exiting
+09-24 22:38:06.713  1889  1898 I AidlLazyServiceRegistrar: Unregistered all clients and exiting
+09-24 22:38:06.812  1935  1935 F ot-rcp  : 00:01:55.683 [C] Platform------: platformUartProcess() at uart.c:238: I/O error
+09-24 22:38:06.886   529   529 W android.hardware.threadnetwork-service: ThreadChip binder is unlinked
+09-24 22:38:06.887   529   529 I android.hardware.threadnetwork-service: Close IThreadChip successfully
+09-24 22:38:06.942     0     0 I init    : ... started service 'audioserver' has pid 2223
+09-24 22:38:06.944     0     0 I init    : starting service 'cameraserver'...
+09-24 22:38:07.126     0     0 I init    : ... started service 'cameraserver' has pid 2224
+09-24 22:38:07.129     0     0 I init    : starting service 'media'...
+09-24 22:38:07.428     0     0 I init    : ... started service 'media' has pid 2225
+09-24 22:38:07.440     0     0 I init    : starting service 'netd'...
+09-24 22:38:07.482     0     0 I init    : Created socket '/dev/socket/dnsproxyd', mode 660, user 0, group 3003
+09-24 22:38:07.499     0     0 I init    : Created socket '/dev/socket/mdns', mode 660, user 0, group 1000
+09-24 22:38:07.528     0     0 I init    : Created socket '/dev/socket/fwmarkd', mode 660, user 0, group 3003
+09-24 22:38:07.960     0     0 I init    : ... started service 'netd' has pid 2226
+09-24 22:38:07.974     0     0 I init    : starting service 'wificond'...
+09-24 22:38:08.268     0     0 I init    : ... started service 'wificond' has pid 2227
+09-24 22:38:08.327     0     0 I init    : starting service 'vendor.audio-hal'...
+09-24 22:38:08.708     0     0 I init    : ... started service 'vendor.audio-hal' has pid 2228
+09-24 22:38:08.722     0     0 I init    : Service 'vendor.biometrics.fingerprint-service.ranchu' (pid 1889) exited with status 0 oneshot service took 133.912003 seconds in background
+09-24 22:38:08.723     0     0 I init    : Sending signal 9 to service 'vendor.biometrics.fingerprint-service.ranchu' (pid 1889) process group...
+09-24 22:38:08.742     0     0 I libprocessgroup: Removed cgroup /sys/fs/cgroup/system/uid_1000/pid_1889
+09-24 22:38:08.774     0     0 I init    : Service 'ot-daemon' (pid 1923) exited with status 0 oneshot service took 121.556000 seconds in background
+09-24 22:38:08.774     0     0 I init    : Sending signal 9 to service 'ot-daemon' (pid 1923) process group...
+09-24 22:38:08.776     0     0 I libprocessgroup: Removed cgroup /sys/fs/cgroup/system/uid_1084/pid_1923
+09-24 22:38:08.836   736   807 D BufferPoolAccessor2.0: evictor expired: 1, evicted: 0
+09-24 22:38:08.817     0     0 I init    : Service 'vendor.gnss.ranchu' (pid 2065) exited with status 0 oneshot service took 75.517998 seconds in background
+09-24 22:38:08.829     0     0 I init    : Sending signal 9 to service 'vendor.gnss.ranchu' (pid 2065) process group...
+09-24 22:38:08.832     0     0 I libprocessgroup: Removed cgroup /sys/fs/cgroup/system/uid_1021/pid_2065
+09-24 22:38:08.859     0     0 I init    : Service 'exec 21 (/system/bin/vdc volume abort_fuse)' (pid 2217) exited with status 0 oneshot service took 4.238000 seconds in background
+09-24 22:38:08.859     0     0 I init    : Sending signal 9 to service 'exec 21 (/system/bin/vdc volume abort_fuse)' (pid 2217) process group...
+09-24 22:38:08.870     0     0 I libprocessgroup: Removed cgroup /sys/fs/cgroup/system/uid_1000/pid_2217
+09-24 22:38:08.884     0     0 I init    : processing action (init.svc.media=*) from (/system/etc/init/mediaserver.rc:1)
+09-24 22:38:08.900     0     0 I init    : processing action (init.svc.audioserver=running) from (/system/etc/init/audioserver.rc:43)
+09-24 22:38:08.913     0     0 I init    : service 'vendor.audio-hal' requested start, but it is already running (flags: 4)
+09-24 22:38:08.914     0     0 I init    : Command 'start vendor.audio-hal-aidl' action=init.svc.audioserver=running (/system/etc/init/audioserver.rc:45) took 0ms and failed: service vendor.audio-hal-aidl not found
+09-24 22:38:08.915     0     0 I init    : Command 'start vendor.audio-effect-hal-aidl' action=init.svc.audioserver=running (/system/etc/init/audioserver.rc:46) took 0ms and failed: service vendor.audio-effect-hal-aidl not found
+09-24 22:38:08.916     0     0 I init    : Command 'start vendor.audio-hal-4-0-msd' action=init.svc.audioserver=running (/system/etc/init/audioserver.rc:47) took 0ms and failed: service vendor.audio-hal-4-0-msd not found
+09-24 22:38:08.916     0     0 I init    : Command 'start audio_proxy_service' action=init.svc.audioserver=running (/system/etc/init/audioserver.rc:48) took 0ms and failed: service audio_proxy_service not found
+09-24 22:38:08.929     0     0 I init    : processing action (init.svc.media=*) from (/system/etc/init/mediaserver.rc:1)
+09-24 22:38:09.860   736   807 D BufferPoolAccessor2.0: evictor expired: 1, evicted: 0
+09-24 22:38:10.211  2226  2226 I netdClient: Skipping libnetd_client init since *we* are netd
+09-24 22:38:10.643  2227  2227 I wificond: wificond is starting up...
+09-24 22:38:10.767     0     0 I servicemanager: Caller(pid=2227,uid=1010,sid=u:r:wificond:s0) Could not find android.hardware.net.nlinterceptor.IInterceptor/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 22:38:10.896  2226  2226 I netd    : netd starting
+09-24 22:38:10.918   228   228 I hwservicemanager: getTransport: Cannot find entry android.system.wifi.keystore@1.0::IKeystore/default in either framework or device VINTF manifest.
+09-24 22:38:10.935  2227  2227 E HidlServiceManagement: Service android.system.wifi.keystore@1.0::IKeystore/default must be in VINTF manifest in order to register/get.
+09-24 22:38:10.946  2227  2227 I wificond: Did not register wifi keystore HIDL HAL service: -2147483648
+09-24 22:38:11.117  2226  2226 I NetdUpdatable: libnetd_updatable_init: Initializing
+09-24 22:38:11.238  2226  2226 I netd    : libnetd_updatable_init success
+09-24 22:38:11.239  2226  2226 I netd    : NetlinkManager instanced
+09-24 22:38:11.253  2226  2226 I netd    : enter NetworkController ctor
+09-24 22:38:11.367  2226  2226 I netd    : leave NetworkController ctor
+09-24 22:38:11.380  2226  2226 I netd    : enter TetherController ctor
+09-24 22:38:11.382  2226  2226 D TetherController: Setting IP forward enable = 0
+09-24 22:38:11.455  2226  2226 I netd    : leave TetherController ctor
+09-24 22:38:14.222  2226  2226 I netd    : Creating child chains: 1649928us
+09-24 22:38:14.253  2226  2226 I netd    : Setting up OEM hooks: 32080us
+09-24 22:38:14.278  2226  2226 I netd    : Setting up FirewallController hooks: 25264us
+09-24 22:38:14.391  2226  2226 I netd    : Setting up TetherController hooks: 112996us
+09-24 22:38:14.510  2226  2226 I netd    : Setting up BandwidthController hooks: 118219us
+09-24 22:38:14.511  2226  2226 I netd    : Setting up IdletimerController hooks: 978us
+09-24 22:38:14.789  2226  2226 I netd    : Setting up StrictController hooks: 277926us
+09-24 22:38:14.825  2226  2226 I netd    : Setting up connmark hooks: 23237us
+09-24 22:38:15.059  2226  2226 I netd    : Enabling bandwidth control: 233667us
+09-24 22:38:15.207  2226  2226 E netd    : Error adding route 0.0.0.0/0 -> (null) dummy0 to table 1002: File exists
+09-24 22:38:15.332  2226  2226 I netd    : Initializing RouteController: 273231us
+09-24 22:38:15.348  2226  2226 D XfrmController: XfrmController::ipSecAddXfrmInterface, line=1499
+09-24 22:38:15.478  2226  2226 D XfrmController: XfrmController::ipSecRemoveTunnelInterface, line=1712
+09-24 22:38:15.478  2226  2226 D XfrmController: deviceName=ipsec_test
+09-24 22:38:15.775  2226  2226 D XfrmController: Sending Netlink XFRM Message: XFRM_MSG_FLUSHSA
+09-24 22:38:15.791  2226  2226 D XfrmController: Sending Netlink XFRM Message: XFRM_MSG_FLUSHPOLICY
+09-24 22:38:15.792  2226  2226 I netd    : Initializing XfrmController: 459482us
+09-24 22:38:15.884  2228  2228 I HidlServiceManagement: Registered android.hardware.audio@7.1::IDevicesFactory/default
+09-24 22:38:15.911  2228  2228 I HidlServiceManagement: Removing namespace from process name android.hardware.audio.service to audio.service.
+09-24 22:38:15.940  2228  2228 I LegacySupport: Registration complete for android.hardware.audio@7.1::IDevicesFactory/default.
+09-24 22:38:16.006  2226  2226 I resolv  : resolv_init: Initializing resolver
+09-24 22:38:16.432  2226  2226 W netd    : Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: dnsresolver
+09-24 22:38:16.461  2226  2226 I netd    : Registering NetdNativeService: 14451us
+09-24 22:38:16.470  2226  2226 I netd    : Registering MDnsService: 9089us
+09-24 22:38:16.563  2228  2228 I HidlServiceManagement: Registered android.hardware.audio.effect@7.0::IEffectsFactory/default
+09-24 22:38:16.574  2228  2228 I LegacySupport: Registration complete for android.hardware.audio.effect@7.0::IEffectsFactory/default.
+09-24 22:38:16.605   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.soundtrigger@2.3::ISoundTriggerHw/default in either framework or device VINTF manifest.
+09-24 22:38:16.646  2228  2228 E LegacySupport: Could not get passthrough implementation for android.hardware.soundtrigger@2.3::ISoundTriggerHw/default.
+09-24 22:38:16.674   228   228 I hwservicemanager: getTransport: Cannot find entry android.system.net.netd@1.1::INetd/default in either framework or device VINTF manifest.
+09-24 22:38:16.687  2226  2226 E HidlServiceManagement: Service android.system.net.netd@1.1::INetd/default must be in VINTF manifest in order to register/get.
+09-24 22:38:16.688  2226  2226 E Netd    : Unable to start HIDL NetdHwService: -2147483648
+09-24 22:38:16.701  2226  2226 I netd    : Registering NetdHwService: 230538us
+09-24 22:38:16.702  2226  2226 I netd    : Netd started in 5823678us
+09-24 22:38:16.707   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.soundtrigger@2.2::ISoundTriggerHw/default in either framework or device VINTF manifest.
+09-24 22:38:16.723  2228  2228 E LegacySupport: Could not get passthrough implementation for android.hardware.soundtrigger@2.2::ISoundTriggerHw/default.
+09-24 22:38:16.754   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.soundtrigger@2.1::ISoundTriggerHw/default in either framework or device VINTF manifest.
+09-24 22:38:16.765  2228  2228 E LegacySupport: Could not get passthrough implementation for android.hardware.soundtrigger@2.1::ISoundTriggerHw/default.
+09-24 22:38:16.767   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.soundtrigger@2.0::ISoundTriggerHw/default in either framework or device VINTF manifest.
+09-24 22:38:16.774  2228  2228 E LegacySupport: Could not get passthrough implementation for android.hardware.soundtrigger@2.0::ISoundTriggerHw/default.
+09-24 22:38:16.775  2228  2228 W audiohalservice: Could not register Soundtrigger API
+09-24 22:38:16.719     0     0 I servicemanager: Caller(pid=2226,uid=0,sid=u:r:netd:s0) Found android.system.net.netd.INetd/default in framework VINTF manifest.
+09-24 22:38:16.818   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.bluetooth.audio@2.2::IBluetoothAudioProvidersFactory/default in either framework or device VINTF manifest.
+09-24 22:38:16.849  2228  2228 E LegacySupport: Could not get passthrough implementation for android.hardware.bluetooth.audio@2.2::IBluetoothAudioProvidersFactory/default.
+09-24 22:38:16.851   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.bluetooth.audio@2.1::IBluetoothAudioProvidersFactory/default in either framework or device VINTF manifest.
+09-24 22:38:16.899  2228  2228 E LegacySupport: Could not get passthrough implementation for android.hardware.bluetooth.audio@2.1::IBluetoothAudioProvidersFactory/default.
+09-24 22:38:16.915   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.bluetooth.audio@2.0::IBluetoothAudioProvidersFactory/default in either framework or device VINTF manifest.
+09-24 22:38:16.957  2228  2228 E LegacySupport: Could not get passthrough implementation for android.hardware.bluetooth.audio@2.0::IBluetoothAudioProvidersFactory/default.
+09-24 22:38:16.958  2228  2228 W audiohalservice: Could not register Bluetooth Audio API
+09-24 22:38:16.965   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.bluetooth.a2dp@1.0::IBluetoothAudioOffload/default in either framework or device VINTF manifest.
+09-24 22:38:16.969  2228  2228 E LegacySupport: Could not get passthrough implementation for android.hardware.bluetooth.a2dp@1.0::IBluetoothAudioOffload/default.
+09-24 22:38:16.970  2228  2228 W audiohalservice: Could not register Bluetooth Audio Offload API
+09-24 22:38:17.559     0     0 I servicemanager: Caller(pid=2228,uid=1041,sid=u:r:hal_audio_default:s0) Found android.hardware.bluetooth.audio.IBluetoothAudioProviderFactory/default in device VINTF manifest.
+09-24 22:38:17.606  2228  2228 I audiohalservice: createIBluetoothAudioProviderFactory() from android.hardware.bluetooth.audio-impl success
+09-24 22:38:17.622  2228  2228 E audiohalservice: Failed to dlopen android.hardware.audio.sounddose-vendor-impl.so: dlopen failed: library "android.hardware.audio.sounddose-vendor-impl.so" not found
+09-24 22:38:17.623  2228  2228 W audiohalservice: createISoundDoseFactory() from android.hardware.audio.sounddose-vendor-impl failed
+09-24 22:38:19.310  2223  2223 I FastMixerState: sMaxFastTracks = 8
+09-24 22:38:19.473  2223  2223 D audioserver: main: starting
+09-24 22:38:19.489  2223  2223 V MediaUtils: physMem: 2592604160
+09-24 22:38:19.489  2223  2223 V MediaUtils: requested limit: 518520820
+09-24 22:38:19.491  2223  2223 I libc    : malloc_limit: Allocation limit enabled, max size 518520820 bytes
+09-24 22:38:19.539  2223  2223 D audio_utils::mutex: get_enable_flag: mutex_priority_inheritance: true
+09-24 22:38:19.643  2223  2223 W FactoryHal: hasAidlHalService android.hardware.audio.core.IModule/default: false
+09-24 22:38:19.619     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.core.IModule/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 22:38:19.693  2223  2223 W FactoryHal: hasAidlHalService android.hardware.audio.effect.IFactory/default: false
+09-24 22:38:19.708   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.audio.effect@7.1::IEffectsFactory/default in either framework or device VINTF manifest.
+09-24 22:38:19.670     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.effect.IFactory/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 22:38:20.233  2223  2223 W FactoryHal: hasAidlHalService android.hardware.audio.effect.IFactory/default: false
+09-24 22:38:20.235   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.audio.effect@7.1::IEffectsFactory/default in either framework or device VINTF manifest.
+09-24 22:38:20.209     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.effect.IFactory/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 22:38:20.275  2223  2223 W FactoryHal: hasAidlHalService android.hardware.audio.core.IModule/default: false
+09-24 22:38:20.251     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.core.IModule/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 22:38:20.409  2223  2223 W BatteryNotifier: batterystats service unavailable!
+09-24 22:38:20.455  2223  2223 D audioserver: main: AudioFlinger created
+09-24 22:38:20.466  2223  2223 D AudioSystem: onNewServiceWithAdapter: media.audio_flinger service obtained 0x770f00ebb0d0
+09-24 22:38:20.515  2223  2223 E AudioFlinger: Function: getAudioPolicyConfig Line: 2618 Failed 
+09-24 22:38:20.977  2223  2223 D APM_EngineLoader: Loaded engine from libaudiopolicyenginedefault.so
+09-24 22:38:20.992  2223  2223 D APM::AudioPolicyEngine/Base: loadAudioPolicyEngineConfig: No configuration found, using default matching phone experience.
+09-24 22:38:21.261  2223  2223 W APM::AudioPolicyEngine/Base: processParsingResult: No configuration of AUDIO_STREAM_CALL_ASSISTANT found, using default volume configuration
+09-24 22:38:21.273  2223  2223 E APM::AudioPolicyEngine: Policy Engine configuration is partially invalid, skipped 1 elements
+09-24 22:38:21.360  2223  2223 W DeviceHalHidl: getSoundDoseInterface service android.hardware.audio.sounddose.ISoundDoseFactory/default doesn't exist
+09-24 22:38:21.362  2223  2223 W MelReporter: activateHalSoundDoseComputation: HAL cannot provide sound dose interface for module primary
+09-24 22:38:21.372  2223  2223 W AudioFlinger: loadHwModule() sound dose reporting is not available
+09-24 22:38:21.472  2223  2223 I AudioFlinger: loadHwModule() Loaded primary audio interface, handle 10
+09-24 22:38:21.645  2223  2223 I AudioFlinger: openOutput() this 0x770f00ebb0d0, module 10 Device AUDIO_DEVICE_OUT_SPEAKER, @:, SamplingRate 48000, Format 0x000001, Channels 0x3, flags 0x2
+09-24 22:38:21.755  2223  2223 I AudioFlinger: operator(): Using 3000 ms as standby time
+09-24 22:38:21.794  2223  2223 I AudioFlinger: HAL output buffer size 1088 frames, normal sink buffer size 1088 frames
+09-24 22:38:21.813  2222  2222 D AndroidRuntime: >>>>>> START com.android.internal.os.ZygoteInit uid 0 <<<<<<
+09-24 22:38:21.829  2222  2222 I boot_progress_start: 815804
+09-24 22:38:21.866  2223  2223 W FactoryHal: hasAidlHalService android.hardware.audio.effect.IFactory/default: false
+09-24 22:38:21.832     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.effect.IFactory/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 22:38:21.886   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.audio.effect@7.1::IEffectsFactory/default in either framework or device VINTF manifest.
+09-24 22:38:21.911  2223  2223 W FactoryHal: hasAidlHalService android.hardware.audio.core.IModule/default: false
+09-24 22:38:21.887     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.core.IModule/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 22:38:22.322  2223  2223 I BufferProvider: found effect "Multichannel Downmix To Stereo" from The Android Open Source Project
+09-24 22:38:22.378  2223  2223 D AudioFlinger: Failed to add event callback
+09-24 22:38:22.381  2223  2256 I AudioFlinger: AudioFlinger's thread 0x7711a2740770 tid=2256 ready to run
+09-24 22:38:22.469  2223  2256 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 22:38:22.486  2228  2255 E android.hardware.audio@7.1-impl.ranchu: getPresentationPosition:510 failure: Result::INVALID_STATE
+09-24 22:38:22.563  2223  2223 E APM_AudioPolicyManager: invalid volume index range in the curve:
+09-24 22:38:22.563  2223  2223 E APM_AudioPolicyManager:   Can be muted  Index Min  Index Max  Index Cur [device : index]...
+09-24 22:38:22.563  2223  2223 E APM_AudioPolicyManager:   true          -1         -1         40000000 : 00, 
+09-24 22:38:22.569  2223  2223 E APM_AudioPolicyManager: invalid volume index range in the curve:
+09-24 22:38:22.569  2223  2223 E APM_AudioPolicyManager:   Can be muted  Index Min  Index Max  Index Cur [device : index]...
+09-24 22:38:22.569  2223  2223 E APM_AudioPolicyManager:   true          -1         -1         40000000 : 00, 
+09-24 22:38:22.570  2223  2223 E APM_AudioPolicyManager: invalid volume index range in the curve:
+09-24 22:38:22.570  2223  2223 E APM_AudioPolicyManager:   Can be muted  Index Min  Index Max  Index Cur [device : index]...
+09-24 22:38:22.570  2223  2223 E APM_AudioPolicyManager:   true          -1         -1         40000000 : 00, 
+09-24 22:38:22.571  2223  2223 E APM_AudioPolicyManager: invalid volume index range in the curve:
+09-24 22:38:22.571  2223  2223 E APM_AudioPolicyManager:   Can be muted  Index Min  Index Max  Index Cur [device : index]...
+09-24 22:38:22.571  2223  2223 E APM_AudioPolicyManager:   true          -1         -1         40000000 : 00, 
+09-24 22:38:22.585  2223  2223 E APM_AudioPolicyManager: invalid volume index range in the curve:
+09-24 22:38:22.585  2223  2223 E APM_AudioPolicyManager:   Can be muted  Index Min  Index Max  Index Cur [device : index]...
+09-24 22:38:22.585  2223  2223 E APM_AudioPolicyManager:   true          -1         -1         40000000 : 00, 
+09-24 22:38:22.586  2223  2223 E APM_AudioPolicyManager: invalid volume index range in the curve:
+09-24 22:38:22.586  2223  2223 E APM_AudioPolicyManager:   Can be muted  Index Min  Index Max  Index Cur [device : index]...
+09-24 22:38:22.586  2223  2223 E APM_AudioPolicyManager:   true          -1         -1         40000000 : 00, 
+09-24 22:38:22.587  2223  2223 E APM_AudioPolicyManager: invalid volume index range in the curve:
+09-24 22:38:22.587  2223  2223 E APM_AudioPolicyManager:   Can be muted  Index Min  Index Max  Index Cur [device : index]...
+09-24 22:38:22.587  2223  2223 E APM_AudioPolicyManager:   true          -1         -1         40000000 : 00, 
+09-24 22:38:22.599  2223  2223 E APM_AudioPolicyManager: invalid volume index range in the curve:
+09-24 22:38:22.599  2223  2223 E APM_AudioPolicyManager:   Can be muted  Index Min  Index Max  Index Cur [device : index]...
+09-24 22:38:22.599  2223  2223 E APM_AudioPolicyManager:   true          -1         -1         40000000 : 00, 
+09-24 22:38:22.613  2222  2222 I AndroidRuntime: Using default boot image
+09-24 22:38:22.614  2222  2222 I AndroidRuntime: Leaving lock profiling enabled
+09-24 22:38:22.623  2223  2223 E APM_AudioPolicyManager: invalid volume index range in the curve:
+09-24 22:38:22.623  2223  2223 E APM_AudioPolicyManager:   Can be muted  Index Min  Index Max  Index Cur [device : index]...
+09-24 22:38:22.623  2223  2223 E APM_AudioPolicyManager:   true          -1         -1         40000000 : 00, 
+09-24 22:38:22.637  2223  2223 E APM_AudioPolicyManager: invalid volume index range in the curve:
+09-24 22:38:22.637  2223  2223 E APM_AudioPolicyManager:   Can be muted  Index Min  Index Max  Index Cur [device : index]...
+09-24 22:38:22.637  2223  2223 E APM_AudioPolicyManager:   true          -1         -1         40000000 : 00, 
+09-24 22:38:22.638  2223  2223 E APM_AudioPolicyManager: invalid volume index range in the curve:
+09-24 22:38:22.638  2223  2223 E APM_AudioPolicyManager:   Can be muted  Index Min  Index Max  Index Cur [device : index]...
+09-24 22:38:22.638  2223  2223 E APM_AudioPolicyManager:   true          -1         -1         40000000 : 00, 
+09-24 22:38:22.638  2223  2223 E APM_AudioPolicyManager: invalid volume index range in the curve:
+09-24 22:38:22.638  2223  2223 E APM_AudioPolicyManager:   Can be muted  Index Min  Index Max  Index Cur [device : index]...
+09-24 22:38:22.638  2223  2223 E APM_AudioPolicyManager:   true          -1         -1         40000000 : 00, 
+09-24 22:38:22.654     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Found android.system.suspend.ISystemSuspend/default in framework VINTF manifest.
+09-24 22:38:22.763  2222  2222 I zygote64: option[0]=-Xzygote
+09-24 22:38:22.770  2222  2222 I zygote64: option[1]=exit
+09-24 22:38:22.771  2222  2222 I zygote64: option[2]=vfprintf
+09-24 22:38:22.784  2222  2222 I zygote64: option[3]=sensitiveThread
+09-24 22:38:22.784  2222  2222 I zygote64: option[4]=-verbose:gc
+09-24 22:38:22.785  2222  2222 I zygote64: option[5]=-XX:PerfettoHprof=true
+09-24 22:38:22.785  2222  2222 I zygote64: option[6]=-XX:PerfettoJavaHeapStackProf=true
+09-24 22:38:22.785  2222  2222 I zygote64: option[7]=-Xprimaryzygote
+09-24 22:38:22.786  2222  2222 I zygote64: option[8]=-Xms8m
+09-24 22:38:22.786  2222  2222 I zygote64: option[9]=-Xmx576m
+09-24 22:38:22.787  2222  2222 I zygote64: option[10]=-XX:HeapGrowthLimit=192m
+09-24 22:38:22.787  2222  2222 I zygote64: option[11]=-XX:HeapMinFree=512k
+09-24 22:38:22.787  2222  2222 I zygote64: option[12]=-XX:HeapMaxFree=8m
+09-24 22:38:22.788  2222  2222 I zygote64: option[13]=-XX:HeapTargetUtilization=0.75
+09-24 22:38:22.801  2222  2222 I zygote64: option[14]=-Xusejit:true
+09-24 22:38:22.802  2222  2222 I zygote64: option[15]=-Xjitsaveprofilinginfo
+09-24 22:38:22.802  2222  2222 I zygote64: option[16]=-XMadviseWillNeedVdexFileSize:104857600
+09-24 22:38:22.803  2222  2222 I zygote64: option[17]=-XMadviseWillNeedOdexFileSize:104857600
+09-24 22:38:22.812  2222  2222 I zygote64: option[18]=-XjdwpOptions:suspend=n,server=y
+09-24 22:38:22.813  2222  2222 I zygote64: option[19]=-XjdwpProvider:default
+09-24 22:38:22.814  2222  2222 I zygote64: option[20]=-Xopaque-jni-ids:swapable
+09-24 22:38:22.814  2222  2222 I zygote64: option[21]=-Xlockprofthreshold:500
+09-24 22:38:22.815  2222  2222 I zygote64: option[22]=-Xcompiler-option
+09-24 22:38:22.825  2223  2223 W AudioFlinger: moveEffects() AUDIO_SESSION_OUTPUT_MIX not found in orphans, checking other mix
+09-24 22:38:22.826  2223  2223 W AudioFlinger: moveEffects() bad srcIo 0
+09-24 22:38:22.829  2222  2222 I zygote64: option[23]=--instruction-set-variant=x86_64
+09-24 22:38:22.829  2222  2222 I zygote64: option[24]=-Xcompiler-option
+09-24 22:38:22.830  2222  2222 I zygote64: option[25]=--instruction-set-features=default
+09-24 22:38:22.831  2222  2222 I zygote64: option[26]=-Xcompiler-option
+09-24 22:38:22.832  2222  2222 I zygote64: option[27]=--generate-mini-debug-info
+09-24 22:38:22.845  2222  2222 I zygote64: option[28]=-Ximage-compiler-option
+09-24 22:38:22.846  2222  2222 I zygote64: option[29]=--runtime-arg
+09-24 22:38:22.846  2222  2222 I zygote64: option[30]=-Ximage-compiler-option
+09-24 22:38:22.847  2222  2222 I zygote64: option[31]=-Xms64m
+09-24 22:38:22.859  2223  2223 I APM::AudioPolicyEngine: getDevicesForStrategyInt no device found for strategy 7
+09-24 22:38:22.861  2222  2222 I zygote64: option[32]=-Ximage-compiler-option
+09-24 22:38:22.862  2222  2222 I zygote64: option[33]=--runtime-arg
+09-24 22:38:22.862  2222  2222 I zygote64: option[34]=-Ximage-compiler-option
+09-24 22:38:22.863  2222  2222 I zygote64: option[35]=-Xmx64m
+09-24 22:38:22.870  2222  2222 I zygote64: option[36]=-Ximage-compiler-option
+09-24 22:38:22.871  2222  2222 I zygote64: option[37]=--dirty-image-objects=/apex/com.android.art/etc/dirty-image-objects
+09-24 22:38:22.872  2222  2222 I zygote64: option[38]=-Ximage-compiler-option
+09-24 22:38:22.885  2222  2222 I zygote64: option[39]=--dirty-image-objects=/system/etc/dirty-image-objects
+09-24 22:38:22.885  2222  2222 I zygote64: option[40]=-Ximage-compiler-option
+09-24 22:38:22.886  2222  2222 I zygote64: option[41]=--instruction-set-variant=x86_64
+09-24 22:38:22.886  2222  2222 I zygote64: option[42]=-Ximage-compiler-option
+09-24 22:38:22.886  2222  2222 I zygote64: option[43]=--instruction-set-features=default
+09-24 22:38:22.887  2222  2222 I zygote64: option[44]=-Ximage-compiler-option
+09-24 22:38:22.887  2222  2222 I zygote64: option[45]=--generate-mini-debug-info
+09-24 22:38:22.887  2222  2222 I zygote64: option[46]=-Duser.locale=en-US
+09-24 22:38:22.888  2222  2222 I zygote64: option[47]=-XX:NativeBridge=libndk_translation.so
+09-24 22:38:22.898  2222  2222 I zygote64: option[48]=--cpu-abilist=x86_64,arm64-v8a
+09-24 22:38:22.898  2222  2222 I zygote64: option[49]=-Xcore-platform-api-policy:just-warn
+09-24 22:38:22.899  2222  2222 I zygote64: option[50]=-Xfingerprint:google/sdk_gphone64_x86_64/emu64xa:16/BE2A.250530.026.F3/13894323:userdebug/dev-keys
+09-24 22:38:22.903  2225  2225 I mediaserver: ServiceManager: 0x7e41434a2a80
+09-24 22:38:22.940  2225  2225 W BatteryNotifier: batterystats service unavailable!
+09-24 22:38:22.958  2225  2225 W mediaserver: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: media.player
+09-24 22:38:22.961  2223  2256 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 22:38:22.971  2225  2225 W BatteryNotifier: batterystats service unavailable!
+09-24 22:38:23.018  2225  2225 W mediaserver: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: media.resource_manager
+09-24 22:38:23.023  2223  2256 D AudioFlinger: updateHalSupportedLatencyModes_l: thread(13) status -38 supported latency modes: { }
+09-24 22:38:23.035  2225  2225 W mediaserver: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: media.resource_observer
+09-24 22:38:23.105  2223  2223 I AudioFlinger: openOutput() this 0x770f00ebb0d0, module 10 Device AUDIO_DEVICE_OUT_TELEPHONY_TX, @:, SamplingRate 48000, Format 0x000001, Channels 0x3, flags 0
+09-24 22:38:23.145  2223  2223 I AudioFlinger: HAL output buffer size 1088 frames, normal sink buffer size 1088 frames
+09-24 22:38:23.168  2223  2223 D AudioFlinger: Failed to add event callback
+09-24 22:38:23.181  2223  2258 I AudioFlinger: AudioFlinger's thread 0x7711a2528770 tid=2258 ready to run
+09-24 22:38:23.188  2223  2258 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 22:38:23.191  2228  2255 E android.hardware.audio@7.1-impl.ranchu: getPresentationPosition:510 failure: Result::INVALID_STATE
+09-24 22:38:23.308  2223  2258 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 22:38:23.334  2222  2222 I zygote64: Core platform API reporting enabled, enforcing=false
+09-24 22:38:23.352  2223  2258 D AudioFlinger: updateHalSupportedLatencyModes_l: thread(21) status -38 supported latency modes: { }
+09-24 22:38:23.387  2222  2222 I zygote64: Using CollectorTypeCMC GC.
+09-24 22:38:23.581  2223  2259 I AudioFlinger: AudioFlinger's thread 0x7711a22eca88 tid=2259 ready to run
+09-24 22:38:23.596  2223  2259 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 22:38:23.732  2223  2259 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 22:38:23.889  2223  2261 I AudioFlinger: AudioFlinger's thread 0x7711a22eca88 tid=2261 ready to run
+09-24 22:38:23.980  2223  2261 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 22:38:23.992  2223  2261 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 22:38:24.105  2223  2263 I AudioFlinger: AudioFlinger's thread 0x7711a22eca88 tid=2263 ready to run
+09-24 22:38:24.164  2223  2263 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 22:38:24.171  2223  2263 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 22:38:24.279  2228  2255 I r_submix: adev_open(name=audio_hw_if)
+09-24 22:38:24.317  2223  2223 W DeviceHalHidl: getSoundDoseInterface service android.hardware.audio.sounddose.ISoundDoseFactory/default doesn't exist
+09-24 22:38:24.317  2223  2223 W MelReporter: activateHalSoundDoseComputation: HAL cannot provide sound dose interface for module r_submix
+09-24 22:38:24.317  2223  2223 W AudioFlinger: loadHwModule() sound dose reporting is not available
+09-24 22:38:24.337  2228  2255 I r_submix: adev_init_check()
+09-24 22:38:24.382  2223  2223 I AudioFlinger: loadHwModule() Loaded r_submix audio interface, handle 18
+09-24 22:38:24.399  2228  2255 D r_submix: adev_open_input_stream(addr=0)
+09-24 22:38:24.406  2228  2255 I r_submix: adev_open_input_stream(): about to create pipe at index 9, rate 48000, pipe size 4096
+09-24 22:38:24.421  2228  2255 D r_submix: submix_audio_device_create_pipe_l(addr=0, idx=9)
+09-24 22:38:24.421  2228  2255 D r_submix:   now using address 0 for route 9
+09-24 22:38:24.521  2223  2265 I AudioFlinger: AudioFlinger's thread 0x7711a22eca88 tid=2265 ready to run
+09-24 22:38:24.529  2228  2255 I r_submix: in_standby()
+09-24 22:38:24.564  2223  2265 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 22:38:24.567  2228  2234 I r_submix: in_standby()
+09-24 22:38:24.596  2223  2265 W AudioFlinger: no wake lock to update, system not ready yet
+09-24 22:38:24.601  2228  2234 D r_submix: adev_close_input_stream()
+09-24 22:38:24.601  2228  2234 D r_submix: submix_audio_device_release_pipe_l(idx=9) addr=0
+09-24 22:38:24.602  2228  2234 D r_submix: submix_audio_device_destroy_pipe_l(): pipe destroyed
+09-24 22:38:24.755  2223  2223 W DeviceHalHidl: getSoundDoseInterface service android.hardware.audio.sounddose.ISoundDoseFactory/default doesn't exist
+09-24 22:38:24.765  2223  2223 W MelReporter: activateHalSoundDoseComputation: HAL cannot provide sound dose interface for module bluetooth
+09-24 22:38:24.766  2223  2223 W AudioFlinger: loadHwModule() sound dose reporting is not available
+09-24 22:38:24.796  2223  2223 I AudioFlinger: loadHwModule() Loaded bluetooth audio interface, handle 26
+09-24 22:38:24.866     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.effect.IFactory/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 22:38:24.901  2223  2223 W FactoryHal: hasAidlHalService android.hardware.audio.effect.IFactory/default: false
+09-24 22:38:24.906   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.audio.effect@7.1::IEffectsFactory/default in either framework or device VINTF manifest.
+09-24 22:38:24.904     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Could not find android.hardware.audio.core.IModule/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-24 22:38:24.928  2223  2223 W FactoryHal: hasAidlHalService android.hardware.audio.core.IModule/default: false
+09-24 22:38:24.992     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:25.047     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:25.080   227  2267 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:25.080     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:26.080  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:26.062     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:26.101   227  2268 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:26.077     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:26.079     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:26.343  2224  2224 I cameraserver: ServiceManager: 0x7c6311f2d510
+09-24 22:38:26.361  2224  2224 I CameraService: CameraService started (pid=2224)
+09-24 22:38:26.362  2224  2224 I CameraService: CameraService process starting
+09-24 22:38:26.386  2224  2224 W BatteryNotifier: batterystats service unavailable!
+09-24 22:38:26.390  2224  2224 W BatteryNotifier: batterystats service unavailable!
+09-24 22:38:26.473  2224  2224 W cameraserver: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: android.hardware.camera.provider.ICameraProvider/internal/0
+09-24 22:38:26.497  2224  2224 I cameraserver: Connecting to new camera provider: android.hardware.camera.provider.ICameraProvider/internal/0, isRemote? 1
+09-24 22:38:26.522  2224  2224 W BpBinder: Linking to death on android.hardware.camera.provider.ICameraProvider but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+09-24 22:38:26.585  2224  2224 I CameraProviderManager: Enumerating new camera device: device@1.1/internal/1
+09-24 22:38:26.616   480   534 W StreamConfigurationMap: StreamConfigurationMap: ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS missing, maxResolution ? true!
+09-24 22:38:26.618   480   534 W StreamConfigurationMap: StreamConfigurationMap: ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS missing!, max resolution ? true
+09-24 22:38:26.618   480   534 W StreamConfigurationMap: StreamConfigurationMap: ANDROID_SCALER_AVAILABLE_STALL_DURATIONS missing! maxResolution ? true
+09-24 22:38:26.638   480   534 W EmulatedCameraDeviceInfo: InitializeControlDefaults: No available post RAW boost! Setting default!
+09-24 22:38:26.667   480   534 I EmulatedCameraDeviceHwlImpl: Create: Created EmulatedCameraDeviceHwlImpl for camera 1
+09-24 22:38:26.671   480   534 D GCH_Utils: FindLibraryPaths: Unable to open directory /vendor/lib64/camera/capture_sessions/ (No such file or directory)
+09-24 22:38:26.678   480   534 I GCH_CameraDevice: Create: Created a camera device for public(1)
+09-24 22:38:26.678   480   534 I GCH_CameraDevice: Pinning memory for 0 shared libraries.
+09-24 22:38:26.794  2224  2224 W cameraserver: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: media.player
+09-24 22:38:26.817  2225  2257 D CCodec  : hidl based PersistentSurface created
+09-24 22:38:26.818  2225  2257 D MediaCodecList: Allowing only non-surface-encoder OMX codecs
+09-24 22:38:26.840   228   228 I hwservicemanager: getTransport: Cannot find entry android.hardware.media.omx@1.0::IOmxStore/default in either framework or device VINTF manifest.
+09-24 22:38:26.847  2225  2257 E OmxInfoBuilder: Cannot find an IOmxStore service.
+09-24 22:38:26.857  2225  2257 D MediaCodecList: ignored failed builder
+09-24 22:38:26.902  2225  2257 I ApexCodecsLazy: Failed to load libcom.android.media.swcodec.apexcodecs.so: dlopen failed: library "libcom.android.media.swcodec.apexcodecs.so" not found
+09-24 22:38:26.907  2225  2257 I Codec2Client: Available Codec2 services: "default" "software"
+09-24 22:38:27.064  2225  2257 D MediaCodecsXmlParser: parsing /apex/com.android.media.swcodec/etc/media_codecs.xml...
+09-24 22:38:27.096  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:27.082     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:27.096     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:27.128   227  2272 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:27.107     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:27.143  2225  2257 D MediaCodecsXmlParser: disabling c2.android.gsm.decoder
+09-24 22:38:27.181  2225  2257 D MediaCodecsXmlParser: disabling c2.android.mpeg2.decoder
+09-24 22:38:27.182  2225  2257 D MediaCodecsXmlParser: disabling c2.android.apv.decoder
+09-24 22:38:27.182  2225  2257 I MediaCodecsXmlParser: codec c2.android.apv.decoder enabled, device sdk 36 >= required 36
+09-24 22:38:27.209  2225  2257 D MediaCodecsXmlParser: disabling c2.android.av1.encoder
+09-24 22:38:27.209  2225  2257 I MediaCodecsXmlParser: codec c2.android.av1.encoder enabled, device sdk 36 >= required 34
+09-24 22:38:27.210  2225  2257 D MediaCodecsXmlParser: disabling c2.android.apv.encoder
+09-24 22:38:27.210  2225  2257 I MediaCodecsXmlParser: codec c2.android.apv.encoder enabled, device sdk 36 >= required 36
+09-24 22:38:27.222  2225  2257 I MediaCodecsXmlParser: Did not find media_codecs_performance.xml in search path
+09-24 22:38:27.223  2225  2257 I MediaCodecsXmlParser: Did not find media_codecs_c2.xml in search path
+09-24 22:38:27.224  2225  2257 D MediaCodecsXmlParser: parsing /vendor/etc/media_codecs_performance_c2.xml...
+09-24 22:38:27.263  2225  2257 D MediaCodecsXmlParser: parsing /vendor/etc/media_codecs.xml...
+09-24 22:38:27.277  2225  2257 D MediaCodecsXmlParser: Ignoring unrecognized tag <MediaCodec> at line 85 of /vendor/etc/media_codecs.xml
+09-24 22:38:27.278  2225  2257 D MediaCodecsXmlParser: Ignoring unrecognized tag <MediaCodec> at line 88 of /vendor/etc/media_codecs.xml
+09-24 22:38:27.278  2225  2257 D MediaCodecsXmlParser: Ignoring unrecognized tag <MediaCodec> at line 91 of /vendor/etc/media_codecs.xml
+09-24 22:38:27.278  2225  2257 D MediaCodecsXmlParser: Ignoring unrecognized tag <MediaCodec> at line 95 of /vendor/etc/media_codecs.xml
+09-24 22:38:27.279  2225  2257 D MediaCodecsXmlParser: Ignoring unrecognized tag <MediaCodec> at line 98 of /vendor/etc/media_codecs.xml
+09-24 22:38:27.279  2225  2257 D MediaCodecsXmlParser: Ignoring unrecognized tag <MediaCodec> at line 101 of /vendor/etc/media_codecs.xml
+09-24 22:38:27.280  2225  2257 D MediaCodecsXmlParser: Ignoring unrecognized tag <MediaCodec> at line 104 of /vendor/etc/media_codecs.xml
+09-24 22:38:27.287  2225  2257 D MediaCodecsXmlParser: parsing /vendor/etc/media_codecs_google_tv.xml...
+09-24 22:38:27.296  2225  2257 D MediaCodecsXmlParser: unable to open media codecs configuration xml file: /vendor/etc/media_codecs_google_tv.xml
+09-24 22:38:27.297  2225  2257 D MediaCodecsXmlParser: parsing /vendor/etc/media_codecs_google_audio.xml...
+09-24 22:38:27.316  2225  2257 D MediaCodecsXmlParser: parsing /vendor/etc/media_codecs_google_telephony.xml...
+09-24 22:38:27.334  2225  2257 D MediaCodecsXmlParser: parsing /vendor/etc/media_codecs_google_video.xml...
+09-24 22:38:27.373  2225  2257 D MediaCodecsXmlParser: parsing /vendor/etc/media_codecs_performance.xml...
+09-24 22:38:27.383  2225  2257 I MediaCodecsXmlParser: Did not find media_codecs_shaping.xml in search path
+09-24 22:38:27.393  2225  2257 I MediaCodecsXmlParser: Did not find media_codecs_shaping.xml in search path
+09-24 22:38:27.414   486   486 I GoldfishComponentStore: in init
+09-24 22:38:27.415   486   486 I GoldfishComponentStore: loading dll of path libcodec2_goldfish_avcdec.so
+09-24 22:38:27.438   486   486 I GoldfishComponentStore: Create()
+09-24 22:38:27.537   486   486 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:38:27.539   486   486 I GoldfishComponentStore: created interface
+09-24 22:38:27.555   486   486 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:38:27.555   486   486 I GoldfishComponentStore: created interface
+09-24 22:38:27.575  2225  2257 I Codec2InfoBuilder: adding type 'video/avc'
+09-24 22:38:27.855   486   826 I GoldfishComponentStore: in init
+09-24 22:38:27.856   486   826 I GoldfishComponentStore: loading dll of path libcodec2_goldfish_hevcdec.so
+09-24 22:38:27.861   486   541 I GoldfishComponentStore: in ~ComponentModule
+09-24 22:38:27.862   486   541 I GoldfishComponentStore: unloading dll
+09-24 22:38:27.890   486   826 I GoldfishComponentStore: Create()
+09-24 22:38:27.947   486   826 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:38:27.964   486   826 I GoldfishComponentStore: created interface
+09-24 22:38:27.983   486   826 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:38:27.983   486   826 I GoldfishComponentStore: created interface
+09-24 22:38:28.020  2225  2257 I Codec2InfoBuilder: adding type 'video/hevc'
+09-24 22:38:28.089   486   541 I GoldfishComponentStore: in ~ComponentModule
+09-24 22:38:28.089   486   541 I GoldfishComponentStore: unloading dll
+09-24 22:38:28.096   486   540 I GoldfishComponentStore: in init
+09-24 22:38:28.097   486   540 I GoldfishComponentStore: loading dll of path libcodec2_goldfish_vp8dec.so
+09-24 22:38:28.116  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:28.118   486   540 I GoldfishComponentStore: Create()
+09-24 22:38:28.106     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:28.155   486   540 I C2GoldfishVpxDec: platform store is 0x7603be58c728, reflector is 0x76041e587f78
+09-24 22:38:28.169   227  2275 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:28.140     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:28.158     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:28.209   486   540 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:38:28.210   486   540 I GoldfishComponentStore: created interface
+09-24 22:38:28.242   486   540 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:38:28.243   486   540 I GoldfishComponentStore: created interface
+09-24 22:38:28.266  2225  2257 I Codec2InfoBuilder: adding type 'video/x-vnd.on2.vp8'
+09-24 22:38:28.310   486   540 I GoldfishComponentStore: in ~ComponentModule
+09-24 22:38:28.310   486   540 I GoldfishComponentStore: unloading dll
+09-24 22:38:28.316   486   826 I GoldfishComponentStore: in init
+09-24 22:38:28.317   486   826 I GoldfishComponentStore: loading dll of path libcodec2_goldfish_vp9dec.so
+09-24 22:38:28.327   486   826 I GoldfishComponentStore: Create()
+09-24 22:38:28.340   486   826 I C2GoldfishVpxDec: platform store is 0x7603be58b968, reflector is 0x76041e588368
+09-24 22:38:28.417   486   826 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:38:28.418   486   826 I GoldfishComponentStore: created interface
+09-24 22:38:28.447   486   826 I android.hardware.media.c2@1.0-service-goldfish: missing struct descriptor #Param::CoreIndex(--005) for field values of struct #Param::CoreIndex(F-10821)
+09-24 22:38:28.447   486   826 I GoldfishComponentStore: created interface
+09-24 22:38:28.481  2225  2257 I Codec2InfoBuilder: adding type 'video/x-vnd.on2.vp9'
+09-24 22:38:28.550   486   486 I GoldfishComponentStore: in ~ComponentModule
+09-24 22:38:28.551   486   486 I GoldfishComponentStore: unloading dll
+09-24 22:38:28.918  2225  2257 I Codec2InfoBuilder: adding type 'audio/mp4a-latm'
+09-24 22:38:29.168  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:29.162     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:29.204     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:29.239   227  2276 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:29.233     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:29.261  2225  2257 I Codec2InfoBuilder: adding type 'audio/mp4a-latm'
+09-24 22:38:29.552  2225  2257 I Codec2InfoBuilder: adding type 'audio/3gpp'
+09-24 22:38:29.657  2225  2257 I Codec2InfoBuilder: adding type 'audio/3gpp'
+09-24 22:38:29.787  2225  2257 I Codec2InfoBuilder: adding type 'audio/amr-wb'
+09-24 22:38:29.882  2222  2222 I zygote64: Initializing ART runtime metrics
+09-24 22:38:29.895  2225  2257 I Codec2InfoBuilder: adding type 'audio/amr-wb'
+09-24 22:38:29.963   736   828 I isAtLeastRelease: device sdk 36, minsdk 36
+09-24 22:38:29.965   736   828 I isAtLeastRelease: active codename REL, to match Baklava
+09-24 22:38:29.965   736   828 D C2SoftApvDec: isAtLeastRelease(36, Baklava) says enable: yes
+09-24 22:38:30.216  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:30.196     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:30.262   227  2279 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:30.238     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:30.240     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:30.278  2225  2257 I Codec2InfoBuilder: adding type 'video/apv'
+09-24 22:38:30.375   736   828 I isAtLeastRelease: device sdk 36, minsdk 36
+09-24 22:38:30.385   736   828 I isAtLeastRelease: active codename REL, to match Baklava
+09-24 22:38:30.386   736   828 D C2SoftApvEnc: isAtLeastRelease(36, Baklava) says enable: yes
+09-24 22:38:30.558  2225  2257 I Codec2InfoBuilder: adding type 'video/apv'
+09-24 22:38:30.575  2222  2222 D nativeloader: InitDefaultPublicLibraries for_preload=1: libandroid.so:libaaudio.so:libamidi.so:libbinder_ndk.so:libc.so:libcamera2ndk.so:libdl.so:libEGL.so:libGLESv1_CM.so:libGLESv2.so:libGLESv3.so:libicu.so:libicui18n.so:libicuuc.so:libjnigraphics.so:liblog.so:libmediandk.so:libm.so:libnativehelper.so:libnativewindow.so:libOpenMAXAL.so:libOpenSLES.so:libRS.so:libstdc++.so:libsync.so:libvulkan.so:libwebviewchromium_plat_support.so:libz.so
+09-24 22:38:30.861  2225  2257 I Codec2InfoBuilder: adding type 'video/av01'
+09-24 22:38:31.197  2225  2257 I Codec2InfoBuilder: adding type 'video/av01'
+09-24 22:38:31.253  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:31.243     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:31.294   227  2280 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:31.270     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:31.272     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:31.340  2222  2222 D nativeloader: Load libicu_jni.so using APEX ns com_android_art for caller /apex/com.android.art/javalib/core-oj.jar: ok
+09-24 22:38:31.362  2222  2222 D zygote64: u_setTimeZoneFilesDirectory("/apex/com.android.tzdata/etc/tz/versioned/9/icu") succeeded. 
+09-24 22:38:31.363  2222  2222 D zygote64: I18n APEX ICU file found: /apex/com.android.i18n/etc/icu/icudt76l.dat
+09-24 22:38:31.450  2222  2222 D nativeloader: Load libjavacore.so using APEX ns com_android_art for caller /apex/com.android.art/javalib/core-oj.jar: ok
+09-24 22:38:31.486   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:38:31.537  2222  2222 D nativeloader: Load libopenjdk.so using APEX ns com_android_art for caller /apex/com.android.art/javalib/core-oj.jar: ok
+09-24 22:38:31.553   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:38:31.570  2225  2257 I Codec2InfoBuilder: adding type 'video/av01'
+09-24 22:38:31.613   736  1241 D C2SoftAomEnc: Given level 0 does not cover current configuration: adjusting to 9000
+09-24 22:38:31.716  2222  2222 I snet_event_log: [200284993,-1,]
+09-24 22:38:31.730  2222  2222 I zygote64: Using memfd for future sealing
+09-24 22:38:31.809  2225  2257 I Codec2InfoBuilder: adding type 'video/avc'
+09-24 22:38:31.842  2222  2222 W zygote64: Unexpected CPU variant for x86: x86_64.
+09-24 22:38:31.842  2222  2222 W zygote64: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, goldmont-without-sha-xsaves, tremont, kabylake, alderlake, default
+09-24 22:38:32.023   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--004) for field values of struct #Param::CoreIndex(F-12004)
+09-24 22:38:32.038   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:38:32.123   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--004) for field values of struct #Param::CoreIndex(F-12004)
+09-24 22:38:32.133   736   828 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:38:32.158  2225  2257 I Codec2InfoBuilder: adding type 'video/avc'
+09-24 22:38:32.179   736  1241 D C2SoftAvcEnc: Given level 0 does not cover current configuration: adjusting to 5000
+09-24 22:38:32.300  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:32.279     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:32.349   227  2288 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:32.318     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:32.327     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:32.366  2225  2257 I Codec2InfoBuilder: adding type 'audio/flac'
+09-24 22:38:32.466   258   268 W keystore2: system/security/keystore2/watchdog/src/lib.rs:143 - ### Keystore Watchdog report - BEGIN ###
+09-24 22:38:32.478   258   268 W keystore2: system/security/keystore2/watchdog/src/lib.rs:152 - When extracting from a bug report, please include this header and all 1 records below (to footer)
+09-24 22:38:32.507   258   268 W keystore2: system/security/keystore2/watchdog/src/lib.rs:199 - ThreadId(3) await_boot_completed Started: 09-24 14:25:34.240 UTC Pending: 778.26571115s Overdue 478.265862888s
+09-24 22:38:32.507   258   268 W keystore2: system/security/keystore2/watchdog/src/lib.rs:211 - ### Keystore Watchdog report - END ###
+09-24 22:38:32.530  2225  2257 I Codec2InfoBuilder: adding type 'audio/flac'
+09-24 22:38:32.678  2225  2257 I Codec2InfoBuilder: adding type 'audio/g711-alaw'
+09-24 22:38:32.823  2225  2257 I Codec2InfoBuilder: adding type 'audio/g711-mlaw'
+09-24 22:38:32.951  2225  2257 D Codec2InfoBuilder: codec entry for 'c2.android.gsm.decoder' is disabled
+09-24 22:38:33.058  2225  2257 I Codec2InfoBuilder: adding type 'video/3gpp'
+09-24 22:38:33.181   736   804 D C2SoftH263Enc: Given level 3004 does not cover current configuration: adjusting to 3003
+09-24 22:38:33.205   736   804 D C2SoftH263Enc: Given level 3004 does not cover current configuration: adjusting to 3003
+09-24 22:38:33.233  2225  2257 I Codec2InfoBuilder: adding type 'video/3gpp'
+09-24 22:38:33.251   736   804 D C2SoftH263Enc: Given level 0 does not cover current configuration: adjusting to 3003
+09-24 22:38:33.333  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:33.326     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:33.340     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:33.371   227  2289 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:33.349     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:33.451  2225  2257 I Codec2InfoBuilder: adding type 'video/hevc'
+09-24 22:38:33.532   736   804 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--004) for field values of struct #Param::CoreIndex(F-12004)
+09-24 22:38:33.605   736   804 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:38:33.624   736   804 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--004) for field values of struct #Param::CoreIndex(F-12004)
+09-24 22:38:33.645   736   804 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:38:33.659  2225  2257 I Codec2InfoBuilder: adding type 'video/hevc'
+09-24 22:38:33.678   736  1470 D C2SoftHevcEnc: Given level 0 does not cover current configuration: adjusting to 6000
+09-24 22:38:33.834  2225  2257 I Codec2InfoBuilder: adding type 'audio/mpeg'
+09-24 22:38:33.974  2225  2257 D Codec2InfoBuilder: codec entry for 'c2.android.mpeg2.decoder' is disabled
+09-24 22:38:34.120  2225  2257 I Codec2InfoBuilder: adding type 'video/mp4v-es'
+09-24 22:38:34.265  2225  2257 I Codec2InfoBuilder: adding type 'video/mp4v-es'
+09-24 22:38:34.279   736   828 D C2SoftMpeg4Enc: Given level 0 does not cover current configuration: adjusting to 4003
+09-24 22:38:34.369  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:34.347     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:34.417   227  2292 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:34.386     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:34.395     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:34.444  2225  2257 I Codec2InfoBuilder: adding type 'audio/opus'
+09-24 22:38:34.631  2225  2257 I Codec2InfoBuilder: adding type 'audio/opus'
+09-24 22:38:34.771  2222  2222 D nativeloader: Load libstats_jni.so using APEX ns com_android_os_statsd for caller /apex/com.android.os.statsd/javalib/framework-statsd.jar: ok
+09-24 22:38:34.785  2225  2257 I Codec2InfoBuilder: adding type 'audio/raw'
+09-24 22:38:34.797  2222  2222 I boot_progress_preload_start: 828773
+09-24 22:38:34.798  2222  2222 D Zygote  : begin preload
+09-24 22:38:34.807  2222  2222 I Zygote  : Calling ZygoteHooks.beginPreload()
+09-24 22:38:34.949  2225  2257 I Codec2InfoBuilder: adding type 'audio/vorbis'
+09-24 22:38:35.093  2225  2257 I Codec2InfoBuilder: adding type 'video/x-vnd.on2.vp8'
+09-24 22:38:35.239   736  1241 I C2SoftVpxEnc: setting temporal layering 0 + 0
+09-24 22:38:35.298   736  1241 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:38:35.323   736  1241 I C2SoftVpxEnc: setting temporal layering 0 + 0
+09-24 22:38:35.338   736  1241 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:38:35.373  2225  2257 I Codec2InfoBuilder: adding type 'video/x-vnd.on2.vp8'
+09-24 22:38:35.385  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:35.363     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:35.426   227  2293 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:35.402     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:35.404     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:35.714  2225  2257 I Codec2InfoBuilder: adding type 'video/x-vnd.on2.vp9'
+09-24 22:38:35.874   736  1470 I C2SoftVpxEnc: setting temporal layering 0 + 0
+09-24 22:38:35.926   736  1470 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:38:35.959   736  1470 I C2SoftVpxEnc: setting temporal layering 0 + 0
+09-24 22:38:35.961  2222  2283 I zygote64: Background verification of 156 classes from boot classpath took 3.003s
+09-24 22:38:35.963   736  1470 I mediaswcodec: missing struct descriptor #Param::CoreIndex(--1812) for field values of struct #Param::CoreIndex(F-11812)
+09-24 22:38:35.990  2225  2257 I Codec2InfoBuilder: adding type 'video/x-vnd.on2.vp9'
+09-24 22:38:36.013   736  1241 D C2SoftVpxEnc: Given level 0 does not cover current configuration: adjusting to 7000
+09-24 22:38:36.093  2224  2224 W BpBinder: Linking to death on android.media.IMediaPlayerService but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+09-24 22:38:36.225  2224  2224 E CameraProviderManager: deriveBlobDurationEntries: Unexpected number of available blob durations! 0 vs. 0 with filteredSizes size: 0
+09-24 22:38:36.227  2224  2224 E cameraserver: AidlDeviceInfo3: Unable to derive Heic UltraHDR tags based on camera and media capabilities: Invalid argument (-22)
+09-24 22:38:36.249  2224  2224 W CameraProviderManager: Camera provider android.hardware.camera.provider.ICameraProvider/internal/0 says an unknown camera device@1.1/internal/1 now has torch status 1. Curious.
+09-24 22:38:36.274  2224  2224 I CameraProviderManager: Camera provider android.hardware.camera.provider.ICameraProvider/internal/0 ready with 1 camera devices
+09-24 22:38:36.316  2224  2224 W cameraserver: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: android.hardware.camera.provider.ICameraProvider/internal/1
+09-24 22:38:36.328  2224  2224 I cameraserver: Connecting to new camera provider: android.hardware.camera.provider.ICameraProvider/internal/1, isRemote? 1
+09-24 22:38:36.375     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:36.387     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:36.387  2224  2224 W BpBinder: Linking to death on android.hardware.camera.provider.ICameraProvider but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+09-24 22:38:36.396  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:36.398     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:36.420   227  2294 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:36.465  2224  2224 I CameraProviderManager: Camera provider android.hardware.camera.provider.ICameraProvider/internal/1 ready with 0 camera devices
+09-24 22:38:36.510  2224  2224 D CameraProviderManager: tryGetService: AIDL Camera provider HAL 'android.hardware.camera.provider.ICameraProvider/virtual/0' is not actually available
+09-24 22:38:36.510  2224  2224 W CameraProviderManager: tryToInitializeAidlProviderLocked: AIDL Camera provider HAL 'android.hardware.camera.provider.ICameraProvider/virtual/0' is not actually available
+09-24 22:38:36.536  2224  2224 I CameraService: onDeviceStatusChanged: Status changed for cameraId=1, newStatus=1
+09-24 22:38:36.545  2224  2224 I CameraService: onDeviceStatusChanged: Unknown camera ID 1, a new camera is added
+09-24 22:38:36.679   228   228 I hwservicemanager: getTransport: Cannot find entry android.frameworks.cameraservice.service@2.2::ICameraService/default in either framework or device VINTF manifest.
+09-24 22:38:36.710  2224  2224 E HidlServiceManagement: Service android.frameworks.cameraservice.service@2.2::ICameraService/default must be in VINTF manifest in order to register/get.
+09-24 22:38:36.726  2224  2224 W CameraService: onFirstRef: Did not register default android.frameworks.cameraservice.service@2.2
+09-24 22:38:36.728     0     0 I servicemanager: Caller(pid=2224,uid=1047,sid=u:r:cameraserver:s0) Found android.frameworks.cameraservice.service.ICameraService/default in framework VINTF manifest.
+09-24 22:38:36.784  2224  2224 W cameraserver: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: android.frameworks.cameraservice.service.ICameraService/default
+09-24 22:38:36.756     0     0 I servicemanager: Caller(pid=2224,uid=1047,sid=u:r:cameraserver:s0) Found android.frameworks.cameraservice.service.ICameraService/default in framework VINTF manifest.
+09-24 22:38:36.796  2224  2224 I CameraService: CameraService pinged cameraservice proxy
+09-24 22:38:36.798  2224  2224 W cameraserver: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: media.camera
+09-24 22:38:36.799  2224  2224 I cameraserver: ServiceManager: 0x7c6311f2d510 done instantiate
+09-24 22:38:36.824  2224  2224 W CameraProviderManager: addAidlProviderLocked: Camera provider HAL with name 'android.hardware.camera.provider.ICameraProvider/internal/0' already registered
+09-24 22:38:36.825  2224  2224 W CameraProviderManager: addAidlProviderLocked: Camera provider HAL with name 'android.hardware.camera.provider.ICameraProvider/internal/1' already registered
+09-24 22:38:37.414  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:37.392     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:37.440   227  2299 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:37.412     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:37.418     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:37.509  2222  2222 V Zygote64Timing: BeginPreload took to complete: 2711ms
+09-24 22:38:37.511  2222  2222 I Zygote  : Preloading classes...
+09-24 22:38:37.639  2222  2222 I AconfigPackage: android.media.swcodec.flags is mapped to com.android.media.swcodec
+09-24 22:38:37.657  2222  2222 I AconfigPackage: com.google.android.settings.simplemode.flags is mapped to system_ext
+09-24 22:38:37.658  2222  2222 I AconfigPackage: com.google.android.systemui is mapped to system_ext
+09-24 22:38:37.658  2222  2222 I AconfigPackage: com.google.android.apps.nexuslauncher is mapped to system_ext
+09-24 22:38:37.658  2222  2222 I AconfigPackage: com.android.settings.accessibility is mapped to system_ext
+09-24 22:38:37.659  2222  2222 I AconfigPackage: com.android.settings.flags is mapped to system_ext
+09-24 22:38:37.659  2222  2222 I AconfigPackage: com.google.android.apps.miphone.aiai.matchmaker.overview.ui is mapped to system_ext
+09-24 22:38:37.659  2222  2222 I AconfigPackage: com.google.android.settings.flags is mapped to system_ext
+09-24 22:38:37.668  2222  2222 I AconfigPackage: com.android.launcher3 is mapped to system_ext
+09-24 22:38:37.668  2222  2222 I AconfigPackage: com.android.wallpaper is mapped to system_ext
+09-24 22:38:37.669  2222  2222 I AconfigPackage: com.android.settings.media_drm is mapped to system_ext
+09-24 22:38:37.669  2222  2222 I AconfigPackage: com.android.systemui.accessibility.accessibilitymenu is mapped to system_ext
+09-24 22:38:37.670  2222  2222 I AconfigPackage: com.android.settings.keyboard is mapped to system_ext
+09-24 22:38:37.670  2222  2222 I AconfigPackage: com.android.server.policy.feature.flags is mapped to system_ext
+09-24 22:38:37.670  2222  2222 I AconfigPackage: com.android.settings.factory_reset is mapped to system_ext
+09-24 22:38:37.671  2222  2222 I AconfigPackage: com.google.android.haptics.flags is mapped to system_ext
+09-24 22:38:37.688  2222  2222 I AconfigPackage: com.android.permission.flags is mapped to com.android.permission
+09-24 22:38:37.702  2222  2222 I AconfigPackage: com.android.icu is mapped to com.android.i18n
+09-24 22:38:37.716  2222  2222 I AconfigPackage: com.android.appsearch.flags is mapped to com.android.appsearch
+09-24 22:38:37.726  2222  2222 I AconfigPackage: android.uprobestats.mainline.flags is mapped to com.android.uprobestats
+09-24 22:38:37.741  2222  2222 I AconfigPackage: android.provider.flags is mapped to com.android.configinfrastructure
+09-24 22:38:37.741  2222  2222 I AconfigPackage: com.android.server.deviceconfig is mapped to com.android.configinfrastructure
+09-24 22:38:37.761  2222  2222 I AconfigPackage: com.android.nfc.flags is mapped to system
+09-24 22:38:37.761  2222  2222 I AconfigPackage: android.app.admin.flags is mapped to system
+09-24 22:38:37.762  2222  2222 I AconfigPackage: android.database.sqlite is mapped to system
+09-24 22:38:37.762  2222  2222 I AconfigPackage: com.android.providers.calendar is mapped to system
+09-24 22:38:37.763  2222  2222 I AconfigPackage: com.android.server.power.feature.flags is mapped to system
+09-24 22:38:37.763  2222  2222 I AconfigPackage: com.android.media.performance.flags is mapped to system
+09-24 22:38:37.763  2222  2222 I AconfigPackage: android.app.contextualsearch.flags is mapped to system
+09-24 22:38:37.764  2222  2222 I AconfigPackage: android.app.ondeviceintelligence.flags is mapped to system
+09-24 22:38:37.777  2222  2222 I AconfigPackage: com.android.media.projection.flags is mapped to system
+09-24 22:38:37.777  2222  2222 I AconfigPackage: android.companion is mapped to system
+09-24 22:38:37.778  2222  2222 I AconfigPackage: android.service.controls.flags is mapped to system
+09-24 22:38:37.779  2222  2222 I AconfigPackage: com.android.text.flags is mapped to system
+09-24 22:38:37.780  2222  2222 I AconfigPackage: com.android.providers.contactkeys.flags is mapped to system
+09-24 22:38:37.785  2222  2222 I AconfigPackage: com.android.intentresolver is mapped to system
+09-24 22:38:37.785  2222  2222 I AconfigPackage: android.companion.virtualdevice.flags is mapped to system
+09-24 22:38:37.785  2222  2222 I AconfigPackage: android.uprobestats.flags is mapped to system
+09-24 22:38:37.786  2222  2222 I AconfigPackage: com.android.net.thread.platform.flags is mapped to system
+09-24 22:38:37.786  2222  2222 I AconfigPackage: android.view.contentprotection.flags is mapped to system
+09-24 22:38:37.792  2222  2222 I AconfigPackage: com.android.server.dreams is mapped to system
+09-24 22:38:37.792  2222  2222 I AconfigPackage: com.android.graphics.surfaceflinger.flags is mapped to system
+09-24 22:38:37.793  2222  2222 I AconfigPackage: com.android.hardware.input is mapped to system
+09-24 22:38:37.793  2222  2222 I AconfigPackage: android.sdk is mapped to system
+09-24 22:38:37.794  2222  2222 I AconfigPackage: com.android.input.flags is mapped to system
+09-24 22:38:37.794  2222  2222 I AconfigPackage: android.tracing is mapped to system
+09-24 22:38:37.794  2222  2222 I AconfigPackage: com.android.server.biometrics is mapped to system
+09-24 22:38:37.795  2222  2222 I AconfigPackage: android.view.contentcapture.flags is mapped to system
+09-24 22:38:37.795  2222  2222 I AconfigPackage: android.app.job is mapped to system
+09-24 22:38:37.795  2222  2222 I AconfigPackage: android.content.res is mapped to system
+09-24 22:38:37.796  2222  2222 I AconfigPackage: android.net.platform.flags is mapped to system
+09-24 22:38:37.804  2222  2222 I AconfigPackage: com.android.aconfig.flags is mapped to system
+09-24 22:38:37.805  2222  2222 I AconfigPackage: com.android.graphics.flags is mapped to system
+09-24 22:38:37.806  2222  2222 I AconfigPackage: android.server.app is mapped to system
+09-24 22:38:37.813  2222  2222 I AconfigPackage: android.speech.flags is mapped to system
+09-24 22:38:37.813  2222  2222 I AconfigPackage: com.android.server.stats is mapped to system
+09-24 22:38:37.814  2222  2222 I AconfigPackage: android.hardware.biometrics is mapped to system
+09-24 22:38:37.815  2222  2222 I AconfigPackage: android.car.feature is mapped to system
+09-24 22:38:37.815  2222  2222 I AconfigPackage: android.adpf is mapped to system
+09-24 22:38:37.820  2222  2222 I AconfigPackage: android.location.flags is mapped to system
+09-24 22:38:37.820  2222  2222 I AconfigPackage: com.android.settingslib.flags is mapped to system
+09-24 22:38:37.821  2222  2222 I AconfigPackage: com.android.managedprovisioning.flags is mapped to system
+09-24 22:38:37.821  2222  2222 I AconfigPackage: android.app.assist.flags is mapped to system
+09-24 22:38:37.821  2222  2222 I AconfigPackage: com.android.server.net is mapped to system
+09-24 22:38:37.822  2222  2222 I AconfigPackage: com.android.settingslib.widget.flags is mapped to system
+09-24 22:38:37.822  2222  2222 I AconfigPackage: com.android.internal.camera.flags is mapped to system
+09-24 22:38:37.823  2222  2222 I AconfigPackage: com.android.hardware.libsensor.flags is mapped to system
+09-24 22:38:37.823  2222  2222 I AconfigPackage: com.android.internal.jank is mapped to system
+09-24 22:38:37.823  2222  2222 I AconfigPackage: com.android.providers.settings is mapped to system
+09-24 22:38:37.824  2222  2222 I AconfigPackage: android.multiuser is mapped to system
+09-24 22:38:37.832  2222  2222 I AconfigPackage: com.android.server.power.optimization is mapped to system
+09-24 22:38:37.833  2222  2222 I AconfigPackage: com.android.calllogbackup is mapped to system
+09-24 22:38:37.834  2222  2222 I AconfigPackage: com.android.media.flags is mapped to system
+09-24 22:38:37.834  2222  2222 I AconfigPackage: com.android.server.flags is mapped to system
+09-24 22:38:37.835  2222  2222 I AconfigPackage: com.android.graphics.libvulkan.flags is mapped to system
+09-24 22:38:37.844  2222  2222 I AconfigPackage: android.app.appfunctions.flags is mapped to system
+09-24 22:38:37.845  2222  2222 I AconfigPackage: android.app.smartspace.flags is mapped to system
+09-24 22:38:37.846  2222  2222 I AconfigPackage: com.android.providers.contacts.flags is mapped to system
+09-24 22:38:37.846  2222  2222 I AconfigPackage: com.android.shell.flags is mapped to system
+09-24 22:38:37.847  2222  2222 I AconfigPackage: com.android.media.aaudio is mapped to system
+09-24 22:38:37.856  2222  2222 I AconfigPackage: android.hardware.radio is mapped to system
+09-24 22:38:37.857  2222  2222 I AconfigPackage: com.google.wear.services.infra.flags is mapped to system
+09-24 22:38:37.857  2222  2222 I AconfigPackage: suspend_service.flags is mapped to system
+09-24 22:38:37.857  2222  2222 I AconfigPackage: android.media.midi is mapped to system
+09-24 22:38:37.858  2222  2222 I AconfigPackage: com.android.libcore.readonly is mapped to system
+09-24 22:38:37.858  2222  2222 I AconfigPackage: com.android.settingslib.widget.selectorwithwidgetpreference.flags is mapped to system
+09-24 22:38:37.858  2222  2222 I AconfigPackage: android.service.notification is mapped to system
+09-24 22:38:37.859  2222  2222 I AconfigPackage: com.android.systemui.shared is mapped to system
+09-24 22:38:37.859  2222  2222 I AconfigPackage: android.app.jank is mapped to system
+09-24 22:38:37.859  2222  2222 I AconfigPackage: android.app.wearable is mapped to system
+09-24 22:38:37.868  2222  2222 I AconfigPackage: com.android.media.audio is mapped to system
+09-24 22:38:37.869  2222  2222 I AconfigPackage: android.service.chooser is mapped to system
+09-24 22:38:37.870  2222  2222 I AconfigPackage: com.android.server.compat is mapped to system
+09-24 22:38:37.870  2222  2222 I AconfigPackage: com.android.server.alarm is mapped to system
+09-24 22:38:37.871  2222  2222 I AconfigPackage: com.android.apex.flags is mapped to system
+09-24 22:38:37.876  2222  2222 I AconfigPackage: android.service.quickaccesswallet is mapped to system
+09-24 22:38:37.877  2222  2222 I AconfigPackage: android.app.usage is mapped to system
+09-24 22:38:37.878  2222  2222 I AconfigPackage: com.android.server.accessibility is mapped to system
+09-24 22:38:37.878  2222  2222 I AconfigPackage: android.app.supervision.flags is mapped to system
+09-24 22:38:37.879  2222  2222 I AconfigPackage: com.android.server.utils is mapped to system
+09-24 22:38:37.888  2222  2222 I AconfigPackage: android.chre.flags is mapped to system
+09-24 22:38:37.889  2222  2222 I AconfigPackage: android.content.flags is mapped to system
+09-24 22:38:37.890  2222  2222 I AconfigPackage: android.media.codec is mapped to system
+09-24 22:38:37.890  2222  2222 I AconfigPackage: com.android.internal.os is mapped to system
+09-24 22:38:37.891  2222  2222 I AconfigPackage: com.android.nfc.nci.flags is mapped to system
+09-24 22:38:37.901  2222  2222 I AconfigPackage: android.app is mapped to system
+09-24 22:38:37.902  2222  2222 I AconfigPackage: android.security.keystore2 is mapped to system
+09-24 22:38:37.903  2222  2222 I AconfigPackage: android.crashrecovery.flags is mapped to system
+09-24 22:38:37.903  2222  2222 I AconfigPackage: com.android.tradeinmode.flags is mapped to system
+09-24 22:38:37.903  2222  2222 I AconfigPackage: android.hardware.flags is mapped to system
+09-24 22:38:37.912  2222  2222 I AconfigPackage: com.android.server.telecom.flags is mapped to system
+09-24 22:38:37.912  2222  2222 I AconfigPackage: com.android.settingslib.media.flags is mapped to system
+09-24 22:38:37.913  2222  2222 I AconfigPackage: com.android.server.policy is mapped to system
+09-24 22:38:37.913  2222  2222 I AconfigPackage: android.media.audiopolicy is mapped to system
+09-24 22:38:37.913  2222  2222 I AconfigPackage: com.android.egg.flags is mapped to system
+09-24 22:38:37.914  2222  2222 I AconfigPackage: com.android.internal.compat.flags is mapped to system
+09-24 22:38:37.914  2222  2222 I AconfigPackage: android.security is mapped to system
+09-24 22:38:37.914  2222  2222 I AconfigPackage: android.service.autofill is mapped to system
+09-24 22:38:37.915  2222  2222 I AconfigPackage: com.example.android.aconfig.demo.flags is mapped to system
+09-24 22:38:37.915  2222  2222 I AconfigPackage: android.view.flags is mapped to system
+09-24 22:38:37.915  2222  2222 I AconfigPackage: android.companion.virtual.flags is mapped to system
+09-24 22:38:37.924  2222  2222 I AconfigPackage: com.android.aconfig_new_storage is mapped to system
+09-24 22:38:37.925  2222  2222 I AconfigPackage: com.android.server.feature.flags is mapped to system
+09-24 22:38:37.926  2222  2222 I AconfigPackage: com.android.systemui is mapped to system
+09-24 22:38:37.927  2222  2222 I AconfigPackage: com.android.server.power.batterysaver is mapped to system
+09-24 22:38:37.927  2222  2222 I AconfigPackage: android.widget.flags is mapped to system
+09-24 22:38:37.944  2222  2222 I AconfigPackage: com.android.media.editing.flags is mapped to system
+09-24 22:38:37.944  2222  2222 I AconfigPackage: com.android.media.codec.flags is mapped to system
+09-24 22:38:37.945  2222  2222 I AconfigPackage: com.android.server.powerstats is mapped to system
+09-24 22:38:37.945  2222  2222 I AconfigPackage: com.android.graphics.egl.flags is mapped to system
+09-24 22:38:37.945  2222  2222 I AconfigPackage: com.android.media.audioserver is mapped to system
+09-24 22:38:37.946  2222  2222 I AconfigPackage: com.android.server.deviceidle is mapped to system
+09-24 22:38:37.946  2222  2222 I AconfigPackage: android.nfc is mapped to system
+09-24 22:38:37.947  2222  2222 I AconfigPackage: android.permission.flags is mapped to system
+09-24 22:38:37.947  2222  2222 I AconfigPackage: android.service.voice.flags is mapped to system
+09-24 22:38:37.948  2222  2222 I AconfigPackage: android.content.pm is mapped to system
+09-24 22:38:37.956  2222  2222 I AconfigPackage: com.android.server.power.hint is mapped to system
+09-24 22:38:37.957  2222  2222 I AconfigPackage: android.os is mapped to system
+09-24 22:38:37.957  2222  2222 I AconfigPackage: android.service.dreams is mapped to system
+09-24 22:38:37.957  2222  2222 I AconfigPackage: com.android.graphics.libgui.flags is mapped to system
+09-24 22:38:37.958  2222  2222 I AconfigPackage: android.hardware.usb.flags is mapped to system
+09-24 22:38:37.958  2222  2222 I AconfigPackage: android.provider is mapped to system
+09-24 22:38:37.959  2222  2222 I AconfigPackage: com.android.server.job is mapped to system
+09-24 22:38:37.959  2222  2222 I AconfigPackage: com.android.internal.foldables.flags is mapped to system
+09-24 22:38:37.959  2222  2222 I AconfigPackage: com.android.internal.telephony.flags is mapped to system
+09-24 22:38:37.959  2222  2222 I AconfigPackage: android.webkit is mapped to system
+09-24 22:38:37.978  2222  2222 I AconfigPackage: android.credentials.flags is mapped to system
+09-24 22:38:37.978  2222  2222 I AconfigPackage: com.android.server.display.feature.flags is mapped to system
+09-24 22:38:37.979  2222  2222 I AconfigPackage: com.android.server.notification is mapped to system
+09-24 22:38:37.979  2222  2222 I AconfigPackage: android.appwidget.flags is mapped to system
+09-24 22:38:37.988  2222  2222 I AconfigPackage: com.android.frameworks.sensorservice.flags is mapped to system
+09-24 22:38:37.989  2222  2222 I AconfigPackage: com.android.printspooler.flags is mapped to system
+09-24 22:38:37.990  2222  2222 I AconfigPackage: com.android.window.flags is mapped to system
+09-24 22:38:37.990  2222  2222 I AconfigPackage: android.adaptiveauth is mapped to system
+09-24 22:38:37.991  2222  2222 I AconfigPackage: android.net.wifi.flags is mapped to system
+09-24 22:38:38.000  2222  2222 I AconfigPackage: android.media.tv.flags is mapped to system
+09-24 22:38:38.001  2222  2222 I AconfigPackage: com.android.server.usb.flags is mapped to system
+09-24 22:38:38.002  2222  2222 I AconfigPackage: android.os.vibrator is mapped to system
+09-24 22:38:38.003  2222  2222 I AconfigPackage: android.hardware.devicestate.feature.flags is mapped to system
+09-24 22:38:38.003  2222  2222 I AconfigPackage: com.android.server.usage is mapped to system
+09-24 22:38:38.003  2222  2222 I AconfigPackage: android.server is mapped to system
+09-24 22:38:38.014  2222  2222 I AconfigPackage: com.android.wm.shell is mapped to system
+09-24 22:38:38.028  2222  2222 I AconfigPackage: android.view.inputmethod is mapped to system
+09-24 22:38:38.029  2222  2222 I AconfigPackage: com.android.graphics.hwui.flags is mapped to system
+09-24 22:38:38.029  2222  2222 I AconfigPackage: com.android.server.backup is mapped to system
+09-24 22:38:38.029  2222  2222 I AconfigPackage: com.android.internal.pm.pkg.component.flags is mapped to system
+09-24 22:38:38.030  2222  2222 I AconfigPackage: android.view.accessibility is mapped to system
+09-24 22:38:38.030  2222  2222 I AconfigPackage: com.google.wear.sdk is mapped to system
+09-24 22:38:38.030  2222  2222 I AconfigPackage: android.media.audio is mapped to system
+09-24 22:38:38.031  2222  2222 I AconfigPackage: com.android.server.am is mapped to system
+09-24 22:38:38.031  2222  2222 I AconfigPackage: com.android.media.playback.flags is mapped to system
+09-24 22:38:38.050  2222  2222 I AconfigPackage: com.android.art.flags is mapped to com.android.art
+09-24 22:38:38.051  2222  2222 I AconfigPackage: com.android.libcore is mapped to com.android.art
+09-24 22:38:38.062  2222  2222 I AconfigPackage: com.android.media.extractor.flags is mapped to com.android.media
+09-24 22:38:38.062  2222  2222 I AconfigPackage: com.android.media.mainline.flags is mapped to com.android.media
+09-24 22:38:38.072  2222  2222 I AconfigPackage: com.android.wifi.flags is mapped to com.android.wifi
+09-24 22:38:38.086  2222  2222 I AconfigPackage: com.android.org.conscrypt.flags is mapped to com.android.conscrypt
+09-24 22:38:38.101  2222  2222 I AconfigPackage: com.android.healthfitness.flags is mapped to com.android.healthfitness
+09-24 22:38:38.112  2222  2222 I AconfigPackage: com.google.android.input.twoshay.flags is mapped to vendor
+09-24 22:38:38.116  2222  2222 I AconfigPackage: libgooglecamerahal.flags is mapped to vendor
+09-24 22:38:38.125  2222  2222 I AconfigPackage: com.android.ipsec.flags is mapped to com.android.ipsec
+09-24 22:38:38.143  2222  2222 I AconfigPackage: com.android.nfc.module.flags is mapped to com.android.nfcservices
+09-24 22:38:38.159  2222  2222 I AconfigPackage: com.android.adservices.ondevicepersonalization.flags is mapped to com.android.ondevicepersonalization
+09-24 22:38:38.170  2222  2222 I AconfigPackage: com.android.bluetooth.flags is mapped to com.android.bt
+09-24 22:38:38.184  2222  2222 I AconfigPackage: com.android.devicelock.flags is mapped to com.android.devicelock
+09-24 22:38:38.200  2222  2222 I AconfigPackage: android.os.profiling is mapped to com.android.profiling
+09-24 22:38:38.210  2222  2222 I AconfigPackage: com.android.os.statsd.flags is mapped to com.android.os.statsd
+09-24 22:38:38.225  2222  2222 I AconfigPackage: com.android.cellbroadcastreceiver.flags is mapped to com.android.cellbroadcast
+09-24 22:38:38.235  2222  2222 I AconfigPackage: com.android.adservices.flags is mapped to com.android.adservices
+09-24 22:38:38.235  2222  2222 I AconfigPackage: com.android.sdksandbox.flags is mapped to com.android.adservices
+09-24 22:38:38.249  2222  2222 I AconfigPackage: com.android.uwb.flags is mapped to com.android.uwb
+09-24 22:38:38.250  2222  2222 I AconfigPackage: com.android.ranging.flags is mapped to com.android.uwb
+09-24 22:38:38.259  2222  2222 I AconfigPackage: android.graphics.pdf.flags is mapped to com.android.mediaprovider
+09-24 22:38:38.264  2222  2222 I AconfigPackage: com.android.providers.media.flags is mapped to com.android.mediaprovider
+09-24 22:38:38.265  2222  2222 I AconfigPackage: android.graphics.pdf.flags.readonly is mapped to com.android.mediaprovider
+09-24 22:38:38.278  2222  2222 I AconfigPackage: com.android.net.ct.flags is mapped to com.android.tethering
+09-24 22:38:38.279  2222  2222 I AconfigPackage: com.android.net.flags is mapped to com.android.tethering
+09-24 22:38:38.284  2222  2222 I AconfigPackage: android.net.vcn is mapped to com.android.tethering
+09-24 22:38:38.285  2222  2222 I AconfigPackage: com.android.nearby.flags is mapped to com.android.tethering
+09-24 22:38:38.285  2222  2222 I AconfigPackage: android.net.http is mapped to com.android.tethering
+09-24 22:38:38.285  2222  2222 I AconfigPackage: com.android.net.thread.flags is mapped to com.android.tethering
+09-24 22:38:38.299  2222  2222 I AconfigPackage: com.android.system.virtualmachine.flags is mapped to com.android.virt
+09-24 22:38:38.325  2222  2222 E FeatureFlagsImplExport: android.os.flagging.AconfigStorageReadException: ERROR_PACKAGE_NOT_FOUND: package android.xr cannot be found on the device
+09-24 22:38:38.424  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:38.403     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:38.465   227  2300 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:38.434     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:38.443     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:39.244  2222  2222 D nativeloader: Load libjavacrypto.so using APEX ns com_android_conscrypt for caller /apex/com.android.conscrypt/javalib/conscrypt.jar: ok
+09-24 22:38:39.452  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:39.438     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:39.486   227  2303 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:39.462     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:39.472     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:39.963  2222  2222 I Typeface: Preloading /system/fonts/Roboto-Regular.ttf
+09-24 22:38:39.974  2222  2222 I Typeface: Preloading /system/fonts/RobotoStatic-Regular.ttf
+09-24 22:38:39.987  2222  2222 I SystemFonts: Loading font config from /system/etc/fonts.xml
+09-24 22:38:40.472  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:40.451     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:40.497   227  2304 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:40.468     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:40.475     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:41.023  2222  2222 E ActivityRecognitionHardware: activity_recognition HAL is deprecated. class_init is effectively a no-op
+09-24 22:38:41.496  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:41.475     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:41.518   227  2305 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:41.494     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:41.496     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:41.944  2222  2284 I zygote64: Background concurrent mark compact GC freed 4913KB AllocSpace bytes, 21(676KB) LOS objects, 49% free, 4729KB/9458KB, paused 10.331ms,14.839ms total 856.950ms
+09-24 22:38:42.524  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:42.504     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:42.526     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:42.551   227  2306 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:42.536     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:43.533  2222  2284 I zygote64: Background concurrent mark compact GC freed 4364KB AllocSpace bytes, 2(36KB) LOS objects, 49% free, 7053KB/13MB, paused 10.721ms,7.439ms total 840.152ms
+09-24 22:38:43.546  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:43.524     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:43.570   227  2307 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:43.546     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:43.548     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:43.723  2222  2222 W Zygote  : Class not found for preloading: android.location.flags.FeatureFlags
+09-24 22:38:43.727  2222  2222 W Zygote  : Class not found for preloading: android.location.flags.FeatureFlagsImpl
+09-24 22:38:43.730  2222  2222 W Zygote  : Class not found for preloading: android.location.flags.Flags
+09-24 22:38:44.005  2222  2222 D nativeloader: Load libmedia_jni.so using system ns (caller=/system/framework/framework.jar!classes2.dex): ok
+09-24 22:38:44.011  2222  2222 D MtpDeviceJNI: register_android_mtp_MtpDevice
+09-24 22:38:44.065  2222  2222 W Zygote  : Class not found for preloading: android.media.MediaCodecInfo$LazyHolder
+09-24 22:38:44.115  2222  2222 D nativeloader: Load libsoundpool.so using system ns (caller=/system/framework/framework.jar!classes2.dex): ok
+09-24 22:38:44.135  2222  2222 D nativeloader: Load libaudioeffect_jni.so using system ns (caller=/system/framework/framework.jar!classes2.dex): ok
+09-24 22:38:44.219  2222  2222 D nativeloader: Load librtp_jni.so using system ns (caller=/system/framework/voip-common.jar): ok
+09-24 22:38:44.222  2222  2222 I zygote64: Thread[1,tid=2222,Native,Thread*=0x7e976ab14010,peer=0x20005a8,"main"] recursive attempt to load library "librtp_jni.so"
+09-24 22:38:44.243  2222  2222 W Zygote  : Class not found for preloading: android.nfc.NfcActivityManager$NfcActivityState
+09-24 22:38:44.246  2222  2222 W Zygote  : Class not found for preloading: android.nfc.NfcActivityManager$NfcApplicationState
+09-24 22:38:44.379  2222  2222 D nativeloader: Load libvintf_jni.so using system ns (caller=/system/framework/framework.jar!classes3.dex): ok
+09-24 22:38:44.563  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:44.550     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:44.595   227  2308 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:44.570     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:44.583     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:44.785  2222  2222 D nativeloader: Load librs_jni.so using system ns (caller=/system/framework/framework.jar!classes3.dex): ok
+09-24 22:38:45.580  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:45.565     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:45.583     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:45.590     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:45.612   227  2309 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:45.682  2222  2222 W Zygote  : Class not found for preloading: com.android.ims.RcsPresenceInfo$1
+09-24 22:38:45.683  2222  2222 W Zygote  : Class not found for preloading: com.android.ims.RcsPresenceInfo$ServiceInfoKey
+09-24 22:38:45.685  2222  2222 W Zygote  : Class not found for preloading: com.android.ims.RcsPresenceInfo$ServiceState
+09-24 22:38:45.686  2222  2222 W Zygote  : Class not found for preloading: com.android.ims.RcsPresenceInfo$ServiceType
+09-24 22:38:45.689  2222  2222 W Zygote  : Class not found for preloading: com.android.ims.RcsPresenceInfo$VolteStatus
+09-24 22:38:45.690  2222  2222 W Zygote  : Class not found for preloading: com.android.ims.RcsPresenceInfo
+09-24 22:38:45.691  2222  2222 W Zygote  : Class not found for preloading: com.android.ims.ResultCode
+09-24 22:38:45.695  2222  2222 W Zygote  : Class not found for preloading: com.android.ims.internal.ContactNumberUtils
+09-24 22:38:45.706  2222  2222 W Zygote  : Class not found for preloading: com.android.ims.internal.Logger
+09-24 22:38:45.805  2222  2222 W Zygote  : Class not found for preloading: com.android.internal.os.BatteryStatsHistory$HistoryStepDetailsCalculator
+09-24 22:38:45.933  2222  2222 W OverlayConfig: partition_order.xml does not exist.
+09-24 22:38:46.423     0     0 W healthd : battery l=100 v=5000 t=25.0 h=2 st=2 c=900000 fc=3000000 cc=10 chg=a
+09-24 22:38:46.596  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:46.586     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:46.602     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:46.627   227  2310 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:46.612     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:47.624  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:47.603     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:47.617     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:47.644   227  2313 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:47.622     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:47.988  2312  2312 W idmap2  : failed to create idmap
+09-24 22:38:48.110  2222  2222 V Configuration: Updating configuration, locales updated from [] to [en_US]
+09-24 22:38:48.117  2222  2222 I zygote64: AssetManager2(0x7e98bab15b38) locale list changing from [] to [en-US]
+09-24 22:38:48.326  2222  2222 W Zygote  : Class not found for preloading: com.android.internal.telephony.flags.FeatureFlags
+09-24 22:38:48.327  2222  2222 W Zygote  : Class not found for preloading: com.android.internal.telephony.flags.FeatureFlagsImpl
+09-24 22:38:48.334  2222  2222 W Zygote  : Class not found for preloading: com.android.internal.telephony.flags.Flags
+09-24 22:38:48.636  2223  2223 W ServiceManagerCppClient: Waited one second for activity (is service started? Number of threads started in the threadpool: 16. Are binder threads started and available?)
+09-24 22:38:48.623     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Since 'activity' could not be found trying to start it as a lazy AIDL service. (if it's not configured to be a lazy service, it may be stuck starting or still starting).
+09-24 22:38:48.680   227  2316 W libc    : Unable to set property "ctl.interface_start" to "aidl/activity": PROP_ERROR_HANDLE_CONTROL_MESSAGE (0x20)
+09-24 22:38:48.653     0     0 E init    : Control message: Could not find 'aidl/activity' for ctl.interface_start from pid: 227 (/system/bin/servicemanager)
+09-24 22:38:48.659     0     0 I servicemanager: Caller(pid=2223,uid=1041,sid=u:r:audioserver:s0) Tried to start aidl service activity as a lazy service, but was unable to. Usually this happens when a service is not installed, but if the service is intended to be used as a lazy service, then it may be configured incorrectly.
+09-24 22:38:48.803  2222  2222 D nativeloader: Load libframework-connectivity-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity.jar: ok
+09-24 22:38:49.021  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.asn1.ASN1ApplicationSpecific
+09-24 22:38:49.022  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.asn1.ASN1ApplicationSpecificParser
+09-24 22:38:49.031  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.asn1.BERApplicationSpecific
+09-24 22:38:49.041  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.asn1.BERApplicationSpecificParser
+09-24 22:38:49.043  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.asn1.BERTags
+09-24 22:38:49.051  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.asn1.DLApplicationSpecific
+09-24 22:38:49.124  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.jcajce.PBKDFKey
+09-24 22:38:49.130  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.jcajce.PKCS12KeyWithParameters
+09-24 22:38:49.131  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.jcajce.provider.asymmetric.EC$Mappings
+09-24 22:38:49.137  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.jcajce.provider.asymmetric.X509$Mappings
+09-24 22:38:49.146  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.jcajce.provider.digest.MD5$Mappings
+09-24 22:38:49.147  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.jcajce.provider.digest.MD5
+09-24 22:38:49.166  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.jcajce.spec.AEADParameterSpec
+09-24 22:38:49.168  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.jce.interfaces.BCKeyStore
+09-24 22:38:49.178  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.util.Encodable
+09-24 22:38:49.179  2222  2222 W Zygote  : Class not found for preloading: com.android.org.bouncycastle.util.Iterable
+09-24 22:38:49.195  2222  2222 W Zygote  : Class not found for preloading: com.android.sdksandbox.flags.FeatureFlags
+09-24 22:38:49.201  2222  2222 W Zygote  : Class not found for preloading: com.android.sdksandbox.flags.FeatureFlagsImpl
+09-24 22:38:49.202  2222  2222 W Zygote  : Class not found for preloading: com.android.sdksandbox.flags.Flags
+09-24 22:38:49.229  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.RcsSettingUtils$$ExternalSyntheticLambda0
+09-24 22:38:49.230  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.RcsSettingUtils
+09-24 22:38:49.231  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.Task
+09-24 22:38:49.237  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.TaskManager$MessageData
+09-24 22:38:49.238  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.TaskManager$MessageHandler
+09-24 22:38:49.239  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.TaskManager
+09-24 22:38:49.246  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.ContactCapabilityResponse
+09-24 22:38:49.247  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresenceAvailabilityTask
+09-24 22:38:49.257  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresenceBase$PresencePublishState
+09-24 22:38:49.258  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresenceBase
+09-24 22:38:49.259  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresenceCapabilityTask
+09-24 22:38:49.265  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresencePublication$$ExternalSyntheticLambda0
+09-24 22:38:49.266  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresencePublication$1
+09-24 22:38:49.267  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresencePublication$PublishRequest
+09-24 22:38:49.271  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresencePublication$PublishType
+09-24 22:38:49.277  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresencePublication$StackPublishTriggerType
+09-24 22:38:49.278  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresencePublication
+09-24 22:38:49.279  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresencePublishTask
+09-24 22:38:49.285  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresencePublisher
+09-24 22:38:49.286  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresenceSubscriber
+09-24 22:38:49.294  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresenceTask
+09-24 22:38:49.295  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.PresenceUtils
+09-24 22:38:49.301  2222  2222 W Zygote  : Class not found for preloading: com.android.service.ims.presence.SubscribePublisher
+09-24 22:38:49.523  2222  2222 W Zygote  : Class not found for preloading: java.lang.invoke.Transformers$ArrayLength
+09-24 22:38:49.531  2222  2222 W Zygote  : Class not found for preloading: java.lang.invoke.Transformers$ReferenceArrayElementGetter
+09-24 22:38:49.536  2222  2222 W Zygote  : Class not found for preloading: java.lang.invoke.Transformers$ReferenceArrayElementSetter
+09-24 22:38:49.620     0     0 I logd    : logdr: UID=2000 GID=2000 PID=2314 n tail=1500 logMask=bf pid=0 start=0ns deadline=0ns

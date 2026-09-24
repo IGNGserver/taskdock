@@ -8,13 +8,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
-import com.devtodo.app.ui.navigation.BottomNavScreens
 import com.devtodo.app.ui.navigation.Screen
 import com.devtodo.app.ui.screens.*
 import com.devtodo.app.ui.theme.TaskDockMotion
@@ -28,113 +26,117 @@ fun TaskDockApp(
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
     val loggedIn by viewModel.authenticated.collectAsStateWithLifecycle()
-    val primary = loggedIn && BottomNavScreens.any { it.route == currentRoute }
     val snackbar = remember { SnackbarHostState() }
     var locateFolder by rememberSaveable { mutableStateOf<String?>(null) }
     var locateTask by rememberSaveable { mutableStateOf<String?>(null) }
     var locateRequest by rememberSaveable { mutableIntStateOf(0) }
-    fun navigatePrimary(route: String) {
-        navController.navigate(route) {
-            popUpTo(Screen.Today.route) { saveState = true }
-            launchSingleTop = true
-            restoreState = true
+
+    fun navigateShortcut(route: String) {
+        if (currentRoute == route) return
+        navController.navigate(route) { launchSingleTop = true }
+    }
+
+    fun returnToDirectory() {
+        if (currentRoute != Screen.Tree.route) {
+            val returned = navController.popBackStack(Screen.Tree.route, inclusive = false)
+            if (!returned) {
+                val routeToReplace = currentRoute ?: return
+                navController.navigate(Screen.Tree.route) {
+                    popUpTo(routeToReplace) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
         }
     }
+
     fun locate(folder: String?, task: String?) {
         locateFolder = folder
         locateTask = task
         locateRequest++
-        navigatePrimary(Screen.Tree.route)
+        if (!navController.popBackStack(Screen.Tree.route, inclusive = false)) {
+            val routeToReplace = currentRoute
+            if (routeToReplace == null) {
+                navController.navigate(Screen.Tree.route) { launchSingleTop = true }
+            } else {
+                navController.navigate(Screen.Tree.route) {
+                    popUpTo(routeToReplace) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
     }
+
     LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
     LaunchedEffect(loggedIn, currentRoute) {
         if (!loggedIn && currentRoute != null && currentRoute != Screen.Login.route) {
             navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
         }
     }
-    BoxWithConstraints(
+
+    Box(
         modifier =
             Modifier.fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface)
-                .windowInsetsPadding(WindowInsets.safeDrawing),
+                .background(MaterialTheme.colorScheme.surface),
     ) {
-        val useNavigationRail = maxWidth >= 600.dp
         Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = MaterialTheme.colorScheme.surface,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            snackbarHost = { SnackbarHost(snackbar) },
-            bottomBar = {
-                if (primary && !useNavigationRail) {
-                    NavigationBar {
-                        BottomNavScreens.forEach { screen ->
-                            NavigationBarItem(
-                                selected = currentRoute == screen.route,
-                                onClick = { navigatePrimary(screen.route) },
-                                icon = { screen.icon?.let { Icon(it, screen.title) } },
-                                label = { Text(screen.title) },
-                            )
-                        }
-                    }
-                }
+            snackbarHost = {
+                SnackbarHost(
+                    snackbar,
+                    modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars),
+                )
             },
         ) { padding ->
-            Row(
+            NavHost(
+                navController = navController,
+                startDestination = if (loggedIn) Screen.Tree.route else Screen.Login.route,
                 modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
+                enterTransition = {
+                    fadeIn(
+                        tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard)
+                    ) + slideInHorizontally(
+                        tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard)
+                    ) { it / 16 }
+                },
+                exitTransition = {
+                    fadeOut(tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard))
+                },
+                popEnterTransition = {
+                    fadeIn(tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard))
+                },
+                popExitTransition = {
+                    fadeOut(tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard)) +
+                        slideOutHorizontally(
+                            tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard)
+                        ) { it / 16 }
+                },
             ) {
-                if (primary && useNavigationRail) {
-                    NavigationRail {
-                        BottomNavScreens.forEach { screen ->
-                            NavigationRailItem(
-                                selected = currentRoute == screen.route,
-                                onClick = { navigatePrimary(screen.route) },
-                                icon = { screen.icon?.let { Icon(it, screen.title) } },
-                                label = { Text(screen.title) },
-                            )
-                        }
-                    }
-                }
-                NavHost(
-                    navController = navController,
-                    startDestination = if (loggedIn) Screen.Today.route else Screen.Login.route,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    enterTransition = {
-                        if (BottomNavScreens.any { it.route == targetState.destination.route })
-                            fadeIn(
-                                tween(TaskDockMotion.NavigationMillis, easing = TaskDockMotion.Standard)
-                            )
-                        else
-                            fadeIn(
-                                tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard)
-                            ) +
-                                slideInHorizontally(
-                                    tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard)
-                                ) {
-                                    it / 12
-                                }
-                    },
-                    exitTransition = {
-                        fadeOut(tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard))
-                    },
-                    popEnterTransition = {
-                        fadeIn(tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard))
-                    },
-                    popExitTransition = {
-                        fadeOut(tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard)) +
-                            slideOutHorizontally(
-                                tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard)
-                            ) {
-                                it / 12
-                            }
-                    },
-                ) {
                 composable(Screen.Login.route) {
                     LoginScreen(
                         viewModel = viewModel,
                         onLoginSuccess = {
                             viewModel.onAuthenticated()
-                            navController.navigate(Screen.Today.route) {
+                            navController.navigate(Screen.Tree.route) {
                                 popUpTo(Screen.Login.route) { inclusive = true }
                             }
                         },
+                    )
+                }
+
+                composable(Screen.Tree.route) {
+                    TreeScreen(
+                        viewModel = viewModel,
+                        onNavigateToDetail = { taskId ->
+                            navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                        },
+                        initialFolderId = locateFolder,
+                        highlightedTaskId = locateTask,
+                        locateRequest = locateRequest,
+                        onNavigateToShortcut = ::navigateShortcut,
+                        onOpenSettings = { navigateShortcut(Screen.More.route) },
+                        onOpenSearch = { navigateShortcut(Screen.AllTasks.route) },
                     )
                 }
 
@@ -145,28 +147,38 @@ fun TaskDockApp(
                             navController.navigate(Screen.TaskDetail.createRoute(taskId))
                         },
                         onNavigateToTree = ::locate,
-                    )
-                }
-
-                composable(Screen.Tree.route) {
-                    TreeScreen(
-                        viewModel = viewModel,
-                        initialFolderId = locateFolder,
-                        highlightedTaskId = locateTask,
-                        locateRequest = locateRequest,
-                        onNavigateToDetail = { taskId ->
-                            navController.navigate(Screen.TaskDetail.createRoute(taskId))
-                        },
+                        onBack = ::returnToDirectory,
                     )
                 }
 
                 composable(Screen.Time.route) {
-                    PlanningScreen(
+                    TimeScreen(
                         viewModel = viewModel,
                         onNavigateToDetail = { taskId ->
                             navController.navigate(Screen.TaskDetail.createRoute(taskId))
                         },
                         onNavigateToTree = ::locate,
+                        onBack = ::returnToDirectory,
+                    )
+                }
+
+                composable(Screen.Workflows.route) {
+                    WorkflowsV2Screen(
+                        viewModel = viewModel,
+                        onNavigateToDetail = { taskId ->
+                            navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                        },
+                        onBack = ::returnToDirectory,
+                    )
+                }
+
+                composable(Screen.AllTasks.route) {
+                    AllTasksV2Screen(
+                        viewModel = viewModel,
+                        onNavigateToDetail = { taskId ->
+                            navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                        },
+                        onBack = { navController.popBackStack() },
                     )
                 }
 
@@ -186,6 +198,7 @@ fun TaskDockApp(
                                 popUpTo(0) { inclusive = true }
                             }
                         },
+                        onBack = { navController.popBackStack() },
                     )
                 }
 
@@ -210,5 +223,4 @@ fun TaskDockApp(
             }
         }
     }
-}
 }

@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.devtodo.app.ui.WorkspaceScreenTest" tests="1" failures="1" errors="0" skipped="0" time="18.157" timestamp="2026-09-24T12:06:28" hostname="localhost">
+  <properties>
+    <property name="device" value="taskdock_api35_review(AVD) - 15" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="directoryDrillDownAndSearchKeepTaskReachable" classname="com.devtodo.app.ui.WorkspaceScreenTest" time="15.244">
+    <failure>androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)
+at androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)
+at com.devtodo.app.ui.WorkspaceScreenTest.waitForText(WorkspaceScreenTest.kt:154)
+at com.devtodo.app.ui.WorkspaceScreenTest.waitForText$default(WorkspaceScreenTest.kt:153)
+at com.devtodo.app.ui.WorkspaceScreenTest.directoryDrillDownAndSearchKeepTaskReachable(WorkspaceScreenTest.kt:227)
+</failure>
+  </testcase>
+</testsuite>

@@ -4,8 +4,9 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.SharedPreferences
 import android.graphics.Bitmap
+import android.os.SystemClock
+import android.util.Base64
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.lifecycle.ViewModelStore
@@ -18,6 +19,7 @@ import com.devtodo.app.data.remote.ApiClient
 import com.devtodo.app.data.security.SecureAuthManager
 import com.devtodo.app.data.sync.SyncEngine
 import com.devtodo.app.ui.screens.*
+import com.devtodo.app.ui.navigation.Screen
 import com.devtodo.app.ui.theme.*
 import java.text.SimpleDateFormat
 import java.io.File
@@ -36,6 +38,7 @@ class WorkspaceScreenTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var db: AppDatabase
     private lateinit var vm: MainViewModel
+    private var navigationVm: MainViewModel? = null
     private val store = ViewModelStore()
     private val now = "2026-09-20T10:00:00Z"
     private val task =
@@ -140,15 +143,29 @@ class WorkspaceScreenTest {
     @After
     fun tearDown() {
         compose.runOnUiThread {
+            navigationVm?.onLoggedOut()
+            navigationVm = null
             vm.onLoggedOut()
             store.clear()
         }
         db.close()
     }
 
-    private fun waitForText(text: String) {
+    private fun waitForText(text: String, substring: Boolean = false) {
         compose.waitUntil(10_000) {
-            compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+            runCatching {
+                compose.onNodeWithText(text, substring = substring).assertIsDisplayed()
+                true
+            }.getOrDefault(false)
+        }
+    }
+
+    private fun waitForDescription(description: String) {
+        compose.waitUntil(10_000) {
+            runCatching {
+                compose.onNodeWithContentDescription(description).assertIsDisplayed()
+                true
+            }.getOrDefault(false)
         }
     }
 
@@ -175,36 +192,376 @@ class WorkspaceScreenTest {
     private fun screenshot(name: String) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(context.getExternalFilesDir(null), "ui-evidence").apply { mkdirs() }
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        compose.waitForIdle()
+        instrumentation.waitForIdleSync()
+        val uiAutomation = instrumentation.uiAutomation
+        uiAutomation.waitForIdle(500L, 10_000L)
+        // Compose semantics can update before the emulator presents the matching frame.
+        // Keep the test on this page until the system compositor has time to catch up.
+        SystemClock.sleep(750L)
+        instrumentation.waitForIdleSync()
+        uiAutomation.waitForIdle(250L, 10_000L)
+        val bitmap =
+            uiAutomation.takeScreenshot()
+                ?: error("Unable to capture device screenshot: $name")
         File(directory, "$name.png").outputStream().use {
-            compose
-                .onRoot()
-                .captureToImage()
-                .asAndroidBitmap()
-                .compress(Bitmap.CompressFormat.PNG, 100, it)
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
         }
+    }
+
+    @Test
+    fun allTasksScreenShowsSearchAndRootTask() {
+        var openedTaskId: String? = null
+        var backCount = 0
+        compose.setContent {
+            DevTodoTheme(themeMode = ThemeMode.LIGHT, dynamicColor = false) {
+                AllTasksV2Screen(
+                    viewModel = vm,
+                    onNavigateToDetail = { openedTaskId = it },
+                    onBack = { backCount++ },
+                )
+            }
+        }
+        waitForText("搜索任务")
+        waitForText("任务列表")
+        compose.onNodeWithTag("all-tasks-list")
+            .performScrollToNode(hasText(task.title))
+        waitForText(task.title)
+        compose.onNodeWithContentDescription("${task.title}，完成状态").assertIsDisplayed()
+        compose.onNodeWithContentDescription("${task.title}，更多操作").assertIsDisplayed()
+        screenshot("all-tasks")
+        compose.onNodeWithText(task.title).performClick()
+        compose.runOnIdle { assertEquals(task.id, openedTaskId) }
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.runOnIdle { assertEquals(1, backCount) }
     }
 
     @Test
     fun directoryDrillDownAndSearchKeepTaskReachable() {
         var opened: String? = null
+        var shortcut: String? = null
+        var settingsOpened = false
+        val showAllTasks = mutableStateOf(false)
         compose.setContent {
             DevTodoTheme(themeMode = ThemeMode.DARK, dynamicColor = false) {
-                TreeScreen(vm, { opened = it })
+                if (showAllTasks.value) {
+                    AllTasksV2Screen(vm, { opened = it })
+                } else {
+                    TreeScreen(
+                        vm,
+                        { opened = it },
+                        onNavigateToShortcut = { shortcut = it },
+                        onOpenSettings = { settingsOpened = true },
+                        onOpenSearch = { shortcut = Screen.AllTasks.route },
+                    )
+                }
             }
         }
+        waitForText("快捷视图")
+        screenshot("tasks-home")
+        val inlineCreate =
+            InstrumentationRegistry.getInstrumentation().targetContext.resources.configuration.let {
+                it.fontScale >= 1.3f || it.screenHeightDp < 480
+            }
+        compose.onNodeWithTag("directory-tree-list")
+            .performScrollToNode(hasText("tokenmonitor"))
+        waitForText("tokenmonitor")
+        compose.onNodeWithText("tokenmonitor").assertIsDisplayed()
+        compose.onNodeWithContentDescription("tokenmonitor，更多操作").assertIsDisplayed()
+        if (!inlineCreate) compose.onNodeWithTag("tree-create-action").assertIsDisplayed()
+        screenshot("tasks-home-last-directory")
+        compose.onNodeWithTag("directory-tree-list")
+            .performScrollToNode(hasText(task.title))
+        waitForText(task.title)
+        compose.onNodeWithContentDescription("${task.title}，完成状态").assertIsDisplayed()
+        compose.onNodeWithContentDescription("${task.title}，更多操作").assertIsDisplayed()
+        if (inlineCreate) {
+            compose.onNodeWithTag("directory-tree-list")
+                .performScrollToNode(hasText("新建任务"))
+            compose.onNodeWithTag("tree-inline-create-task").assertIsDisplayed()
+        } else {
+            compose.onNodeWithTag("tree-create-action").assertIsDisplayed()
+        }
+        val lastRootRowBounds =
+            compose.onNodeWithTag("tree-row-${task.id}").fetchSemanticsNode().boundsInRoot
+        val rootCreateBounds =
+            compose.onNodeWithTag(
+                if (inlineCreate) "tree-inline-create-task" else "tree-create-action",
+            ).fetchSemanticsNode().boundsInRoot
+        assertTrue(
+            "The final root task row must clear the create action: $lastRootRowBounds / $rootCreateBounds",
+            lastRootRowBounds.bottom <= rootCreateBounds.top,
+        )
+        screenshot("tasks-home-last-row")
+        compose.onNodeWithTag("directory-tree-list")
+            .performScrollToNode(hasText("IGNG站点"))
         waitForText("IGNG站点")
-        screenshot("tasks-folders")
+        screenshot("tasks-home-first-directory")
+        compose.onNodeWithTag("directory-tree-list")
+            .performScrollToNode(hasText("快捷视图"))
+        waitForText("快捷视图")
+        compose.onNodeWithText("今天").performClick()
+        compose.runOnIdle { assertEquals(Screen.Today.route, shortcut) }
+        compose.onNodeWithText("流程").performClick()
+        compose.runOnIdle { assertEquals(Screen.Workflows.route, shortcut) }
+        compose.onNodeWithContentDescription("设置").performClick()
+        compose.runOnIdle { assertTrue(settingsOpened) }
+        compose.onNodeWithTag("directory-tree-list")
+            .performScrollToNode(hasText("IGNG站点"))
         compose.onNodeWithText("IGNG站点").performClick()
         waitForText("站点发布检查")
-        compose.onNodeWithText("站点发布检查").performClick()
+        screenshot("tasks-folder")
+        compose.onNodeWithTag("directory-tree-list")
+            .performScrollToNode(hasText("IGNG站点 待办 16"))
+        waitForText("IGNG站点 待办 16")
+        compose.onNodeWithText("IGNG站点 待办 16").assertIsDisplayed()
+        compose.onNodeWithText("待办").assertIsDisplayed()
+        compose.onNodeWithContentDescription("IGNG站点 待办 16，更多操作").assertIsDisplayed()
+        if (inlineCreate) {
+            compose.onNodeWithTag("directory-tree-list")
+                .performScrollToNode(hasText("新建任务"))
+            compose.onNodeWithTag("tree-inline-create-task").assertIsDisplayed()
+        } else {
+            compose.onNodeWithTag("tree-create-action").assertIsDisplayed()
+        }
+        val lastTaskBounds =
+            compose.onNodeWithTag("tree-row-${folderIds[0]}-task-15").fetchSemanticsNode().boundsInRoot
+        val folderCreateBounds =
+            compose.onNodeWithTag(
+                if (inlineCreate) "tree-inline-create-task" else "tree-create-action",
+            ).fetchSemanticsNode().boundsInRoot
+        assertTrue(
+            "The last folder task must clear the create action: $lastTaskBounds / $folderCreateBounds",
+            lastTaskBounds.bottom <= folderCreateBounds.top,
+        )
+        screenshot("tasks-folder-last-task")
+        compose.onNodeWithText("站点发布检查").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(drillDownTaskId, opened) }
         compose.onNodeWithContentDescription("返回上级目录").performClick()
+        compose.onNodeWithTag("directory-tree-list")
+            .performScrollToNode(hasText("全部任务"))
         compose.onNodeWithText("全部任务").performClick()
+        compose.runOnIdle {
+            assertEquals(Screen.AllTasks.route, shortcut)
+            showAllTasks.value = true
+        }
+        waitForText("搜索任务")
+        screenshot("tasks-search")
         compose.onNodeWithText("搜索任务").performTextInput("不存在")
         compose.onNodeWithText("没有匹配的任务").assertExists()
         compose.onNodeWithText("搜索任务").performTextClearance()
+        compose.onNodeWithTag("all-tasks-list")
+            .performScrollToNode(hasText("站点发布检查"))
         waitForText("站点发布检查")
-        screenshot("tasks-search")
+    }
+
+    @Test
+    fun todayScreenReturnsToDirectory() {
+        var backCount = 0
+        compose.setContent {
+            DevTodoTheme(themeMode = ThemeMode.LIGHT, dynamicColor = false) {
+                TodayV2Screen(vm, onNavigateToDetail = {}, onBack = { backCount++ })
+            }
+        }
+        waitForText("今天")
+        screenshot("today")
+        compose.onNodeWithContentDescription("返回目录").performClick()
+        compose.runOnIdle { assertEquals(1, backCount) }
+    }
+
+    @Test
+    fun scheduleScreenReturnsToDirectory() {
+        var backCount = 0
+        compose.setContent {
+            DevTodoTheme(themeMode = ThemeMode.LIGHT, dynamicColor = false) {
+                TimeScreen(vm, onNavigateToDetail = {}, onNavigateToTree = { _, _ -> }, onBack = { backCount++ })
+            }
+        }
+        waitForDescription("返回目录")
+        screenshot("schedule")
+        compose.onNodeWithContentDescription("返回目录").performClick()
+        compose.runOnIdle { assertEquals(1, backCount) }
+    }
+
+    @Test
+    fun workflowsScreenReturnsToDirectory() {
+        var backCount = 0
+        compose.setContent {
+            DevTodoTheme(themeMode = ThemeMode.LIGHT, dynamicColor = false) {
+                WorkflowsV2Screen(vm, onNavigateToDetail = {}, onBack = { backCount++ })
+            }
+        }
+        waitForText("流程")
+        screenshot("workflows")
+        compose.onNodeWithContentDescription("返回目录").performClick()
+        compose.runOnIdle { assertEquals(1, backCount) }
+    }
+
+    @Test
+    fun appStartsInDirectoryAndSmartViewsReturnToIt() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val prefix = "navigation-test-${UUID.randomUUID()}-"
+        val isolated =
+            object : ContextWrapper(context) {
+                override fun getApplicationContext(): Context = this
+
+                override fun getSharedPreferences(name: String, mode: Int): SharedPreferences =
+                    super.getSharedPreferences(prefix + name, mode)
+            }
+        val auth = SecureAuthManager(isolated).apply {
+            ownerId = "fixture-owner"
+            username = "UI fixture"
+            val payload = Base64.encodeToString(
+                "{\"exp\":${System.currentTimeMillis() / 1000L + 3600L}}".toByteArray(),
+                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+            )
+            accessToken = "fixture.$payload.signature"
+        }
+        val todayDate =
+            SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+                .apply { timeZone = TimeZone.getTimeZone("Asia/Shanghai") }
+                .format(Date())
+        val todayPoint = timePoint("navigation-today", TimePointType.DATE, todayDate)
+        val workflow =
+            WorkflowEntity(
+                id = "navigation-workflow",
+                ownerId = "fixture-owner",
+                name = "站点发布流程",
+                rank = "1024",
+                version = 1,
+                archivedAt = null,
+                createdAt = now,
+                updatedAt = now,
+            )
+        val workflowStage =
+            WorkflowStageEntity(
+                id = "navigation-workflow-stage",
+                ownerId = "fixture-owner",
+                workflowId = workflow.id,
+                name = "发布准备",
+                rank = "1024",
+                version = 1,
+                createdAt = now,
+                updatedAt = now,
+            )
+        runBlocking {
+            db.timePointDao().upsertTimePoint(todayPoint)
+            db.placementDao().upsertPlacement(
+                PlacementEntity(
+                    id = "navigation-today-placement",
+                    ownerId = "fixture-owner",
+                    taskId = task.id,
+                    timePointId = todayPoint.id,
+                    rank = "1024",
+                    version = 1,
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+            db.workflowDao().upsertWorkflow(workflow)
+            db.workflowDao().upsertStages(listOf(workflowStage))
+            db.workflowDao().upsertMemberships(
+                listOf(
+                    WorkflowTaskMembershipEntity(
+                        id = "navigation-workflow-membership",
+                        ownerId = "fixture-owner",
+                        workflowId = workflow.id,
+                        stageId = workflowStage.id,
+                        taskId = task.id,
+                        rank = "1024",
+                        version = 1,
+                        createdAt = now,
+                        updatedAt = now,
+                    ),
+                ),
+            )
+        }
+        val api = ApiClient(auth)
+        val engine = SyncEngine(db, api, auth).apply { setNetworkAvailable(false) }
+        navigationVm = MainViewModel(db, engine, auth, api)
+
+        compose.setContent {
+            DevTodoTheme(themeMode = ThemeMode.LIGHT, dynamicColor = false) {
+                TaskDockApp(navigationVm!!)
+            }
+        }
+        waitForText("快捷视图")
+        waitForText("7 个目录", substring = true)
+        screenshot("app-directory-initial")
+        compose.onNodeWithTag("directory-tree-list")
+            .performScrollToNode(hasText("IGNG站点"))
+        waitForText("IGNG站点")
+        compose.onNodeWithText("任务库").assertDoesNotExist()
+        compose.onNodeWithText("计划").assertDoesNotExist()
+        screenshot("app-directory")
+        compose.onNodeWithTag("directory-tree-list")
+            .performScrollToNode(hasText("快捷视图"))
+
+        compose.onNodeWithText("今天").performClick()
+        waitForDescription("返回目录")
+        waitForText(todayDate, substring = true)
+        waitForText(task.title)
+        screenshot("app-today")
+        compose.onNodeWithContentDescription("返回目录").performClick()
+        waitForText("快捷视图")
+
+        compose.onNodeWithText("日程").performClick()
+        waitForDescription("返回目录")
+        waitForText("今天与接下来")
+        waitForText(task.title)
+        screenshot("app-schedule")
+        compose.onNodeWithContentDescription("返回目录").performClick()
+        waitForText("快捷视图")
+
+        compose.onNodeWithText("流程").performClick()
+        waitForText(workflow.name)
+        screenshot("app-workflows")
+        compose.onNodeWithText(workflow.name).performClick()
+        waitForText(workflowStage.name)
+        waitForText("1 个阶段")
+        waitForText(task.title)
+        screenshot("app-workflow-detail")
+        compose.onNodeWithContentDescription("返回流程列表").performClick()
+        waitForText(workflow.name)
+        compose.onNodeWithContentDescription("返回目录").performClick()
+        waitForText("快捷视图")
+
+        compose.onNodeWithText("全部任务").performClick()
+        waitForText("搜索任务")
+        waitForText("全部任务")
+        waitForText("任务列表")
+        compose.onNodeWithText("快捷视图").assertDoesNotExist()
+        screenshot("app-all-tasks")
+        compose.onNodeWithText("搜索任务").performTextInput("ISC-1")
+        waitForText("管理层权限重构（Ip数据库）")
+        compose.onNodeWithText("管理层权限重构（Ip数据库）").performClick()
+        waitForText("任务详情")
+        waitForText(task.title)
+        screenshot("app-task-detail")
+        compose.onNodeWithContentDescription("返回").performClick()
+        waitForText("搜索任务")
+        compose.onNodeWithContentDescription("返回").performClick()
+        waitForText("快捷视图")
+
+        compose.onNodeWithContentDescription("设置").performClick()
+        waitForText("设置")
+        waitForText("TaskDock 账户")
+        compose.onNodeWithText("快捷视图").assertDoesNotExist()
+        screenshot("app-settings")
+        compose.onNodeWithContentDescription("返回").performClick()
+        waitForText("快捷视图")
+
+        compose.onNodeWithText("IGNG站点").performScrollTo().performClick()
+        waitForText("站点发布检查")
+        waitForText("当前目录")
+        screenshot("app-folder")
+        compose.onNodeWithText("站点发布检查").performClick()
+        waitForText("任务详情")
+        compose.onNodeWithContentDescription("返回").performClick()
+        waitForText("IGNG站点")
+        compose.onNodeWithContentDescription("返回上级目录").performClick()
+        waitForText("快捷视图")
     }
 
     @Test
@@ -219,6 +576,7 @@ class WorkspaceScreenTest {
                     onPureBlackChange = {},
                     onNavigateToArchived = {},
                     onLogout = {},
+                    onBack = {},
                 )
             }
         }
@@ -239,11 +597,25 @@ class WorkspaceScreenTest {
                     onPureBlackChange = {},
                     onNavigateToArchived = {},
                     onLogout = {},
+                    onBack = {},
                 )
             }
         }
         waitForText("TaskDock 账户")
         screenshot("settings-light")
+    }
+
+    @Test
+    fun directoryKeepsStructureWithDynamicColor() {
+        compose.setContent {
+            DevTodoTheme(themeMode = ThemeMode.LIGHT, dynamicColor = true) {
+                TreeScreen(vm, onNavigateToDetail = {})
+            }
+        }
+        waitForText("快捷视图")
+        waitForText("目录")
+        compose.onNodeWithText("快捷视图").assertIsDisplayed()
+        screenshot("directory-dynamic-color")
     }
 
     @Test
@@ -293,6 +665,7 @@ class WorkspaceScreenTest {
         compose.onNodeWithTag("planner-timepoints")
             .performScrollToNode(hasText("Launch review"))
         waitForText("Launch review")
+        screenshot("schedule-event")
     }
 
     @Test

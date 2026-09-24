@@ -14,8 +14,10 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -30,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -66,6 +69,7 @@ fun TimeScreen(
     viewModel: MainViewModel,
     onNavigateToDetail: ((String) -> Unit)? = null,
     onNavigateToTree: ((String?, String?) -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
 ) {
     val points by viewModel.activeTimePoints.collectAsStateWithLifecycle()
     val placements by viewModel.activeTimePointPlacements.collectAsStateWithLifecycle()
@@ -100,6 +104,23 @@ fun TimeScreen(
     val hasTodayPoint = groups.todayAndUpcoming.any { it.localDate == today }
 
     WorkspaceScaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("日程") },
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回目录")
+                        }
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { datePicker = true }) {
+                        Icon(Icons.Default.DateRange, "选择日期")
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             if (!useInlineDateAction) {
                 ExtendedFloatingActionButton(

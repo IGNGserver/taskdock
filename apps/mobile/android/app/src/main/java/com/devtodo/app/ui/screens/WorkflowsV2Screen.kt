@@ -49,7 +49,11 @@ import com.devtodo.app.ui.components.WorkspaceScaffold
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WorkflowsV2Screen(viewModel: MainViewModel, onNavigateToDetail: (String) -> Unit = {}) {
+fun WorkflowsV2Screen(
+    viewModel: MainViewModel,
+    onNavigateToDetail: (String) -> Unit = {},
+    onBack: (() -> Unit)? = null,
+) {
     val workflows by viewModel.workflowsV2.collectAsStateWithLifecycle()
     val tasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
     val folders by viewModel.foldersV2.collectAsStateWithLifecycle()
@@ -70,6 +74,21 @@ fun WorkflowsV2Screen(viewModel: MainViewModel, onNavigateToDetail: (String) -> 
     val selected = workflows.find { it.id == selectedId }
     BackHandler(selected != null) { selectedId = null }
     WorkspaceScaffold(
+        topBar = {
+            androidx.compose.material3.TopAppBar(
+                title = { Text("流程") },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        if (selected != null) selectedId = null else onBack?.invoke()
+                    }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            if (selected != null) "返回流程列表" else "返回目录",
+                        )
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             if (selected == null)
                 ExtendedFloatingActionButton(
@@ -116,11 +135,7 @@ fun WorkflowsV2Screen(viewModel: MainViewModel, onNavigateToDetail: (String) -> 
                             Text(workflow.name, style = MaterialTheme.typography.titleLarge)
                         },
                         supportingContent = { Text("${stages.size} 个阶段") },
-                        leadingContent = {
-                            IconButton(onClick = { selectedId = null }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回流程列表")
-                            }
-                        },
+                        leadingContent = { Icon(Icons.Default.AccountTree, null) },
                         trailingContent = {
                             ActionMenu(
                                 "流程操作",

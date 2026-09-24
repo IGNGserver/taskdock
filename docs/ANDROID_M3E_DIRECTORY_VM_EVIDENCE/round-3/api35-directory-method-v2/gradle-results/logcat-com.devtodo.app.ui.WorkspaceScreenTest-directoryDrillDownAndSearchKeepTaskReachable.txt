@@ -1,0 +1,355 @@
+09-24 20:35:39.165  7695  7740 I TestRunner: started: directoryDrillDownAndSearchKeepTaskReachable(com.devtodo.app.ui.WorkspaceScreenTest)
+09-24 20:35:39.271  7695  7740 I Tracing : Tracer added: class androidx.test.platform.tracing.AndroidXTracer
+09-24 20:35:39.297  7695  7695 W vtodo.app.debug: Accessing hidden method Landroid/os/MessageQueue;->next()Landroid/os/Message; (unsupported, reflection, allowed)
+09-24 20:35:39.297  7695  7695 W vtodo.app.debug: Accessing hidden field Landroid/os/MessageQueue;->mMessages:Landroid/os/Message; (unsupported, reflection, allowed)
+09-24 20:35:39.298  7695  7695 W vtodo.app.debug: Accessing hidden method Landroid/os/Message;->recycleUnchecked()V (unsupported, reflection, allowed)
+09-24 20:35:39.301  7695  7740 D IdlingRegistry: Registering idling resources: [androidx.compose.ui.test.EspressoLink@e915cc6]
+09-24 20:35:39.335  7695  7740 W Settings: Setting always_finish_activities has moved from android.provider.Settings.System to android.provider.Settings.Global, returning read-only value.
+09-24 20:35:39.370   614   986 V GrammaticalInflectionUtils: AttributionSource: AttributionSource { uid = 10215, packageName = null, attributionTag = null, token = android.os.Binder@45fc763, deviceId = 0, next = null } does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+09-24 20:35:39.394  1102  1102 W SplitSelectStateCtor: Missing session instanceIds
+09-24 20:35:39.394  1102  1102 D StatsLog: LAUNCHER_SPLIT_SELECTION_EXIT_INTERRUPTED
+09-24 20:35:39.432  1102  1102 I TopTaskTracker: onTaskMovedToFront: (moved taskInfo to front) taskId=13, baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10008000 cmp=com.devtodo.app.debug/androidx.activity.ComponentActivity }
+09-24 20:35:39.438   449   449 I BpBinder: onLastStrongRef automatically unlinking death recipients:
+09-24 20:35:39.481   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+09-24 20:35:39.482   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+09-24 20:35:39.482   614   768 D InetDiagMessage: Destroyed live tcp sockets for uids={10101} in 20ms
+09-24 20:35:39.493  7695  7695 D LifecycleMonitor: Lifecycle status change: androidx.activity.ComponentActivity@799c24d in: PRE_ON_CREATE
+09-24 20:35:39.494  7695  7695 V ActivityScenario: Activity lifecycle changed event received but ignored because the reported transition was not ON_CREATE while the last known transition was PRE_ON_CREATE
+09-24 20:35:39.509   854   924 D SplashScreenView: Build android.window.SplashScreenView{adb8dbd V.E...... ......ID 0,0-0,0}
+09-24 20:35:39.509   854   924 D SplashScreenView: Icon: view: null drawable: null size: 0
+09-24 20:35:39.509   854   924 D SplashScreenView: Branding: view: android.view.View{1d91fb2 G.ED..... ......I. 0,0-0,0 #1020503 android:id/splashscreen_branding_view} drawable: null size w: 0 h: 0
+09-24 20:35:39.569  7695  7695 D LifecycleMonitor: Lifecycle status change: androidx.activity.ComponentActivity@799c24d in: CREATED
+09-24 20:35:39.570  7695  7695 V ActivityScenario: Update currentActivityStage to CREATED, currentActivity=androidx.activity.ComponentActivity@799c24d
+09-24 20:35:39.572  7695  7695 D LifecycleMonitor: Lifecycle status change: androidx.activity.ComponentActivity@799c24d in: STARTED
+09-24 20:35:39.572  7695  7695 V ActivityScenario: Update currentActivityStage to STARTED, currentActivity=androidx.activity.ComponentActivity@799c24d
+09-24 20:35:39.587  1102  1476 D EGL_emulation: app_time_stats: avg=847.90ms min=21.03ms max=9657.79ms count=12
+09-24 20:35:39.633  7695  7695 D LifecycleMonitor: Lifecycle status change: androidx.activity.ComponentActivity@799c24d in: RESUMED
+09-24 20:35:39.646  7695  7695 V ActivityScenario: Update currentActivityStage to RESUMED, currentActivity=androidx.activity.ComponentActivity@799c24d
+09-24 20:35:39.679  7695  7695 W HWUI    : Unknown dataspace 0
+09-24 20:35:40.060   449   485 W ServiceManagerCppClient: Permission failure: android.permission.ACCESS_SURFACE_FLINGER from uid=10215 pid=0
+09-24 20:35:40.060   449   485 D PermissionCache: checking android.permission.ACCESS_SURFACE_FLINGER for uid=10215 => denied (2422 us)
+09-24 20:35:40.068   449   485 W ServiceManagerCppClient: Permission failure: android.permission.ROTATE_SURFACE_FLINGER from uid=10215 pid=0
+09-24 20:35:40.068   449   485 D PermissionCache: checking android.permission.ROTATE_SURFACE_FLINGER for uid=10215 => denied (8367 us)
+09-24 20:35:40.069   449   485 W ServiceManagerCppClient: Permission failure: android.permission.INTERNAL_SYSTEM_WINDOW from uid=10215 pid=0
+09-24 20:35:40.069   449   485 D PermissionCache: checking android.permission.INTERNAL_SYSTEM_WINDOW for uid=10215 => denied (291 us)
+09-24 20:35:40.096  7695  7745 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+09-24 20:35:40.098  7695  7745 I EGL_emulation: Opening libGLESv2_emulation.so
+09-24 20:35:40.178  7695  7745 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+09-24 20:35:40.225  1102  1476 D EGL_emulation: app_time_stats: avg=31959.01ms min=6.10ms max=191149.17ms count=6
+09-24 20:35:40.277   854  1040 D EGL_emulation: app_time_stats: avg=13021.25ms min=13021.25ms max=13021.25ms count=1
+09-24 20:35:40.369   386   443 I netd    : tetherGetStats() -> {[]} <2.81ms>
+09-24 20:35:40.515   177   177 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+09-24 20:35:40.539  7695  7745 I Gralloc4: mapper 4.x is not supported
+09-24 20:35:40.767  1102  1102 D VRI[NexusLauncherActivity]: visibilityChanged oldVisibility=true newVisibility=false
+09-24 20:35:40.805  1102  1102 D NexusLauncherModelDelegate: notifySmartspaceEvent: SmartspaceTargetEvent{mSmartspaceTarget=null, mSmartspaceActionId='null', mEventType=7}
+09-24 20:35:41.204  7695  7752 E SurfaceSyncGroup: Failed to receive transaction ready in 1000ms. Marking SurfaceSyncGroup(wmsSync-VRI[ComponentActivity]#0) as ready
+09-24 20:35:41.211   614   954 W ServiceManagerCppClient: Permission failure: android.permission.ACCESS_SURFACE_FLINGER from uid=10215 pid=0
+09-24 20:35:41.211   614   954 D PermissionCache: checking android.permission.ACCESS_SURFACE_FLINGER for uid=10215 => denied (635 us)
+09-24 20:35:41.212   614   954 W ServiceManagerCppClient: Permission failure: android.permission.ROTATE_SURFACE_FLINGER from uid=10215 pid=0
+09-24 20:35:41.212   614   954 D PermissionCache: checking android.permission.ROTATE_SURFACE_FLINGER for uid=10215 => denied (148 us)
+09-24 20:35:41.212   614   954 W ServiceManagerCppClient: Permission failure: android.permission.INTERNAL_SYSTEM_WINDOW from uid=10215 pid=0
+09-24 20:35:41.212   614   954 D PermissionCache: checking android.permission.INTERNAL_SYSTEM_WINDOW for uid=10215 => denied (220 us)
+09-24 20:35:41.216  7695  7752 E SurfaceSyncGroup: Failed to receive transaction ready in 1000ms. Marking SurfaceSyncGroup(VRI[ComponentActivity]#1) as ready
+09-24 20:35:41.233   614   640 W ziparchive: Unable to open '/data/app/~~oO61dhTHtd_w-5pRyRNJFg==/com.devtodo.app.debug-msg2u8-LEfR1_8SibhEUxA==/base.dm': No such file or directory
+09-24 20:35:41.276   614   640 I ActivityTaskManager: Displayed com.devtodo.app.debug/androidx.activity.ComponentActivity for user 0: +1s868ms
+09-24 20:35:41.455  1102  1102 I Choreographer: Skipped 40 frames!  The application may be doing too much work on its main thread.
+09-24 20:35:41.649  1102  1476 D EGL_emulation: app_time_stats: avg=144.76ms min=22.78ms max=902.39ms count=8
+09-24 20:35:41.813   386   443 I netd    : tetherGetStats() -> {[]} <15.39ms>
+09-24 20:35:41.862  1102  1494 I HWUI    : Davey! duration=1159ms; Flags=0, FrameTimelineVsyncId=31049, IntendedVsync=1207554215503, Vsync=1207820882159, InputEventId=0, HandleInputStart=1207826395881, AnimationStart=1207826399894, PerformTraversalsStart=1207839248224, DrawStart=1208471136665, FrameDeadline=1207820882159, FrameInterval=1207822906469, FrameStartTime=16666666, SyncQueued=1208472888708, SyncStart=1208472938298, IssueDrawCommandsStart=1208472980178, SwapBuffers=1208693490308, FrameCompleted=1208713519676, DequeueBufferDuration=44677, QueueBufferDuration=256021, GpuCompleted=1208713519676, SwapBuffersCompleted=1208703373771, DisplayPresentTime=72904454231687715, CommandSubmissionCompleted=1208693490308,
+09-24 20:35:41.865  7695  7706 I HWUI    : Davey! duration=2095ms; Flags=1, FrameTimelineVsyncId=30756, IntendedVsync=1206804215533, Vsync=1206954215527, InputEventId=0, HandleInputStart=1206974198095, AnimationStart=1206974253181, PerformTraversalsStart=1206974258524, DrawStart=1207899236245, FrameDeadline=1206820882199, FrameInterval=1206962852311, FrameStartTime=16666666, SyncQueued=1207922805950, SyncStart=1207924255904, IssueDrawCommandsStart=1207930978876, SwapBuffers=1208056000509, FrameCompleted=1208901544740, DequeueBufferDuration=7648, QueueBufferDuration=434547, GpuCompleted=1208901544740, SwapBuffersCompleted=1208685525591, DisplayPresentTime=72904454231359566, CommandSubmissionCompleted=1208056000509,
+09-24 20:35:41.869  1742  2393 I FontLog : Received query Noto Color Emoji Compat, URI content://com.google.android.gms.fonts [CONTEXT service_id=132 ]
+09-24 20:35:41.890  1742  2393 I FontLog : Query [emojicompat-emoji-font] resolved to {Noto Color Emoji Compat, wdth 100.0, wght 400, ital 0.0, bestEffort false} [CONTEXT service_id=132 ]
+09-24 20:35:41.910  1742  2393 I FontLog : Fetch {Noto Color Emoji Compat, wdth 100.0, wght 400, ital 0.0, bestEffort false} end status Status{statusCode=SUCCESS, resolution=null} [CONTEXT service_id=132 ]
+09-24 20:35:41.915  1102  1102 D BaseDepthController: setSurface:
+09-24 20:35:41.915  1102  1102 D BaseDepthController: 	mWaitingOnSurfaceValidity: false
+09-24 20:35:41.915  1102  1102 D BaseDepthController: 	mSurface: null
+09-24 20:35:41.916  1102  1102 D BaseDepthController: mSurface is null and mCurrentBlur is: 0
+09-24 20:35:41.928  1102  1102 D StateManager: goToState - fromState: Normal, toState: Normal, partial trace:
+09-24 20:35:41.928  1102  1102 D StateManager: 	at com.android.launcher3.statemanager.StateManager.moveToRestState(go/retraceme 31f9979659277bb965985aff1272c33e3c3c9e755b77166d20a2465454178f2c:4)
+09-24 20:35:41.928  1102  1102 D StateManager: 	at com.android.launcher3.statemanager.StateManager.moveToRestState(go/retraceme 31f9979659277bb965985aff1272c33e3c3c9e755b77166d20a2465454178f2c:1)
+09-24 20:35:41.928  1102  1102 D StateManager: 	at com.android.launcher3.statemanager.StatefulActivity.onStop(go/retraceme 31f9979659277bb965985aff1272c33e3c3c9e755b77166d20a2465454178f2c:34)
+09-24 20:35:41.933  1742  1775 I FontLog : Pulling font file for id = 13, cache size = 6 [CONTEXT service_id=132 ]
+09-24 20:35:41.943  1102  1102 D StatsLog: LAUNCHER_ONSTOP
+09-24 20:35:41.951  1102  1763 D OneSearchSuggestProvider: Shut down the binder channel
+09-24 20:35:41.957   614   733 I ImeTracker: com.devtodo.app.debug:ac98585d: onRequestHide at ORIGIN_SERVER reason HIDE_UNSPECIFIED_WINDOW fromUser false
+09-24 20:35:41.983   854   923 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=false callback=android.view.ViewRootImpl$$ExternalSyntheticLambda11@2b848b9
+09-24 20:35:42.025  7695  7699 I vtodo.app.debug: Compiler allocated 5174KB to compile void android.view.ViewRootImpl.performTraversals()
+09-24 20:35:42.057   614   733 I ImeTracker: com.devtodo.app.debug:ac98585d: onCancelled at PHASE_SERVER_SHOULD_HIDE
+09-24 20:35:42.068  1742  1775 I FontLog : Pulling font file for id = 13, cache size = 6 [CONTEXT service_id=132 ]
+09-24 20:35:42.097  1102  1102 D StatsLog: LAUNCHER_GOOGLE_SEARCH_RESTORE_LIST_SIZE_AFTER_ACTIVITY_RESTART
+09-24 20:35:42.124   614   986 W InputManager-JNI: Input channel object '52bdecc Splash Screen com.devtodo.app.debug (client)' was disposed without first being removed with the input manager!
+09-24 20:35:42.205  3371  3371 I GoogleInputMethodService: GoogleInputMethodService.onFinishInput():3157
+09-24 20:35:42.230  3371  3371 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2248 repeatCheckTimes = 0, locked = false
+09-24 20:35:42.232  3371  3371 I GoogleInputMethodService: GoogleInputMethodService.onStartInput():1986 onStartInput(EditorInfo{EditorInfo{packageName=com.devtodo.app.debug, inputType=0, inputTypeString=NULL, enableLearning=false, autoCorrection=false, autoComplete=false, imeOptions=0, privateImeOptions=null, actionName=UNSPECIFIED, actionLabel=null, initialSelStart=-1, initialSelEnd=-1, initialCapsMode=0, label=null, fieldId=0, fieldName=null, extras=null, hintText=null, hintLocales=[]}}, false)
+09-24 20:35:42.233  3371  3371 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2248 repeatCheckTimes = 1, locked = false
+09-24 20:35:42.240  3371  3371 I AndroidIME: InputBundleManager.loadActiveInputBundleId():450 loadActiveInputBundleId: und-Latn-x-password, password
+09-24 20:35:42.312   842   842 I wpa_supplicant: wlan0: CTRL-EVENT-BEACON-LOSS
+09-24 20:35:42.499   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+09-24 20:35:42.516   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+09-24 20:35:42.516   614   768 D InetDiagMessage: Destroyed live tcp sockets for uids={10142} in 37ms
+09-24 20:35:42.517   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+09-24 20:35:42.518   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+09-24 20:35:42.518   614   768 D InetDiagMessage: Destroyed live tcp sockets for uids={20142} in 1ms
+09-24 20:35:42.563  1804  1813 W gle.android.gms: Suspending all threads took: 14.692ms
+09-24 20:35:42.981   614   652 V GrammaticalInflectionUtils: AttributionSource: AttributionSource { uid = 10135, packageName = null, attributionTag = null, token = android.os.Binder@45fc763, deviceId = 0, next = null } does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+09-24 20:35:43.030   386   443 I netd    : tetherGetStats() -> {[]} <0.66ms>
+09-24 20:35:43.211   387   387 D Zygote  : Forked child process 7775
+09-24 20:35:43.292  7775  7775 I d.configupdater: Using CollectorTypeCMC GC.
+09-24 20:35:43.302  7775  7775 W d.configupdater: Unexpected CPU variant for x86: x86_64.
+09-24 20:35:43.302  7775  7775 W d.configupdater: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, goldmont-without-sha-xsaves, tremont, kabylake, default
+09-24 20:35:43.320  7775  7775 E d.configupdater: Not starting debugger since process cannot load the jdwp agent.
+09-24 20:35:43.346  7775  7775 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+09-24 20:35:43.444  7775  7775 D nativeloader: InitLlndkLibrariesProduct: libEGL.so:libGLESv1_CM.so:libGLESv2.so:libGLESv3.so:libRS.so:libandroid_net.so:libapexsupport.so:libbinder_ndk.so:libc.so:libcgrouprc.so:libclang_rt.asan-x86_64-android.so:libcom.android.tethering.connectivity_native.so:libdl.so:libft2.so:liblog.so:libm.so:libmediandk.so:libnativewindow.so:libneuralnetworks.so:libselinux.so:libsync.so:libvendorsupport.so:libvndksupport.so:libvulkan.so
+09-24 20:35:43.444  7775  7775 D nativeloader: Configuring product-clns-7 for unbundled product apk /product/priv-app/ConfigUpdater/ConfigUpdater.apk. target_sdk_version=30, uses_libraries=, library_path=/product/priv-app/ConfigUpdater/lib/x86_64:/product/lib64:/system/product/lib64, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.configupdater:/product/lib64:/system/product/lib64
+09-24 20:35:43.446  7775  7775 D nativeloader: InitVndkspLibrariesProduct: VNDK is deprecated with product
+09-24 20:35:43.484  7775  7775 V GraphicsEnvironment: Currently set values for:
+09-24 20:35:43.484  7775  7775 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+09-24 20:35:43.484  7775  7775 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+09-24 20:35:43.485  7775  7775 V GraphicsEnvironment: Global.Settings values are invalid: number of packages: 0, number of values: 0
+09-24 20:35:43.485  7775  7775 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+09-24 20:35:43.531  7775  7775 D ConfigUpdater: PhenotypeBroadcastReceiver : com.google.android.configupdater.DELAYED_FLAG_COMMIT
+09-24 20:35:43.670  1742  2566 I ActivityScheduler: nextTriggerTime: 1448823, in 238100ms, detectorType: 39, FULL_TYPE alarmWindowMillis: 80000
+09-24 20:35:44.160  7695  7695 W vtodo.app.debug: Verification of android.graphics.Typeface androidx.compose.ui.text.font.PlatformTypefacesApi28.loadNamedFromTypefaceCacheOrNull-RetOiIg(java.lang.String, androidx.compose.ui.text.font.FontWeight, int) took 157.847ms (437.13 bytecodes/s) (3848B approximate peak alloc)
+09-24 20:35:44.299  1804  1804 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.feedback.internal.IFeedbackService dat=chimera-action:/... cmp=com.google.android.gms/.chimera.GmsBoundBrokerService }
+09-24 20:35:44.313  7695  7700 I vtodo.app.debug: Background concurrent mark compact GC freed 4094KB AllocSpace bytes, 22(888KB) LOS objects, 49% free, 4467KB/8934KB, paused 178us,3.608ms total 117.729ms
+09-24 20:35:44.487  7695  7695 I Choreographer: Skipped 49 frames!  The application may be doing too much work on its main thread.
+09-24 20:35:45.273   854  1040 D EGL_emulation: app_time_stats: avg=1220.64ms min=19.49ms max=4231.10ms count=4
+09-24 20:35:45.546  7695  7695 I Choreographer: Skipped 57 frames!  The application may be doing too much work on its main thread.
+09-24 20:35:46.031  7695  7811 D ProfileInstaller: Installing profile for com.devtodo.app.debug
+09-24 20:35:46.055  7695  7704 I HWUI    : Davey! duration=2355ms; Flags=0, FrameTimelineVsyncId=31432, IntendedVsync=1210720882043, Vsync=1211537548677, InputEventId=0, HandleInputStart=1211540898959, AnimationStart=1211540904989, PerformTraversalsStart=1211540911351, DrawStart=1212364963092, FrameDeadline=1210737548709, FrameInterval=1211540515934, FrameStartTime=16666666, SyncQueued=1212417402207, SyncStart=1212428953945, IssueDrawCommandsStart=1212429158002, SwapBuffers=1212965094497, FrameCompleted=1213087782954, DequeueBufferDuration=6662, QueueBufferDuration=240392, GpuCompleted=1213087782954, SwapBuffersCompleted=1213070240328, DisplayPresentTime=144115222452437076, CommandSubmissionCompleted=1212965094497,
+09-24 20:35:46.087  1102  1476 D EGL_emulation: app_time_stats: avg=1410.28ms min=10.26ms max=4194.60ms count=3
+09-24 20:35:46.404  7695  7704 I HWUI    : Davey! duration=1334ms; Flags=0, FrameTimelineVsyncId=31460, IntendedVsync=1211637548673, Vsync=1212587548635, InputEventId=0, HandleInputStart=1212600444332, AnimationStart=1212600448704, PerformTraversalsStart=1212600453305, DrawStart=1212600525267, FrameDeadline=1213120881947, FrameInterval=1212599851399, FrameStartTime=16666666, SyncQueued=1212612539824, SyncStart=1213078420266, IssueDrawCommandsStart=1213078606106, SwapBuffers=1213116861471, FrameCompleted=1213437888221, DequeueBufferDuration=5935, QueueBufferDuration=737623, GpuCompleted=1213437888221, SwapBuffersCompleted=1213430625955, DisplayPresentTime=0, CommandSubmissionCompleted=1213116861471,
+09-24 20:35:46.442  7695  7740 I UiAutomation: Initialized for user 0 on display 0
+09-24 20:35:46.474   614   614 W IPCThreadState: Sending oneway calls to frozen process.
+09-24 20:35:46.476  7695  7816 V UiAutomation: Init UiAutomation@d3711a7[id=3, displayId=0, flags=0]
+09-24 20:35:46.476  1346  1827 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+09-24 20:35:46.479   614   614 W IPCThreadState: Sending oneway calls to frozen process.
+09-24 20:35:46.482   614   614 W IPCThreadState: Sending oneway calls to frozen process.
+09-24 20:35:46.484   614   614 W IPCThreadState: Sending oneway calls to frozen process.
+09-24 20:35:46.484   614   614 W IPCThreadState: Sending oneway calls to frozen process.
+09-24 20:35:46.484   614   614 W IPCThreadState: Sending oneway calls to frozen process.
+09-24 20:35:46.484   614   614 W IPCThreadState: Sending oneway calls to frozen process.
+09-24 20:35:46.484   614   614 W IPCThreadState: Sending oneway calls to frozen process.
+09-24 20:35:46.484   614   614 W IPCThreadState: Sending oneway calls to frozen process.
+09-24 20:35:46.492  1346  1660 I AiAiEcho: Predicting[0]:  [CONTEXT sampling_count=5 ]
+09-24 20:35:46.493  1346  1660 I AiAiEcho: EchoTargets:
+09-24 20:35:46.493  1346  1660 I AiAiEcho: Filtered by AiAi flag check:
+09-24 20:35:46.493  1346  1660 I AiAiEcho: [CONTEXT ratelimit_period="10 SECONDS" ]
+09-24 20:35:46.499  1346  1660 I AiAiEcho: Ranked targets strategy: SORT, count: 0, ranking metadata:  [CONTEXT ratelimit_period="10 SECONDS" ]
+09-24 20:35:46.502  1346  1660 I AiAiEcho: #remoteViewsTwiddler: feature disabled.
+09-24 20:35:46.505  1346  1660 I AiAiEcho: Predicting[0]:  [CONTEXT sampling_count=5 ]
+09-24 20:35:46.505  1346  1660 I AiAiEcho: EchoTargets:
+09-24 20:35:46.505  1346  1660 I AiAiEcho: Filtered by AiAi flag check:
+09-24 20:35:46.505  1346  1660 I AiAiEcho: [CONTEXT ratelimit_period="10 SECONDS" ]
+09-24 20:35:46.505  1346  1660 I AiAiEcho: Ranked targets strategy: SORT, count: 0, ranking metadata:  [CONTEXT ratelimit_period="10 SECONDS" ]
+09-24 20:35:46.505  1346  1660 I AiAiEcho: #remoteViewsTwiddler: feature disabled.
+09-24 20:35:46.506  1346  1660 I AiAiEcho: Predicting[0]:  [CONTEXT sampling_count=5 ]
+09-24 20:35:46.506  1346  1660 I AiAiEcho: EchoTargets:
+09-24 20:35:46.506  1346  1660 I AiAiEcho: Filtered by AiAi flag check:
+09-24 20:35:46.506  1346  1660 I AiAiEcho: [CONTEXT ratelimit_period="10 SECONDS" ]
+09-24 20:35:46.507  1346  1660 I AiAiEcho: Ranked targets strategy: SORT, count: 0, ranking metadata:  [CONTEXT ratelimit_period="10 SECONDS" ]
+09-24 20:35:46.507  1346  1660 I AiAiEcho: #remoteViewsTwiddler: feature disabled.
+09-24 20:35:46.516  1346  1660 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface media_data_manager with targets# 0 (types=[])
+09-24 20:35:46.519  1346  1660 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface home with targets# 0 (types=[])
+09-24 20:35:46.520  1346  1660 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface lockscreen with targets# 0 (types=[])
+09-24 20:35:46.523   854   854 D SsMediaDataProvider: Forwarding Smartspace updates []
+09-24 20:35:46.524  1102  1102 D SsBaseTemplateCard: No text view can be set up
+09-24 20:35:46.525  1102  1102 D SsBaseTemplateCard: Passed-in item info is null
+09-24 20:35:46.526  1102  1102 D SsBaseTemplateCard: Passed-in item info is null
+09-24 20:35:46.526  1102  1102 D SsBaseTemplateCard: Passed-in item info is null
+09-24 20:35:46.527  1102  1102 I SsBaseTemplateCard: Secondary card pane is null
+09-24 20:35:46.529   854   854 W PageIndicator: Total number of pages invalid: 0. Assuming 1 page.
+09-24 20:35:48.124   386   443 I netd    : tetherGetStats() -> {[]} <1.06ms>
+09-24 20:35:48.823  7775  7832 D ProfileInstaller: Installing profile for com.google.android.configupdater
+09-24 20:35:48.852   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+09-24 20:35:48.852   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+09-24 20:35:48.852   614   768 D InetDiagMessage: Destroyed live tcp sockets for uids={10135} in 1ms
+09-24 20:35:48.853   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+09-24 20:35:48.854   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+09-24 20:35:48.854   614   768 D InetDiagMessage: Destroyed live tcp sockets for uids={20135} in 1ms
+09-24 20:35:48.950  7695  7745 D EGL_emulation: app_time_stats: avg=1828.62ms min=26.18ms max=4384.70ms count=4
+09-24 20:35:50.347   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+09-24 20:35:50.347   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+09-24 20:35:50.347   614   768 D InetDiagMessage: Destroyed live tcp sockets for uids={10194} in 2ms
+09-24 20:35:50.487   842   842 I wpa_supplicant: wlan0: CTRL-EVENT-BEACON-LOSS
+09-24 20:35:50.487  7695  7700 I vtodo.app.debug: NativeAlloc concurrent mark compact GC freed 884KB AllocSpace bytes, 0(0B) LOS objects, 49% free, 6835KB/13MB, paused 158us,1.680ms total 175.809ms
+09-24 20:35:52.723   614  1012 V GrammaticalInflectionUtils: AttributionSource: AttributionSource { uid = 10216, packageName = null, attributionTag = null, token = android.os.Binder@45fc763, deviceId = 0, next = null } does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+09-24 20:35:52.760   854   924 D SplashScreenView: Build android.window.SplashScreenView{cf49799 V.E...... ......ID 0,0-0,0}
+09-24 20:35:52.760   854   924 D SplashScreenView: Icon: view: null drawable: null size: 0
+09-24 20:35:52.760   854   924 D SplashScreenView: Branding: view: android.view.View{3ab5a5e G.ED..... ......I. 0,0-0,0 #1020503 android:id/splashscreen_branding_view} drawable: null size w: 0 h: 0
+09-24 20:35:52.761  7695  7695 D LifecycleMonitor: Lifecycle status change: androidx.activity.ComponentActivity@799c24d in: PAUSED
+09-24 20:35:52.761  7695  7695 V ActivityScenario: Update currentActivityStage to PAUSED, currentActivity=androidx.activity.ComponentActivity@799c24d
+09-24 20:35:52.765   614   643 V GrammaticalInflectionUtils: AttributionSource: AttributionSource { uid = 10216, packageName = null, attributionTag = null, token = android.os.Binder@45fc763, deviceId = 0, next = null } does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+09-24 20:35:52.767  1102  1102 I TopTaskTracker: onTaskMovedToFront: (moved taskInfo to front) taskId=14, baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 cmp=com.devtodo.app.debug.test/androidx.test.core.app.InstrumentationActivityInvoker$EmptyActivity }
+09-24 20:35:52.783   386   443 I netd    : tetherGetStats() -> {[]} <0.65ms>
+09-24 20:35:52.785   449   449 I BpBinder: onLastStrongRef automatically unlinking death recipients:
+09-24 20:35:52.838   387   387 D Zygote  : Forked child process 7879
+09-24 20:35:52.884  7879  7879 I .app.debug.test: Late-enabling -Xcheck:jni
+09-24 20:35:52.957  7879  7879 I .app.debug.test: Using CollectorTypeCMC GC.
+09-24 20:35:52.958  7879  7879 W .app.debug.test: Unexpected CPU variant for x86: x86_64.
+09-24 20:35:52.958  7879  7879 W .app.debug.test: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, goldmont-without-sha-xsaves, tremont, kabylake, default
+09-24 20:35:52.966   465   473 I adbd    : jdwp connection from 7879
+09-24 20:35:52.974  7879  7879 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+09-24 20:35:53.030  7879  7879 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.test.base.jar
+09-24 20:35:53.039  7879  7879 D nativeloader: Configuring clns-7 for other apk /system/framework/android.test.mock.jar. target_sdk_version=36, uses_libraries=ALL, library_path=/data/app/~~bESvWA8r7q6Ep2x1i7qW9w==/com.devtodo.app.debug.test-MmKSa8IvqgvP4HHw1CMlwg==/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.devtodo.app.debug.test
+09-24 20:35:53.041  7879  7879 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.test.base.jar
+09-24 20:35:53.067  7879  7879 D nativeloader: Configuring clns-8 for other apk /system/framework/android.test.runner.jar. target_sdk_version=36, uses_libraries=ALL, library_path=/data/app/~~bESvWA8r7q6Ep2x1i7qW9w==/com.devtodo.app.debug.test-MmKSa8IvqgvP4HHw1CMlwg==/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.devtodo.app.debug.test
+09-24 20:35:53.071  7879  7879 W ziparchive: Unable to open '/data/app/~~bESvWA8r7q6Ep2x1i7qW9w==/com.devtodo.app.debug.test-MmKSa8IvqgvP4HHw1CMlwg==/base.dm': No such file or directory
+09-24 20:35:53.071  7879  7879 W ziparchive: Unable to open '/data/app/~~bESvWA8r7q6Ep2x1i7qW9w==/com.devtodo.app.debug.test-MmKSa8IvqgvP4HHw1CMlwg==/base.dm': No such file or directory
+09-24 20:35:53.130   854  1040 D EGL_emulation: app_time_stats: avg=867.91ms min=7.33ms max=7666.09ms count=9
+09-24 20:35:53.145  7879  7879 D nativeloader: Configuring clns-9 for other apk /data/app/~~bESvWA8r7q6Ep2x1i7qW9w==/com.devtodo.app.debug.test-MmKSa8IvqgvP4HHw1CMlwg==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~bESvWA8r7q6Ep2x1i7qW9w==/com.devtodo.app.debug.test-MmKSa8IvqgvP4HHw1CMlwg==/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.devtodo.app.debug.test
+09-24 20:35:53.157  7879  7879 V GraphicsEnvironment: Currently set values for:
+09-24 20:35:53.158  7879  7879 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+09-24 20:35:53.158  7879  7879 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+09-24 20:35:53.158  7879  7879 V GraphicsEnvironment: Global.Settings values are invalid: number of packages: 0, number of values: 0
+09-24 20:35:53.158  7879  7879 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+09-24 20:35:53.169   413   413 I RanchuHwc: logCompositionFallbackIfChanged: layer 57 CompositionType fallback from 3 to 1
+09-24 20:35:53.277  7879  7879 W HWUI    : Unknown dataspace 0
+09-24 20:35:53.307   449   485 W ServiceManagerCppClient: Permission failure: android.permission.ACCESS_SURFACE_FLINGER from uid=10216 pid=7879
+09-24 20:35:53.307   449   485 D PermissionCache: checking android.permission.ACCESS_SURFACE_FLINGER for uid=10216 => denied (340 us)
+09-24 20:35:53.309   449   485 W ServiceManagerCppClient: Permission failure: android.permission.ROTATE_SURFACE_FLINGER from uid=10216 pid=7879
+09-24 20:35:53.309   449   485 D PermissionCache: checking android.permission.ROTATE_SURFACE_FLINGER for uid=10216 => denied (2513 us)
+09-24 20:35:53.309   449   485 W ServiceManagerCppClient: Permission failure: android.permission.INTERNAL_SYSTEM_WINDOW from uid=10216 pid=7879
+09-24 20:35:53.309   449   485 D PermissionCache: checking android.permission.INTERNAL_SYSTEM_WINDOW for uid=10216 => denied (210 us)
+09-24 20:35:53.310   449   541 W ServiceManagerCppClient: Permission failure: android.permission.ACCESS_SURFACE_FLINGER from uid=10216 pid=0
+09-24 20:35:53.310   449   541 D PermissionCache: checking android.permission.ACCESS_SURFACE_FLINGER for uid=10216 => denied (5985 us)
+09-24 20:35:53.312  7879  7898 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+09-24 20:35:53.314  7879  7898 I EGL_emulation: Opening libGLESv2_emulation.so
+09-24 20:35:53.346  7879  7898 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+09-24 20:35:53.423   177   177 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+09-24 20:35:53.424  7879  7898 I Gralloc4: mapper 4.x is not supported
+09-24 20:35:53.665  1102  1476 D EGL_emulation: app_time_stats: avg=1074.33ms min=3.67ms max=7455.91ms count=7
+09-24 20:35:53.825  7695  7695 D VRI[ComponentActivity]: visibilityChanged oldVisibility=true newVisibility=false
+09-24 20:35:53.930   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+09-24 20:35:53.951   614   768 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+09-24 20:35:53.952   614   768 D InetDiagMessage: Destroyed live tcp sockets for uids={10135} in 49ms
+09-24 20:35:54.335   854  1040 D EGL_emulation: app_time_stats: avg=139.74ms min=12.60ms max=673.24ms count=6
+09-24 20:35:54.359  1102  1102 I Choreographer: Skipped 39 frames!  The application may be doing too much work on its main thread.
+09-24 20:35:54.400   614  1645 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+09-24 20:35:54.409   614  1101 W ServiceManagerCppClient: Permission failure: android.permission.ACCESS_SURFACE_FLINGER from uid=10216 pid=0
+09-24 20:35:54.409   614  1101 D PermissionCache: checking android.permission.ACCESS_SURFACE_FLINGER for uid=10216 => denied (479 us)
+09-24 20:35:54.409   614  1101 W ServiceManagerCppClient: Permission failure: android.permission.ROTATE_SURFACE_FLINGER from uid=10216 pid=0
+09-24 20:35:54.409   614  1101 D PermissionCache: checking android.permission.ROTATE_SURFACE_FLINGER for uid=10216 => denied (106 us)
+09-24 20:35:54.409   614  1101 W ServiceManagerCppClient: Permission failure: android.permission.INTERNAL_SYSTEM_WINDOW from uid=10216 pid=0
+09-24 20:35:54.409   614  1101 D PermissionCache: checking android.permission.INTERNAL_SYSTEM_WINDOW for uid=10216 => denied (102 us)
+09-24 20:35:54.428  7879  7905 E SurfaceSyncGroup: Failed to receive transaction ready in 1000ms. Marking SurfaceSyncGroup(wmsSync-VRI[InstrumentationActivityInvoker$EmptyActivity]#0) as ready
+09-24 20:35:54.437  7879  7890 I HWUI    : Davey! duration=1066ms; Flags=1, FrameTimelineVsyncId=31881, IntendedVsync=1220337548325, Vsync=1220337548325, InputEventId=0, HandleInputStart=1220344730064, AnimationStart=1220344745252, PerformTraversalsStart=1220344758101, DrawStart=1220651697267, FrameDeadline=1220354214991, FrameInterval=1220344676257, FrameStartTime=16666666, SyncQueued=1220697386157, SyncStart=1220698317141, IssueDrawCommandsStart=1220704547517, SwapBuffers=1220714825406, FrameCompleted=1221405026947, DequeueBufferDuration=91807, QueueBufferDuration=2430962, GpuCompleted=1221404601106, SwapBuffersCompleted=1221405026947, DisplayPresentTime=72904454231359566, CommandSubmissionCompleted=1220714825406,
+09-24 20:35:54.459  1102  1116 I HWUI    : Davey! duration=705ms; Flags=0, FrameTimelineVsyncId=32058, IntendedVsync=1220754214975, Vsync=1221404214949, InputEventId=0, HandleInputStart=1221413736147, AnimationStart=1221413739116, PerformTraversalsStart=1221414412667, DrawStart=1221414818402, FrameDeadline=1221470881613, FrameInterval=1221412907629, FrameStartTime=16666666, SyncQueued=1221414914502, SyncStart=1221449493340, IssueDrawCommandsStart=1221449514337, SwapBuffers=1221450856056, FrameCompleted=1221493866215, DequeueBufferDuration=28732062, QueueBufferDuration=395707, GpuCompleted=1221493866215, SwapBuffersCompleted=1221485108352, DisplayPresentTime=0, CommandSubmissionCompleted=1221450856056,
+09-24 20:35:54.473   614   640 W ziparchive: Unable to open '/data/app/~~bESvWA8r7q6Ep2x1i7qW9w==/com.devtodo.app.debug.test-MmKSa8IvqgvP4HHw1CMlwg==/base.dm': No such file or directory
+09-24 20:35:54.485   449   449 I BpBinder: onLastStrongRef automatically unlinking death recipients:
+09-24 20:35:54.490  1102  1102 I TopTaskTracker: onTaskMovedToFront: (moved taskInfo to front) taskId=6, baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.HOME] flg=0x10000100 cmp=com.google.android.apps.nexuslauncher/.NexusLauncherActivity }
+09-24 20:35:54.571   614   640 I ActivityTaskManager: Displayed com.devtodo.app.debug.test/androidx.test.core.app.InstrumentationActivityInvoker$EmptyActivity for user 0: +1s751ms
+09-24 20:35:54.583   614  1645 I EGL_emulation: Opening libGLESv2_emulation.so
+09-24 20:35:54.619  1102  1102 D NexusLauncherModelDelegate: notifySmartspaceEvent: SmartspaceTargetEvent{mSmartspaceTarget=null, mSmartspaceActionId='null', mEventType=6}
+09-24 20:35:54.692  1102  1102 D BaseDepthController: setSurface:
+09-24 20:35:54.692  1102  1102 D BaseDepthController: 	mWaitingOnSurfaceValidity: false
+09-24 20:35:54.692  1102  1102 D BaseDepthController: 	mSurface: Surface(name=com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity)/@0xfdeef8b
+09-24 20:35:54.809   614  1645 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+09-24 20:35:54.811   386   443 I netd    : tetherGetStats() -> {[]} <36.54ms>
+09-24 20:35:54.871  7695  7695 D LifecycleMonitor: Lifecycle status change: androidx.activity.ComponentActivity@799c24d in: STOPPED
+09-24 20:35:54.879  7695  7695 V ActivityScenario: Update currentActivityStage to STOPPED, currentActivity=androidx.activity.ComponentActivity@799c24d
+09-24 20:35:55.028  1102  1102 D StatsLog: LAUNCHER_ONRESUME
+09-24 20:35:55.079   854   923 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=false callback=android.view.ViewRootImpl$$ExternalSyntheticLambda11@56e1455
+09-24 20:35:55.102   614  2021 W InputManager-JNI: Input channel object '5785a1 Splash Screen com.devtodo.app.debug.test (client)' was disposed without first being removed with the input manager!
+09-24 20:35:55.118  1102  1476 D EGL_emulation: app_time_stats: avg=348.45ms min=6.91ms max=686.99ms count=4
+09-24 20:35:55.151  1102  1102 D StateManager: createAtomicAnimation - fromState: Background, toState: Normal, partial trace:
+09-24 20:35:55.151  1102  1102 D StateManager: 	at com.android.quickstep.util.WorkspaceRevealAnim.prepareToAnimate(go/retraceme 31f9979659277bb965985aff1272c33e3c3c9e755b77166d20a2465454178f2c:22)
+09-24 20:35:55.151  1102  1102 D StateManager: 	at com.android.quickstep.util.WorkspaceRevealAnim.<init>(go/retraceme 31f9979659277bb965985aff1272c33e3c3c9e755b77166d20a2465454178f2c:11)
+09-24 20:35:55.151  1102  1102 D StateManager: 	at com.android.launcher3.QuickstepTransitionManager.createWallpaperOpenAnimations(go/retraceme 31f9979659277bb965985aff1272c33e3c3c9e755b77166d20a2465454178f2c:735)
+09-24 20:35:55.157   614  1396 W AppSearchIcing: icing-search-engine.cc:321: Error: 5, Message: Document (com.google.android.googlequicksearchbox$OneSearchZeroStateGoogleSuggestions/default, zp) not found.
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: AppSearch 0-state cache not available, fallback to AGA
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: java.util.concurrent.CompletionException: java.util.NoSuchElementException: No value present
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at java.util.concurrent.CompletableFuture.encodeThrowable(CompletableFuture.java:308)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at java.util.concurrent.CompletableFuture.completeThrowable(CompletableFuture.java:323)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at java.util.concurrent.CompletableFuture$UniAccept.tryFire(CompletableFuture.java:684)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:486)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at java.util.concurrent.CompletableFuture.completeExceptionally(CompletableFuture.java:2138)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at com.google.android.apps.nexuslauncher.allapps.E0.onResult(go/retraceme 31f9979659277bb965985aff1272c33e3c3c9e755b77166d20a2465454178f2c:67)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at android.app.appsearch.SearchSessionUtil$1.lambda$onResult$0(go/retraceme 64eee9e9f568ff45978879ad2ff83146f2618ee8a88278736fbdf5fae931976e:144)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at android.app.appsearch.SearchSessionUtil$1.$r8$lambda$CEk3q8sDAQVhU3rQwVueB8FAj_M(go/retraceme 64eee9e9f568ff45978879ad2ff83146f2618ee8a88278736fbdf5fae931976e:1)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at android.app.appsearch.SearchSessionUtil$1$$ExternalSyntheticLambda0.run(go/retraceme 64eee9e9f568ff45978879ad2ff83146f2618ee8a88278736fbdf5fae931976e:22)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at android.os.Handler.handleCallback(Handler.java:959)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at android.os.Handler.dispatchMessage(Handler.java:100)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at android.os.Looper.loopOnce(Looper.java:232)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at android.os.Looper.loop(Looper.java:317)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at android.os.HandlerThread.run(HandlerThread.java:85)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: Caused by: java.util.NoSuchElementException: No value present
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at java.util.Optional.get(Optional.java:143)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	at com.google.android.apps.nexuslauncher.allapps.E0.onResult(go/retraceme 31f9979659277bb965985aff1272c33e3c3c9e755b77166d20a2465454178f2c:28)
+09-24 20:35:55.181  1102  1763 D OneSearchSuggestProvider: 	... 8 more
+09-24 20:35:55.246  1102  1763 D OneSearchSuggestProvider: Created the binder channel successfully for end point service =com.google.android.apps.search.googleapp.search.suggest.plugins.onesearch.server.OneSearchSuggestService , mChannel=i1{delegate=f{logId=21, target=directaddress:///AndroidComponentAddress%5BIntent%20%7B%20act=grpc.io.action.BIND%20cmp=com.google.android.googlequicksearchbox/com.google.android.apps.search.googleapp.search.suggest.plugins.onesearch.server.OneSearchSuggestService%20%7D%5D}} , mOneSearchConnection=l2.Z@b60a4c3
+09-24 20:35:55.256   614   733 I ImeTracker: com.google.android.apps.nexuslauncher:560130ff: onRequestHide at ORIGIN_SERVER reason HIDE_UNSPECIFIED_WINDOW fromUser false
+09-24 20:35:55.256   614   733 I ImeTracker: com.google.android.apps.nexuslauncher:560130ff: onCancelled at PHASE_SERVER_SHOULD_HIDE
+09-24 20:35:55.336   413   413 I RanchuHwc: logCompositionFallbackIfChanged: layer 60 CompositionType fallback from 2 to 1
+09-24 20:35:55.337   413   413 I RanchuHwc: logCompositionFallbackIfChanged: layer 61 CompositionType fallback from 2 to 1
+09-24 20:35:55.372  1102  1188 D QuickstepModelDelegate: notifyAppTargetEvent action=1 launchLocation=workspace/0/[-1,-1]/[1,1]
+09-24 20:35:55.627  3371  3371 I GoogleInputMethodService: GoogleInputMethodService.onFinishInput():3157
+09-24 20:35:55.633  1346  1660 I AiAiEcho: Predicting[0]:  [CONTEXT sampling_count=5 ]
+09-24 20:35:55.648   854  1040 D EGL_emulation: app_time_stats: avg=1301.20ms min=1301.20ms max=1301.20ms count=1
+09-24 20:35:55.655  1346  1660 I AiAiEcho: EchoTargets:
+09-24 20:35:55.655  1346  1660 I AiAiEcho: Filtered by AiAi flag check:
+09-24 20:35:55.655  1346  1660 I AiAiEcho: [CONTEXT ratelimit_period="10 SECONDS" ]
+09-24 20:35:55.664  3371  3371 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2248 repeatCheckTimes = 0, locked = false
+09-24 20:35:55.671  3371  3371 I GoogleInputMethodService: GoogleInputMethodService.onStartInput():1986 onStartInput(EditorInfo{EditorInfo{packageName=com.google.android.apps.nexuslauncher, inputType=0, inputTypeString=NULL, enableLearning=false, autoCorrection=false, autoComplete=false, imeOptions=0, privateImeOptions=null, actionName=UNSPECIFIED, actionLabel=null, initialSelStart=-1, initialSelEnd=-1, initialCapsMode=0, label=null, fieldId=0, fieldName=null, extras=null, hintText=null, hintLocales=[]}}, false)
+09-24 20:35:55.671  3371  3371 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2248 repeatCheckTimes = 1, locked = false
+09-24 20:35:55.673  1346  1660 I AiAiEcho: Ranked targets strategy: SORT, count: 0, ranking metadata:  [CONTEXT ratelimit_period="10 SECONDS" ]
+09-24 20:35:55.674  1346  1660 I AiAiEcho: #remoteViewsTwiddler: feature disabled.
+09-24 20:35:55.689  1346  1660 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface home with targets# 0 (types=[])
+09-24 20:35:55.706  7879  7879 D VRI[InstrumentationActivityInvoker$EmptyActivity]: visibilityChanged oldVisibility=true newVisibility=false
+09-24 20:35:55.706  3371  3371 I AndroidIME: InputBundleManager.loadActiveInputBundleId():450 loadActiveInputBundleId: und-Latn-x-password, password
+09-24 20:35:55.934  1102  1102 D SsBaseTemplateCard: No text view can be set up
+09-24 20:35:55.937  1102  1102 D SsBaseTemplateCard: Passed-in item info is null
+09-24 20:35:55.938  1102  1102 D SsBaseTemplateCard: Passed-in item info is null
+09-24 20:35:55.938  1102  1102 D SsBaseTemplateCard: Passed-in item info is null
+09-24 20:35:55.938  1102  1102 I SsBaseTemplateCard: Secondary card pane is null
+09-24 20:35:56.014  3371  3371 W NotificationCenter: NotificationCenter$ListenerData.notifyOnExecutor():672 Heavy notify work detected on UI thread: |kga->jjc| takes 307ms
+09-24 20:35:56.133  7695  7695 D LifecycleMonitor: Lifecycle status change: androidx.activity.ComponentActivity@799c24d in: DESTROYED
+09-24 20:35:56.134  7695  7695 V ActivityScenario: Update currentActivityStage to DESTROYED, currentActivity=null
+09-24 20:35:56.174  7695  7695 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=false callback=android.view.ViewRootImpl$$ExternalSyntheticLambda11@ad43f86
+09-24 20:35:56.362   614   632 W InputManager-JNI: Input channel object '8f53b64 com.devtodo.app.debug/androidx.activity.ComponentActivity (client)' was disposed without first being removed with the input manager!
+09-24 20:35:56.380   614   652 W system_server: Long monitor contention with owner binder:614_1 (632) at int com.android.server.am.ActivityManagerService.bindServiceInstance(android.app.IApplicationThread, android.os.IBinder, android.content.Intent, java.lang.String, android.app.IServiceConnection, long, java.lang.String, boolean, int, java.lang.String, android.app.IApplicationThread, java.lang.String, int)(ActivityManagerService.java:14231) waiters=0 in void com.android.server.am.BroadcastQueueModernImpl.handleProcessFreezableChanged(com.android.server.am.ProcessRecord) for 635ms
+09-24 20:35:56.423   614   643 W system_server: Long monitor contention with owner binder:614_1 (632) at int com.android.server.am.ActivityManagerService.bindServiceInstance(android.app.IApplicationThread, android.os.IBinder, android.content.Intent, java.lang.String, android.app.IServiceConnection, long, java.lang.String, boolean, int, java.lang.String, android.app.IApplicationThread, java.lang.String, int)(ActivityManagerService.java:14231) waiters=1 in void com.android.server.am.ProcessRecord.setRunningRemoteAnimation(boolean) for 725ms
+09-24 20:35:56.687  1102  1543 D SharedPreferencesImpl: Time required to fsync /data/user/0/com.google.android.apps.nexuslauncher/shared_prefs/com.android.launcher3.prefs.xml: [<1: 0, <2: 0, <4: 0, <8: 0, <16: 2, <32: 1, <64: 0, <128: 1, <256: 0, <512: 0, <1024: 1, <2048: 0, <4096: 0, <8192: 0, <16384: 0, >=16384: 0]
+09-24 20:35:56.733  1102  1476 D EGL_emulation: app_time_stats: avg=284.98ms min=79.72ms max=701.24ms count=6
+09-24 20:35:56.790  7879  7883 I .app.debug.test: Compiler allocated 5174KB to compile void android.view.ViewRootImpl.performTraversals()
+09-24 20:35:56.796   386   443 I netd    : tetherGetStats() -> {[]} <8.26ms>
+09-24 20:35:56.857  2486  2510 W earchbox:search: Long monitor contention with owner binder:2486_5 (3035) at boolean android.os.MessageQueue.enqueueMessage(android.os.Message, long)(MessageQueue.java:695) waiters=0 in boolean android.os.MessageQueue.enqueueMessage(android.os.Message, long) for 367ms
+09-24 20:35:56.881  7879  7879 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=false callback=android.view.ViewRootImpl$$ExternalSyntheticLambda11@4b10797
+09-24 20:35:56.893  1102  1257 I HWUI    : Davey! duration=874ms; Flags=0, FrameTimelineVsyncId=32589, IntendedVsync=1222904214889, Vsync=1222987548219, InputEventId=0, HandleInputStart=1222996353337, AnimationStart=1222996359218, PerformTraversalsStart=1222996526327, DrawStart=1223429568527, FrameDeadline=1223187548211, FrameInterval=1222996349236, FrameStartTime=16666666, SyncQueued=1223439833980, SyncStart=1223468433026, IssueDrawCommandsStart=1223468894147, SwapBuffers=1223717357728, FrameCompleted=1223806873992, DequeueBufferDuration=341583, QueueBufferDuration=19580847, GpuCompleted=1223786286009, SwapBuffersCompleted=1223806873992, DisplayPresentTime=0, CommandSubmissionCompleted=1223717357728,
+09-24 20:35:56.899  7695  7695 I Choreographer: Skipped 120 frames!  The application may be doing too much work on its main thread.
+09-24 20:35:57.006   614   986 W InputManager-JNI: Input channel object '3b4a6b9 com.devtodo.app.debug.test/androidx.test.core.app.InstrumentationActivityInvoker$EmptyActivity (client)' was disposed without first being removed with the input manager!
+09-24 20:35:57.092  2486  2486 W earchbox:search: Long monitor contention with owner binder:2486_5 (3035) at boolean android.os.MessageQueue.enqueueMessage(android.os.Message, long)(MessageQueue.java:695) waiters=1 in android.os.Message android.os.MessageQueue.next() for 468ms
+09-24 20:35:57.155  7879  7879 I Choreographer: Skipped 32 frames!  The application may be doing too much work on its main thread.
+09-24 20:35:57.279   614   644 W system_server: Long monitor contention with owner binder:614_B (986) at void com.android.server.wm.ActivityClientController.activityDestroyed(android.os.IBinder)(ActivityClientController.java:303) waiters=0 in void com.android.server.wm.InputMonitor$UpdateInputWindows.run() for 210ms
+09-24 20:35:57.325  1102  1102 I TopTaskTracker: onTaskRemoved: taskId=13
+09-24 20:35:57.413  1102  1102 I TopTaskTracker: onTaskRemoved: taskId=13
+09-24 20:35:57.415  1102  1102 I TopTaskTracker: onTaskRemoved: taskId=14
+09-24 20:35:57.416  1102  1102 I TopTaskTracker: onTaskRemoved: taskId=14
+09-24 20:35:57.963  7695  7740 D IdlingRegistry: Unregistering idling resources: [androidx.compose.ui.test.EspressoLink@e915cc6]
+09-24 20:35:58.021  7695  7740 E TestRunner: failed: directoryDrillDownAndSearchKeepTaskReachable(com.devtodo.app.ui.WorkspaceScreenTest)
+09-24 20:35:58.104  7695  7740 E TestRunner: ----- begin exception -----
+09-24 20:35:58.104  7695  7740 E TestRunner: java.lang.AssertionError: expected:<today> but was:<null>
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at org.junit.Assert.fail(Assert.java:89)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at org.junit.Assert.failNotEquals(Assert.java:835)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at org.junit.Assert.assertEquals(Assert.java:120)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at org.junit.Assert.assertEquals(Assert.java:146)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at com.devtodo.app.ui.WorkspaceScreenTest.directoryDrillDownAndSearchKeepTaskReachable$lambda$12(WorkspaceScreenTest.kt:302)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at com.devtodo.app.ui.WorkspaceScreenTest.$r8$lambda$Ak_G8b3VFFcrkzhqUH48Enss1sA(Unknown Source:0)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at com.devtodo.app.ui.WorkspaceScreenTest$$ExternalSyntheticLambda4.invoke(D8$$SyntheticClass:0)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at androidx.compose.ui.test.AndroidSynchronization_androidKt.runOnUiThread$lambda$0(AndroidSynchronization.android.kt:37)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at androidx.compose.ui.test.AndroidSynchronization_androidKt.$r8$lambda$opyMdTZ52jorqLaIG4SKpPr_Zno(Unknown Source:0)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at androidx.compose.ui.test.AndroidSynchronization_androidKt$$ExternalSyntheticLambda0.call(D8$$SyntheticClass:0)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at java.util.concurrent.FutureTask.run(FutureTask.java:264)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:487)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at java.util.concurrent.FutureTask.run(FutureTask.java:264)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at android.app.Instrumentation$SyncRunnable.run(Instrumentation.java:2612)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at android.os.Handler.handleCallback(Handler.java:959)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at android.os.Handler.dispatchMessage(Handler.java:100)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at android.os.Looper.loopOnce(Looper.java:232)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at android.os.Looper.loop(Looper.java:317)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at android.app.ActivityThread.main(ActivityThread.java:8705)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at java.lang.reflect.Method.invoke(Native Method)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:580)
+09-24 20:35:58.104  7695  7740 E TestRunner: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:886)
+09-24 20:35:58.105  7695  7740 E TestRunner: ----- end exception -----
+09-24 20:35:58.124  7695  7740 I TestRunner: finished: directoryDrillDownAndSearchKeepTaskReachable(com.devtodo.app.ui.WorkspaceScreenTest)
