@@ -3196,7 +3196,10 @@ function AddTaskModal({
           kind: 'FOLDER' as const,
           folder,
         })),
-        ...(tasksByParent.get(parentFolderId) ?? []).map((task) => ({ kind: 'TASK' as const, task })),
+        ...(tasksByParent.get(parentFolderId) ?? []).map((task) => ({
+          kind: 'TASK' as const,
+          task,
+        })),
       ];
       return nodes.sort((left, right) => {
         const leftRank = BigInt(left.kind === 'FOLDER' ? left.folder.rank : left.task.rank);
@@ -3307,11 +3310,7 @@ function AddTaskModal({
         />
       }
       trailing={
-        busyTaskId === task.id ? (
-          <LoaderCircle className="spin" size={16} />
-        ) : (
-          <Plus size={16} />
-        )
+        busyTaskId === task.id ? <LoaderCircle className="spin" size={16} /> : <Plus size={16} />
       }
       onClick={() => void add(task)}
       disabled={Boolean(busyTaskId)}
