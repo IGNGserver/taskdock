@@ -5,6 +5,7 @@ import type {
   TaskStatus,
   TimePointDto,
   TimePointPlacementCountDto,
+  TreeItemDto,
   TreeTaskDto,
   V2SettingsDto,
 } from '@devtodo/contracts';
@@ -131,6 +132,14 @@ import { readRecentCaptureFolder } from './folder-preference.js';
 
 type PlacementWithTask = PlacementDto & { task: TreeTaskDto };
 type PresenceState = 'entering' | 'present' | 'exiting';
+
+function taskStatusLabel(status: TaskStatus): string {
+  return status === 'IN_PROGRESS' ? '进行中' : status === 'DONE' ? '已完成' : '待开始';
+}
+
+function taskStatusClass(status: TaskStatus): string {
+  return status === 'IN_PROGRESS' ? 'in-progress' : status === 'DONE' ? 'done' : 'todo';
+}
 
 /**
  * Overlay lifecycle helper. The exit duration comes from the M3E spring tokens
@@ -3111,131 +3120,140 @@ function AddTaskModal({
   const [activeTab, setActiveTab] = useState<'existing' | 'create'>('create');
   const [createTitle, setCreateTitle] = useState('');
   const [query, setQuery] = useState('');
-  const [tasks, setTasks] = useState<TreeTaskDto[]>([]);
-  const [folders, setFolders] = useState<FolderDto[]>([]);
+  const [folderId, setFolderId] = useState<string | null>(null);
+  const [items, setItems] = useState<TreeItemDto[]>([]);
+  const [path, setPath] = useState<Array<Pick<FolderDto, 'id' | 'title'>>>([]);
+  const [searchIndex, setSearchIndex] = useState<{
+    tasks: TreeTaskDto[];
+    folders: FolderDto[];
+  } | null>(null);
   const [error, setError] = useState('');
   const [pickerError, setPickerError] = useState('');
+  const [searchError, setSearchError] = useState('');
+  const [searchRetry, setSearchRetry] = useState(0);
   const [pickerLoading, setPickerLoading] = useState(false);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set());
-  const initializedTree = useRef(false);
+  const pickerLoadSequence = useRef(0);
+  const searchLoadSequence = useRef(0);
 
   const loadPicker = useCallback(async () => {
+    const sequence = ++pickerLoadSequence.current;
     setPickerLoading(true);
-    setError('');
     setPickerError('');
     try {
-      const [taskResult, folderResult] = await Promise.all([
-        requestV2<{ items: TreeTaskDto[] }>('/tasks?archived=false'),
-        requestV2<{ items: FolderDto[] }>('/folders?archived=false'),
+      const queryString = folderId
+        ? `?parentFolderId=${encodeURIComponent(folderId)}`
+        : '?parentFolderId=root';
+      const [children, nextPath] = await Promise.all([
+        requestV2<{ items: TreeItemDto[] }>(`/tree/children${queryString}`),
+        folderId
+          ? requestV2<{ items: Array<Pick<FolderDto, 'id' | 'title'>> }>(
+              `/folders/${encodeURIComponent(folderId)}/path`,
+            )
+          : Promise.resolve({ items: [] }),
       ]);
-      setTasks(taskResult.items);
-      setFolders(folderResult.items);
-      if (!initializedTree.current) {
-        setExpandedFolderIds(
-          new Set(
-            folderResult.items
-              .filter((folder) => !folder.parentFolderId)
-              .map((folder) => folder.id),
-          ),
-        );
-        initializedTree.current = true;
-      }
+      if (sequence !== pickerLoadSequence.current) return;
+      setItems(children.items);
+      setPath(nextPath.items);
     } catch (cause) {
-      setPickerError(cause instanceof ApiError ? cause.message : '任务目录加载失败，请重试');
+      if (sequence === pickerLoadSequence.current)
+        setPickerError(cause instanceof ApiError ? cause.message : '任务目录加载失败，请重试');
     } finally {
-      setPickerLoading(false);
+      if (sequence === pickerLoadSequence.current) setPickerLoading(false);
     }
-  }, []);
+  }, [folderId]);
 
   useEffect(() => {
     if (activeTab !== 'existing') return;
     void loadPicker();
-    const listener = () => void loadPicker();
+    const listener = () => {
+      setSearchIndex(null);
+      setSearchError('');
+      setSearchRetry((count) => count + 1);
+      void loadPicker();
+    };
     window.addEventListener('devtodo:data-changed', listener);
     return () => window.removeEventListener('devtodo:data-changed', listener);
   }, [activeTab, loadPicker]);
 
-  const activeTasks = useMemo(
-    () => tasks.filter((task) => !task.archivedAt && !task.deletedAt && task.status !== 'DONE'),
-    [tasks],
+  useEffect(() => {
+    const searchText = query.trim();
+    if (activeTab !== 'existing' || !searchText || searchIndex) return;
+    let cancelled = false;
+    const sequence = ++searchLoadSequence.current;
+    const timeout = window.setTimeout(() => {
+      setSearchError('');
+      void Promise.all([
+        requestV2<{ items: TreeTaskDto[] }>('/tasks?archived=false'),
+        requestV2<{ items: FolderDto[] }>('/folders?archived=false'),
+      ])
+        .then(([taskResult, folderResult]) => {
+          if (cancelled || sequence !== searchLoadSequence.current) return;
+          setSearchIndex({ tasks: taskResult.items, folders: folderResult.items });
+        })
+        .catch((cause) => {
+          if (cancelled || sequence !== searchLoadSequence.current) return;
+          setSearchError(cause instanceof ApiError ? cause.message : '搜索索引加载失败，请重试');
+        });
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+      if (sequence === searchLoadSequence.current) searchLoadSequence.current += 1;
+    };
+  }, [activeTab, query, searchIndex, searchRetry]);
+
+  const activeItems = useMemo(
+    () =>
+      items.filter(
+        (item) =>
+          item.kind === 'FOLDER' ||
+          (!item.task.archivedAt && !item.task.deletedAt && item.task.status !== 'DONE'),
+      ),
+    [items],
   );
-  const activeFolders = useMemo(
-    () => folders.filter((folder) => !folder.archivedAt && !folder.deletedAt),
-    [folders],
-  );
-  const foldersById = useMemo(() => {
+  const searchFoldersById = useMemo(() => {
     const byId = new Map<string, FolderDto>();
-    for (const folder of activeFolders) byId.set(folder.id, folder);
+    for (const folder of searchIndex?.folders ?? []) byId.set(folder.id, folder);
     return byId;
-  }, [activeFolders]);
-  const foldersByParent = useMemo(() => {
-    const grouped = new Map<string | null, FolderDto[]>();
-    for (const folder of activeFolders) {
-      const siblings = grouped.get(folder.parentFolderId) ?? [];
-      siblings.push(folder);
-      grouped.set(folder.parentFolderId, siblings);
-    }
-    return grouped;
-  }, [activeFolders]);
-  const tasksByParent = useMemo(() => {
-    const grouped = new Map<string | null, TreeTaskDto[]>();
-    for (const task of activeTasks) {
-      const siblings = grouped.get(task.parentFolderId) ?? [];
-      siblings.push(task);
-      grouped.set(task.parentFolderId, siblings);
-    }
-    return grouped;
-  }, [activeTasks]);
-  type PickerNode = { kind: 'FOLDER'; folder: FolderDto } | { kind: 'TASK'; task: TreeTaskDto };
-  const nodesUnder = useCallback(
-    (parentFolderId: string | null): PickerNode[] => {
-      const nodes: PickerNode[] = [
-        ...(foldersByParent.get(parentFolderId) ?? []).map((folder) => ({
-          kind: 'FOLDER' as const,
-          folder,
-        })),
-        ...(tasksByParent.get(parentFolderId) ?? []).map((task) => ({
-          kind: 'TASK' as const,
-          task,
-        })),
-      ];
-      return nodes.sort((left, right) => {
-        const leftRank = BigInt(left.kind === 'FOLDER' ? left.folder.rank : left.task.rank);
-        const rightRank = BigInt(right.kind === 'FOLDER' ? right.folder.rank : right.task.rank);
-        return leftRank < rightRank ? -1 : leftRank > rightRank ? 1 : 0;
-      });
-    },
-    [foldersByParent, tasksByParent],
-  );
+  }, [searchIndex]);
   const taskLocation = useCallback(
     (task: TreeTaskDto) => {
-      const path: string[] = [];
+      const titles: string[] = [];
       let parentId = task.parentFolderId;
       let visited = 0;
-      while (parentId && visited < activeFolders.length) {
-        const folder = foldersById.get(parentId);
+      while (parentId && visited < (searchIndex?.folders.length ?? 0)) {
+        const folder = searchFoldersById.get(parentId);
         if (!folder) break;
-        path.unshift(folder.title);
+        titles.unshift(folder.title);
         parentId = folder.parentFolderId;
         visited += 1;
       }
-      return path.join(' / ') || '根目录';
+      return titles.join(' / ') || '根目录';
     },
-    [activeFolders.length, foldersById],
+    [searchFoldersById, searchIndex?.folders.length],
   );
   const matchingTasks = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
-    if (!needle) return activeTasks;
-    return activeTasks.filter(
+    if (!needle || !searchIndex) return [];
+    return searchIndex.tasks.filter(
       (task) =>
-        task.title.toLocaleLowerCase().includes(needle) ||
-        task.referenceId.toLocaleLowerCase().includes(needle) ||
-        taskLocation(task).toLocaleLowerCase().includes(needle),
+        !task.archivedAt &&
+        !task.deletedAt &&
+        task.status !== 'DONE' &&
+        (task.title.toLocaleLowerCase().includes(needle) ||
+          task.referenceId.toLocaleLowerCase().includes(needle) ||
+          taskLocation(task).toLocaleLowerCase().includes(needle)),
     );
-  }, [activeTasks, query, taskLocation]);
+  }, [query, searchIndex, taskLocation]);
+  const searchLoading =
+    activeTab === 'existing' && Boolean(query.trim()) && !searchIndex && !searchError;
 
+  const openFolder = (id: string | null) => {
+    setQuery('');
+    setFolderId(id);
+  };
   const handleCreateNew = async (e: FormEvent) => {
     e.preventDefault();
     const title = createTitle.trim();
@@ -3279,18 +3297,10 @@ function AddTaskModal({
       setError(cause instanceof ApiError ? cause.message : '更新任务状态失败，请重试');
     }
   };
-  const toggleFolder = (folderId: string) => {
-    setExpandedFolderIds((current) => {
-      const next = new Set(current);
-      if (next.has(folderId)) next.delete(folderId);
-      else next.add(folderId);
-      return next;
-    });
-  };
   const renderTaskRow = (task: TreeTaskDto, showLocation: boolean) => (
     <ListItem
       key={task.id}
-      className="m3e-list-item--picker"
+      className="m3e-list-item--picker m3e-list-item--tree-row"
       headline={task.title}
       supporting={
         showLocation ? (
@@ -3317,40 +3327,32 @@ function AddTaskModal({
       ariaLabel={`安排任务 ${task.title}`}
     />
   );
-  const renderBranch = (parentFolderId: string | null): ReactNode => {
-    const nodes = nodesUnder(parentFolderId);
-    if (!nodes.length) return null;
-    return (
-      <ul className="m3e-list m3e-list--gap m3e-list--picker" role="list">
-        {nodes.map((node) => {
-          if (node.kind === 'TASK') return renderTaskRow(node.task, false);
-          const expanded = expandedFolderIds.has(node.folder.id);
-          return (
-            <li className="task-picker-tree__folder" key={node.folder.id}>
-              <button
-                type="button"
-                className="task-picker-folder"
-                aria-expanded={expanded}
-                aria-label={`${expanded ? '收起' : '展开'}目录 ${node.folder.title}`}
-                onClick={() => toggleFolder(node.folder.id)}
-              >
-                {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                <Folder size={18} aria-hidden="true" />
-                <span>{node.folder.title}</span>
-              </button>
-              {expanded && (
-                <div className="task-picker-tree__children">
-                  {renderBranch(node.folder.id) ?? (
-                    <p className="task-picker-empty-folder">此目录没有未完成任务</p>
-                  )}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+  const renderTreeItem = (item: TreeItemDto) =>
+    item.kind === 'FOLDER' ? (
+      <ListItem
+        className="m3e-list-item--tree-row"
+        key={`folder-${item.folder.id}`}
+        leading={<Folder size={20} />}
+        headline={item.folder.title}
+        supporting={
+          <>
+            <Chip
+              kind="assist"
+              label={taskStatusLabel(item.aggregate.status)}
+              className={`m3e-chip--task-status m3e-chip--task-status-${taskStatusClass(item.aggregate.status)}`}
+            />
+            <span className="tree-count">
+              {item.aggregate.doneCount}/{item.aggregate.totalCount} 已完成
+            </span>
+          </>
+        }
+        trailing={<ChevronRight size={16} aria-hidden="true" />}
+        ariaLabel={`打开文件夹 ${item.folder.title}`}
+        onClick={() => openFolder(item.folder.id)}
+      />
+    ) : (
+      renderTaskRow(item.task, false)
     );
-  };
 
   return (
     <Modal title="安排任务" onClose={onClose}>
@@ -3387,7 +3389,10 @@ function AddTaskModal({
             variant="view"
             autoFocus
             value={query}
-            onChange={setQuery}
+            onChange={(value) => {
+              setSearchError('');
+              setQuery(value);
+            }}
             placeholder="搜索标题、引用 ID 或目录"
             leadingIcon={<Search size={20} />}
           />
@@ -3408,15 +3413,35 @@ function AddTaskModal({
               {pickerError}
             </Alert>
           )}
+          {searchError && query.trim() && (
+            <Alert
+              tone="error"
+              title="搜索目录失败"
+              action={
+                <Button
+                  variant="text"
+                  size="s"
+                  onClick={() => {
+                    setSearchError('');
+                    setSearchRetry((count) => count + 1);
+                  }}
+                >
+                  重试
+                </Button>
+              }
+            >
+              {searchError}
+            </Alert>
+          )}
           {!query.trim() && (
             <p className="field-help picker-hint">按目录浏览未完成任务，也可以搜索跨目录查找。</p>
           )}
-          <div className="task-picker-scroll" role="region" aria-label="可安排任务">
-            {pickerLoading ? (
-              <LoadingState label="正在加载任务目录" />
-            ) : pickerError && !tasks.length && !folders.length ? null : query.trim() ? (
-              matchingTasks.length ? (
-                <List className="m3e-list--picker" gap>
+          {query.trim() ? (
+            <div className="task-picker-scroll" role="region" aria-label="任务搜索结果">
+              {searchLoading ? (
+                <LoadingState label="正在搜索任务目录" />
+              ) : searchError ? null : matchingTasks.length ? (
+                <List className="m3e-list--picker m3e-list--tree-group" gap>
                   {matchingTasks.map((task) => renderTaskRow(task, true))}
                 </List>
               ) : (
@@ -3426,18 +3451,77 @@ function AddTaskModal({
                   title="没有可加入的任务"
                   description="换一个标题、引用 ID 或目录名称再试。"
                 />
-              )
-            ) : activeTasks.length ? (
-              renderBranch(null)
-            ) : (
-              <M3EmptyState
-                compact
-                icon={<ListChecksIcon size={20} />}
-                title="没有未完成任务"
-                description="可以切换到新建任务并立即安排。"
-              />
-            )}
-          </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <nav className="tree-breadcrumbs" aria-label="目录路径">
+                <Button
+                  variant={!folderId ? 'tonal' : 'text'}
+                  size="s"
+                  type="button"
+                  aria-current={!folderId ? 'page' : undefined}
+                  className="m3e-button--tree-breadcrumb"
+                  onClick={() => openFolder(null)}
+                >
+                  根目录
+                </Button>
+                {path.map((crumb) => (
+                  <span key={crumb.id} className="tree-breadcrumbs__segment">
+                    <ChevronRight size={16} aria-hidden="true" />
+                    <Button
+                      variant={crumb.id === folderId ? 'tonal' : 'text'}
+                      size="s"
+                      type="button"
+                      aria-current={crumb.id === folderId ? 'page' : undefined}
+                      className="m3e-button--tree-breadcrumb"
+                      onClick={() => openFolder(crumb.id)}
+                    >
+                      {crumb.title}
+                    </Button>
+                  </span>
+                ))}
+              </nav>
+              <div
+                key={folderId ?? 'root'}
+                className="task-picker-scroll"
+                role="region"
+                aria-label="当前目录"
+              >
+                {pickerLoading ? (
+                  <LoadingState label="正在加载目录" />
+                ) : pickerError && !activeItems.length ? null : (
+                  <Card
+                    as="section"
+                    variant="outlined"
+                    className="m3e-card--tree-group"
+                    aria-labelledby="task-picker-current-folder"
+                  >
+                    <div className="tree-group-heading">
+                      <span id="task-picker-current-folder">当前目录</span>
+                      <span>{activeItems.length}</span>
+                    </div>
+                    {activeItems.length ? (
+                      <List className="m3e-list--picker m3e-list--tree-group" gap>
+                        {activeItems.map(renderTreeItem)}
+                      </List>
+                    ) : (
+                      <M3EmptyState
+                        compact
+                        icon={<ListChecksIcon size={20} />}
+                        title={folderId ? '此目录没有可安排的任务' : '没有未完成任务'}
+                        description={
+                          folderId
+                            ? '当前目录中没有未完成任务；可以返回上级目录或切换到新建任务。'
+                            : '可以切换到新建任务并立即安排。'
+                        }
+                      />
+                    )}
+                  </Card>
+                )}
+              </div>
+            </>
+          )}
         </>
       )}
     </Modal>
