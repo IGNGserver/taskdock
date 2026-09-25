@@ -6,7 +6,7 @@
 
 - 修复原生客户端重启后丢失登录凭据：Android `ApiClient.refreshSession`、桌面 `main.ts:nativeRefresh` 与 Web `refreshAccessToken` 此前把 `/auth/refresh` 的**任何** 401 都当作会话撤销并删除本地 refresh token，而一次性挑战过期/被消费同样返回 401（`AUTH_REQUIRED`）。现在只有 `AUTH_SESSION_REVOKED`/`AUTH_INVALID_CREDENTIALS` 才清除凭证，中枢侧把这类失败改判为 `AUTH_CHALLENGE_INVALID`（403）。
 - 修复「中枢已轮转、客户端没收到响应」导致下次启动重放废 token 并撤销整条会话链：客户端在请求前先生成并落盘后继 refresh token（Android `pending_refresh_token`、桌面 `pendingRefreshToken`、Capacitor `pending-refresh-token`），中枢 `AuthService.refresh` 接受客户端提供的 `nextRefreshToken` 并在识别到同一后继时幂等重发，不引入时间宽限期，重放检测对第三方仍然有效。
-- 修复 Android 冷启动读不到 Keystore 就被判定未登录：`SecureTokenStore` 的主存储句柄改为可按需重开，refresh/access token 同时写入 AndroidX 加密文件与 Keystore 副本并互相修复，新建 master key 显式关闭 `setInvalidatedByBiometricEnrollment`（重录指纹不再销毁会话）；`MainViewModel` 不再缓存登录态快照，启动时会延迟重读一次存储，`TaskDockApp` 统一负责登录页与工作区之间的双向跳转。
+- 修复 Android 冷启动读不到 Keystore 就被判定未登录：`SecureTokenStore` 的主存储句柄改为可按需重开，refresh/access/pending token 同时写入 AndroidX 加密文件与 Keystore 副本并互相修复（单份文件损坏或暂时不可读不再等于丢失登录）；`MainViewModel` 不再缓存登录态快照，启动时会延迟重读一次存储，`TaskDockApp` 统一负责登录页与工作区之间的双向跳转。
 - 修复桌面端在系统钥匙环尚未就绪（Linux 重启后常见）时被登出：`readSecureRefreshToken` 拆分 missing/unavailable/corrupt 三态，不可读视为可重试的 `AUTH_STORAGE_UNAVAILABLE`（503）而不是会话撤销，文件不再被删除。
 - 强制重新登录时不再清空账号名，登录页预填上次用户名；`docs/SECURITY.md` 补充原生端会话持久化契约。
 

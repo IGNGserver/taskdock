@@ -23,9 +23,9 @@ internal const val AUTH_PENDING_REFRESH_TOKEN_KEY = "pending_refresh_token"
  * Stores native session tokens without ever writing new plaintext token values.
  *
  * Every value is written to both the AndroidX encrypted file and a Keystore
- * backed fallback file. The AndroidX master key used to be invalidated by
- * biometric re-enrollment, and Keystore reads transiently fail right after a
- * device reboot, so a single unreadable file must never be able to destroy a
+ * backed fallback file. Keystore can transiently refuse to serve a key right
+ * after a device reboot, and a damaged or unreadable AndroidX file is otherwise
+ * unrecoverable, so a single unreadable file must never be able to destroy a
  * durable login credential. Reads prefer the primary file and heal whichever
  * copy was unavailable.
  */
@@ -102,13 +102,13 @@ internal class SecureTokenStore(context: Context) {
     }
 
     private fun createPrimaryPrefs(): SharedPreferences? = try {
-        // An installed app keeps its original master key, so this spec only
-        // protects keys generated from now on; the duplicate copy below is
-        // what saves an upgrade that already owns a biometric-invalidated key.
+        // Not requiring user authentication keeps the master key out of the
+        // auth-bound category, so it is not tied to a lock-screen credential.
+        // An installed app keeps its original key either way, which is why every
+        // value also gets the Keystore-backed second copy below.
         val masterKey = MasterKey.Builder(appContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .setUserAuthenticationRequired(false)
-            .setInvalidatedByBiometricEnrollment(false)
             .build()
         EncryptedSharedPreferences.create(
             appContext,

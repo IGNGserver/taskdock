@@ -129,8 +129,8 @@ class SecureAuthStorageMigrationTest {
                 .getString(AUTH_REFRESH_TOKEN_KEY, null),
         )
 
-        // Some ROMs invalidate the AndroidX master key after a biometric
-        // re-enrollment. The session must survive that, not just a clean read.
+        // A damaged or temporarily unreadable AndroidX file must not sign the
+        // device out while the Keystore copy still describes the same session.
         assertTrue(context.deleteSharedPreferences("devtodo_secure_auth"))
         val recovered = SecureAuthManager(context)
         assertEquals(token, recovered.refreshToken)
