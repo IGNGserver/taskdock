@@ -82,38 +82,73 @@ export class AuthService {
     });
   }
 
-  async refresh(refreshToken: string): Promise<AuthResult> {
-    const nextRefreshToken = randomBytes(48).toString('base64url');
+  /**
+   * Rotates a refresh session.
+   *
+   * When the client supplies its own replacement secret, a rotation whose
+   * response was lost is recoverable: the client proves it by presenting that
+   * secret again, so a cold start after a dropped reply resumes instead of
+   * replaying a spent token and burning the whole chain. Any other replay still
+   * revokes the chain, because a thief cannot name the successor secret.
+   */
+  async refresh(refreshToken: string, nextRefreshToken?: string): Promise<AuthResult> {
+    const presentedHash = this.hashRefreshToken(refreshToken);
+    const nextToken = nextRefreshToken ?? randomBytes(48).toString('base64url');
+    const nextHash = this.hashRefreshToken(nextToken);
     const outcome = await this.store.withMutation(async () => {
-      const session = await this.store.findSessionByHash(this.hashRefreshToken(refreshToken));
-      if (!session) throw new DomainError('AUTH_SESSION_REVOKED', '会话不存在或已撤销');
-      if (session.revokedAt || session.usedAt || session.replacedById) {
-        await this.store.revokeSessionChain(session);
-        return { replayDetected: true as const };
+      const session = await this.store.findSessionByHash(presentedHash);
+      if (!session || session.revokedAt)
+        throw new DomainError('AUTH_SESSION_REVOKED', '会话不存在或已撤销');
+      if (session.usedAt || session.replacedById) {
+        const successor = nextRefreshToken
+          ? await this.store.findSessionByHash(nextHash)
+          : undefined;
+        if (
+          !successor ||
+          successor.revokedAt ||
+          successor.ownerId !== session.ownerId ||
+          successor.deviceId !== session.deviceId
+        ) {
+          await this.store.revokeSessionChain(session);
+          return { replayDetected: true as const };
+        }
+        const resumedDevice = await this.store.getDevice(successor.ownerId, successor.deviceId);
+        if (resumedDevice.revokedAt)
+          throw new DomainError('AUTH_SESSION_REVOKED', '设备会话已撤销');
+        const resumedUser = await this.store.getUserRecord(successor.ownerId);
+        return {
+          replayDetected: false as const,
+          result: await this.buildAuthResult(resumedUser, resumedDevice, nextToken),
+        };
       }
       const device = await this.store.getDevice(session.ownerId, session.deviceId);
       if (device.revokedAt) throw new DomainError('AUTH_SESSION_REVOKED', '设备会话已撤销');
       const user = await this.store.getUserRecord(session.ownerId);
-      await this.store.rotateSession(
-        session.id,
-        this.hashRefreshToken(nextRefreshToken),
-        session.expiresAt,
-      );
+      await this.store.rotateSession(session.id, nextHash, session.expiresAt);
       return {
         replayDetected: false as const,
-        result: {
-          accessToken: await this.signAccessToken(user.id, device.id),
-          refreshToken: nextRefreshToken,
-          user: { id: user.id, username: user.username, createdAt: user.createdAt },
-          device: (await this.store.listDevices(user.id)).find(
-            (candidate: DeviceDto) => candidate.id === device.id,
-          )!,
-        },
+        result: await this.buildAuthResult(user, device, nextToken),
       };
     });
     if (outcome.replayDetected)
       throw new DomainError('AUTH_SESSION_REVOKED', '检测到 refresh token 重放，会话链已撤销');
     return outcome.result;
+  }
+
+  private async buildAuthResult(
+    user: { id: string; username: string; createdAt: string },
+    device: DeviceDto,
+    refreshToken: string,
+  ): Promise<AuthResult> {
+    const seen = (await this.store.listDevices(user.id)).find(
+      (candidate: DeviceDto) => candidate.id === device.id,
+    );
+    return {
+      accessToken: await this.signAccessToken(user.id, device.id),
+      refreshToken,
+      user: { id: user.id, username: user.username, createdAt: user.createdAt },
+      device: seen ?? device,
+    };
   }
 
   async logout(refreshToken: string | undefined): Promise<void> {

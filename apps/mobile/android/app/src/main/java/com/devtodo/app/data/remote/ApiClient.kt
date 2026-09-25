@@ -1,5 +1,6 @@
 package com.devtodo.app.data.remote
 
+import android.util.Base64
 import com.devtodo.app.data.model.*
 import com.devtodo.app.data.security.SecureAuthManager
 import kotlinx.coroutines.Dispatchers
@@ -10,6 +11,7 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
 
 enum class ApiFailureCategory {
@@ -37,6 +39,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val refreshLock = Any()
+    private val secureRandom = SecureRandom()
     private val nativeOrigin = "https://localhost"
 
     /**
@@ -159,6 +162,11 @@ class ApiClient(private val authManager: SecureAuthManager) {
                 return true
             }
             val refreshToken = authManager.refreshToken ?: return false
+            // The replacement secret is generated and committed here, before the
+            // request. If the reply is lost the retry offers the same pair, so the
+            // Hub can resume the rotation instead of revoking the session chain.
+            val candidate = authManager.pendingRefreshToken
+                ?: newRefreshCandidate().also { authManager.pendingRefreshToken = it }
             val challenge = try {
                 requestNativeChallenge()
             } catch (_: ApiClientException) {
@@ -169,6 +177,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
             val payload = json.encodeToString(
                 mapOf(
                     "refreshToken" to refreshToken,
+                    "nextRefreshToken" to candidate,
                     "nativeChallenge" to challenge
                 )
             )
@@ -182,11 +191,13 @@ class ApiClient(private val authManager: SecureAuthManager) {
                 rawHttpClient.newCall(request).execute().use { response ->
                     val body = response.body?.string() ?: ""
                     if (!response.isSuccessful) {
-                        if (response.code == 401) authManager.clearSession()
+                        if (isSessionRevocation(response.code, body)) authManager.clearSession()
                         false
                     } else {
                         val result = json.decodeFromString<LoginResponse>(body)
-                        val nextRefreshToken = result.refreshToken ?: return@use false
+                        val nextRefreshToken = result.refreshToken
+                            ?.takeIf { it.isNotBlank() }
+                            ?: candidate
                         authManager.setSessionTokens(result.accessToken, nextRefreshToken)
                         authManager.ownerId = result.user.id
                         authManager.username = result.user.username
@@ -199,6 +210,28 @@ class ApiClient(private val authManager: SecureAuthManager) {
                 false
             }
         }
+    }
+
+    /**
+     * True only when the Hub named this device's session as the problem. A 401
+     * caused by anything else must leave the stored credential intact so the
+     * next launch can retry.
+     */
+    private fun isSessionRevocation(statusCode: Int, body: String): Boolean {
+        if (statusCode != 401) return false
+        val code = runCatching {
+            json.parseToJsonElement(body).jsonObject["code"]?.jsonPrimitive?.contentOrNull
+        }.getOrNull()
+        return code == "AUTH_SESSION_REVOKED" || code == "AUTH_INVALID_CREDENTIALS"
+    }
+
+    private fun newRefreshCandidate(): String {
+        val bytes = ByteArray(48)
+        secureRandom.nextBytes(bytes)
+        return Base64.encodeToString(
+            bytes,
+            Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP,
+        )
     }
 
     private fun requestNativeChallenge(): String? {
@@ -421,6 +454,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
         val message = payload?.get("message")?.jsonPrimitive?.contentOrNull
             ?: "${operation} failed with HTTP ${response.code}"
         val category = when {
+            code == "AUTH_CHALLENGE_INVALID" -> ApiFailureCategory.REQUEST_REJECTED
             response.code == 401 || response.code == 403 -> ApiFailureCategory.AUTH_REQUIRED
             code == "SYNC_CURSOR_EXPIRED" -> ApiFailureCategory.CURSOR_EXPIRED
             response.code == 404 || code == "CLIENT_UPGRADE_REQUIRED" || code == "SYNC_PROTOCOL_UNSUPPORTED" ->

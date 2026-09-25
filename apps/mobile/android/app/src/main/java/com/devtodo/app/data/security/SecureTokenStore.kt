@@ -17,26 +17,30 @@ import javax.crypto.spec.GCMParameterSpec
 
 internal const val AUTH_ACCESS_TOKEN_KEY = "access_token"
 internal const val AUTH_REFRESH_TOKEN_KEY = "refresh_token"
+internal const val AUTH_PENDING_REFRESH_TOKEN_KEY = "pending_refresh_token"
 
 /**
  * Stores native session tokens without ever writing new plaintext token values.
  *
- * The primary store keeps the existing EncryptedSharedPreferences name so an
- * in-place upgrade remains compatible. If AndroidX encryption cannot open the
- * file, the fallback still stores ciphertext protected by an Android Keystore
- * key. This keeps a transient AndroidX/Keystore failure from silently switching
- * between two plaintext preference files.
+ * Every value is written to both the AndroidX encrypted file and a Keystore
+ * backed fallback file. The AndroidX master key used to be invalidated by
+ * biometric re-enrollment, and Keystore reads transiently fail right after a
+ * device reboot, so a single unreadable file must never be able to destroy a
+ * durable login credential. Reads prefer the primary file and heal whichever
+ * copy was unavailable.
  */
 internal class SecureTokenStore(context: Context) {
     private val appContext = context.applicationContext
     private val lock = Any()
-    private val primaryPrefs: SharedPreferences? = createPrimaryPrefs()
+    private var primaryPrefs: SharedPreferences? = null
+    private var lastPrimaryAttemptMs = 0L
     private val encryptedFallbackPrefs: SharedPreferences = appContext.getSharedPreferences(
         ENCRYPTED_FALLBACK_PREFS,
         Context.MODE_PRIVATE,
     )
 
     init {
+        primary()
         migrateLegacyStores()
     }
 
@@ -50,26 +54,22 @@ internal class SecureTokenStore(context: Context) {
 
     fun putAll(values: Map<String, String>) = synchronized(lock) {
         require(values.isNotEmpty())
-        if (primaryPrefs?.let { writePrimary(it, values) } == true) {
-            removeFallbackValues(values.keys)
-            return@synchronized
+        val primaryWritten = primary()?.let { writePrimary(it, values) } == true
+        val fallbackWritten = runCatching { writeFallback(values) }.getOrDefault(false)
+        if (!primaryWritten && !fallbackWritten) {
+            error("无法保存加密登录凭证")
         }
-
-        val editor = encryptedFallbackPrefs.edit()
-        values.forEach { (key, value) ->
-            editor.putString(key, encryptFallback(value))
-        }
-        check(editor.commit()) { "无法保存加密登录凭证" }
+        Unit
     }
 
     fun remove(key: String) = synchronized(lock) {
-        primaryPrefs?.edit()?.remove(key)?.commit()
+        primary()?.edit()?.remove(key)?.commit()
         encryptedFallbackPrefs.edit().remove(key).commit()
     }
 
     fun removeAll(keys: Set<String>) = synchronized(lock) {
         if (keys.isEmpty()) return@synchronized
-        primaryPrefs?.edit()?.apply {
+        primary()?.edit()?.apply {
             keys.forEach { key -> this.remove(key) }
         }?.commit()
         encryptedFallbackPrefs.edit().apply {
@@ -77,9 +77,38 @@ internal class SecureTokenStore(context: Context) {
         }.commit()
     }
 
+    /**
+     * Drops the cached handle and tries the AndroidX file again right away,
+     * ignoring the retry interval. Used when the app is about to tell the user
+     * they are signed out, which is the worst moment to rely on a stale handle.
+     */
+    fun forceReopenPrimary() = synchronized(lock) {
+        primaryPrefs = createPrimaryPrefs()
+        lastPrimaryAttemptMs = android.os.SystemClock.elapsedRealtime()
+        primaryPrefs != null
+    }
+
+    /**
+     * Reopens the AndroidX store on demand. A cold device boot can make
+     * Keystore answer "uninitialized" for the first few attempts, and a handle
+     * that gave up there would keep reporting a logged-out app forever.
+     */
+    private fun primary(): SharedPreferences? {
+        primaryPrefs?.let { return it }
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastPrimaryAttemptMs < PRIMARY_RETRY_INTERVAL_MS) return null
+        lastPrimaryAttemptMs = now
+        return createPrimaryPrefs()?.also { primaryPrefs = it }
+    }
+
     private fun createPrimaryPrefs(): SharedPreferences? = try {
+        // An installed app keeps its original master key, so this spec only
+        // protects keys generated from now on; the duplicate copy below is
+        // what saves an upgrade that already owns a biometric-invalidated key.
         val masterKey = MasterKey.Builder(appContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .setUserAuthenticationRequired(false)
+            .setInvalidatedByBiometricEnrollment(false)
             .build()
         EncryptedSharedPreferences.create(
             appContext,
@@ -88,22 +117,22 @@ internal class SecureTokenStore(context: Context) {
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
-    } catch (_: Exception) {
+    } catch (failure: VirtualMachineError) {
+        throw failure
+    } catch (_: Throwable) {
         null
     }
 
     private fun readValueLocked(key: String): String? {
-        val primary = runCatching { primaryPrefs?.getString(key, null) }.getOrNull()
+        val primary = runCatching { primary()?.getString(key, null) }.getOrNull()
         if (!primary.isNullOrBlank()) return primary
 
         val encryptedFallback = encryptedFallbackPrefs.getString(key, null) ?: return null
         val fallback = runCatching { decryptFallback(encryptedFallback) }.getOrNull() ?: return null
 
         // Heal the primary store when it becomes available after a transient
-        // AndroidX/Keystore error. The fallback is removed only after commit.
-        if (primaryPrefs?.let { writePrimary(it, mapOf(key to fallback)) } == true) {
-            encryptedFallbackPrefs.edit().remove(key).commit()
-        }
+        // AndroidX/Keystore error. The fallback is kept as the second copy.
+        primary()?.let { writePrimary(it, mapOf(key to fallback)) }
         return fallback
     }
 
@@ -115,10 +144,12 @@ internal class SecureTokenStore(context: Context) {
         false
     }
 
-    private fun removeFallbackValues(keys: Set<String>) {
-        encryptedFallbackPrefs.edit().apply {
-            keys.forEach { key -> this.remove(key) }
-        }.commit()
+    private fun writeFallback(values: Map<String, String>): Boolean {
+        val editor = encryptedFallbackPrefs.edit()
+        values.forEach { (key, value) ->
+            editor.putString(key, encryptFallback(value))
+        }
+        return editor.commit()
     }
 
     private fun migrateLegacyStores() = synchronized(lock) {
@@ -242,6 +273,7 @@ internal class SecureTokenStore(context: Context) {
         const val LEGACY_CAPACITOR_PREFS = "WSSecureStorageSharedPreferences"
         const val LEGACY_CAPACITOR_KEY = "devtodo_refresh-token"
         const val FALLBACK_KEY_ALIAS = "com.devtodo.app.auth.fallback.v1"
+        const val PRIMARY_RETRY_INTERVAL_MS = 10_000L
         const val ANDROID_KEY_STORE = "AndroidKeyStore"
         const val AES_GCM = "AES/GCM/NoPadding"
         const val LEGACY_IV_SEPARATOR = '\u0010'

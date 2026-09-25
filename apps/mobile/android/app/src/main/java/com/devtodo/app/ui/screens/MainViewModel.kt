@@ -146,6 +146,21 @@ class MainViewModel(
         if (authManager.isLoggedIn) {
             loadTodayData()
             restorePersistedSession(showOfflineMessage = true)
+        } else {
+            scheduleSessionStoreRetry()
+        }
+    }
+
+    /**
+     * A cold boot can reject the first Keystore read, which would otherwise put
+     * the login screen in front of a device that still holds a valid session.
+     * Reopen the store once before believing that.
+     */
+    private fun scheduleSessionStoreRetry() {
+        viewModelScope.launch(Dispatchers.IO) {
+            delay(600L)
+            if (!isActive || !authManager.retrySecureStore()) return@launch
+            withContext(Dispatchers.Main.immediate) { restorePersistedSession(true) }
         }
     }
 

@@ -67,8 +67,13 @@ fun TaskDockApp(
     }
 
     LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
+    // One owner for every Login <-> workspace transition: a manual sign-in and a
+    // session that only became readable after a cold boot take the same path.
     LaunchedEffect(loggedIn, currentRoute) {
-        if (!loggedIn && currentRoute != null && currentRoute != Screen.Login.route) {
+        if (currentRoute == null) return@LaunchedEffect
+        if (loggedIn && currentRoute == Screen.Login.route) {
+            navController.navigate(Screen.Tree.route) { popUpTo(0) { inclusive = true } }
+        } else if (!loggedIn && currentRoute != Screen.Login.route) {
             navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
         }
     }
@@ -116,12 +121,7 @@ fun TaskDockApp(
                 composable(Screen.Login.route) {
                     LoginScreen(
                         viewModel = viewModel,
-                        onLoginSuccess = {
-                            viewModel.onAuthenticated()
-                            navController.navigate(Screen.Tree.route) {
-                                popUpTo(Screen.Login.route) { inclusive = true }
-                            }
-                        },
+                        onLoginSuccess = { viewModel.onAuthenticated() },
                     )
                 }
 

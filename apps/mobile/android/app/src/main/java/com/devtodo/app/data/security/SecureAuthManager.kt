@@ -34,6 +34,18 @@ class SecureAuthManager(context: Context) {
             else tokenStore.put(AUTH_REFRESH_TOKEN_KEY, value)
         }
 
+    /**
+     * Replacement secret staged before a refresh request is sent. Keeping it
+     * durable is what lets a lost reply be retried with the same pair instead of
+     * replaying a spent token and getting the whole session chain revoked.
+     */
+    var pendingRefreshToken: String?
+        get() = tokenStore.get(AUTH_PENDING_REFRESH_TOKEN_KEY)
+        set(value) {
+            if (value.isNullOrBlank()) tokenStore.remove(AUTH_PENDING_REFRESH_TOKEN_KEY)
+            else tokenStore.put(AUTH_PENDING_REFRESH_TOKEN_KEY, value)
+        }
+
     fun setSessionTokens(nextAccessToken: String, nextRefreshToken: String) {
         tokenStore.putAll(
             mapOf(
@@ -41,6 +53,7 @@ class SecureAuthManager(context: Context) {
                 AUTH_REFRESH_TOKEN_KEY to nextRefreshToken,
             ),
         )
+        pendingRefreshToken = null
     }
 
     var hubOrigin: String
@@ -82,6 +95,15 @@ class SecureAuthManager(context: Context) {
         get() = hasUsableAccessToken || !refreshToken.isNullOrEmpty()
 
     /**
+     * Re-reads the encrypted store after a failure so a Keystore that was only
+     * briefly unavailable cannot leave a signed-in device on the login screen.
+     */
+    fun retrySecureStore(): Boolean {
+        tokenStore.forceReopenPrimary()
+        return isLoggedIn
+    }
+
+    /**
      * Access tokens are deliberately short-lived. A persisted access token
      * alone is not a session, so an old APK must not reopen the workspace and
      * start syncing with an expired bearer token after an app restart.
@@ -107,11 +129,18 @@ class SecureAuthManager(context: Context) {
         }
     }
 
+    /**
+     * Drops the credentials. The account name is not a secret and staying
+     * behind lets a forced re-login start pre-filled instead of blank.
+     */
     fun clearSession() {
-        tokenStore.removeAll(setOf(AUTH_ACCESS_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY))
-        plainPrefs.edit {
-            remove(KEY_OWNER_ID)
-            remove(KEY_USERNAME)
-        }
+        tokenStore.removeAll(
+            setOf(
+                AUTH_ACCESS_TOKEN_KEY,
+                AUTH_REFRESH_TOKEN_KEY,
+                AUTH_PENDING_REFRESH_TOKEN_KEY,
+            ),
+        )
+        plainPrefs.edit { remove(KEY_OWNER_ID) }
     }
 }

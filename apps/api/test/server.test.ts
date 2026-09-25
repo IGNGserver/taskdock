@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import { uuidv7 } from '@devtodo/contracts';
@@ -304,6 +306,157 @@ describe('Fastify API', () => {
       },
     });
     expect(afterReplay.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('resumes a rotation whose response the native client never received', async () => {
+    const token = 'test-bootstrap-token-that-is-long-enough-resume';
+    const { app } = await buildServer({
+      store: new MemoryStore(),
+      config: { webRoot: '/tmp/devtodo-no-web', bootstrapToken: token },
+    });
+    const challenge = async (): Promise<{ nativeChallenge: string }> => ({
+      nativeChallenge: (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/native/challenge',
+          headers: { origin: 'https://localhost' },
+        })
+      ).json().challenge as string,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/bootstrap',
+      payload: { token, username: 'resume-user', password: 'correct horse battery staple' },
+    });
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      headers: { origin: 'https://localhost' },
+      payload: {
+        username: 'resume-user',
+        password: 'correct horse battery staple',
+        ...(await challenge()),
+      },
+    });
+    expect(login.statusCode).toBe(200);
+    const spentToken = (login.json() as { refreshToken: string }).refreshToken;
+    const successor = randomBytes(48).toString('base64url');
+    const refresh = async (presented: string, candidate: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/refresh',
+        headers: { origin: 'https://localhost' },
+        payload: {
+          refreshToken: presented,
+          nextRefreshToken: candidate,
+          ...(await challenge()),
+        },
+      });
+
+    const first = await refresh(spentToken, successor);
+    expect(first.statusCode).toBe(200);
+    expect((first.json() as { refreshToken: string }).refreshToken).toBe(successor);
+
+    // The client persisted `successor` but the reply was lost: retrying with the
+    // same pair must resume instead of tripping the replay revocation.
+    const retry = await refresh(spentToken, successor);
+    expect(retry.statusCode).toBe(200);
+    expect((retry.json() as { refreshToken: string }).refreshToken).toBe(successor);
+
+    const advanced = await refresh(successor, randomBytes(48).toString('base64url'));
+    expect(advanced.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('revokes the chain when a spent token is replayed with an unknown successor', async () => {
+    const token = 'test-bootstrap-token-that-is-long-enough-thief';
+    const { app } = await buildServer({
+      store: new MemoryStore(),
+      config: { webRoot: '/tmp/devtodo-no-web', bootstrapToken: token },
+    });
+    const challenge = async (): Promise<{ nativeChallenge: string }> => ({
+      nativeChallenge: (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/native/challenge',
+          headers: { origin: 'https://localhost' },
+        })
+      ).json().challenge as string,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/bootstrap',
+      payload: { token, username: 'thief-user', password: 'correct horse battery staple' },
+    });
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      headers: { origin: 'https://localhost' },
+      payload: {
+        username: 'thief-user',
+        password: 'correct horse battery staple',
+        ...(await challenge()),
+      },
+    });
+    const spentToken = (login.json() as { refreshToken: string }).refreshToken;
+    const legitimate = randomBytes(48).toString('base64url');
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/refresh',
+          headers: { origin: 'https://localhost' },
+          payload: {
+            refreshToken: spentToken,
+            nextRefreshToken: legitimate,
+            ...(await challenge()),
+          },
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const stolen = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      headers: { origin: 'https://localhost' },
+      payload: {
+        refreshToken: spentToken,
+        nextRefreshToken: randomBytes(48).toString('base64url'),
+        ...(await challenge()),
+      },
+    });
+    expect(stolen.statusCode).toBe(401);
+    expect((stolen.json() as { code: string }).code).toBe('AUTH_SESSION_REVOKED');
+
+    const victim = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      headers: { origin: 'https://localhost' },
+      payload: {
+        refreshToken: legitimate,
+        nextRefreshToken: randomBytes(48).toString('base64url'),
+        ...(await challenge()),
+      },
+    });
+    expect(victim.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('rejects an expired native challenge without pretending the session died', async () => {
+    const token = 'test-bootstrap-token-that-is-long-enough-challenge';
+    const { app } = await buildServer({
+      store: new MemoryStore(),
+      config: { webRoot: '/tmp/devtodo-no-web', bootstrapToken: token },
+    });
+    const rejected = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      headers: { origin: 'https://localhost' },
+      payload: { refreshToken: 'anything', nativeChallenge: uuidv7() },
+    });
+    expect(rejected.statusCode).toBe(403);
+    expect((rejected.json() as { code: string }).code).toBe('AUTH_CHALLENGE_INVALID');
     await app.close();
   });
 

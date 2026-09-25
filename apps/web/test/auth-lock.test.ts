@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { ApiError, isSessionRevocationError } from '../src/api.js';
 import { isAuthLocallyLocked, lockAuthLocally, unlockAuthLocally } from '../src/auth-lock.js';
 
 const previousStorage = globalThis.localStorage;
@@ -32,5 +33,18 @@ describe('local auth lock', () => {
 
     unlockAuthLocally();
     expect(isAuthLocallyLocked()).toBe(false);
+  });
+
+  it('names only a revoked session as a reason to drop the stored credential', () => {
+    expect(isSessionRevocationError(new ApiError('AUTH_SESSION_REVOKED', 'x', null, 401))).toBe(
+      true,
+    );
+    // A rejected native challenge or a rate limit says nothing about the token.
+    expect(isSessionRevocationError(new ApiError('AUTH_CHALLENGE_INVALID', 'x', null, 403))).toBe(
+      false,
+    );
+    expect(isSessionRevocationError(new ApiError('AUTH_REQUIRED', 'x', null, 401))).toBe(false);
+    expect(isSessionRevocationError(new ApiError('RATE_LIMITED', 'x', null, 429))).toBe(false);
+    expect(isSessionRevocationError(new Error('offline'))).toBe(false);
   });
 });

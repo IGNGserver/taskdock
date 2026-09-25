@@ -13,6 +13,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.nio.charset.StandardCharsets
@@ -112,6 +113,28 @@ class SecureAuthStorageMigrationTest {
             context.getSharedPreferences("devtodo_secure_auth_fallback", Context.MODE_PRIVATE)
                 .getString(AUTH_REFRESH_TOKEN_KEY, null),
         )
+    }
+
+    @Test
+    fun keepsAKeystoreFallbackCopySoALostPrimaryFileStillSignsTheUserIn() {
+        val token = "refresh-token-duplicate-copy-test"
+        val auth = SecureAuthManager(context)
+        auth.setSessionTokens("access-token-duplicate-copy-test", token)
+
+        assertEquals(token, SecureAuthManager(context).refreshToken)
+        assertNotEquals(
+            token,
+            context
+                .getSharedPreferences("devtodo_secure_auth_fallback", Context.MODE_PRIVATE)
+                .getString(AUTH_REFRESH_TOKEN_KEY, null),
+        )
+
+        // Some ROMs invalidate the AndroidX master key after a biometric
+        // re-enrollment. The session must survive that, not just a clean read.
+        assertTrue(context.deleteSharedPreferences("devtodo_secure_auth"))
+        val recovered = SecureAuthManager(context)
+        assertEquals(token, recovered.refreshToken)
+        assertEquals("access-token-duplicate-copy-test", recovered.accessToken)
     }
 
     private companion object {
