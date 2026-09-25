@@ -1,7 +1,7 @@
 # 安全说明
 
 - 密码使用 Argon2id；access token 只在内存，refresh token 只保存哈希或平台安全存储。
-- 原生客户端（Android/桌面/Capacitor）的 refresh token 会长期保留，只在用户主动退出、中枢明确回 `AUTH_SESSION_REVOKED`，或换中枢地址时清除；挑战校验失败、限流、超时等一律保留凭证并在下次启动重试。Android 同时维护 AndroidX 加密文件与 Keystore 副本两份密文，新建的 master key 不再被生物识别重录作废；桌面的钥匙环暂时不可读视为可重试状态，不等同于登出。
+- 原生客户端（Android/桌面/Capacitor）的 refresh token 会长期保留，只在用户主动退出、中枢明确回 `AUTH_SESSION_REVOKED`，或换中枢地址时清除；挑战校验失败、限流、超时等一律保留凭证并在下次启动重试。Android 同时维护 AndroidX 加密文件与 Keystore 副本两份密文，任一份损坏或暂不可读都不等于丢失登录；桌面的钥匙环暂时不可读视为可重试状态，不等同于登出。
 - refresh token 单次使用并重放即撤销整条链；客户端在请求前先落盘自己生成的后继密钥，因此「中枢已轮转但响应丢失」可以用同一对 token 幂等恢复，而不必依赖宽限期，也不会让不知道后继密钥的重放者受益。
 - Web 使用 HttpOnly refresh Cookie、显式 CORS、CSP/安全响应头、请求体限制和 Owner 范围查询。支持 HTTP 或 HTTPS 入口；HTTP 登录页会显示安全警告，但密码和会话信息仍会明文传输，公网应使用 HTTPS。
 - 所有 REST/WebSocket 输入通过 Zod 或显式参数校验；写入要求 Idempotency-Key，更新要求 baseVersion。
