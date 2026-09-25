@@ -588,6 +588,14 @@ html.drawer-open .page-wrap {
     padding-block: 6px max(6px, var(--dt-safe-bottom));
   }
 
+  .m3e-snackbar {
+    inset-block-end: calc(152px + var(--dt-safe-bottom));
+  }
+
+  .keyboard-visible .m3e-snackbar {
+    inset-block-end: calc(16px + var(--dt-safe-bottom));
+  }
+
   .app-float-layer {
     inset-block-end: calc(80px + var(--dt-safe-bottom));
     inset-inline-end: max(16px, var(--dt-safe-right));
