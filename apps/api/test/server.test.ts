@@ -489,7 +489,11 @@ describe('Fastify API', () => {
       url: '/api/v1/auth/native/challenge',
       headers: { origin: 'https://localhost', 'sec-fetch-site': 'same-origin' },
     });
-    expect(sameOriginChallenge.statusCode).toBe(401);
+    // A browser forging the native header is refused at the exchange step (403),
+    // which is deliberately not a session revocation (401) so clients keep their
+    // stored credential.
+    expect(sameOriginChallenge.statusCode).toBe(403);
+    expect((sameOriginChallenge.json() as { code: string }).code).toBe('AUTH_CHALLENGE_INVALID');
     const nativeLogin = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
@@ -512,7 +516,11 @@ describe('Fastify API', () => {
         nativeChallenge: (challenge.json() as { challenge: string }).challenge,
       },
     });
-    expect(replayedChallengeLogin.statusCode).toBe(401);
+    // The consumed challenge cannot be replayed for a second session, and the
+    // answer is an exchange failure rather than a revoked session.
+    expect(replayedChallengeLogin.statusCode).toBe(403);
+    expect((replayedChallengeLogin.json() as { code: string }).code).toBe('AUTH_CHALLENGE_INVALID');
+    expect(replayedChallengeLogin.json()).not.toHaveProperty('refreshToken');
     const me = await app.inject({
       method: 'GET',
       url: '/api/v1/me',
