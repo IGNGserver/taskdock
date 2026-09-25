@@ -32,6 +32,16 @@ async function assertFits(page: Page) {
         className: element.className,
         width: element.clientWidth,
         scroll: element.scrollWidth,
+        overflowingChildren: [...element.querySelectorAll<HTMLElement>('*')]
+          .filter((child) => child.scrollWidth > child.clientWidth + 1)
+          .slice(0, 12)
+          .map((child) => ({
+            tag: child.tagName,
+            className: child.className,
+            width: child.clientWidth,
+            scroll: child.scrollWidth,
+            text: child.innerText.slice(0, 48),
+          })),
       }));
   });
   expect(overflow).toEqual([]);
@@ -101,7 +111,7 @@ for (const width of [320, 390, 430]) {
       if (route === '/more' || route === '/time') {
         await page
           .getByRole('navigation', { name: '移动导航' })
-          .getByRole('link', { name: route === '/more' ? '更多' : '时间', exact: true })
+          .getByRole('link', { name: route === '/more' ? '更多' : '计划', exact: true })
           .click();
       } else {
         await page.getByRole('button', { name: '打开侧边栏' }).click();
@@ -130,6 +140,29 @@ test('production PWA caches assets and can reopen the workspace offline', async 
 }) => {
   test.skip(process.env['E2E_PWA'] !== '1', 'requires a production build with the service worker');
   await login(page);
+  const snackbar = page.locator('.m3e-snackbar');
+  await expect(snackbar).toBeVisible();
+  const snackbarOverlapsControls = await page.evaluate(() => {
+    const notice = document.querySelector('.m3e-snackbar')?.getBoundingClientRect();
+    if (!notice) return true;
+    const overlaps = (control: DOMRect) =>
+      notice.left < control.right &&
+      notice.right > control.left &&
+      notice.top < control.bottom &&
+      notice.bottom > control.top;
+    const controls = [
+      ...document.querySelectorAll('.m3e-navigation-bar, button[aria-label="打开创建菜单"]'),
+    ];
+    return {
+      overlaps: controls.some((element) => overlaps(element.getBoundingClientRect())),
+      notice: { top: notice.top, bottom: notice.bottom, left: notice.left, right: notice.right },
+      controls: controls.map((element) => {
+        const control = element.getBoundingClientRect();
+        return { className: element.className, top: control.top, bottom: control.bottom };
+      }),
+    };
+  });
+  expect(snackbarOverlapsControls).toMatchObject({ overlaps: false });
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
   });
@@ -169,6 +202,7 @@ test('landscape and enlarged text keep navigation and forms within reach', async
     .click();
   await assertFits(page);
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole('navigation', { name: '移动导航' })).toBeVisible();
   await page.evaluate(() => {
     document.documentElement.style.fontSize = '24px';
   });
