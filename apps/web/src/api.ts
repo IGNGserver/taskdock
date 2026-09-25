@@ -40,7 +40,7 @@ let secureStorageSetup: Promise<void> | null = null;
 let runtimeHubOrigin: string | null = null;
 let desktopHubOriginLoadPromise: Promise<string | null> | null = null;
 let desktopHubOriginLoadError: string | null = null;
-let lastRefreshFailure: 'network' | 'unauthorized' | 'unknown' | null = null;
+let lastRefreshFailure: RefreshFailureKind | null = null;
 const localRevalidations = new Map<string, Promise<unknown>>();
 
 export class ApiError extends Error {
@@ -70,6 +70,11 @@ export interface SearchItem {
   project: ProjectDto | null;
   note: NoteDto;
 }
+
+export type RefreshFailureKind = 'network' | 'revoked' | 'transient';
+
+/** Codes that prove the stored refresh token itself is dead. */
+const SESSION_REVOCATION_CODES = new Set(['AUTH_SESSION_REVOKED', 'AUTH_INVALID_CREDENTIALS']);
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
@@ -442,7 +447,7 @@ function canReadFromLocalFirst(path: string, method: string): boolean {
 
 export async function refreshAccessToken(): Promise<boolean> {
   if (isAuthLocallyLocked()) {
-    lastRefreshFailure = 'unauthorized';
+    lastRefreshFailure = 'revoked';
     setAccessToken(null);
     return false;
   }
@@ -453,44 +458,56 @@ export async function refreshAccessToken(): Promise<boolean> {
       if (isDesktopClient()) {
         const result = await desktopAuthRefresh();
         if (isAuthLocallyLocked()) {
-          lastRefreshFailure = 'unauthorized';
+          lastRefreshFailure = 'revoked';
           setAccessToken(null);
           return false;
         }
         setAccessToken(result.accessToken);
         return true;
       }
-      const nativeRefreshToken = await readNativeRefreshToken();
+      // Browsers keep the session in an HttpOnly cookie and have no stored
+      // refresh token; only a native platform owns the credential directly.
+      const ownsNativeToken = Capacitor.isNativePlatform();
+      const confirmedRefreshToken = ownsNativeToken ? await readNativeRefreshToken() : null;
+      if (ownsNativeToken && !confirmedRefreshToken) {
+        lastRefreshFailure = 'revoked';
+        setAccessToken(null);
+        return false;
+      }
+      // The replacement secret is generated here and stored before the request,
+      // so a rotation the Hub applied but whose reply was lost is resumable:
+      // the retry presents the same pair instead of replaying a spent token.
+      const candidate = ownsNativeToken
+        ? ((await readNativePendingRefreshToken()) ?? generateRefreshCandidate())
+        : null;
+      if (candidate) await saveNativePendingRefreshToken(candidate);
       const nativeChallenge = isNativeClient() ? await requestNativeChallenge() : undefined;
       const result = await requestV1<{ accessToken: string; refreshToken?: string }>(
         '/auth/refresh',
         {
           method: 'POST',
           body: JSON.stringify({
-            ...(nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {}),
+            ...(confirmedRefreshToken ? { refreshToken: confirmedRefreshToken } : {}),
+            ...(candidate ? { nextRefreshToken: candidate } : {}),
             ...(nativeChallenge ? { nativeChallenge } : {}),
           }),
         },
         false,
       );
       if (isAuthLocallyLocked()) {
-        lastRefreshFailure = 'unauthorized';
+        lastRefreshFailure = 'revoked';
         setAccessToken(null);
         return false;
       }
       setAccessToken(result.accessToken);
-      if (isNativeClient()) {
-        if (!result.refreshToken) throw new Error('native refresh token was not returned');
-        await saveNativeRefreshToken(result.refreshToken);
+      if (ownsNativeToken && candidate) {
+        // An older Hub answers with its own generated token; honour it.
+        await saveNativeRefreshToken(result.refreshToken?.trim() || candidate);
+        await clearNativePendingRefreshToken();
       }
       return true;
     } catch (error) {
-      lastRefreshFailure =
-        error instanceof ApiError && error.status === 401
-          ? 'unauthorized'
-          : isNetworkError(error)
-            ? 'network'
-            : 'unknown';
+      lastRefreshFailure = classifyRefreshFailure(error);
       setAccessToken(null);
       return false;
     } finally {
@@ -500,7 +517,27 @@ export async function refreshAccessToken(): Promise<boolean> {
   return refreshPromise;
 }
 
-export function getLastRefreshFailure(): 'network' | 'unauthorized' | 'unknown' | null {
+/**
+ * Only a session the Hub explicitly revoked or replaced may destroy a stored
+ * credential. A lost native challenge, a rate limit or an unreachable Hub must
+ * keep the refresh token so the next launch can retry.
+ */
+function classifyRefreshFailure(error: unknown): RefreshFailureKind {
+  if (error instanceof ApiError)
+    return SESSION_REVOCATION_CODES.has(error.code) ? 'revoked' : 'transient';
+  return isNetworkError(error) ? 'network' : 'transient';
+}
+
+/**
+ * True only when the Hub named the stored session itself as the problem. An
+ * expired access token, a rejected native challenge or a proxy error must never
+ * be read as "this device's credential is dead".
+ */
+export function isSessionRevocationError(error: unknown): boolean {
+  return error instanceof ApiError && SESSION_REVOCATION_CODES.has(error.code);
+}
+
+export function getLastRefreshFailure(): RefreshFailureKind | null {
   return lastRefreshFailure;
 }
 
@@ -600,10 +637,42 @@ export async function saveNativeRefreshToken(token: string): Promise<void> {
   await SecureStorage.set('refresh-token', token, false, false);
 }
 
+/**
+ * The replacement secret a refresh call is about to offer. It is written before
+ * the request so a lost reply cannot strand the client on a spent token.
+ */
+export async function saveNativePendingRefreshToken(token: string): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  await ensureNativeStorage();
+  await SecureStorage.set('pending-refresh-token', token, false, false);
+}
+
+export async function readNativePendingRefreshToken(): Promise<string | null> {
+  if (!Capacitor.isNativePlatform()) return null;
+  await ensureNativeStorage();
+  const value = await SecureStorage.get('pending-refresh-token', false, false);
+  return typeof value === 'string' && value ? value : null;
+}
+
+export async function clearNativePendingRefreshToken(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  await ensureNativeStorage();
+  await SecureStorage.remove('pending-refresh-token', false);
+}
+
+function generateRefreshCandidate(): string {
+  const bytes = new Uint8Array(48);
+  crypto.getRandomValues(bytes);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 export async function clearNativeRefreshToken(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   await ensureNativeStorage();
   await SecureStorage.remove('refresh-token', false);
+  await SecureStorage.remove('pending-refresh-token', false);
 }
 
 export async function readNativeRefreshToken(): Promise<string | null> {

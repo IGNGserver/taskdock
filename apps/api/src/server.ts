@@ -360,6 +360,10 @@ export async function buildServer(
           .object({
             refreshToken: z.string().min(1).optional(),
             nativeChallenge: uuidSchema.optional(),
+            nextRefreshToken: z
+              .string()
+              .regex(/^[A-Za-z0-9_-]{64,128}$/)
+              .optional(),
           })
           .parse(request.body ?? {});
         rateLimiter.check(request, 'refresh', undefined, 30, 60_000);
@@ -371,7 +375,7 @@ export async function buildServer(
         );
         const refreshToken = body.refreshToken ?? request.cookies['devtodo_refresh'];
         if (!refreshToken) throw new DomainError('AUTH_SESSION_REVOKED', '缺少 refresh token');
-        const result = await auth.refresh(refreshToken);
+        const result = await auth.refresh(refreshToken, body.nextRefreshToken);
         setRefreshCookie(reply, result.refreshToken, config);
         return {
           accessToken: result.accessToken,
@@ -397,7 +401,7 @@ export async function buildServer(
         rateLimiter.check(request, 'native-challenge', rateIdentity, 30, 60_000);
         const origin = requestOrigin(request);
         if (!nativeClient(request, config) || !origin)
-          throw new DomainError('AUTH_REQUIRED', '原生客户端来源未获允许');
+          throw new DomainError('AUTH_CHALLENGE_INVALID', '原生客户端来源未获允许');
         const expiresAt = new Date(Date.now() + 30_000).toISOString();
         const challenge = await store.createNativeChallenge(origin, expiresAt);
         return reply.code(201).send({ challenge, expiresAt });
@@ -2211,6 +2215,7 @@ function statusFor(code: string): number {
     code === 'AUTH_SESSION_REVOKED'
   )
     return 401;
+  if (code === 'AUTH_CHALLENGE_INVALID') return 403;
   if (code === 'VERSION_CONFLICT') return 409;
   if (
     code === 'TREE_CYCLE' ||
@@ -2282,10 +2287,10 @@ async function requireNativeExchange(
   challenge: string | undefined,
 ): Promise<boolean> {
   if (!nativeClient(request, config)) return false;
-  if (!challenge) throw new DomainError('AUTH_REQUIRED', '原生客户端缺少一次性挑战');
+  if (!challenge) throw new DomainError('AUTH_CHALLENGE_INVALID', '原生客户端缺少一次性挑战');
   const origin = requestOrigin(request)!;
   if (!(await store.consumeNativeChallenge(challenge, origin)))
-    throw new DomainError('AUTH_REQUIRED', '原生客户端挑战无效或已过期');
+    throw new DomainError('AUTH_CHALLENGE_INVALID', '原生客户端挑战无效或已过期');
   return true;
 }
 

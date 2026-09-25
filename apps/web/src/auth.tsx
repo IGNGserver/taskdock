@@ -12,8 +12,8 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  ApiError,
   createSyncEngine,
+  clearNativePendingRefreshToken,
   clearNativeRefreshToken,
   desktopAuthLogin,
   desktopAuthLogout,
@@ -24,6 +24,7 @@ import {
   isNativeClient,
   isDesktopClient,
   isDesktopShell,
+  isSessionRevocationError,
   readNativeRefreshToken,
   refreshAccessToken,
   requestV1,
@@ -318,7 +319,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!refreshed) {
       if (operation !== authOperationRef.current) return;
       const failure = getLastRefreshFailure();
-      if (failure === 'unauthorized') {
+      if (failure === 'revoked') {
         lockAuthLocally();
         await clearNativeRefreshToken().catch(() => undefined);
         try {
@@ -326,13 +327,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch {
           /* The lock is authoritative when localStorage is available. */
         }
-      }
-      if (
-        (failure === 'network' || (typeof navigator !== 'undefined' && !navigator.onLine)) &&
-        hasLocalSession
-      )
-        return;
-      if (hasLocalSession && failure !== 'unauthorized') {
+      } else if (hasLocalSession) {
+        // An unreachable or unverified Hub must not cost the device its
+        // credential; keep the workspace and let the next retry refresh.
         setConnection('offline');
         return;
       }
@@ -360,7 +357,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await initialize(me);
     } catch (cause) {
       if (operation !== authOperationRef.current) return;
-      if (cause instanceof ApiError && cause.status === 401) {
+      const revoked = isSessionRevocationError(cause);
+      if (revoked) {
         lockAuthLocally();
         await clearNativeRefreshToken().catch(() => undefined);
         try {
@@ -369,7 +367,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           /* The local lock remains authoritative when storage is available. */
         }
       }
-      if (hasLocalSession && !(cause instanceof ApiError && cause.status === 401)) {
+      if (hasLocalSession && !revoked) {
         setConnection('offline');
         return;
       }
@@ -453,8 +451,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(result.accessToken);
       if (isNativeClient() && !result.refreshToken)
         throw new Error('native refresh token was not returned');
-      if (isNativeClient() && result.refreshToken)
+      if (isNativeClient() && result.refreshToken) {
         await saveNativeRefreshToken(result.refreshToken);
+        await clearNativePendingRefreshToken();
+      }
       await initialize(await requestV1<MeResponse>('/me'));
     },
     [initialize],

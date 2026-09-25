@@ -41,7 +41,7 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
     val haptic = LocalHapticFeedback.current
 
     var hubUrl by rememberSaveable { mutableStateOf(viewModel.authManager.hubOrigin) }
-    var username by rememberSaveable { mutableStateOf("") }
+    var username by rememberSaveable { mutableStateOf(viewModel.authManager.username ?: "") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }

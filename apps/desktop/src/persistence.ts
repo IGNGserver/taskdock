@@ -120,3 +120,41 @@ export function atomicWriteFile(filePath: string, value: string | Uint8Array): v
     }
   }
 }
+
+export interface DesktopSessionSecrets {
+  refreshToken: string | null;
+  /**
+   * Replacement secret staged before a refresh request. Persisting it first is
+   * what lets a rotation whose reply was lost be retried with the same pair.
+   */
+  pendingRefreshToken: string | null;
+}
+
+export function encodeDesktopSession(secrets: DesktopSessionSecrets): string {
+  return JSON.stringify({ version: 1, ...secrets });
+}
+
+/**
+ * Reads a decoded desktop session payload. A value that is not JSON is a bare
+ * token written before the versioned format existed, so it is returned as the
+ * refresh token instead of being reported as corruption.
+ */
+export function decodeDesktopSession(raw: string): DesktopSessionSecrets | null {
+  if (!raw.trim().startsWith('{')) return { refreshToken: raw || null, pendingRefreshToken: null };
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (parsed['version'] !== undefined && parsed['version'] !== 1) return null;
+    return {
+      refreshToken:
+        typeof parsed['refreshToken'] === 'string' && parsed['refreshToken']
+          ? parsed['refreshToken']
+          : null,
+      pendingRefreshToken:
+        typeof parsed['pendingRefreshToken'] === 'string' && parsed['pendingRefreshToken']
+          ? parsed['pendingRefreshToken']
+          : null,
+    };
+  } catch {
+    return null;
+  }
+}

@@ -2,7 +2,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { readHubOriginFile, writeHubOriginFile } from '../src/persistence.js';
+import {
+  decodeDesktopSession,
+  encodeDesktopSession,
+  readHubOriginFile,
+  writeHubOriginFile,
+} from '../src/persistence.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -51,5 +56,27 @@ describe('desktop Hub origin persistence', () => {
     const filePath = createPath();
     writeFileSync(filePath, '{broken');
     expect(readHubOriginFile(filePath)).toMatchObject({ origin: null, status: 'invalid' });
+  });
+});
+
+describe('desktop session payload codec', () => {
+  it('keeps the staged replacement secret across a save and reload', () => {
+    const secrets = {
+      refreshToken: 'confirmed-token',
+      pendingRefreshToken: 'staged-token',
+    };
+    expect(decodeDesktopSession(encodeDesktopSession(secrets))).toEqual(secrets);
+  });
+
+  it('reads a bare legacy token as the refresh token instead of corruption', () => {
+    expect(decodeDesktopSession('legacy-plain-token')).toEqual({
+      refreshToken: 'legacy-plain-token',
+      pendingRefreshToken: null,
+    });
+  });
+
+  it('rejects an unreadable payload so the caller can ask for a new login', () => {
+    expect(decodeDesktopSession('{"version":2}')).toBeNull();
+    expect(decodeDesktopSession('{"refreshToken":')).toBeNull();
   });
 });
