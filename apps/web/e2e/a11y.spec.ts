@@ -256,9 +256,14 @@ for (const route of ROUTES) {
  * freshly mounted content is still fading in when a route is audited, so axe can
  * measure a blended colour instead of the settled one — a mid-flight opacity
  * turns `--m3-on-surface-variant` into something barely darker than its
- * background. Wait for the finite animations in the audited layer to finish
- * instead of guessing a duration, so axe measures the settled colours in every
- * browser.
+ * background, and a filled button at 85% opacity loses 4.5:1. Wait for the
+ * finite animations in the audited layer to finish instead of guessing a
+ * duration, so axe measures the settled colours in every browser.
+ *
+ * A single quiet instant is not enough: content that mounts after the shell has
+ * become interactive starts its entrance animation *after* the first check
+ * already passed. The streak requires the layer to stay animation-free across
+ * several polls, so a late transition resets it and is waited out too.
  *
  * Ambient loops are excluded because they never reach `finished`: the sync
  * status pulse and the skeleton shimmer run forever and would only make this
@@ -266,19 +271,26 @@ for (const route of ROUTES) {
  * measured mid-transition.
  */
 async function waitForSettled(page: Page, selector: string): Promise<void> {
+  await page.evaluate(() => {
+    delete document.documentElement.dataset.settleStreak;
+  });
   await page.waitForFunction(
     (target) => {
       const element = document.querySelector(target);
       if (!element) return false;
       const layer = element.parentElement ?? element;
       const nodes = [layer, ...layer.querySelectorAll('*')];
-      return nodes
+      const running = nodes
         .flatMap((node) => node.getAnimations())
         .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
-        .every((animation) => animation.playState === 'finished' || animation.playState === 'idle');
+        .some((animation) => animation.playState !== 'finished' && animation.playState !== 'idle');
+      const root = document.documentElement;
+      const streak = running ? 0 : Number(root.dataset.settleStreak ?? '0') + 1;
+      root.dataset.settleStreak = String(streak);
+      return streak >= 5;
     },
     selector,
-    { timeout: 5000 },
+    { polling: 150, timeout: 10_000 },
   );
 }
 
