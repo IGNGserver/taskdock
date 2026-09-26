@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalFocusManager
@@ -32,8 +33,12 @@ import androidx.compose.ui.unit.dp
 import com.devtodo.app.R
 import com.devtodo.app.data.remote.ApiClientException
 import com.devtodo.app.data.remote.ApiFailureCategory
+import com.devtodo.app.ui.theme.TaskDockShapes
 import kotlinx.coroutines.launch
 
+/**
+ * Material 3 Expressive Login & Hub Connection Screen.
+ */
 @Composable
 fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
     val coroutineScope = rememberCoroutineScope()
@@ -85,51 +90,66 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
 
     Box(
         contentAlignment = Alignment.Center,
-        modifier =
-            Modifier.fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .imePadding()
-                .padding(horizontal = 24.dp)
-                .verticalScroll(rememberScrollState()),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .imePadding()
+            .padding(horizontal = 20.dp)
+            .verticalScroll(rememberScrollState()),
     ) {
         Surface(
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surface,
-            modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(vertical = 24.dp),
+            shape = TaskDockShapes.LargeIncreased,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 2.dp,
+            modifier = Modifier
+                .widthIn(max = 480.dp)
+                .fillMaxWidth()
+                .padding(vertical = 24.dp),
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 28.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 28.dp),
                 horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.taskdock_icon),
-                    contentDescription = "TaskDock",
-                    modifier = Modifier.size(56.dp),
-                )
-                Text(
-                    text = "TaskDock",
-                    style =
-                        MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = "连接 TaskDock 服务器，继续处理任务",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.taskdock_icon),
+                        contentDescription = "TaskDock",
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(TaskDockShapes.Medium),
+                    )
+                    Column {
+                        Text(
+                            text = "TaskDock",
+                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = "个人任务自托管工作台",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // 1. Server origin input
+                // Server origin input
                 OutlinedTextField(
                     enabled = !isLoading,
                     value = hubUrl,
                     onValueChange = { hubUrl = it },
-                    label = { Text("服务器地址") },
+                    label = { Text("服务器中枢地址") },
                     placeholder = { Text("http://192.168.x.x:48731") },
                     singleLine = true,
+                    shape = TaskDockShapes.Medium,
                     leadingIcon = {
                         Icon(
                             Icons.Default.Dns,
@@ -137,28 +157,26 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     },
-                    keyboardOptions =
-                        KeyboardOptions(
-                            keyboardType = KeyboardType.Uri,
-                            imeAction = ImeAction.Next,
-                        ),
-                    keyboardActions =
-                        KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Next,
+                    ),
+                    keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
                     isError = errorMessage != null,
-                    supportingText =
-                        if (isHttpHub) {
-                            { Text("当前使用 HTTP，账号和密码会以明文传输，请优先使用 HTTPS") }
-                        } else null,
+                    supportingText = if (isHttpHub) {
+                        { Text("当前使用 HTTP，账号和密码会以明文传输，局域网外请优先使用 HTTPS") }
+                    } else null,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                // 2. Username Input
+                // Username Input
                 OutlinedTextField(
                     enabled = !isLoading,
                     value = username,
                     onValueChange = { username = it },
                     label = { Text("用户名") },
                     singleLine = true,
+                    shape = TaskDockShapes.Medium,
                     leadingIcon = {
                         Icon(
                             Icons.Default.Person,
@@ -166,24 +184,23 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     },
-                    keyboardOptions =
-                        KeyboardOptions(
-                            keyboardType = KeyboardType.Text,
-                            imeAction = ImeAction.Next,
-                        ),
-                    keyboardActions =
-                        KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Next,
+                    ),
+                    keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
                     isError = errorMessage != null,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                // 3. Password Input with Native Password Keyboard
+                // Password Input with Native Password Keyboard
                 OutlinedTextField(
                     enabled = !isLoading,
                     value = password,
                     onValueChange = { password = it },
                     label = { Text("密码") },
                     singleLine = true,
+                    shape = TaskDockShapes.Medium,
                     leadingIcon = {
                         Icon(
                             Icons.Default.Lock,
@@ -194,60 +211,50 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                     trailingIcon = {
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
                             Icon(
-                                imageVector =
-                                    if (passwordVisible) Icons.Default.VisibilityOff
-                                    else Icons.Default.Visibility,
+                                if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                                 contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
                             )
                         }
                     },
-                    visualTransformation =
-                        if (passwordVisible) VisualTransformation.None
-                        else PasswordVisualTransformation(),
-                    keyboardOptions =
-                        KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Done,
-                        ),
-                    keyboardActions =
-                        KeyboardActions(
-                            onDone = {
-                                submit()
-                                focusManager.clearFocus()
-                            }
-                        ),
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
                     isError = errorMessage != null,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                errorMessage?.let {
+                if (errorMessage != null) {
                     Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
+                        text = errorMessage ?: "",
                         color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 4.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
-
                 Button(
                     onClick = ::submit,
-                    enabled =
-                        !isLoading &&
-                            username.isNotBlank() &&
-                            password.isNotBlank() &&
-                            hubUrl.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    enabled = !isLoading && username.isNotBlank() && password.isNotBlank() && hubUrl.isNotBlank(),
+                    shape = TaskDockShapes.FullPill,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.5.dp,
+                            modifier = Modifier.size(22.dp),
                             color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp,
                         )
                     } else {
-                        Text("登录", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            text = "连接并登录",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                     }
                 }
             }

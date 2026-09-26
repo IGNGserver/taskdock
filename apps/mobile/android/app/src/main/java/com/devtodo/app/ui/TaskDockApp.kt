@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -67,8 +68,7 @@ fun TaskDockApp(
     }
 
     LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
-    // One owner for every Login <-> workspace transition: a manual sign-in and a
-    // session that only became readable after a cold boot take the same path.
+
     LaunchedEffect(loggedIn, currentRoute) {
         if (currentRoute == null) return@LaunchedEffect
         if (loggedIn && currentRoute == Screen.Login.route) {
@@ -79,9 +79,9 @@ fun TaskDockApp(
     }
 
     Box(
-        modifier =
-            Modifier.fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface),
     ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -97,25 +97,31 @@ fun TaskDockApp(
             NavHost(
                 navController = navController,
                 startDestination = if (loggedIn) Screen.Tree.route else Screen.Login.route,
-                modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .consumeWindowInsets(padding),
+                // Material 3 Expressive Spring Motion Physics transitions
                 enterTransition = {
                     fadeIn(
-                        tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard)
+                        animationSpec = TaskDockMotion.springSpatialFast()
                     ) + slideInHorizontally(
-                        tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard)
-                    ) { it / 16 }
+                        animationSpec = TaskDockMotion.springSpatial(),
+                        initialOffsetX = { fullWidth -> (fullWidth * 0.15f).toInt() }
+                    )
                 },
                 exitTransition = {
-                    fadeOut(tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard))
+                    fadeOut(animationSpec = TaskDockMotion.springSpatialFast())
                 },
                 popEnterTransition = {
-                    fadeIn(tween(TaskDockMotion.EnterMillis, easing = TaskDockMotion.Standard))
+                    fadeIn(animationSpec = TaskDockMotion.springSpatialFast())
                 },
                 popExitTransition = {
-                    fadeOut(tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard)) +
+                    fadeOut(animationSpec = TaskDockMotion.springSpatialFast()) +
                         slideOutHorizontally(
-                            tween(TaskDockMotion.ExitMillis, easing = TaskDockMotion.Standard)
-                        ) { it / 16 }
+                            animationSpec = TaskDockMotion.springSpatial(),
+                            targetOffsetX = { fullWidth -> (fullWidth * 0.15f).toInt() }
+                        )
                 },
             ) {
                 composable(Screen.Login.route) {

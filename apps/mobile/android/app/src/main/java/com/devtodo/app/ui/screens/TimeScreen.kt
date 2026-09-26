@@ -1,17 +1,10 @@
 package com.devtodo.app.ui.screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.animation.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -19,50 +12,32 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Event
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.devtodo.app.data.local.TaskEntity
 import com.devtodo.app.data.local.TimePointEntity
-import com.devtodo.app.data.model.TimePointType
 import com.devtodo.app.data.model.TaskStatus
-import com.devtodo.app.ui.components.CaptureSheet
-import com.devtodo.app.ui.components.EmptyState
-import com.devtodo.app.ui.components.M3TaskRow
-import com.devtodo.app.ui.components.RowAction
-import com.devtodo.app.ui.components.SectionHeading
-import com.devtodo.app.ui.components.WorkspaceScaffold
+import com.devtodo.app.data.model.TimePointType
+import com.devtodo.app.ui.components.*
+import com.devtodo.app.ui.theme.TaskDockShapes
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
+import java.util.*
 
+/**
+ * Material 3 Expressive Time & Schedule Screen.
+ * Visual parity with Web Schedule / Placements, expressive date pills,
+ * fluid task rows and bottom Floating Action Island for rapid planning.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimeScreen(
@@ -76,19 +51,17 @@ fun TimeScreen(
     val tasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val timezone = settings?.timezone ?: "Asia/Shanghai"
-    val useInlineDateAction =
-        LocalDensity.current.fontScale >= 1.3f || LocalConfiguration.current.screenHeightDp < 480
+
     val today = currentLocalDate(timezone)
     val taskById = remember(tasks) { tasks.associateBy { it.id } }
     val placementsByPoint = remember(placements) { placements.groupBy { it.timePointId } }
     val tasksByPoint = remember(points, taskById, placementsByPoint) {
         points.associate { point ->
-            val visible =
-                placementsByPoint[point.id].orEmpty().mapNotNull { placement ->
-                    taskById[placement.taskId]?.takeIf {
-                        it.archivedAt == null && it.deletedAt == null
-                    }
+            val visible = placementsByPoint[point.id].orEmpty().mapNotNull { placement ->
+                taskById[placement.taskId]?.takeIf {
+                    it.archivedAt == null && it.deletedAt == null
                 }
+            }
             point.id to visible
         }
     }
@@ -96,6 +69,7 @@ fun TimeScreen(
     val groups = remember(points, taskCountByPoint, today) {
         groupTimePoints(points, taskCountByPoint, today)
     }
+
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedDate by rememberSaveable { mutableStateOf<String?>(null) }
     var datePicker by rememberSaveable { mutableStateOf(false) }
@@ -103,10 +77,14 @@ fun TimeScreen(
     val dateState = rememberDatePickerState()
     val hasTodayPoint = groups.todayAndUpcoming.any { it.localDate == today }
 
-    WorkspaceScaffold(
+    PredictiveBackContainer(
+        enabled = onBack != null,
+        onBack = { onBack?.invoke() },
+    ) {
+        WorkspaceScaffold(
         topBar = {
             TopAppBar(
-                title = { Text("日程") },
+                title = { Text("日程与安排", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -119,41 +97,41 @@ fun TimeScreen(
                         Icon(Icons.Default.DateRange, "选择日期")
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                )
             )
         },
-        floatingActionButton = {
-            if (!useInlineDateAction) {
-                ExtendedFloatingActionButton(
-                    onClick = { datePicker = true },
-                    icon = { Icon(Icons.Default.Add, null) },
-                    text = { Text("选择日期") },
+        bottomBar = {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                FloatingActionIsland(
+                    onQuickCreate = { title ->
+                        // Automatically schedule for today or picked date
+                        viewModel.createTreeTaskV2AtTimePoint(
+                            title,
+                            selectedDate ?: today,
+                            true,
+                        )
+                    },
+                    placeholder = "在选定日期/今天安排任务…",
+                    primaryLabel = "安排新任务",
                 )
             }
-        }
+        },
     ) { padding ->
         LazyColumn(
-            Modifier.fillMaxSize().padding(padding).testTag("planner-timepoints"),
-            contentPadding = PaddingValues(bottom = 120.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .testTag("planner-timepoints"),
+            contentPadding = PaddingValues(bottom = 96.dp),
         ) {
             if (!hasTodayPoint) {
                 item(key = "today-prompt") {
                     TodayPlanningPrompt(timezone, today) { selectedDate = today }
-                }
-            }
-
-            if (useInlineDateAction) {
-                item(key = "inline-planner-action") {
-                    Button(
-                        onClick = { datePicker = true },
-                        modifier =
-                            Modifier.fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                                .sizeIn(minHeight = 56.dp),
-                    ) {
-                        Icon(Icons.Default.Add, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("选择日期安排")
-                    }
                 }
             }
 
@@ -234,7 +212,7 @@ fun TimeScreen(
             }
 
             if (groups.events.isNotEmpty()) {
-                item(key = "events-heading") { SectionHeading("事件") }
+                item(key = "events-heading") { SectionHeading("事件里程碑") }
                 timePointItems(
                     points = groups.events,
                     tasksByPoint = tasksByPoint,
@@ -252,9 +230,19 @@ fun TimeScreen(
             if (points.isEmpty()) {
                 item(key = "time-empty-state") {
                     EmptyState(
-                        Icons.Default.CalendarToday,
-                        "还没有日期或事件",
-                        "先选择日期安排任务；已有事件会在同步后显示。",
+                        icon = Icons.Default.CalendarToday,
+                        title = "日程安排空空如也",
+                        description = "选择右上角日期或通过底部操作安排任务。",
+                        action = {
+                            FilledTonalButton(
+                                onClick = { datePicker = true },
+                                shape = TaskDockShapes.FullPill,
+                            ) {
+                                Icon(Icons.Default.DateRange, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("选择日期")
+                            }
+                        }
                     )
                 }
             }
@@ -268,13 +256,12 @@ fun TimeScreen(
                 TextButton(
                     enabled = dateState.selectedDateMillis != null,
                     onClick = {
-                        selectedDate =
-                            SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
-                                .apply { timeZone = TimeZone.getTimeZone("UTC") }
-                                .format(Date(dateState.selectedDateMillis!!))
+                        selectedDate = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+                            timeZone = TimeZone.getTimeZone("UTC")
+                        }.format(Date(dateState.selectedDateMillis!!))
                         datePicker = false
                     },
-                ) { Text("选择日期") }
+                ) { Text("确认安排") }
             },
             dismissButton = { TextButton(onClick = { datePicker = false }) { Text("取消") } },
         ) { DatePicker(dateState) }
@@ -282,7 +269,7 @@ fun TimeScreen(
 
     if (selectedId != null || selectedDate != null) {
         CaptureSheet(
-            "新建安排",
+            title = "在此日期添加任务",
             onDismiss = {
                 selectedId = null
                 selectedDate = null
@@ -295,55 +282,83 @@ fun TimeScreen(
             )
         }
     }
+    }
 }
 
 @Composable
 private fun TodayPlanningPrompt(timezone: String, today: String, onAdd: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        shape = MaterialTheme.shapes.extraLarge,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(TaskDockShapes.LargeIncreased)
+            .clickable(onClick = onAdd),
+        shape = TaskDockShapes.LargeIncreased,
         color = colors.primaryContainer,
     ) {
-        ListItem(
-            headlineContent = {
-                Text("今天", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            },
-            supportingContent = {
-                Text("${formatLocalDate(today, timezone)} · 今天还没有日期安排")
-            },
-            leadingContent = {
-                Icon(Icons.Default.CalendarToday, null, tint = colors.onPrimaryContainer)
-            },
-            trailingContent = {
-                IconButton(onClick = onAdd, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.Add, "在今天安排任务")
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Surface(
+                    shape = TaskDockShapes.Medium,
+                    color = colors.primary,
+                    modifier = Modifier.size(42.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            tint = colors.onPrimary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
-            },
-            colors =
-                ListItemDefaults.colors(
-                    containerColor = colors.primaryContainer,
-                    headlineColor = colors.onPrimaryContainer,
-                    supportingColor = colors.onPrimaryContainer,
-                ),
-        )
+
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "今天尚未安排任务",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.onPrimaryContainer,
+                    )
+                    Text(
+                        text = formatLocalDate(today, timezone),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onPrimaryContainer.copy(alpha = 0.8f),
+                    )
+                }
+            }
+
+            IconButton(onClick = onAdd) {
+                Icon(Icons.Default.Add, "在今天安排任务", tint = colors.onPrimaryContainer)
+            }
+        }
     }
 }
 
 @Composable
 private fun OlderDatesHeader(count: Int, expanded: Boolean, onToggle: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(start = 16.dp, top = 16.dp, end = 12.dp, bottom = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, top = 16.dp, end = 16.dp, bottom = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "更早的空日期 · $count",
-            Modifier.weight(1f),
+            text = "过往未安排日期 ($count)",
             style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        TextButton(onClick = onToggle, modifier = Modifier.sizeIn(minHeight = 48.dp)) {
+        TextButton(onClick = onToggle) {
             Text(if (expanded) "收起" else "查看全部")
         }
     }
@@ -360,21 +375,22 @@ private fun LazyListScope.timePointItems(
     onNavigateToTree: (TaskEntity) -> Unit,
 ) {
     points.forEach { point ->
+        val tasks = tasksByPoint[point.id].orEmpty()
         item(key = "time-point:${point.id}") {
             TimePointRow(
                 point = point,
-                taskCount = tasksByPoint[point.id].orEmpty().size,
+                taskCount = tasks.size,
                 timezone = timezone,
                 today = today,
                 onAdd = { onAdd(point) },
             )
         }
-        items(tasksByPoint[point.id].orEmpty(), key = { "${point.id}:task:${it.id}" }) { task ->
-            M3TaskRow(
-                task,
+        items(tasks, key = { "${point.id}:task:${it.id}" }) { task ->
+            ExpressiveTaskCard(
+                task = task,
                 onClick = { onNavigateToDetail(task) },
                 onStatusToggle = { onStatusToggle(task, it) },
-                actions = listOf(RowAction("在目录中显示") { onNavigateToTree(task) }),
+                actions = listOf(RowAction("在目录中定位") { onNavigateToTree(task) }),
             )
         }
     }
@@ -390,69 +406,80 @@ private fun TimePointRow(
 ) {
     val isDate = point.type == TimePointType.DATE
     val isToday = isDate && point.localDate == today
-    val title =
-        when {
-            isToday -> "今天"
-            isDate -> formatLocalDate(point.localDate, timezone)
-            else -> point.title?.takeIf(String::isNotBlank) ?: "未命名事件"
-        }
-    val context =
-        when {
-            isDate && isToday ->
-                "${formatLocalDate(point.localDate, timezone)} · ${if (taskCount == 0) "还没有安排任务" else "$taskCount 个任务"}"
-            isDate && taskCount == 0 -> "没有安排任务 · 仍可添加"
-            isDate -> "$taskCount 个任务"
-            point.reachedAt != null -> "已到达 · $taskCount 个任务"
-            else -> "未到达 · $taskCount 个任务"
-        }
+    val title = when {
+        isToday -> "今天"
+        isDate -> formatLocalDate(point.localDate, timezone)
+        else -> point.title?.takeIf(String::isNotBlank) ?: "未命名事件"
+    }
+
+    val subtitle = when {
+        isDate && isToday -> if (taskCount == 0) "今天未安排" else "$taskCount 个安排任务"
+        isDate && taskCount == 0 -> "暂无任务"
+        isDate -> "$taskCount 个安排任务"
+        point.reachedAt != null -> "已到达 · $taskCount 个任务"
+        else -> "未到达 · $taskCount 个任务"
+    }
+
     val colors = MaterialTheme.colorScheme
-    val containerColor =
-        when {
-            isToday -> colors.primaryContainer
-            taskCount > 0 -> colors.surfaceContainer
-            else -> colors.surfaceContainerLow
-        }
-    val iconColor =
-        when {
-            isToday -> colors.onPrimaryContainer
-            !isDate -> colors.onTertiaryContainer
-            else -> colors.onSecondaryContainer
-        }
-    val iconContainer =
-        when {
-            isToday -> colors.primaryContainer
-            !isDate -> colors.tertiaryContainer
-            else -> colors.secondaryContainer
-        }
-    ListItem(
-        headlineContent = {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-        },
-        supportingContent = {
-            Text(context, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-        },
-        leadingContent = {
-            Surface(shape = MaterialTheme.shapes.medium, color = iconContainer) {
-                Icon(
-                    if (isDate) Icons.Default.CalendarToday else Icons.Default.Event,
-                    null,
-                    modifier = Modifier.padding(10.dp).size(22.dp),
-                    tint = iconColor,
+    val (iconBg, iconTint) = when {
+        isToday -> colors.primaryContainer to colors.onPrimaryContainer
+        !isDate -> colors.tertiaryContainer to colors.onTertiaryContainer
+        else -> colors.secondaryContainer to colors.onSecondaryContainer
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = TaskDockShapes.Large,
+        color = if (isToday) colors.surfaceContainerHigh else colors.surfaceContainerLow,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                shape = TaskDockShapes.Small,
+                color = iconBg,
+                modifier = Modifier.size(36.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (isDate) Icons.Default.CalendarToday else Icons.Default.Event,
+                        contentDescription = null,
+                        tint = iconTint,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.SemiBold,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant,
                 )
             }
-        },
-        trailingContent = {
-            IconButton(
-                onClick = onAdd,
-                modifier = Modifier.size(48.dp),
-            ) {
+
+            IconButton(onClick = onAdd) {
                 Icon(
-                    Icons.Default.Add,
-                    if (isDate) "在此日期安排任务" else "在此事件安排任务",
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "安排任务",
                     tint = colors.onSurfaceVariant,
                 )
             }
-        },
-        colors = ListItemDefaults.colors(containerColor = containerColor),
-    )
+        }
+    }
 }
