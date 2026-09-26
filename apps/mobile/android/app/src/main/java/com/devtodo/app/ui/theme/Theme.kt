@@ -108,14 +108,7 @@ private val DarkColorScheme =
  * extraLarge), so the increased/xxl steps cannot be expressed here without
  * subclassing — the nearest M3E step is mapped into each available slot.
  */
-private val DevTodoShapes =
-    Shapes(
-        extraSmall = RoundedCornerShape(4.dp),
-        small = RoundedCornerShape(8.dp),
-        medium = RoundedCornerShape(12.dp),
-        large = RoundedCornerShape(16.dp),
-        extraLarge = RoundedCornerShape(28.dp),
-    )
+private val DevTodoShapes = DevTodoMaterialShapes
 
 enum class ThemeMode {
     SYSTEM,

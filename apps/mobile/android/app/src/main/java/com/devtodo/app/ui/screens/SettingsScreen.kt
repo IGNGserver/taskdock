@@ -1,23 +1,18 @@
 package com.devtodo.app.ui.screens
 
 import android.os.Build
-import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.MoreTime
-import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -31,10 +26,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.devtodo.app.data.local.OutboxEntity
 import com.devtodo.app.data.sync.SyncState
 import com.devtodo.app.ui.components.ActionMenu
+import com.devtodo.app.ui.components.PredictiveBackContainer
 import com.devtodo.app.ui.components.RowAction
 import com.devtodo.app.ui.components.WorkspaceScaffold
+import com.devtodo.app.ui.theme.TaskDockShapes
 import com.devtodo.app.ui.theme.ThemeMode
 
+/**
+ * Material 3 Expressive Settings Screen.
+ * Featuring expressive sync status hero card, fluid pill selection chips,
+ * and unified surface containers.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
@@ -54,6 +56,7 @@ fun SettingsScreen(
     val pending by viewModel.pendingOutboxItems.collectAsStateWithLifecycle()
     val conflicts by viewModel.unresolvedConflicts.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+
     var showHub by rememberSaveable { mutableStateOf(false) }
     var hub by rememberSaveable { mutableStateOf(viewModel.authManager.hubOrigin) }
     var confirmOrigin by rememberSaveable { mutableStateOf<String?>(null) }
@@ -61,10 +64,15 @@ fun SettingsScreen(
     var discard by remember { mutableStateOf<OutboxEntity?>(null) }
     var queue by rememberSaveable { mutableStateOf(false) }
     var showTimezone by rememberSaveable { mutableStateOf(false) }
-    WorkspaceScaffold(
+
+    PredictiveBackContainer(
+        enabled = onBack != null,
+        onBack = { onBack?.invoke() },
+    ) {
+        WorkspaceScaffold(
         topBar = {
             TopAppBar(
-                title = { Text("设置") },
+                title = { Text("设置", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -72,17 +80,22 @@ fun SettingsScreen(
                         }
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                )
             )
         }
     ) { padding ->
         Column(
-            Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(bottom = 48.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            SyncSummaryCard(
+            // Expressive Sync & Account Card
+            ExpressiveSyncSummaryCard(
                 username = viewModel.authManager.username ?: "当前账户",
                 state = sync,
                 pendingCount = pending.size,
@@ -92,34 +105,42 @@ fun SettingsScreen(
                 onReauthenticate = { logout = true },
             )
 
-            SettingsGroup(
-                title = "服务器连接",
+            // Server Connection Group
+            ExpressiveSettingsGroup(
+                title = "服务器中枢",
                 description = serverSummary(viewModel.authManager.hubOrigin),
-                icon = { Icon(Icons.Default.CloudSync, null) },
             ) {
-                SettingsActionRow("服务器地址", "完整地址只在编辑时显示", "更改") {
+                SettingsActionRow(
+                    title = "中枢服务地址",
+                    subtitle = "完整地址只在编辑时显示",
+                    actionLabel = "更改",
+                ) {
                     hub = viewModel.authManager.hubOrigin
                     showHub = true
                 }
             }
 
-            SettingsGroup(
-                title = "同步队列",
-                description = "${pending.size} 项待提交 · ${conflicts.size} 项冲突",
-                icon = { Icon(Icons.Default.Storage, null) },
+            // Sync Queue Group
+            ExpressiveSettingsGroup(
+                title = "离线同步队列",
+                description = "${pending.size} 项本地待提交 · ${conflicts.size} 项冲突",
             ) {
                 SettingsActionRow(
-                    "本地待处理操作",
-                    if (pending.isEmpty() && conflicts.isEmpty()) "没有待处理项"
-                    else "查看、重试或丢弃本地操作",
-                    if (queue) "收起" else "查看",
-                ) { queue = !queue }
+                    title = "本地待处理队列",
+                    subtitle = if (pending.isEmpty() && conflicts.isEmpty()) "队列畅通，无积压操作" else "查看、重试或丢弃离线队列",
+                    actionLabel = if (queue) "收起" else "查看",
+                ) {
+                    queue = !queue
+                }
+
                 AnimatedVisibility(queue) {
-                    Column {
+                    Column(Modifier.padding(bottom = 8.dp)) {
                         if (conflicts.isNotEmpty()) {
                             Text(
-                                "冲突数据已保留，请打开 Web 端的“更多 → 设置 → 高级同步与故障处理”选择要保留的版本。",
-                                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                                text = "存在版本冲突。请在 Web 端“设置 → 高级同步”中检视并解决冲突。",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
                                 color = MaterialTheme.colorScheme.error,
                                 style = MaterialTheme.typography.bodySmall,
                             )
@@ -127,20 +148,20 @@ fun SettingsScreen(
                         conflicts.forEach { conflict ->
                             ListItem(
                                 headlineContent = { Text(conflict.command ?: conflict.entityType) },
-                                supportingContent = { Text("记录 ${conflict.entityId.take(8)}") },
+                                supportingContent = { Text("记录 ID: ${conflict.entityId.take(8)}") },
                                 colors = transparentListItemColors(),
                             )
                         }
                         pending.forEach { item ->
                             ListItem(
                                 headlineContent = { Text(item.command) },
-                                supportingContent = { Text(item.lastError ?: "等待提交") },
+                                supportingContent = { Text(item.lastError ?: "等待同步") },
                                 trailingContent = {
                                     ActionMenu(
                                         "待提交操作",
                                         listOf(
-                                            RowAction("重试") { viewModel.retryOutboxItem(item) },
-                                            RowAction("丢弃", destructive = true) { discard = item },
+                                            RowAction("立即重试") { viewModel.retryOutboxItem(item) },
+                                            RowAction("丢弃操作", destructive = true) { discard = item },
                                         ),
                                     )
                                 },
@@ -151,133 +172,149 @@ fun SettingsScreen(
                 }
             }
 
-            SettingsGroup(
-                title = "日期与安排",
-                description = "日期、今日视图和日历使用同一时区。",
-                icon = { Icon(Icons.Default.MoreTime, null) },
+            // Date & Regional Group
+            ExpressiveSettingsGroup(
+                title = "日期与安排设置",
+                description = "日期规划与今日视图的时间准则。",
             ) {
                 SettingsActionRow(
-                    "时区",
-                    timezoneLabel(settings?.timezone ?: "Asia/Shanghai"),
-                    "更改",
-                ) { showTimezone = true }
-                SettingsChoiceRow(
-                    title = "每周开始于",
-                    description = null,
+                    title = "工作区时区",
+                    subtitle = timezoneLabel(settings?.timezone ?: "Asia/Shanghai"),
+                    actionLabel = "更改",
+                ) {
+                    showTimezone = true
+                }
+
+                ExpressiveChoiceRow(
+                    title = "每周起始日",
                     options = listOf(1 to "周一", 0 to "周日"),
                     selected = settings?.weekStartsOn ?: 1,
                     onSelect = { viewModel.updateSettings(weekStartsOn = it) },
                 )
-                SettingsChoiceRow(
-                    title = "新任务默认放到",
-                    description = "这是快速新建任务的起点，之后仍可移动到其他目录。",
+
+                ExpressiveChoiceRow(
+                    title = "新任务默认捕获至",
                     options = listOf("ROOT" to "根目录", "RECENT_FOLDER" to "最近文件夹"),
                     selected = settings?.defaultCaptureTarget ?: "ROOT",
                     onSelect = { viewModel.updateSettings(defaultCaptureTarget = it) },
                 )
             }
 
-            SettingsGroup(
-                title = "外观",
-                description = "颜色选择会同时适用于列表、菜单和系统栏。",
+            // Appearance & Themes Group
+            ExpressiveSettingsGroup(
+                title = "外观与主题",
+                description = "采用 Material 3 Expressive 色阶与动效。",
             ) {
-                SettingsChoiceRow(
-                    title = "主题",
-                    description = null,
-                    options =
-                        listOf(
-                            ThemeMode.SYSTEM to "跟随系统",
-                            ThemeMode.LIGHT to "浅色",
-                            ThemeMode.DARK to "深色",
-                        ),
+                ExpressiveChoiceRow(
+                    title = "色彩模式",
+                    options = listOf(
+                        ThemeMode.SYSTEM to "跟随系统",
+                        ThemeMode.LIGHT to "浅色",
+                        ThemeMode.DARK to "深色",
+                    ),
                     selected = theme,
                     onSelect = onThemeModeChange,
                 )
-                SettingSwitchRow(
-                    "动态配色",
-                    if (Build.VERSION.SDK_INT >= 31) "使用系统壁纸颜色"
-                    else "需要 Android 12 或更新版本",
-                    dynamic,
-                    onDynamicColorChange,
-                    Build.VERSION.SDK_INT >= 31,
+
+                ExpressiveSwitchRow(
+                    title = "Material You 动态配色",
+                    subtitle = if (Build.VERSION.SDK_INT >= 31) "提取系统壁纸颜色呈现" else "需要 Android 12 或更新版本",
+                    checked = dynamic,
+                    onCheckedChange = onDynamicColorChange,
+                    enabled = Build.VERSION.SDK_INT >= 31,
                 )
-                SettingSwitchRow("纯黑背景", "在深色主题中使用", black, onPureBlackChange)
+
+                ExpressiveSwitchRow(
+                    title = "AMOLED 纯黑底色",
+                    subtitle = "在深色模式下使用纯黑背景降低能耗",
+                    checked = black,
+                    onCheckedChange = onPureBlackChange,
+                )
             }
 
-            SettingsGroup(title = "数据与账户") {
+            // Data & Actions Group
+            ExpressiveSettingsGroup(title = "数据与账户") {
                 SettingsActionRow(
-                    "归档中心",
-                    "查看和恢复已归档的任务与目录",
-                    "打开",
+                    title = "归档中心",
+                    subtitle = "检视并恢复已归档的任务与目录",
+                    actionLabel = "打开",
                     onClick = onNavigateToArchived,
                 )
+
                 SettingsActionRow(
-                    "退出登录",
-                    "本地任务会保留；未提交操作仍需原账户继续同步。",
-                    "退出",
+                    title = "退出当前账户",
+                    subtitle = "本地任务将安全保留；未提交操作需重新登录原账户同步。",
+                    actionLabel = "退出",
                     destructive = true,
-                ) { logout = true }
+                ) {
+                    logout = true
+                }
             }
         }
     }
-    if (showTimezone)
+
+    if (showTimezone) {
         AlertDialog(
-        onDismissRequest = { showTimezone = false },
-        title = { Text("选择时区") },
-        text = {
+            onDismissRequest = { showTimezone = false },
+            title = { Text("选择工作区时区") },
+            text = {
                 Column(Modifier.selectableGroup()) {
                     listOf(
                         "Asia/Shanghai" to "中国标准时间 (UTC+08:00)",
                         "Asia/Tokyo" to "日本标准时间 (UTC+09:00)",
                         "UTC" to "协调世界时 (UTC)",
-                        "America/Los_Angeles" to "太平洋时间",
+                        "America/Los_Angeles" to "太平洋时间 (US/Pacific)",
                     ).forEach { (value, label) ->
                         val selected = settings?.timezone == value
                         Row(
-                            Modifier.fillMaxWidth()
-                                .defaultMinSize(minHeight = 52.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(TaskDockShapes.Medium)
                                 .selectable(
                                     selected = selected,
                                     role = Role.RadioButton,
                                     onClick = {
-                                viewModel.updateSettings(timezone = value)
-                                showTimezone = false
+                                        viewModel.updateSettings(timezone = value)
+                                        showTimezone = false
                                     },
                                 )
-                                .padding(horizontal = 8.dp),
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             RadioButton(selected = selected, onClick = null)
+                            Spacer(Modifier.width(12.dp))
                             Text(label, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { showTimezone = false }) { Text("取消") }
-            },
+            confirmButton = { TextButton(onClick = { showTimezone = false }) { Text("取消") } },
         )
-    if (showHub)
+    }
+
+    if (showHub) {
         AlertDialog(
             onDismissRequest = { showHub = false },
-            title = { Text("服务器连接") },
+            title = { Text("配置服务器中枢地址") },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        hub,
-                        { hub = it },
-                        label = { Text("服务器地址") },
+                        value = hub,
+                        onValueChange = { hub = it },
+                        label = { Text("中枢服务地址") },
                         singleLine = true,
+                        shape = TaskDockShapes.Medium,
                         isError = hub.isNotBlank() && normalizedHubOrigin(hub) == null,
                         supportingText = {
                             Text(
-                                if (hub.startsWith("http://")) "HTTP 会明文传输账号和任务数据，请仅在可信网络使用。"
-                                else "请输入 HTTP 或 HTTPS 地址，不含路径。"
+                                if (hub.startsWith("http://")) "HTTP 明文传输仅建议在家庭内网或受信任局域网使用。"
+                                else "请输入 HTTP 或 HTTPS 完整地址（例如 https://todo.example.com）。"
                             )
                         },
                     )
-                    if (pending.isNotEmpty())
-                        Text("请先完成待提交操作，再更换服务器。", color = MaterialTheme.colorScheme.error)
+                    if (pending.isNotEmpty()) {
+                        Text("当前有未同步操作，请等待同步完毕后再切换服务器。", color = MaterialTheme.colorScheme.error)
+                    }
                 }
             },
             confirmButton = {
@@ -295,11 +332,13 @@ fun SettingsScreen(
             },
             dismissButton = { TextButton(onClick = { showHub = false }) { Text("取消") } },
         )
+    }
+
     confirmOrigin?.let { origin ->
         AlertDialog(
             onDismissRequest = { confirmOrigin = null },
             title = { Text("切换服务器并重新登录？") },
-            text = { Text("将连接 $origin。当前设备上的任务不会被删除。") },
+            text = { Text("将切换连接至 $origin。当前本地已缓存任务仍会保留。") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -308,30 +347,33 @@ fun SettingsScreen(
                         confirmOrigin = null
                     }
                 ) {
-                    Text("切换")
+                    Text("切换并登录")
                 }
             },
             dismissButton = { TextButton(onClick = { confirmOrigin = null }) { Text("取消") } },
         )
     }
-    if (logout)
+
+    if (logout) {
         AlertDialog(
             onDismissRequest = { logout = false },
             title = { Text("退出登录？") },
             text = {
                 Text(
-                    if (pending.isEmpty()) "本地任务会保留，重新登录后继续同步。"
-                    else "还有 ${pending.size} 项未提交。重新登录当前账户后才能继续同步。"
+                    if (pending.isEmpty()) "退出后本地任务仍然保留，再次登录即可恢复云端同步。"
+                    else "注意：还有 ${pending.size} 项操作未提交至中枢。退出后须重新登录当前账户才能继续上传。"
                 )
             },
-            confirmButton = { TextButton(onClick = onLogout) { Text("退出登录") } },
+            confirmButton = { TextButton(onClick = onLogout) { Text("确认退出") } },
             dismissButton = { TextButton(onClick = { logout = false }) { Text("取消") } },
         )
+    }
+
     discard?.let { item ->
         AlertDialog(
             onDismissRequest = { discard = null },
-            title = { Text("丢弃待提交操作？") },
-            text = { Text("这条操作将不再发送到服务器，本地显示可能与其他设备不同。") },
+            title = { Text("丢弃离线待提交操作？") },
+            text = { Text("该操作将从离线队列彻底移除，可能造成多端数据不一致。确定丢弃？") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -339,17 +381,18 @@ fun SettingsScreen(
                         discard = null
                     }
                 ) {
-                    Text("丢弃")
+                    Text("丢弃", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = { TextButton(onClick = { discard = null }) { Text("取消") } },
         )
     }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SyncSummaryCard(
+private fun ExpressiveSyncSummaryCard(
     username: String,
     state: SyncState,
     pendingCount: Int,
@@ -359,88 +402,118 @@ private fun SyncSummaryCard(
     onReauthenticate: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
-    val stateColor =
-        when (state) {
-            SyncState.AUTH_REQUIRED, SyncState.INCOMPATIBLE, SyncState.SERVER_UNAVAILABLE,
-            SyncState.ERROR -> colors.error
-            SyncState.OFFLINE -> colors.onSecondaryContainer
-            SyncState.IDLE, SyncState.SYNCING -> colors.onSecondaryContainer
-        }
     Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = MaterialTheme.shapes.extraLarge,
-        color = colors.secondaryContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = TaskDockShapes.LargeIncreased,
+        color = colors.primaryContainer.copy(alpha = 0.6f),
+        tonalElevation = 2.dp,
     ) {
         Column(
-            Modifier.padding(20.dp),
+            modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(shape = CircleShape, color = colors.surfaceContainerHigh) {
-                    Icon(
-                        Icons.Default.AccountCircle,
-                        contentDescription = null,
-                        modifier = Modifier.padding(12.dp).size(24.dp),
-                        tint = colors.onSurfaceVariant,
-                    )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    shape = TaskDockShapes.FullPill,
+                    color = colors.primary,
+                    modifier = Modifier.size(46.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = username.take(1).uppercase(),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.onPrimary,
+                        )
+                    }
                 }
-                Spacer(Modifier.width(12.dp))
+
+                Spacer(Modifier.width(14.dp))
+
                 Column(Modifier.weight(1f)) {
                     Text(
-                        username,
+                        text = username,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.onSecondaryContainer,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.onPrimaryContainer,
                     )
-                    Text("TaskDock 账户", style = MaterialTheme.typography.bodySmall,
-                        color = colors.onSecondaryContainer)
+                    Text(
+                        text = "同步状态: ${syncStateLabel(state)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onPrimaryContainer.copy(alpha = 0.8f),
+                    )
                 }
+
                 if (state == SyncState.SYNCING) {
-                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.5.dp)
                 }
             }
-            Text(
-                syncStateLabel(state),
-                style = MaterialTheme.typography.bodyMedium,
-                color = stateColor,
-            )
+
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SyncCountPill("$pendingCount 项待提交")
+                Surface(
+                    shape = TaskDockShapes.FullPill,
+                    color = colors.surface.copy(alpha = 0.8f),
+                ) {
+                    Text(
+                        text = "$pendingCount 项待提交",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.onSurface,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+
                 if (conflictCount > 0) {
-                    SyncCountPill("$conflictCount 项冲突", isError = true)
+                    Surface(
+                        shape = TaskDockShapes.FullPill,
+                        color = colors.errorContainer,
+                    ) {
+                        Text(
+                            text = "$conflictCount 项冲突待解决",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.onErrorContainer,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
                 }
             }
+
             if (error != null) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
-                    Icon(Icons.Default.ErrorOutline, null, tint = colors.error)
+                    Icon(Icons.Default.ErrorOutline, null, tint = colors.error, modifier = Modifier.size(18.dp))
                     Text(error, color = colors.error, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (state == SyncState.SYNCING) LinearProgressIndicator(Modifier.fillMaxWidth())
-            Button(
+
+            FilledTonalButton(
                 onClick = if (state == SyncState.AUTH_REQUIRED) onReauthenticate else onSync,
                 enabled = state != SyncState.SYNCING,
-                modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                shape = TaskDockShapes.FullPill,
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(
-                    if (state == SyncState.AUTH_REQUIRED) Icons.Default.AccountCircle
-                    else Icons.Default.CloudSync,
-                    null,
+                    imageVector = if (state == SyncState.AUTH_REQUIRED) Icons.Default.AccountCircle else Icons.Default.CloudSync,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
                     when (state) {
-                        SyncState.AUTH_REQUIRED -> "重新登录"
-                        SyncState.SYNCING -> "正在同步"
-                        SyncState.OFFLINE -> "尝试连接"
+                        SyncState.AUTH_REQUIRED -> "重新验证账户"
+                        SyncState.SYNCING -> "正在双向同步…"
+                        SyncState.OFFLINE -> "检查网络并重连"
                         SyncState.ERROR, SyncState.SERVER_UNAVAILABLE -> "重试同步"
-                        SyncState.INCOMPATIBLE -> "检查连接"
+                        SyncState.INCOMPATIBLE -> "检查版本协议"
                         SyncState.IDLE -> "立即同步"
                     }
                 )
@@ -450,199 +523,187 @@ private fun SyncSummaryCard(
 }
 
 @Composable
-private fun SyncCountPill(text: String, isError: Boolean = false) {
-    val colors = MaterialTheme.colorScheme
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = if (isError) colors.errorContainer else colors.surfaceContainerHigh,
-    ) {
-        Text(
-            text,
-            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            color = if (isError) colors.onErrorContainer else colors.onSurfaceVariant,
-            style = MaterialTheme.typography.labelMedium,
-        )
-    }
-}
-
-@Composable
-private fun SettingsGroup(
+private fun ExpressiveSettingsGroup(
     title: String,
     description: String? = null,
-    icon: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(
-        Modifier.fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(MaterialTheme.shapes.extraLarge)
-            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = TaskDockShapes.LargeIncreased,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            icon?.let {
-                Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                    Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { it() }
-                }
-            }
-            Column(Modifier.weight(1f)) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    title,
+                    text = title,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
                 )
                 if (description != null) {
                     Text(
-                        description,
+                        text = description,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
+            content()
         }
-        content()
-        Spacer(Modifier.height(8.dp))
     }
 }
 
 @Composable
 private fun SettingsActionRow(
     title: String,
-    description: String,
-    action: String,
+    subtitle: String,
+    actionLabel: String,
     destructive: Boolean = false,
     onClick: () -> Unit,
 ) {
-    ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = { Text(description) },
-        trailingContent = {
-            TextButton(onClick = onClick, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
-                Text(
-                    action,
-                    color = if (destructive) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.primary,
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        FilledTonalButton(
+            onClick = onClick,
+            shape = TaskDockShapes.FullPill,
+            colors = if (destructive) {
+                ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
                 )
-            }
-        },
-        colors = transparentListItemColors(),
-    )
+            } else {
+                ButtonDefaults.filledTonalButtonColors()
+            },
+        ) {
+            Text(actionLabel)
+        }
+    }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun <T> SettingsChoiceRow(
+private fun <T> ExpressiveChoiceRow(
     title: String,
-    description: String?,
     options: List<Pair<T, String>>,
     selected: T,
     onSelect: (T) -> Unit,
 ) {
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
-        FlowRow(
-            modifier = Modifier.fillMaxWidth().selectableGroup(),
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             options.forEach { (value, label) ->
-                val isSelected = value == selected
-                Row(
-                    Modifier.clip(MaterialTheme.shapes.large)
-                        .background(
-                            if (isSelected) MaterialTheme.colorScheme.secondaryContainer
-                            else MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                        .selectable(
-                            selected = isSelected,
-                            role = Role.RadioButton,
-                            onClick = { onSelect(value) },
-                        )
-                        .defaultMinSize(minHeight = 52.dp)
-                        .padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    RadioButton(selected = isSelected, onClick = null)
-                    Text(
-                        label,
-                        modifier = Modifier.padding(end = 8.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
-                        else MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
+                val isSelected = selected == value
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onSelect(value) },
+                    label = { Text(label) },
+                    shape = TaskDockShapes.FullPill,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
-        if (description != null) {
+    }
+}
+
+@Composable
+private fun ExpressiveSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
             Text(
-                description,
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+        )
     }
 }
 
 @Composable
 private fun transparentListItemColors() =
-    ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
-
-private fun serverSummary(origin: String): String {
-    val uri = Uri.parse(origin)
-    val host = uri.host ?: return "服务器地址已配置"
-    val port = uri.port.takeIf { it >= 0 }?.let { ":$it" }.orEmpty()
-    val scheme = uri.scheme?.uppercase() ?: "HTTPS"
-    return "$scheme · $host$port"
-}
-
-@Composable
-private fun SettingSwitchRow(
-    title: String,
-    description: String,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit,
-    enabled: Boolean = true,
-) {
-    ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = { Text(description) },
-        trailingContent = { Switch(checked, null, enabled = enabled) },
-        modifier =
-            Modifier.toggleable(
-                    checked,
-                    enabled = enabled,
-                    role = Role.Switch,
-                    onValueChange = onChange,
-                )
-                .defaultMinSize(minHeight = 64.dp),
-        colors = transparentListItemColors(),
-    )
-}
+    ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
 
 private fun syncStateLabel(state: SyncState): String =
     when (state) {
-        SyncState.IDLE -> "当前没有同步任务"
-        SyncState.SYNCING -> "正在同步"
-        SyncState.OFFLINE -> "离线，修改会保存在此设备"
-        SyncState.AUTH_REQUIRED -> "需要重新登录"
-        SyncState.INCOMPATIBLE -> "请升级服务器后重试"
-        SyncState.SERVER_UNAVAILABLE -> "服务器暂不可用"
-        SyncState.ERROR -> "同步失败，请重试"
+        SyncState.IDLE -> "就绪（已与云端同步）"
+        SyncState.SYNCING -> "正在与中枢双向同步…"
+        SyncState.OFFLINE -> "离线（本地优先工作）"
+        SyncState.ERROR -> "同步出错，可手动重试"
+        SyncState.AUTH_REQUIRED -> "会话已过期，请重新登录"
+        SyncState.SERVER_UNAVAILABLE -> "中枢服务无法连接"
+        SyncState.INCOMPATIBLE -> "服务协议版本不兼容"
     }
 
-private fun timezoneLabel(timezone: String): String =
-    when (timezone) {
-        "Asia/Shanghai" -> "中国标准时间 (UTC+08:00)"
-        "Asia/Tokyo" -> "日本标准时间 (UTC+09:00)"
+private fun serverSummary(origin: String): String =
+    when {
+        origin.startsWith("http://10.") ||
+            origin.startsWith("http://192.168.") ||
+            origin.startsWith("http://172.") -> "局域网中枢 ($origin)"
+        origin.startsWith("https://") -> "安全中枢 ($origin)"
+        origin.startsWith("http://") -> "公开 HTTP 中枢 ($origin)"
+        else -> origin
+    }
+
+private fun timezoneLabel(tz: String): String =
+    when (tz) {
+        "Asia/Shanghai" -> "中国标准时间 (Asia/Shanghai)"
+        "Asia/Tokyo" -> "日本标准时间 (Asia/Tokyo)"
         "UTC" -> "协调世界时 (UTC)"
-        "America/Los_Angeles" -> "太平洋时间"
-        else -> timezone
+        else -> tz
     }
