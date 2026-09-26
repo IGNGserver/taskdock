@@ -59,7 +59,12 @@
     "schemas": {
       "Error": {
         "type": "object",
-        "required": ["code", "message", "requestId", "details"],
+        "required": [
+          "code",
+          "message",
+          "requestId",
+          "details"
+        ],
         "properties": {
           "code": {
             "type": "string"
@@ -96,19 +101,34 @@
             "type": "string"
           },
           "projectId": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "category": {
-            "enum": ["FEATURE", "MISC"]
+            "enum": [
+              "FEATURE",
+              "MISC"
+            ]
           },
           "title": {
             "type": "string"
           },
           "status": {
-            "enum": ["TODO", "IN_PROGRESS", "DONE"]
+            "enum": [
+              "TODO",
+              "IN_PROGRESS",
+              "DONE"
+            ]
           },
           "priority": {
-            "enum": ["NONE", "LOW", "MEDIUM", "HIGH"]
+            "enum": [
+              "NONE",
+              "LOW",
+              "MEDIUM",
+              "HIGH"
+            ]
           },
           "rank": {
             "type": "string"
@@ -120,7 +140,13 @@
       },
       "Placement": {
         "type": "object",
-        "required": ["id", "taskId", "timePointId", "rank", "version"],
+        "required": [
+          "id",
+          "taskId",
+          "timePointId",
+          "rank",
+          "version"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -330,24 +356,6 @@
         }
       }
     },
-    "/projects/{id}/archive": {
-      "post": {
-        "responses": {
-          "200": {
-            "description": "project archived"
-          }
-        }
-      }
-    },
-    "/projects/{id}/restore": {
-      "post": {
-        "responses": {
-          "200": {
-            "description": "project restored"
-          }
-        }
-      }
-    },
     "/rollovers/{operationId}/undo": {
       "post": {
         "responses": {
@@ -475,15 +483,6 @@
         }
       }
     },
-    "/tasks/{id}/archive": {
-      "post": {
-        "responses": {
-          "200": {
-            "description": "task archived"
-          }
-        }
-      }
-    },
     "/tasks/{id}/duplicate": {
       "post": {
         "responses": {
@@ -505,15 +504,6 @@
         "responses": {
           "200": {
             "description": "note updated"
-          }
-        }
-      }
-    },
-    "/tasks/{id}/restore": {
-      "post": {
-        "responses": {
-          "200": {
-            "description": "task restored"
           }
         }
       }
@@ -587,15 +577,6 @@
         }
       }
     },
-    "/time-points/{id}/archive": {
-      "post": {
-        "responses": {
-          "200": {
-            "description": "event archived"
-          }
-        }
-      }
-    },
     "/time-points/{id}/placements": {
       "get": {
         "parameters": [
@@ -627,43 +608,6 @@
         "responses": {
           "200": {
             "description": "event reached"
-          }
-        }
-      }
-    },
-    "/time-points/{id}/restore": {
-      "post": {
-        "responses": {
-          "200": {
-            "description": "event restored"
-          }
-        }
-      }
-    },
-    "/v2/archive-operations": {
-      "servers": [
-        {
-          "url": "/api"
-        }
-      ],
-      "get": {
-        "responses": {
-          "200": {
-            "description": "TaskDock v2 GET /v2/archive-operations"
-          }
-        }
-      }
-    },
-    "/v2/archive-operations/{id}": {
-      "servers": [
-        {
-          "url": "/api"
-        }
-      ],
-      "get": {
-        "responses": {
-          "200": {
-            "description": "TaskDock v2 GET /v2/archive-operations/{id}"
           }
         }
       }
@@ -710,20 +654,6 @@
         }
       }
     },
-    "/v2/folders/{id}/archive-tree": {
-      "servers": [
-        {
-          "url": "/api"
-        }
-      ],
-      "post": {
-        "responses": {
-          "200": {
-            "description": "TaskDock v2 POST /v2/folders/{id}/archive-tree"
-          }
-        }
-      }
-    },
     "/v2/folders/{id}/delete-preview": {
       "servers": [
         {
@@ -748,20 +678,6 @@
         "responses": {
           "200": {
             "description": "TaskDock v2 GET /v2/folders/{id}/path"
-          }
-        }
-      }
-    },
-    "/v2/folders/{id}/restore-tree": {
-      "servers": [
-        {
-          "url": "/api"
-        }
-      ],
-      "post": {
-        "responses": {
-          "200": {
-            "description": "TaskDock v2 POST /v2/folders/{id}/restore-tree"
           }
         }
       }
@@ -1018,20 +934,6 @@
         }
       }
     },
-    "/v2/tasks/{id}/archive": {
-      "servers": [
-        {
-          "url": "/api"
-        }
-      ],
-      "post": {
-        "responses": {
-          "200": {
-            "description": "TaskDock v2 POST /v2/tasks/{id}/archive"
-          }
-        }
-      }
-    },
     "/v2/tasks/{id}/duplicate": {
       "servers": [
         {
@@ -1056,20 +958,6 @@
         "responses": {
           "200": {
             "description": "TaskDock v2 PATCH /v2/tasks/{id}/note"
-          }
-        }
-      }
-    },
-    "/v2/tasks/{id}/restore": {
-      "servers": [
-        {
-          "url": "/api"
-        }
-      ],
-      "post": {
-        "responses": {
-          "200": {
-            "description": "TaskDock v2 POST /v2/tasks/{id}/restore"
           }
         }
       }
@@ -1186,20 +1074,6 @@
         }
       }
     },
-    "/v2/time-points/{id}/archive": {
-      "servers": [
-        {
-          "url": "/api"
-        }
-      ],
-      "post": {
-        "responses": {
-          "200": {
-            "description": "TaskDock v2 POST /v2/time-points/{id}/archive"
-          }
-        }
-      }
-    },
     "/v2/time-points/{id}/placements": {
       "servers": [
         {
@@ -1238,20 +1112,6 @@
         "responses": {
           "200": {
             "description": "TaskDock v2 POST /v2/time-points/{id}/reach"
-          }
-        }
-      }
-    },
-    "/v2/time-points/{id}/restore": {
-      "servers": [
-        {
-          "url": "/api"
-        }
-      ],
-      "post": {
-        "responses": {
-          "200": {
-            "description": "TaskDock v2 POST /v2/time-points/{id}/restore"
           }
         }
       }
@@ -1406,34 +1266,6 @@
         "responses": {
           "200": {
             "description": "TaskDock v2 DELETE /v2/workflows/{id}"
-          }
-        }
-      }
-    },
-    "/v2/workflows/{id}/archive": {
-      "servers": [
-        {
-          "url": "/api"
-        }
-      ],
-      "post": {
-        "responses": {
-          "200": {
-            "description": "TaskDock v2 POST /v2/workflows/{id}/archive"
-          }
-        }
-      }
-    },
-    "/v2/workflows/{id}/restore": {
-      "servers": [
-        {
-          "url": "/api"
-        }
-      ],
-      "post": {
-        "responses": {
-          "200": {
-            "description": "TaskDock v2 POST /v2/workflows/{id}/restore"
           }
         }
       }

@@ -13,11 +13,11 @@ import {
  * resolution order and the ROOT preference.
  */
 const folders = [
-  { id: 'folder-recent', archivedAt: null, updatedAt: '2026-09-10T00:00:00.000Z' },
-  { id: 'folder-newer', archivedAt: null, updatedAt: '2026-09-20T00:00:00.000Z' },
+  { id: 'folder-recent', updatedAt: '2026-09-10T00:00:00.000Z' },
+  { id: 'folder-newer', updatedAt: '2026-09-20T00:00:00.000Z' },
   {
-    id: 'folder-archived',
-    archivedAt: '2026-09-01T00:00:00.000Z',
+    id: 'folder-deleted',
+    deletedAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-25T00:00:00.000Z',
   },
 ];
@@ -57,11 +57,11 @@ describe('capture folder preference', () => {
     ).toBe('folder-newer');
   });
 
-  it('ignores an archived active folder and falls back to the recent one', () => {
+  it('ignores a deleted active folder and falls back to the recent one', () => {
     recordLastFolderId('folder-recent');
     expect(
       resolveCaptureFolder({
-        activeFolderId: 'folder-archived',
+        activeFolderId: 'folder-deleted',
         defaultCaptureTarget: 'RECENT_FOLDER',
         folders,
       }),
@@ -89,8 +89,8 @@ describe('capture folder preference', () => {
     ).toBe('folder-newer');
   });
 
-  it('never resolves to an archived folder when falling back', () => {
-    recordLastFolderId('folder-archived');
+  it('never resolves to a deleted folder when falling back', () => {
+    recordLastFolderId('folder-deleted');
     expect(
       resolveCaptureFolder({
         activeFolderId: null,

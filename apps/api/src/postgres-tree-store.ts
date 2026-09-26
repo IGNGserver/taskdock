@@ -45,11 +45,11 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     // sequential: pg clients do not support Promise.all on one active query
     // stream, and queued concurrent calls become an execution hazard in pg 9.
     const folders = await this.postgres.v2Query(
-      'SELECT id, owner_id, parent_folder_id, title, rank::text, version, archived_at, archived_by_operation_id, created_at, updated_at, deleted_at FROM folders WHERE owner_id = $1',
+      'SELECT id, owner_id, parent_folder_id, title, rank::text, version, created_at, updated_at, deleted_at FROM folders WHERE owner_id = $1',
       [ownerId],
     );
     const tasks = await this.postgres.v2Query(
-      'SELECT id, owner_id, reference_id, parent_folder_id, title, status, rank::text, version, completed_at, archived_at, created_at, updated_at, deleted_at, archived_by_operation_id FROM tasks WHERE owner_id = $1',
+      'SELECT id, owner_id, reference_id, parent_folder_id, title, status, rank::text, version, completed_at, created_at, updated_at, deleted_at FROM tasks WHERE owner_id = $1',
       [ownerId],
     );
     const notes = await this.postgres.v2Query(
@@ -61,7 +61,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
       [ownerId],
     );
     const workflows = await this.postgres.v2Query(
-      'SELECT id, owner_id, name, rank::text, version, archived_at, created_at, updated_at, deleted_at FROM workflows WHERE owner_id = $1',
+      'SELECT id, owner_id, name, rank::text, version, created_at, updated_at, deleted_at FROM workflows WHERE owner_id = $1',
       [ownerId],
     );
     const stages = await this.postgres.v2Query(
@@ -72,12 +72,8 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
       'SELECT id, owner_id, workflow_id, stage_id, task_id, rank::text, version, created_at, updated_at, deleted_at FROM workflow_task_memberships WHERE owner_id = $1',
       [ownerId],
     );
-    const archiveOperations = await this.postgres.v2Query(
-      'SELECT id, owner_id, root_folder_id, root_base_version, folder_count, task_count, created_at, restored_at FROM archive_operations WHERE owner_id = $1',
-      [ownerId],
-    );
     const timePoints = await this.postgres.v2Query(
-      'SELECT id, owner_id, type, local_date, title, rank::text, version, reached_at, archived_at, created_at, updated_at, deleted_at FROM time_points WHERE owner_id = $1',
+      'SELECT id, owner_id, type, local_date, title, rank::text, version, reached_at, created_at, updated_at, deleted_at FROM time_points WHERE owner_id = $1',
       [ownerId],
     );
     const placements = await this.postgres.v2Query(
@@ -98,8 +94,6 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
         ownerId: String(row.owner_id),
         parentFolderId: nullableString(row.parent_folder_id),
         rank: String(row.rank),
-        archivedAt: isoOrNull(row.archived_at),
-        archivedByOperationId: nullableString(row.archived_by_operation_id),
         createdAt: iso(row.created_at),
         updatedAt: iso(row.updated_at),
         deletedAt: isoOrNull(row.deleted_at),
@@ -114,8 +108,6 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
         rank: String(row.rank),
         version: Number(row.version),
         completedAt: isoOrNull(row.completed_at),
-        archivedAt: isoOrNull(row.archived_at),
-        archivedByOperationId: nullableString(row.archived_by_operation_id),
         createdAt: iso(row.created_at),
         updatedAt: iso(row.updated_at),
         deletedAt: isoOrNull(row.deleted_at),
@@ -150,7 +142,6 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
         name: String(row.name),
         rank: String(row.rank),
         version: Number(row.version),
-        archivedAt: isoOrNull(row.archived_at),
         createdAt: iso(row.created_at),
         updatedAt: iso(row.updated_at),
         deletedAt: isoOrNull(row.deleted_at),
@@ -178,16 +169,6 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
         updatedAt: iso(row.updated_at),
         deletedAt: isoOrNull(row.deleted_at),
       })),
-      archiveOperations: archiveOperations.rows.map((row) => ({
-        id: String(row.id),
-        ownerId: String(row.owner_id),
-        rootFolderId: String(row.root_folder_id),
-        rootBaseVersion: Number(row.root_base_version),
-        folderCount: Number(row.folder_count),
-        taskCount: Number(row.task_count),
-        createdAt: iso(row.created_at),
-        restoredAt: isoOrNull(row.restored_at),
-      })),
       timePoints: timePoints.rows.map((row) => ({
         id: String(row.id),
         ownerId: String(row.owner_id),
@@ -197,7 +178,6 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
         rank: String(row.rank),
         version: Number(row.version),
         reachedAt: isoOrNull(row.reached_at),
-        archivedAt: isoOrNull(row.archived_at),
         createdAt: iso(row.created_at),
         updatedAt: iso(row.updated_at),
         deletedAt: isoOrNull(row.deleted_at),
@@ -302,7 +282,6 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
 
   private async persistChanges(ownerId: string, changes: V2SyncChange[]): Promise<void> {
     const priority: Record<V2SyncChange['entityType'], number> = {
-      archiveOperation: 10,
       folder: 20,
       workflow: 30,
       task: 40,
@@ -324,28 +303,11 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
   private async persistChange(ownerId: string, change: V2SyncChange): Promise<void> {
     const row = asRecord(change.snapshot);
     switch (change.entityType) {
-      case 'archiveOperation':
-        await this.postgres.v2Query(
-          `INSERT INTO archive_operations (id,owner_id,root_folder_id,root_base_version,folder_count,task_count,created_at,restored_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-           ON CONFLICT (id) DO UPDATE SET root_folder_id=EXCLUDED.root_folder_id,root_base_version=EXCLUDED.root_base_version,folder_count=EXCLUDED.folder_count,task_count=EXCLUDED.task_count,created_at=EXCLUDED.created_at,restored_at=EXCLUDED.restored_at`,
-          [
-            change.entityId,
-            ownerId,
-            row.rootFolderId,
-            row.rootBaseVersion,
-            row.folderCount,
-            row.taskCount,
-            row.createdAt,
-            nullableValue(row.restoredAt),
-          ],
-        );
-        return;
       case 'folder':
         await this.postgres.v2Query(
-          `INSERT INTO folders (id,owner_id,parent_folder_id,title,rank,version,archived_at,archived_by_operation_id,created_at,updated_at,deleted_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-           ON CONFLICT (id) DO UPDATE SET parent_folder_id=EXCLUDED.parent_folder_id,title=EXCLUDED.title,rank=EXCLUDED.rank,version=EXCLUDED.version,archived_at=EXCLUDED.archived_at,archived_by_operation_id=EXCLUDED.archived_by_operation_id,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
+          `INSERT INTO folders (id,owner_id,parent_folder_id,title,rank,version,created_at,updated_at,deleted_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT (id) DO UPDATE SET parent_folder_id=EXCLUDED.parent_folder_id,title=EXCLUDED.title,rank=EXCLUDED.rank,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
            WHERE folders.owner_id = EXCLUDED.owner_id`,
           [
             change.entityId,
@@ -354,8 +316,6 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
             row.title,
             row.rank,
             row.version,
-            nullableValue(row.archivedAt),
-            nullableValue(row.archivedByOperationId),
             row.createdAt,
             row.updatedAt,
             nullableValue(row.deletedAt),
@@ -364,9 +324,9 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
         return;
       case 'task': {
         await this.postgres.v2Query(
-          `INSERT INTO tasks (id,owner_id,project_id,category,reference_id,title,status,priority,rank,completed_at,archived_at,version,created_at,updated_at,deleted_at,parent_folder_id,archived_by_operation_id)
-           VALUES ($1,$2,NULL,'MISC',$3,$4,$5,'NONE',$6,$7,$8,$9,$10,$11,$12,$13,$14)
-           ON CONFLICT (id) DO UPDATE SET reference_id=EXCLUDED.reference_id,title=EXCLUDED.title,status=EXCLUDED.status,rank=EXCLUDED.rank,completed_at=EXCLUDED.completed_at,archived_at=EXCLUDED.archived_at,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at,parent_folder_id=EXCLUDED.parent_folder_id,archived_by_operation_id=EXCLUDED.archived_by_operation_id
+          `INSERT INTO tasks (id,owner_id,project_id,category,reference_id,title,status,priority,rank,completed_at,version,created_at,updated_at,deleted_at,parent_folder_id)
+           VALUES ($1,$2,NULL,'MISC',$3,$4,$5,'NONE',$6,$7,$8,$9,$10,$11,$12)
+           ON CONFLICT (id) DO UPDATE SET reference_id=EXCLUDED.reference_id,title=EXCLUDED.title,status=EXCLUDED.status,rank=EXCLUDED.rank,completed_at=EXCLUDED.completed_at,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at,parent_folder_id=EXCLUDED.parent_folder_id
            WHERE tasks.owner_id = EXCLUDED.owner_id`,
           [
             change.entityId,
@@ -376,13 +336,11 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
             row.status,
             row.rank,
             nullableValue(row.completedAt),
-            nullableValue(row.archivedAt),
             row.version,
             row.createdAt,
             row.updatedAt,
             nullableValue(row.deletedAt),
             nullableValue(row.parentFolderId),
-            nullableValue(row.archivedByOperationId),
           ],
         );
         const match = /^TASK-(\d+)$/.exec(String(row.referenceId));
@@ -435,9 +393,9 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
         return;
       case 'workflow':
         await this.postgres.v2Query(
-          `INSERT INTO workflows (id,owner_id,name,rank,version,archived_at,created_at,updated_at,deleted_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-           ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,rank=EXCLUDED.rank,version=EXCLUDED.version,archived_at=EXCLUDED.archived_at,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
+          `INSERT INTO workflows (id,owner_id,name,rank,version,created_at,updated_at,deleted_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,rank=EXCLUDED.rank,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
            WHERE workflows.owner_id = EXCLUDED.owner_id`,
           [
             change.entityId,
@@ -445,7 +403,6 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
             row.name,
             row.rank,
             row.version,
-            nullableValue(row.archivedAt),
             row.createdAt,
             row.updatedAt,
             nullableValue(row.deletedAt),
@@ -493,9 +450,9 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
         return;
       case 'timePoint':
         await this.postgres.v2Query(
-          `INSERT INTO time_points (id,owner_id,type,local_date,title,rank,version,reached_at,archived_at,created_at,updated_at,deleted_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-           ON CONFLICT (id) DO UPDATE SET type=EXCLUDED.type,local_date=EXCLUDED.local_date,title=EXCLUDED.title,rank=EXCLUDED.rank,version=EXCLUDED.version,reached_at=EXCLUDED.reached_at,archived_at=EXCLUDED.archived_at,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
+          `INSERT INTO time_points (id,owner_id,type,local_date,title,rank,version,reached_at,created_at,updated_at,deleted_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+           ON CONFLICT (id) DO UPDATE SET type=EXCLUDED.type,local_date=EXCLUDED.local_date,title=EXCLUDED.title,rank=EXCLUDED.rank,version=EXCLUDED.version,reached_at=EXCLUDED.reached_at,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
            WHERE time_points.owner_id = EXCLUDED.owner_id`,
           [
             change.entityId,
@@ -506,7 +463,6 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
             row.rank,
             row.version,
             nullableValue(row.reachedAt),
-            nullableValue(row.archivedAt),
             row.createdAt,
             row.updatedAt,
             nullableValue(row.deletedAt),

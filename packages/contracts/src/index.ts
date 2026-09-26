@@ -38,9 +38,6 @@ export interface FolderDto {
   title: string;
   rank: string;
   version: number;
-  archivedAt: string | null;
-  /** Archive boundary retained for exact recursive restore. */
-  archivedByOperationId?: string | null;
   deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -55,9 +52,6 @@ export interface TreeTaskDto {
   rank: string;
   version: number;
   completedAt: string | null;
-  archivedAt: string | null;
-  /** Archive boundary retained for exact recursive restore. */
-  archivedByOperationId?: string | null;
   deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -111,50 +105,12 @@ export interface WorkflowDto {
   name: string;
   rank: string;
   version: number;
-  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
   stages?: Array<
     WorkflowStageDto & { tasks: TreeTaskDto[]; memberships?: WorkflowTaskMembershipDto[] }
   >;
-}
-
-export interface ArchiveOperationDto {
-  id: string;
-  rootFolderId: string;
-  rootBaseVersion: number;
-  folderCount: number;
-  taskCount: number;
-  createdAt: string;
-  restoredAt: string | null;
-}
-
-/** A top-level cascade-archive entry for the archive centre list view. */
-export interface ArchiveOperationSummaryDto extends ArchiveOperationDto {
-  rootFolderTitle: string;
-  /** Total folders currently covered by this operation, including already-archived descendants. */
-  descendantFolderCount: number;
-  /** Total active tasks currently covered by this operation. */
-  descendantTaskCount: number;
-  /** Descendants that were archived before this operation ran and must stay archived on restore. */
-  previouslyArchivedFolderCount: number;
-  previouslyArchivedTaskCount: number;
-  /** Nested folders that can be opened or restored individually. */
-  folders: Array<{
-    id: string;
-    parentFolderId: string | null;
-    title: string;
-    archivedAt: string | null;
-    archivedByOperationId: string | null;
-    version: number;
-  }>;
-}
-
-export interface ArchiveOperationDetailDto extends ArchiveOperationSummaryDto {
-  tasks: TreeTaskDto[];
-  /** Independently archived tasks that are not covered by any archive operation. */
-  standaloneArchivedTasks?: TreeTaskDto[];
 }
 
 export interface TaskDetailV2Dto {
@@ -199,9 +155,9 @@ export interface ProjectDto {
   taskPrefix: string;
   rank: string;
   version: number;
-  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string | null;
 }
 
 export interface ProjectTaskCountDto {
@@ -221,7 +177,6 @@ export interface TaskDto {
   rank: string;
   version: number;
   completedAt: string | null;
-  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -229,6 +184,7 @@ export interface TaskDto {
 export interface LocalTaskDto extends Omit<TaskDto, 'referenceId'> {
   referenceId: string | null;
   pendingSync?: boolean;
+  deletedAt?: string | null;
 }
 
 export interface NoteDto {
@@ -249,7 +205,6 @@ export interface TimePointDto {
   rank: string;
   version: number;
   reachedAt: string | null;
-  archivedAt: string | null;
   deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -292,12 +247,9 @@ export const errorCodes = [
   'BOOTSTRAP_TOKEN_INVALID',
   'VALIDATION_FAILED',
   'ENTITY_NOT_FOUND',
-  'ENTITY_ARCHIVED',
   'VERSION_CONFLICT',
   'TREE_CYCLE',
   'PARENT_NOT_FOLDER',
-  'TARGET_ARCHIVED',
-  'ANCESTOR_ARCHIVED',
   'SUBTREE_CHANGED',
   'DELETE_CONFIRMATION_REQUIRED',
   'WORKFLOW_TASK_ALREADY_EXISTS',

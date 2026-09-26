@@ -1,5 +1,4 @@
 import type {
-  ArchiveOperationDto,
   FolderDto,
   LocalTaskDto,
   Mutation,
@@ -48,9 +47,6 @@ export interface LocalWorkflowStage extends WorkflowStageDto {
 export interface LocalWorkflowTaskMembership extends WorkflowTaskMembershipDto {
   pendingSync?: boolean;
 }
-export interface LocalArchiveOperation extends ArchiveOperationDto {
-  pendingSync?: boolean;
-}
 export interface LocalNote extends NoteDto {
   pendingSync?: boolean;
 }
@@ -87,7 +83,6 @@ export type LocalImageTable =
   | 'workflows'
   | 'workflowStages'
   | 'workflowTaskMemberships'
-  | 'archiveOperations'
   | 'settings';
 
 export interface LocalImageRow {
@@ -137,7 +132,6 @@ export class DevTodoDatabase extends Dexie {
   workflows!: Table<LocalWorkflow, string>;
   workflowStages!: Table<LocalWorkflowStage, string>;
   workflowTaskMemberships!: Table<LocalWorkflowTaskMembership, string>;
-  archiveOperations!: Table<LocalArchiveOperation, string>;
   settings!: Table<SettingsDto, string>;
   outbox!: Table<OutboxItem, number>;
   conflicts!: Table<ConflictRecord, number>;
@@ -185,7 +179,6 @@ export class DevTodoDatabase extends Dexie {
               title: project.name,
               rank: project.rank,
               version: project.version,
-              archivedAt: project.archivedAt,
               createdAt: project.createdAt,
               updatedAt: project.updatedAt,
               pendingSync: project.pendingSync,
@@ -203,6 +196,48 @@ export class DevTodoDatabase extends Dexie {
         }
         await transaction.table<SyncMeta>('syncMeta').put({ key: 'protocolVersion', value: '2' });
         await transaction.table<SyncMeta>('syncMeta').put({ key: 'schemaVersion', value: '3' });
+      });
+    // The archive mechanism was removed; drop archivedAt indexes and the
+    // archiveOperations table, and treat any archived rows as deleted.
+    this.version(4)
+      .stores({
+        folders: '&id, [parentFolderId+deletedAt], parentFolderId, rank, deletedAt',
+        tasks:
+          '&id, [parentFolderId+status], parentFolderId, status, rank, referenceId, deletedAt, projectId',
+        timePoints: '&id, [type+localDate], type, rank, deletedAt',
+        workflows: '&id, rank, deletedAt',
+        archiveOperations: null,
+      })
+      .upgrade(async (transaction) => {
+        const migrate = async (tableName: 'folders' | 'tasks' | 'timePoints' | 'workflows') => {
+          const table = transaction.table<Record<string, unknown>>(tableName);
+          const rows = await table.toArray();
+          const updates: Array<Record<string, unknown>> = [];
+          const removals: string[] = [];
+          for (const row of rows) {
+            if (row['archivedAt']) {
+              if (!row['deletedAt']) {
+                updates.push({ ...row, deletedAt: row['archivedAt'] });
+              } else {
+                removals.push(String(row['id']));
+              }
+              continue;
+            }
+            if ('archivedAt' in row) {
+              const { archivedAt: _archivedAt, ...rest } = row;
+              void _archivedAt;
+              updates.push(rest);
+            }
+          }
+          if (updates.length) await table.bulkPut(updates as never[]);
+          if (removals.length) await table.bulkDelete(removals);
+        };
+        await migrate('folders');
+        await migrate('tasks');
+        await migrate('timePoints');
+        await migrate('workflows');
+        await transaction.table('archiveOperations').clear();
+        await transaction.table<SyncMeta>('syncMeta').put({ key: 'schemaVersion', value: '4' });
       });
   }
 }
@@ -268,7 +303,6 @@ export interface V2SnapshotResult {
   workflows: LocalWorkflow[];
   workflowStages: LocalWorkflowStage[];
   workflowTaskMemberships: LocalWorkflowTaskMembership[];
-  archiveOperations: LocalArchiveOperation[];
   settings: V2SettingsDto;
   cursor: string;
 }
@@ -299,15 +333,6 @@ export async function convertV1OutboxForV2(db: DevTodoDatabase): Promise<Upgrade
   const pending: UpgradePendingMutation[] = [];
   await db.transaction('rw', [db.outbox, db.syncMeta], async () => {
     const items = await db.outbox.orderBy('id').toArray();
-    const archiveOperationByFolder = new Map<string, string>();
-    for (const item of items) {
-      if (item.command !== 'project.archive') continue;
-      const requested = item.payload['operationId'];
-      archiveOperationByFolder.set(
-        item.entityId,
-        typeof requested === 'string' ? requested : item.mutationId,
-      );
-    }
     for (const item of items) {
       let command = item.command;
       let payload = { ...item.payload };
@@ -319,16 +344,13 @@ export async function convertV1OutboxForV2(db: DevTodoDatabase): Promise<Upgrade
         command = 'folder.update';
         payload = { title: item.payload['name'] };
       } else if (item.command === 'project.archive') {
-        command = 'folder.archiveTree';
-        payload = { operationId: archiveOperationByFolder.get(item.entityId) ?? item.mutationId };
+        // The archive mechanism no longer exists; the closest safe intent is a
+        // permanent delete of the folder subtree.
+        command = 'folder.deleteTree';
+        payload = { confirmationToken: '' };
+        reason = 'v1 归档已移除，该操作被转换为待确认的目录删除，需要用户重新确认';
       } else if (item.command === 'project.restore') {
-        command = 'folder.restoreTree';
-        payload = {
-          operationId:
-            (typeof item.payload['operationId'] === 'string'
-              ? item.payload['operationId']
-              : archiveOperationByFolder.get(item.entityId)) ?? item.entityId,
-        };
+        reason = '归档机制已移除，v1 恢复操作不再可用';
       } else if (item.command === 'project.reorder' || item.command === 'task.reorder') {
         reason = 'v1 整组重排无法安全猜测 v2 混合状态锚点';
       } else if (item.command === 'task.create') {
@@ -503,10 +525,6 @@ export class SyncEngine {
     const server = conflictServerSnapshot(conflict.server);
     const item = await this.db.outbox.where('mutationId').equals(conflict.mutationId).first();
     if (!item || item.id === undefined) throw new Error('冲突缺少可重试的 mutation');
-    if (strategy === 'restore') {
-      await this.resolveArchivedConflict(conflict, item);
-      return;
-    }
     if (strategy !== 'server' && strategy !== 'discard') {
       if (!server || typeof server.version !== 'number' || !Number.isInteger(server.version))
         throw new Error('服务端实体已删除，请选择丢弃或重新创建');
@@ -602,87 +620,9 @@ export class SyncEngine {
   }
 
   private async resolveArchivedConflict(conflict: ConflictRecord, item: OutboxItem): Promise<void> {
-    const server = conflictServerSnapshot(conflict.server);
-    if (
-      !server ||
-      !isArchivedConflictCommand(conflict.entityType, item.command) ||
-      !server['archivedAt'] ||
-      typeof server['version'] !== 'number' ||
-      !Number.isInteger(server['version'])
-    )
-      throw new Error('当前冲突实体不支持恢复后应用');
-    const originalAfterImage = item.afterImage;
-    if (!originalAfterImage) throw new Error('冲突缺少本地 after-image，无法安全恢复');
-    const restoreCommand = restoreCommandForEntity(conflict.entityType);
-    const restoreBaseVersion = server['version'];
-    const retryBaseVersion = restoreBaseVersion + 1;
-    const retryPayload = withoutBaseVersion(item.payload);
-    const tables = [
-      this.db.projects,
-      this.db.tasks,
-      this.db.notes,
-      this.db.timePoints,
-      this.db.placements,
-      this.db.settings,
-      this.db.outbox,
-      this.db.conflicts,
-      this.db.deferredChanges,
-    ];
-    await this.db.transaction('rw', tables, async () => {
-      await this.putAuthoritativeConflict(conflict.entityType, server);
-      const restoreBeforeImage = await captureLocalStateImage(
-        this.db,
-        restoreCommand,
-        item.entityId,
-        {},
-      );
-      await applyRestoredOptimisticValue(this.db, conflict.entityType, item.entityId, server);
-      const restoreAfterImage = await captureLocalStateImage(
-        this.db,
-        restoreCommand,
-        item.entityId,
-        {},
-      );
-      const retryAfterImage = rebaseStateImage(
-        originalAfterImage,
-        conflict.entityType,
-        item.entityId,
-        retryBaseVersion + 1,
-      );
-      const restoreItem: OutboxItem = {
-        ...item,
-        id: undefined,
-        mutationId: uuidv7(),
-        command: restoreCommand,
-        baseVersion: restoreBaseVersion,
-        occurredAt: new Date().toISOString(),
-        payload: {},
-        attempts: 0,
-        nextAttemptAt: Date.now(),
-        lastError: undefined,
-        beforeImage: restoreBeforeImage,
-        afterImage: restoreAfterImage,
-      };
-      const retryItem: OutboxItem = {
-        ...item,
-        id: undefined,
-        mutationId: uuidv7(),
-        baseVersion: retryBaseVersion,
-        occurredAt: new Date().toISOString(),
-        payload: retryPayload,
-        attempts: 0,
-        nextAttemptAt: Date.now(),
-        lastError: undefined,
-        beforeImage: restoreAfterImage,
-        afterImage: retryAfterImage,
-      };
-      await this.db.outbox.delete(item.id!);
-      await this.db.outbox.add(restoreItem);
-      await this.db.outbox.add(retryItem);
-      await this.db.conflicts.update(conflict.id!, { resolvedAt: new Date().toISOString() });
-      await this.flushDeferredChanges();
-      await this.reapplyPendingImages();
-    });
+    void conflict;
+    void item;
+    throw new Error('归档机制已移除，恢复策略不再可用');
   }
 
   async retryRejectedMutation(mutationId: string): Promise<void> {
@@ -1051,8 +991,6 @@ export class SyncEngine {
         return;
       }
       case 'project.update':
-      case 'project.archive':
-      case 'project.restore':
         await put(this.db.projects as unknown as Table<unknown, string>, result);
         return;
       case 'project.reorder':
@@ -1070,8 +1008,6 @@ export class SyncEngine {
         return;
       }
       case 'task.update':
-      case 'task.archive':
-      case 'task.restore':
         await put(this.db.tasks as unknown as Table<unknown, string>, result);
         return;
       case 'task.reorder':
@@ -1099,8 +1035,7 @@ export class SyncEngine {
       }
       case 'timePoint.update':
       case 'timePoint.reach':
-      case 'timePoint.archive':
-      case 'timePoint.restore':
+      case 'timePoint.delete':
         await put(this.db.timePoints as unknown as Table<unknown, string>, result);
         return;
       case 'timePoint.reorder':
@@ -1490,10 +1425,6 @@ export class V2SyncEngine {
     const item = await this.db.outbox.where('mutationId').equals(conflict.mutationId).first();
     if (!item?.id) throw new Error('冲突缺少可重试的 mutation');
     const server = conflictServerSnapshot(conflict.server);
-    if (strategy === 'restore') {
-      await this.resolveArchivedConflictV2(conflict, item);
-      return;
-    }
     if (strategy === 'server' || strategy === 'discard') {
       if (strategy === 'server' && server) {
         const table = v2EntityTable(this.db, conflict.entityType);
@@ -1539,7 +1470,6 @@ export class V2SyncEngine {
         this.db.workflows,
         this.db.workflowStages,
         this.db.workflowTaskMemberships,
-        this.db.archiveOperations,
         this.db.settings,
         // v2 has no Project concept; the legacy table is cleared so stale rows
         // cannot leak back through v1 GET compatibility paths.
@@ -1558,7 +1488,6 @@ export class V2SyncEngine {
           this.db.workflows.clear(),
           this.db.workflowStages.clear(),
           this.db.workflowTaskMemberships.clear(),
-          this.db.archiveOperations.clear(),
           this.db.settings.clear(),
           // v2 has no Project concept. The legacy table is still declared by the
           // v1 schema, so clear it too: otherwise stale rows stay readable
@@ -1574,7 +1503,6 @@ export class V2SyncEngine {
         await this.db.workflows.bulkPut(snapshot.workflows);
         await this.db.workflowStages.bulkPut(snapshot.workflowStages);
         await this.db.workflowTaskMemberships.bulkPut(snapshot.workflowTaskMemberships);
-        await this.db.archiveOperations.bulkPut(snapshot.archiveOperations);
         await this.db.settings.put(snapshot.settings);
         await this.db.syncMeta.put({ key: 'v2:cursor', value: snapshot.cursor });
         for (const item of pending) {
@@ -1598,7 +1526,6 @@ export class V2SyncEngine {
         this.db.workflows,
         this.db.workflowStages,
         this.db.workflowTaskMemberships,
-        this.db.archiveOperations,
         this.db.settings,
         this.db.outbox,
       ],
@@ -1639,99 +1566,17 @@ export class V2SyncEngine {
   }
 
   /**
-   * Restore an archived entity and then re-apply the local intent on top of the
-   * restored version. A v2 `restore` always produces a server-side version bump,
-   * so the retried mutation must target `restoredVersion + 1`.
+   * The archive mechanism was removed, so archived-row conflicts no longer have
+   * a restore path. Kept as a stub for compatibility with persisted strategy
+   * values.
    */
   private async resolveArchivedConflictV2(
     conflict: ConflictRecord,
     item: OutboxItem,
   ): Promise<void> {
-    const server = conflictServerSnapshot(conflict.server);
-    const restoreCommand = v2RestoreCommandForEntity(conflict.entityType);
-    if (
-      !server ||
-      !restoreCommand ||
-      !server['archivedAt'] ||
-      typeof server['version'] !== 'number' ||
-      !Number.isInteger(server['version'])
-    )
-      throw new Error('当前冲突实体不支持恢复后应用');
-    const restoreBaseVersion = server['version'] as number;
-    const retryBaseVersion = restoreBaseVersion + 1;
-    const retryPayload = v2RetryPayload(conflict.entityType, item.payload);
-    const table = v2EntityTable(this.db, conflict.entityType);
-    if (!table) throw new Error('当前冲突实体不支持恢复后应用');
-    await this.db.transaction(
-      'rw',
-      [
-        this.db.folders,
-        this.db.tasks,
-        this.db.notes,
-        this.db.taskSteps,
-        this.db.timePoints,
-        this.db.placements,
-        this.db.workflows,
-        this.db.workflowStages,
-        this.db.workflowTaskMemberships,
-        this.db.archiveOperations,
-        this.db.outbox,
-        this.db.conflicts,
-      ],
-      async () => {
-        // 1. Adopt the archived server row, then optimistically apply the
-        //    restore that the first queued command will perform (the server
-        //    bumps the version by one and clears archivedAt).
-        await table.put({ ...server, pendingSync: false } as never);
-        await table.put({
-          ...server,
-          archivedAt: null,
-          version: retryBaseVersion,
-          updatedAt: new Date().toISOString(),
-          pendingSync: true,
-        } as never);
-        // 2. Queue the restore command first so the ordering is restore -> retry.
-        await this.db.outbox.add({
-          ...item,
-          id: undefined,
-          mutationId: uuidv7(),
-          command: restoreCommand,
-          entityId: conflict.entityId,
-          baseVersion: restoreBaseVersion,
-          occurredAt: new Date().toISOString(),
-          payload: {},
-          attempts: 0,
-          nextAttemptAt: Date.now(),
-          lastError: undefined,
-          beforeImage: undefined,
-          afterImage: undefined,
-        });
-        // 3. Queue the original intent against the post-restore version.
-        const retryItem: OutboxItem = {
-          ...item,
-          id: undefined,
-          mutationId: uuidv7(),
-          baseVersion: retryBaseVersion,
-          occurredAt: new Date().toISOString(),
-          payload: retryPayload,
-          attempts: 0,
-          nextAttemptAt: Date.now(),
-          lastError: undefined,
-          afterImage: item.afterImage
-            ? rebaseStateImage(
-                item.afterImage,
-                conflict.entityType,
-                item.entityId,
-                retryBaseVersion,
-              )
-            : undefined,
-        };
-        await this.db.outbox.delete(item.id!);
-        await this.db.outbox.add(retryItem);
-        if (conflict.id !== undefined)
-          await this.db.conflicts.update(conflict.id, { resolvedAt: new Date().toISOString() });
-      },
-    );
+    void conflict;
+    void item;
+    throw new Error('归档机制已移除，恢复策略不再可用');
   }
 }
 
@@ -1904,8 +1749,6 @@ function imageTable(db: DevTodoDatabase, table: LocalImageTable): Table<unknown,
       return db.workflowStages as unknown as Table<unknown, string>;
     case 'workflowTaskMemberships':
       return db.workflowTaskMemberships as unknown as Table<unknown, string>;
-    case 'archiveOperations':
-      return db.archiveOperations as unknown as Table<unknown, string>;
   }
 }
 
@@ -1951,8 +1794,6 @@ function v2EntityTable(db: DevTodoDatabase, entityType: string): Table<unknown, 
       return db.workflowStages as unknown as Table<unknown, string>;
     case 'workflowTaskMembership':
       return db.workflowTaskMemberships as unknown as Table<unknown, string>;
-    case 'archiveOperation':
-      return db.archiveOperations as unknown as Table<unknown, string>;
     case 'settings':
       return db.settings as unknown as Table<unknown, string>;
     default:
@@ -1964,33 +1805,6 @@ function withoutBaseVersion(payload: Record<string, unknown>): Record<string, un
   const next = { ...payload };
   delete next['baseVersion'];
   return next;
-}
-
-/** v2 restore command for an entity type, or null when it has no restore path. */
-function v2RestoreCommandForEntity(entityType: string): string | null {
-  switch (entityType) {
-    case 'folder':
-      // Folders restore through their cascade operation, never a bare restore.
-      return null;
-    case 'task':
-      return 'task.restore';
-    case 'timePoint':
-      return 'timePoint.restore';
-    case 'workflow':
-      return 'workflow.restore';
-    default:
-      return null;
-  }
-}
-
-/** Strip fields the v2 mutation contract validates itself. */
-function v2RetryPayload(
-  _entityType: string,
-  payload: Record<string, unknown>,
-): Record<string, unknown> {
-  // Matches the plain `server`/`local` retry path: the fresh base version is
-  // supplied through the mutation envelope, not the payload.
-  return withoutBaseVersion(payload);
 }
 
 function mergedConflictPayload(item: OutboxItem, merged: unknown): Record<string, unknown> {
@@ -2241,69 +2055,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isArchivedConflictCommand(entityType: string, command: string): boolean {
-  return (
-    (entityType === 'project' &&
-      ['project.update', 'project.archive', 'project.restore'].includes(command)) ||
-    (entityType === 'task' && ['task.update', 'task.archive', 'task.restore'].includes(command)) ||
-    (entityType === 'timePoint' &&
-      ['timePoint.update', 'timePoint.reach', 'timePoint.archive', 'timePoint.restore'].includes(
-        command,
-      ))
-  );
-}
-
-function restoreCommandForEntity(entityType: string): string {
-  if (entityType === 'project') return 'project.restore';
-  if (entityType === 'task') return 'task.restore';
-  if (entityType === 'timePoint') return 'timePoint.restore';
-  throw new Error('当前冲突实体不支持恢复');
-}
-
-async function applyRestoredOptimisticValue(
-  db: DevTodoDatabase,
-  entityType: string,
-  entityId: string,
-  server: Record<string, unknown>,
-): Promise<void> {
-  const tableName = imageTableName(entityType);
-  const table = imageTable(db, tableName);
-  const current = await table.get(entityId);
-  if (!isRecord(current)) throw new Error('服务端归档实体不在本地缓存中');
-  await table.put({
-    ...current,
-    archivedAt: null,
-    version: Number(server['version']) + 1,
-    updatedAt: new Date().toISOString(),
-    pendingSync: true,
-  } as never);
-}
-
-function rebaseStateImage(
-  image: LocalStateImage,
-  entityType: string,
-  entityId: string,
-  version: number,
-): LocalStateImage {
-  const tableName = imageTableName(entityType);
-  return {
-    rows: image.rows.map((row) => {
-      if (row.table !== tableName || row.id !== entityId || !isRecord(row.value)) return row;
-      return {
-        ...row,
-        value: { ...row.value, version, pendingSync: true },
-      };
-    }),
-  };
-}
-
-function imageTableName(entityType: string): LocalImageTable {
-  if (entityType === 'project') return 'projects';
-  if (entityType === 'task') return 'tasks';
-  if (entityType === 'timePoint') return 'timePoints';
-  throw new Error('当前冲突实体不支持恢复');
-}
-
 interface PendingSyncIntent {
   projectIds: Set<string>;
   taskIds: Set<string>;
@@ -2332,16 +2083,12 @@ function pendingSyncIntent(items: OutboxItem[], notes: LocalNote[]): PendingSync
     switch (item.command) {
       case 'project.create':
       case 'project.update':
-      case 'project.archive':
-      case 'project.restore':
         intent.projectIds.add(item.entityId);
         break;
       case 'project.reorder':
         ids.forEach((id) => intent.projectIds.add(id));
         break;
       case 'task.update':
-      case 'task.archive':
-      case 'task.restore':
         intent.taskIds.add(item.entityId);
         break;
       case 'task.create':
@@ -2367,8 +2114,6 @@ function pendingSyncIntent(items: OutboxItem[], notes: LocalNote[]): PendingSync
       case 'timePoint.event.create':
       case 'timePoint.update':
       case 'timePoint.reach':
-      case 'timePoint.archive':
-      case 'timePoint.restore':
         intent.timePointIds.add(item.entityId);
         break;
       case 'timePoint.reorder':

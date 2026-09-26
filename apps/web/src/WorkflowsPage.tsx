@@ -23,7 +23,6 @@ import {
   Button,
   ButtonGroup,
   Card,
-  Chip,
   ConfirmDialog,
   Dialog,
   EmptyState,
@@ -323,7 +322,7 @@ function WorkflowAddTaskDialog({
               description={
                 candidates.length
                   ? '换一个标题或引用 ID 再试。'
-                  : '目录里的未归档任务都已在这个流程中；可以改为新建任务。'
+                  : '目录里的任务都已在这个流程中；可以改为新建任务。'
               }
             />
           )}
@@ -365,7 +364,6 @@ export function WorkflowsPage() {
   const [dialog, setDialog] = useState<WorkflowDialog | null>(null);
   const [confirmation, setConfirmation] = useState<WorkflowConfirm | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -379,7 +377,7 @@ export function WorkflowsPage() {
     setLoadError('');
     try {
       const [workflowResult, taskResult, folderResult] = await Promise.all([
-        requestV2<{ items: WorkflowDto[] }>('/workflows?includeArchived=true'),
+        requestV2<{ items: WorkflowDto[] }>('/workflows'),
         requestV2<{ items: TreeTaskDto[] }>('/tasks'),
         requestV2<{ items: FolderDto[] }>('/folders'),
       ]);
@@ -492,9 +490,7 @@ export function WorkflowsPage() {
       }),
     );
 
-  const activeWorkflows = workflows.filter((workflow) => !workflow.archivedAt);
-  const archivedCount = workflows.length - activeWorkflows.length;
-  const visibleWorkflows = showArchived ? workflows : activeWorkflows;
+  const visibleWorkflows = workflows;
 
   return (
     <section className="page-section workflows-page" aria-labelledby="workflows-title">
@@ -507,17 +503,6 @@ export function WorkflowsPage() {
           </p>
         </div>
         <div className="workflows-header__actions">
-          {archivedCount > 0 && (
-            <Button
-              variant={showArchived ? 'tonal' : 'text'}
-              size="s"
-              type="button"
-              aria-pressed={showArchived}
-              onClick={() => setShowArchived((current) => !current)}
-            >
-              {showArchived ? '隐藏已归档' : `显示已归档（${archivedCount}）`}
-            </Button>
-          )}
           <Button
             variant="filled"
             size="s"
@@ -586,15 +571,9 @@ export function WorkflowsPage() {
               (total, stage) => total + stage.tasks.filter((task) => task.status === 'DONE').length,
               0,
             );
-            const candidates = tasks.filter((task) => !task.archivedAt && !memberIds.has(task.id));
-            const archived = Boolean(workflow.archivedAt);
+            const candidates = tasks.filter((task) => !memberIds.has(task.id));
             return (
-              <Card
-                as="article"
-                variant="outlined"
-                className={`m3e-card--workflow${archived ? ' is-archived' : ''}`}
-                key={workflow.id}
-              >
+              <Card as="article" variant="outlined" className="m3e-card--workflow" key={workflow.id}>
                 <header className="workflow-card__header">
                   <div className="workflow-card__heading">
                     <h2 className="workflow-card__name">{workflow.name}</h2>
@@ -604,30 +583,18 @@ export function WorkflowsPage() {
                       <span>
                         {doneCount}/{taskCount} 已完成
                       </span>
-                      {archived && (
-                        <Chip kind="assist" label="已归档" className="m3e-chip--workflow-archive" />
-                      )}
                     </p>
                   </div>
                   <WorkflowMenu
                     label={`${workflow.name} 的操作`}
                     options={[
-                      { id: 'add-stage', label: '新增阶段', disabled: archived },
+                      { id: 'add-stage', label: '新增阶段' },
                       { id: 'rename', label: '重命名流程' },
-                      { id: 'archive', label: archived ? '恢复流程' : '归档流程' },
                       { id: 'delete', label: '删除流程', danger: true },
                     ]}
                     onSelect={(id) => {
                       if (id === 'add-stage') setDialog({ kind: 'add-stage', workflow });
                       if (id === 'rename') setDialog({ kind: 'rename-workflow', workflow });
-                      if (id === 'archive')
-                        void run(() =>
-                          mutationV2(
-                            'POST',
-                            `/workflows/${workflow.id}/${archived ? 'restore' : 'archive'}`,
-                            { baseVersion: workflow.version },
-                          ),
-                        );
                       if (id === 'delete')
                         setConfirmation({
                           title: '删除流程',
@@ -663,25 +630,24 @@ export function WorkflowsPage() {
                           <WorkflowMenu
                             label={`${stage.name} 阶段的操作`}
                             options={[
-                              { id: 'add-task', label: '添加任务', disabled: archived },
-                              { id: 'rename', label: '重命名阶段', disabled: archived },
+                              { id: 'add-task', label: '添加任务' },
+                              { id: 'rename', label: '重命名阶段' },
                               {
                                 id: 'move-prev',
                                 label: '向前移动',
                                 hint: '←',
-                                disabled: archived || !prevStage,
+                                disabled: !prevStage,
                               },
                               {
                                 id: 'move-next',
                                 label: '向后移动',
                                 hint: '→',
-                                disabled: archived || !nextStage,
+                                disabled: !nextStage,
                               },
                               {
                                 id: 'delete',
                                 label: '删除阶段',
                                 danger: true,
-                                disabled: archived,
                               },
                             ]}
                             onSelect={(id) => {
@@ -721,11 +687,6 @@ export function WorkflowsPage() {
                             }}
                           />
                         </header>
-                        {stage.hiddenTaskCount ? (
-                          <p className="workflow-stage__notice">
-                            {stage.hiddenTaskCount} 个已归档任务已隐藏
-                          </p>
-                        ) : null}
                         {stage.tasks.length ? (
                           <List gap className="m3e-list--workflow-stage">
                             {stage.tasks.map((task, taskIndex) => {
@@ -745,8 +706,7 @@ export function WorkflowsPage() {
                                   leadingControl={
                                     <TaskStatusControl
                                       status={task.status}
-                                      disabled={archived}
-                                      onStatusChange={(status) => changeTaskStatus(task, status)}
+                                                                            onStatusChange={(status) => changeTaskStatus(task, status)}
                                     />
                                   }
                                   headline={
@@ -776,32 +736,32 @@ export function WorkflowsPage() {
                                           label: prevStage
                                             ? `移到「${prevStage.name}」`
                                             : '移到上一阶段',
-                                          disabled: archived || !prevStage || !membership,
+                                          disabled: !prevStage || !membership,
                                         },
                                         {
                                           id: 'stage-next',
                                           label: nextStage
                                             ? `移到「${nextStage.name}」`
                                             : '移到下一阶段',
-                                          disabled: archived || !nextStage || !membership,
+                                          disabled: !nextStage || !membership,
                                         },
                                         {
                                           id: 'up',
                                           label: '在阶段内上移',
                                           hint: '↑',
-                                          disabled: archived || !membership || !prevMembership,
+                                          disabled: !membership || !prevMembership,
                                         },
                                         {
                                           id: 'down',
                                           label: '在阶段内下移',
                                           hint: '↓',
-                                          disabled: archived || !membership || !nextMembership,
+                                          disabled: !membership || !nextMembership,
                                         },
                                         {
                                           id: 'remove',
                                           label: '从阶段移除',
                                           danger: true,
-                                          disabled: archived || !membership,
+                                          disabled: !membership,
                                         },
                                       ]}
                                       onSelect={(id) => {
@@ -838,33 +798,29 @@ export function WorkflowsPage() {
                         ) : (
                           <p className="workflow-stage__empty">这个阶段还没有任务</p>
                         )}
-                        {!archived && (
-                          <Button
-                            variant="text"
-                            size="s"
-                            type="button"
-                            className="workflow-stage__add"
-                            leadingIcon={<Plus size={16} />}
-                            disabled={busy}
-                            onClick={() => setDialog({ kind: 'add-task', stage, candidates })}
-                          >
-                            添加任务
-                          </Button>
-                        )}
+                        <Button
+                          variant="text"
+                          size="s"
+                          type="button"
+                          className="workflow-stage__add"
+                          leadingIcon={<Plus size={16} />}
+                          disabled={busy}
+                          onClick={() => setDialog({ kind: 'add-task', stage, candidates })}
+                        >
+                          添加任务
+                        </Button>
                       </section>
                     );
                   })}
-                  {!archived && (
-                    <button
-                      type="button"
-                      className="workflow-stage-add"
-                      disabled={busy}
-                      onClick={() => setDialog({ kind: 'add-stage', workflow })}
-                    >
-                      <Plus size={18} aria-hidden="true" />
-                      <span>新增阶段</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="workflow-stage-add"
+                    disabled={busy}
+                    onClick={() => setDialog({ kind: 'add-stage', workflow })}
+                  >
+                    <Plus size={18} aria-hidden="true" />
+                    <span>新增阶段</span>
+                  </button>
                 </div>
               </Card>
             );

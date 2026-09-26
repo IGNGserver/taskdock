@@ -41,7 +41,6 @@ function task(id: string): LocalTaskDto {
     rank: '1024',
     version: 1,
     completedAt: null,
-    archivedAt: null,
     createdAt: now(),
     updatedAt: now(),
   };
@@ -56,7 +55,6 @@ function datePoint(id: string, localDate = '2026-09-04'): TimePointDto {
     rank: '1024',
     version: 1,
     reachedAt: null,
-    archivedAt: null,
     createdAt: now(),
     updatedAt: now(),
   };
@@ -69,7 +67,6 @@ function project(id: string): ProjectDto {
     taskPrefix: 'TEST',
     rank: '1024',
     version: 1,
-    archivedAt: null,
     createdAt: now(),
     updatedAt: now(),
   };
@@ -860,93 +857,6 @@ describe('SyncEngine', () => {
     expect(isMergeableConflictCommand('placement.reorder')).toBe(false);
   });
 
-  it('restores an archived task before retrying its local mutation', async () => {
-    const restoreNavigator = online();
-    try {
-      await withDatabase(async (db) => {
-        const taskId = uuidv7();
-        const localTask = { ...task(taskId), title: '本地标题', version: 2, pendingSync: true };
-        const serverTask = {
-          ...task(taskId),
-          title: '服务器标题',
-          version: 3,
-          archivedAt: now(),
-        };
-        const item = {
-          ...outboxItem('task.update', taskId, { title: '本地标题' }, 1),
-          beforeImage: { rows: [{ table: 'tasks' as const, id: taskId, value: task(taskId) }] },
-          afterImage: { rows: [{ table: 'tasks' as const, id: taskId, value: localTask }] },
-        };
-        await db.tasks.put(localTask);
-        await db.outbox.add(item);
-        const pushed: string[] = [];
-        let pushCount = 0;
-        const transport: SyncTransport = {
-          push: async ({ mutations }) => {
-            const mutation = mutations[0]!;
-            pushed.push(mutation.command);
-            pushCount += 1;
-            if (pushCount === 1) {
-              expect(mutation.command).toBe('task.update');
-              return {
-                results: [
-                  {
-                    mutationId: mutation.mutationId,
-                    status: 'conflict',
-                    error: {
-                      code: 'VERSION_CONFLICT',
-                      message: '任务已归档',
-                      details: { server: serverTask },
-                    },
-                  },
-                ],
-              };
-            }
-            if (mutation.command === 'task.restore') {
-              return {
-                results: [
-                  {
-                    mutationId: mutation.mutationId,
-                    status: 'applied',
-                    result: { ...serverTask, archivedAt: null, version: 4 },
-                  },
-                ],
-              };
-            }
-            expect(mutation.command).toBe('task.update');
-            expect(mutation.baseVersion).toBe(4);
-            return {
-              results: [
-                {
-                  mutationId: mutation.mutationId,
-                  status: 'applied',
-                  result: { ...serverTask, title: '本地标题', archivedAt: null, version: 5 },
-                },
-              ],
-            };
-          },
-          pull: async () => emptyPull(),
-          snapshot,
-        };
-        const engine = new SyncEngine(db, uuidv7(), transport);
-        await engine.sync();
-        const conflict = await db.conflicts.toCollection().first();
-        expect(conflict).toBeTruthy();
-        await engine.resolveConflict(conflict!.id!, 'restore');
-        expect(await db.outbox.count()).toBe(2);
-        await engine.sync();
-
-        expect(pushed).toEqual(['task.update', 'task.restore', 'task.update']);
-        expect(await db.outbox.count()).toBe(0);
-        expect((await db.tasks.get(taskId))?.title).toBe('本地标题');
-        expect((await db.tasks.get(taskId))?.archivedAt).toBeNull();
-        expect((await db.tasks.get(taskId))?.version).toBe(5);
-      });
-    } finally {
-      restoreNavigator();
-    }
-  });
-
   it('discards a deleted conflict and its dependent optimistic graph', async () => {
     const restoreNavigator = online();
     try {
@@ -1022,7 +932,6 @@ describe('SyncEngine', () => {
           taskPrefix: 'DEL',
           rank: '1024',
           version: 1,
-          archivedAt: null,
           createdAt: now(),
           updatedAt: now(),
         };

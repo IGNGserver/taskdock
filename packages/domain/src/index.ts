@@ -59,25 +59,15 @@ export function transitionTask(
   return { status: next, completedAt: next === 'DONE' ? now : null };
 }
 
-export type EventState = 'WAITING' | 'REACHED' | 'ARCHIVED';
+export type EventState = 'WAITING' | 'REACHED';
 
 export function deriveEventState(
   type: TimePointType,
   reachedAt: Date | string | null,
-  archivedAt: Date | string | null,
 ): EventState | null {
   if (type !== 'EVENT') return null;
-  if (archivedAt) return 'ARCHIVED';
   if (reachedAt) return 'REACHED';
   return 'WAITING';
-}
-
-export function restoreEventState(
-  reachedAt: Date | string | null,
-  archivedAt: Date | string | null,
-): EventState {
-  if (archivedAt) return reachedAt ? 'REACHED' : 'WAITING';
-  return reachedAt ? 'REACHED' : 'WAITING';
 }
 
 export function isValidIanaTimezone(timezone: string): boolean {
@@ -210,7 +200,6 @@ export async function renderSafeMarkdown(markdown: string): Promise<string> {
 export interface FolderTreeNode {
   id: string;
   parentFolderId: string | null;
-  archivedAt?: string | null;
   deletedAt?: string | null;
 }
 
@@ -218,7 +207,6 @@ export interface FolderTaskForAggregate {
   id: string;
   parentFolderId: string | null;
   status: TaskStatus;
-  archivedAt?: string | null;
   deletedAt?: string | null;
 }
 
@@ -250,13 +238,7 @@ export function deriveFolderAggregate(
   }
   const counts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 } as Record<TaskStatus, number>;
   for (const task of tasks) {
-    if (
-      task.deletedAt ||
-      task.archivedAt ||
-      !task.parentFolderId ||
-      !reachable.has(task.parentFolderId)
-    )
-      continue;
+    if (task.deletedAt || !task.parentFolderId || !reachable.has(task.parentFolderId)) continue;
     // A task is only valid when every folder in its path is active. Walk the
     // path iteratively and reject cycles/missing parents as invalid descendants.
     const pathSeen = new Set<string>();
@@ -269,7 +251,7 @@ export function deriveFolderAggregate(
       }
       pathSeen.add(parent);
       const folder = folderMap.get(parent);
-      if (!folder || folder.deletedAt || folder.archivedAt) {
+      if (!folder || folder.deletedAt) {
         valid = false;
         break;
       }
@@ -338,8 +320,7 @@ export function assertTreeParentIsActiveFolder(
   if (parentFolderId === null) return;
   const folder = folders.find((candidate) => candidate.id === parentFolderId);
   if (!folder) throw new DomainError('PARENT_NOT_FOLDER', '目标父级不是文件夹');
-  if (folder.deletedAt) throw new DomainError('TARGET_ARCHIVED', '目标文件夹已删除');
-  if (folder.archivedAt) throw new DomainError('TARGET_ARCHIVED', '目标文件夹已归档');
+  if (folder.deletedAt) throw new DomainError('VALIDATION_FAILED', '目标文件夹已删除');
 }
 
 export function stepTransition(

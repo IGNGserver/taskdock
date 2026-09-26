@@ -97,18 +97,16 @@ function TreeRowActions({
   groupLength,
   onMove,
   onOpenMove,
-  onArchiveFolder,
   onDeleteFolder,
-  onArchiveTask,
+  onDeleteTask,
 }: {
   item: TreeItemDto;
   index: number;
   groupLength: number;
   onMove: (item: TreeItemDto, direction: 'up' | 'down') => void;
   onOpenMove: (item: TreeItemDto) => void;
-  onArchiveFolder: (item: Extract<TreeItemDto, { kind: 'FOLDER' }>) => void;
   onDeleteFolder: (item: Extract<TreeItemDto, { kind: 'FOLDER' }>) => void;
-  onArchiveTask: (item: Extract<TreeItemDto, { kind: 'TASK' }>) => void;
+  onDeleteTask: (item: Extract<TreeItemDto, { kind: 'TASK' }>) => void;
 }) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -129,8 +127,7 @@ function TreeRowActions({
       disabled: index === groupLength - 1,
     },
     { id: 'move', label: '移动到其他目录' },
-    { id: 'archive', label: isFolder ? '归档文件夹' : '归档任务' },
-    ...(isFolder ? [{ id: 'delete', label: '永久删除', danger: true }] : []),
+    { id: 'delete', label: '永久删除', danger: true },
   ];
 
   const select = (id: string) => {
@@ -138,11 +135,10 @@ function TreeRowActions({
     if (id === 'move-up') onMove(item, 'up');
     if (id === 'move-down') onMove(item, 'down');
     if (id === 'move') onOpenMove(item);
-    if (id === 'archive') {
-      if (isFolder) onArchiveFolder(item);
-      else onArchiveTask(item);
+    if (id === 'delete') {
+      if (isFolder) onDeleteFolder(item);
+      else onDeleteTask(item);
     }
-    if (id === 'delete' && isFolder) onDeleteFolder(item);
   };
 
   return (
@@ -380,34 +376,24 @@ export function TreePage() {
       setError(cause instanceof Error ? cause.message : '创建文件夹失败，请重试');
     }
   };
-  const archiveFolder = (item: Extract<TreeItemDto, { kind: 'FOLDER' }>) => {
+  const deleteTask = (item: Extract<TreeItemDto, { kind: 'TASK' }>) => {
     setConfirmation({
-      title: '归档文件夹',
-      description: `归档“${item.folder.title}”及其 ${item.aggregate.totalCount} 个有效后代任务？你可以在归档中恢复它们。`,
-      confirmLabel: '归档',
-      danger: false,
+      title: '永久删除任务',
+      description: `确定要永久删除“${item.task.title}”吗？它的备注、步骤和所有安排都会一并删除，此操作不可恢复。`,
+      confirmLabel: '永久删除',
+      danger: true,
       onConfirm: async () => {
         try {
-          await mutationV2('POST', `/folders/${item.folder.id}/archive-tree`, {
-            baseVersion: item.folder.version,
+          await mutationV2('DELETE', `/tasks/${item.task.id}`, {
+            baseVersion: item.task.version,
           });
           await load();
           return true;
         } catch (cause) {
-          throw cause instanceof Error ? cause : new Error('归档目录失败，请重试');
+          throw cause instanceof Error ? cause : new Error('删除任务失败，请重试');
         }
       },
     });
-  };
-  const archiveTask = async (item: Extract<TreeItemDto, { kind: 'TASK' }>) => {
-    try {
-      await mutationV2('POST', `/tasks/${item.task.id}/archive`, {
-        baseVersion: item.task.version,
-      });
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '归档任务失败，请重试');
-    }
   };
   const changeTaskStatus = async (task: TreeTaskDto, status: TaskStatus) => {
     setError('');
@@ -481,7 +467,7 @@ export function TreePage() {
             return true;
           } catch (cause) {
             if (cause instanceof ApiError && cause.code === 'OFFLINE_TREE_DELETE_FORBIDDEN') {
-              throw new Error(`${cause.message} 建议：改为递归归档整棵目录。`);
+              throw new Error(cause.message);
             }
             throw cause instanceof Error ? cause : new Error('删除操作失败');
           }
@@ -491,7 +477,7 @@ export function TreePage() {
       // Surface the structured offline-refusal guidance instead of a generic
       // network error. Permanent tree deletion is online-only by design.
       if (cause instanceof ApiError && cause.code === 'OFFLINE_TREE_DELETE_FORBIDDEN') {
-        setError(`${cause.message} 建议：改为递归归档整棵目录。`);
+        setError(cause.message);
         return;
       }
       setError(cause instanceof Error ? cause.message : '删除操作失败');
@@ -540,7 +526,7 @@ export function TreePage() {
   };
   const openMove = async (item: TreeItemDto) => {
     try {
-      const result = await requestV2<{ items: FolderDto[] }>('/folders?archived=false');
+      const result = await requestV2<{ items: FolderDto[] }>('/folders');
       const target =
         item.kind === 'FOLDER'
           ? {
@@ -742,9 +728,8 @@ export function TreePage() {
                             void moveWithinStatus(candidate, direction)
                           }
                           onOpenMove={(candidate) => void openMove(candidate)}
-                          onArchiveFolder={(candidate) => void archiveFolder(candidate)}
                           onDeleteFolder={(candidate) => void deleteFolder(candidate)}
-                          onArchiveTask={(candidate) => void archiveTask(candidate)}
+                          onDeleteTask={(candidate) => deleteTask(candidate)}
                         />
                       }
                     />
@@ -777,9 +762,8 @@ export function TreePage() {
                             void moveWithinStatus(candidate, direction)
                           }
                           onOpenMove={(candidate) => void openMove(candidate)}
-                          onArchiveFolder={(candidate) => void archiveFolder(candidate)}
                           onDeleteFolder={(candidate) => void deleteFolder(candidate)}
-                          onArchiveTask={(candidate) => void archiveTask(candidate)}
+                          onDeleteTask={(candidate) => deleteTask(candidate)}
                         />
                       }
                     />
@@ -974,7 +958,6 @@ function TaskDetailV2({
   const [error, setError] = useState('');
   const [pendingStepDeletion, setPendingStepDeletion] = useState<TaskStepDto | null>(null);
   const [taskDeletionOpen, setTaskDeletionOpen] = useState(false);
-  const archived = Boolean(taskRecord.archivedAt);
   useEffect(() => {
     setTaskRecord(detail.task);
     setNoteRecord(detail.note);
@@ -1007,7 +990,6 @@ function TaskDetailV2({
     }
   };
   const updateNote = async () => {
-    if (archived) return;
     try {
       const updated = (await mutationV2('PATCH', `/tasks/${taskRecord.id}/note`, {
         contentMarkdown: note,
@@ -1041,7 +1023,7 @@ function TaskDetailV2({
   };
   const addStep = async (event: FormEvent) => {
     event.preventDefault();
-    if (!newStep.trim() || archived) return;
+    if (!newStep.trim()) return;
     try {
       const created = (await mutationV2('POST', `/tasks/${taskRecord.id}/steps`, {
         title: newStep.trim(),
@@ -1056,7 +1038,7 @@ function TaskDetailV2({
   const moveStep = async (step: TaskStepDto, direction: 'up' | 'down') => {
     const index = steps.findIndex((candidate) => candidate.id === step.id);
     const target = steps[index + (direction === 'up' ? -1 : 1)];
-    if (!target || archived) return;
+    if (!target) return;
     try {
       const updated = (await mutationV2('POST', `/task-steps/${step.id}/move`, {
         ...(direction === 'up' ? { beforeId: target.id } : { afterId: target.id }),
@@ -1077,7 +1059,6 @@ function TaskDetailV2({
     }
   };
   const deleteStep = async (step: TaskStepDto) => {
-    if (archived) return false;
     try {
       await mutationV2('DELETE', `/task-steps/${step.id}`, { baseVersion: step.version });
       setSteps((current) => current.filter((candidate) => candidate.id !== step.id));
@@ -1088,14 +1069,14 @@ function TaskDetailV2({
   };
   const loadFolderOptions = async () => {
     try {
-      const result = await requestV2<{ items: FolderDto[] }>('/folders?archived=false');
+      const result = await requestV2<{ items: FolderDto[] }>('/folders');
       setFolderOptions(result.items);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '目录加载失败');
     }
   };
   const moveTask = async () => {
-    if (archived || folderBusy || moveFolderId === (taskRecord.parentFolderId ?? '')) return;
+    if (folderBusy || moveFolderId === (taskRecord.parentFolderId ?? '')) return;
     setFolderBusy(true);
     try {
       const updated = (await mutationV2('POST', '/tree/items/move', {
@@ -1114,7 +1095,6 @@ function TaskDetailV2({
     }
   };
   const updatePlacement = async (placement: TaskDetailV2Dto['placements'][number]) => {
-    if (archived) return;
     try {
       await mutationV2('DELETE', `/placements/${placement.id}`, { baseVersion: placement.version });
       await onChanged();
@@ -1144,7 +1124,6 @@ function TaskDetailV2({
             label="任务标题"
             hideLabel
             value={title}
-            disabled={archived}
             onChange={(event) => setTitle(event.target.value)}
             onBlur={() =>
               title.trim() !== taskRecord.title && void updateTask({ title: title.trim() })
@@ -1155,11 +1134,6 @@ function TaskDetailV2({
       {error && (
         <Alert tone="error" title="任务操作失败">
           {error}
-        </Alert>
-      )}
-      {archived && (
-        <Alert tone="warning" title="此任务已归档">
-          恢复后才能编辑任务、备注、步骤和安排。
         </Alert>
       )}
       {pendingStepDeletion && (
@@ -1188,9 +1162,9 @@ function TaskDetailV2({
           label="任务状态"
           onChange={(candidate) => void updateTask({ status: candidate })}
           options={[
-            { value: 'TODO', label: '待开始', disabled: archived },
-            { value: 'IN_PROGRESS', label: '进行中', disabled: archived },
-            { value: 'DONE', label: '已完成', disabled: archived },
+            { value: 'TODO', label: '待开始' },
+            { value: 'IN_PROGRESS', label: '进行中' },
+            { value: 'DONE', label: '已完成' },
           ]}
         />
       </div>
@@ -1201,7 +1175,6 @@ function TaskDetailV2({
           label="任务备注"
           hideLabel
           value={note}
-          disabled={archived}
           onChange={(event) => setNote(event.target.value)}
           onBlur={() => void updateNote()}
           rows={5}
@@ -1227,7 +1200,6 @@ function TaskDetailV2({
                   label={`步骤 ${index + 1} 标题`}
                   hideLabel
                   value={draft.title}
-                  disabled={archived}
                   onChange={(event) =>
                     setStepDrafts((current) => ({
                       ...current,
@@ -1245,7 +1217,6 @@ function TaskDetailV2({
                   hideLabel
                   placeholder="步骤备注（可选）"
                   value={draft.noteMarkdown}
-                  disabled={archived}
                   onChange={(event) =>
                     setStepDrafts((current) => ({
                       ...current,
@@ -1262,7 +1233,6 @@ function TaskDetailV2({
                   className="m3e-select--step-status"
                   label={`步骤 ${index + 1} 状态`}
                   value={step.status}
-                  disabled={archived}
                   onChange={(value) =>
                     void updateStep(step, { status: value as TaskStepDto['status'] })
                   }
@@ -1277,7 +1247,7 @@ function TaskDetailV2({
                 <IconButton
                   label="步骤上移"
                   type="button"
-                  disabled={archived || index === 0}
+                  disabled={index === 0}
                   onClick={() => void moveStep(step, 'up')}
                 >
                   ↑
@@ -1285,7 +1255,7 @@ function TaskDetailV2({
                 <IconButton
                   label="步骤下移"
                   type="button"
-                  disabled={archived || index === steps.length - 1}
+                  disabled={index === steps.length - 1}
                   onClick={() => void moveStep(step, 'down')}
                 >
                   ↓
@@ -1295,7 +1265,6 @@ function TaskDetailV2({
                   className="m3e-icon-button--danger"
                   type="button"
                   aria-label={`删除步骤 ${step.title}`}
-                  disabled={archived}
                   onClick={() => setPendingStepDeletion(step)}
                 >
                   ×
@@ -1312,9 +1281,8 @@ function TaskDetailV2({
             placeholder="新增执行步骤…"
             value={newStep}
             onChange={(event) => setNewStep(event.target.value)}
-            disabled={archived}
           />
-          <Button variant="tonal" type="submit" disabled={archived || !newStep.trim()}>
+          <Button variant="tonal" type="submit" disabled={!newStep.trim()}>
             添加
           </Button>
         </form>
@@ -1328,7 +1296,7 @@ function TaskDetailV2({
             className="m3e-select--task-folder"
             label="移动任务到文件夹"
             value={moveFolderId}
-            disabled={archived || folderBusy}
+            disabled={folderBusy}
             onFocus={() => void loadFolderOptions()}
             onChange={setMoveFolderId}
             options={[
@@ -1340,7 +1308,7 @@ function TaskDetailV2({
             variant="tonal"
             size="s"
             type="button"
-            disabled={archived || folderBusy || moveFolderId === (taskRecord.parentFolderId ?? '')}
+            disabled={folderBusy || moveFolderId === (taskRecord.parentFolderId ?? '')}
             onClick={() => void moveTask()}
           >
             {folderBusy ? '移动中…' : '移动'}
@@ -1364,7 +1332,6 @@ function TaskDetailV2({
                 variant="tonal"
                 size="s"
                 type="button"
-                disabled={archived}
                 onClick={() => void updatePlacement(placement)}
               >
                 移除
@@ -1392,33 +1359,9 @@ function TaskDetailV2({
       <DestructiveSection
         className="m3e-destructive-section--task-detail"
         title="任务管理"
-        description={
-          archived ? '恢复任务后可继续编辑。' : '归档可恢复；删除会永久移除任务及其全部关联内容。'
-        }
+        description={'删除会永久移除任务及其全部关联内容，此操作不可恢复。'}
       >
         <div className="header-actions">
-          <Button
-            variant="tonal"
-            type="button"
-            onClick={() => {
-              void mutationV2(
-                'POST',
-                `/tasks/${taskRecord.id}/${archived ? 'restore' : 'archive'}`,
-                {
-                  baseVersion: taskRecord.version,
-                },
-              )
-                .then((updated) => {
-                  setTaskRecord(updated as TaskDetailV2Dto['task']);
-                  return onChanged();
-                })
-                .catch((cause) =>
-                  setError(cause instanceof Error ? cause.message : '归档操作失败'),
-                );
-            }}
-          >
-            {archived ? '恢复任务' : '归档任务'}
-          </Button>
           <Button
             variant="filled"
             className="m3e-button--danger"

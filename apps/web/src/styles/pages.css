@@ -425,71 +425,6 @@
 }
 
 /* -------------------------------------------------------------------------- */
-/* Archive                                                                    */
-/* -------------------------------------------------------------------------- */
-
-.archive-project-list {
-  display: grid;
-  gap: 8px;
-}
-
-.archive-project {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  min-block-size: 64px;
-  padding: 12px 16px;
-  border-radius: var(--m3-shape-md);
-  background-color: var(--m3-surface-container-lowest);
-}
-
-.archive-project > span {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-inline-size: 0;
-}
-
-.archive-project strong {
-  font-size: var(--m3-type-body-large-size);
-}
-
-.archive-project small {
-  color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-body-small-size);
-}
-
-.archive-project-actions {
-  display: inline-flex;
-  flex: none;
-  gap: 6px;
-}
-
-.archive-operation-children {
-  display: grid;
-  gap: 4px;
-  margin-block-start: 8px;
-  padding-inline-start: 14px;
-  border-inline-start: 2px solid var(--m3-outline-variant);
-}
-
-.archive-operation-child {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  border-radius: var(--m3-shape-sm);
-  color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-body-medium-size);
-}
-
-.archive-operation-child small {
-  color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-body-small-size);
-}
-
-/* -------------------------------------------------------------------------- */
 /* Settings                                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -1259,38 +1194,12 @@
   cursor: pointer;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Inline quick capture                                                       */
-/* -------------------------------------------------------------------------- */
-
-.quick-capture {
-  margin-block: 4px 18px;
-}
-
-.quick-capture kbd {
-  flex: none;
-  padding: 3px 7px;
-  border: 1px solid var(--m3-outline-variant);
-  border-radius: var(--m3-shape-xs);
-  background-color: var(--m3-surface-container);
-  color: var(--m3-on-surface-variant);
-  font-family: var(--m3-font-mono);
-  font-size: var(--m3-type-label-small-size);
-}
-
 /*
  * Touch devices have no hardware Enter key, so the ↵ affordance is noise there
- * and the compact shell hides it. The E2E suite asserts this.
+ * and the compact shell hides it.
  */
 @media (max-width: 599.98px) {
-  .quick-capture kbd,
   .m3e-button--command-trigger kbd {
-    display: none;
-  }
-}
-
-@media (hover: none) {
-  .quick-capture kbd {
     display: none;
   }
 }
@@ -1408,9 +1317,7 @@
   min-inline-size: 0;
 }
 
-.today-overview-label,
-.today-context-eyebrow,
-.capture-zone-eyebrow {
+.today-overview-label {
   color: inherit;
   font-size: var(--m3-type-label-medium-size);
   font-weight: var(--m3-type-emphasized-weight);
@@ -1449,152 +1356,6 @@
   font-weight: var(--m3-type-emphasized-weight-strong);
   font-variant-numeric: tabular-nums;
   text-align: end;
-}
-
-.today-context {
-  display: flex;
-  flex-direction: column;
-  gap: var(--m3-space-5);
-  min-inline-size: 0;
-  padding: var(--m3-space-5);
-  border: 1px solid var(--m3-outline-variant);
-  border-radius: var(--m3-shape-xl);
-  background-color: var(--m3-surface-container);
-  color: var(--m3-on-surface);
-}
-
-.today-context-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--m3-space-3);
-}
-
-.today-context-heading h2 {
-  margin: var(--m3-space-1) 0 0;
-  font-size: var(--m3-type-title-medium-size);
-  font-weight: var(--m3-type-emphasized-weight);
-}
-
-.today-context-eyebrow,
-.capture-zone-eyebrow {
-  color: var(--m3-primary);
-}
-
-.today-context-mark,
-.today-context-note-icon {
-  display: grid;
-  flex: none;
-  place-items: center;
-  inline-size: 40px;
-  block-size: 40px;
-  border-radius: var(--m3-shape-expressive-blob);
-  background-color: var(--m3-tertiary-container);
-  color: var(--m3-on-tertiary-container);
-}
-
-.today-context-events {
-  display: grid;
-  gap: var(--m3-space-2);
-}
-
-.today-context-label {
-  color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-label-medium-size);
-}
-
-.today-context-event {
-  display: flex;
-  align-items: center;
-  gap: var(--m3-space-3);
-  min-block-size: 56px;
-  padding: var(--m3-space-2) var(--m3-space-3);
-  border-radius: var(--m3-shape-md);
-  color: inherit;
-  text-decoration: none;
-  transition:
-    background-color var(--m3-motion-short2) var(--m3-easing-standard),
-    translate var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast);
-}
-
-.today-context-event:hover {
-  background-color: var(--m3-surface-container-high);
-  translate: 2px 0;
-}
-
-.today-context-event > span:nth-child(2) {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: var(--m3-space-1);
-  min-inline-size: 0;
-}
-
-.today-context-event strong {
-  overflow: hidden;
-  font-size: var(--m3-type-body-medium-size);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.today-context-event small {
-  color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-body-small-size);
-}
-
-.today-context-more {
-  padding-inline: var(--m3-space-3);
-  color: var(--m3-primary);
-  font-size: var(--m3-type-label-large-size);
-  text-decoration: none;
-}
-
-.today-context-note {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--m3-space-3);
-  margin-block-start: auto;
-  padding-block-start: var(--m3-space-3);
-  border-block-start: 1px solid var(--m3-outline-variant);
-}
-
-.today-context-note p {
-  margin: 0;
-  color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-body-medium-size);
-  line-height: 1.45;
-}
-
-.capture-zone {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr);
-  gap: var(--m3-space-5);
-  align-items: center;
-  margin-block: var(--m3-space-6);
-  padding: var(--m3-space-4) var(--m3-space-5);
-  border-radius: var(--m3-shape-lg);
-  background-color: var(--m3-surface-container-lowest);
-  box-shadow: var(--m3-elevation-1);
-}
-
-.capture-zone-copy {
-  min-inline-size: 0;
-}
-
-.capture-zone-copy h2 {
-  margin: var(--m3-space-1) 0;
-  font-size: var(--m3-type-title-medium-size);
-  font-weight: var(--m3-type-emphasized-weight);
-}
-
-.capture-zone-copy p {
-  margin: 0;
-  color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-body-small-size);
-}
-
-.capture-zone .quick-capture {
-  margin: 0;
 }
 
 .today-task-workspace {
@@ -1804,9 +1565,7 @@
   rotate: 0deg;
 }
 
-.today-overview-label,
-.today-context-eyebrow,
-.capture-zone-eyebrow {
+.today-overview-label {
   letter-spacing: 0.04em;
   text-transform: none;
 }
@@ -1823,32 +1582,6 @@
   grid-column: 1 / -1;
   color: color-mix(in srgb, var(--m3-on-primary-container) 82%, transparent);
   font-size: var(--m3-type-body-medium-size);
-}
-
-.today-context {
-  min-block-size: 176px;
-  padding: 20px;
-  border-radius: var(--m3-shape-lg);
-  background-color: var(--m3-surface-container-low);
-}
-
-.today-context-note {
-  margin-block-start: 0;
-  padding-block-start: 16px;
-}
-
-.today-context-mark,
-.today-context-note-icon {
-  border-radius: var(--m3-shape-md);
-}
-
-.capture-zone {
-  margin-block: 20px;
-  padding: 16px 20px;
-  border: 1px solid var(--m3-outline-variant);
-  border-radius: var(--m3-shape-lg);
-  background-color: var(--m3-surface-container-low);
-  box-shadow: none;
 }
 
 /* Workspace alignment and contained rows. */

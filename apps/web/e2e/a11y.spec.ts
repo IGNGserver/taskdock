@@ -65,7 +65,7 @@ async function installMockApi(page: Page): Promise<void> {
   });
 
   /*
-   * The v2 tree/workflow/archive routes read `/api/v2`, so the v1 mock alone
+   * The v2 tree/workflow routes read `/api/v2`, so the v1 mock alone
    * leaves them on the error path — which is not what this gate is meant to
    * audit. Mirror the empty-snapshot shape the v2 feature spec uses.
    */
@@ -82,7 +82,6 @@ async function installMockApi(page: Page): Promise<void> {
           localDate: '2026-09-19',
           timezone: 'Asia/Shanghai',
           reachedAt: null,
-          archivedAt: null,
           version: 1,
           createdAt: '2026-09-19T00:00:00.000Z',
           updatedAt: '2026-09-19T00:00:00.000Z',
@@ -102,7 +101,6 @@ async function installMockApi(page: Page): Promise<void> {
           workflows: [],
           workflowStages: [],
           workflowTaskMemberships: [],
-          archiveOperations: [],
           settings,
           cursor: '0',
         }),
@@ -215,10 +213,7 @@ test('login and authenticated shell have no axe violations', async ({ page }) =>
   await page.getByLabel('用户名').fill(user.username);
   await page.getByLabel('密码').fill('correct horse battery staple');
   await page.getByRole('button', { name: '登录' }).click();
-  await waitForInteractive(
-    page,
-    test.info().project.name === 'mobile' ? '打开创建菜单' : '快速添加',
-  );
+  await waitForInteractive(page, '搜索任务和备注');
   await waitForSettled(page, 'body');
   results = await analyzePage(page);
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
@@ -236,7 +231,6 @@ const ROUTES: ReadonlyArray<{ path: string; heading: string | RegExp }> = [
   { path: '/time', heading: '计划' },
   { path: '/time/calendar', heading: '日历' },
   { path: '/time/events', heading: '事件' },
-  { path: '/archive', heading: '归档' },
   { path: '/settings', heading: '设置' },
   { path: '/more', heading: '更多' },
 ];
@@ -258,18 +252,11 @@ for (const route of ROUTES) {
     await page.getByLabel('用户名').fill(user.username);
     await page.getByLabel('密码').fill('correct horse battery staple');
     await page.getByRole('button', { name: '登录' }).click();
-    await expect(
-      test.info().project.name === 'mobile'
-        ? page.getByRole('button', { name: '打开创建菜单' })
-        : page.getByRole('button', { name: '快速添加' }),
-    ).toBeVisible();
+    await expect(page.getByRole('button', { name: '搜索任务和备注' })).toBeVisible();
 
     await page.goto(route.path);
     await expect(page.getByRole('heading', { name: route.heading }).first()).toBeVisible();
-    await waitForInteractive(
-      page,
-      test.info().project.name === 'mobile' ? '打开创建菜单' : '快速添加',
-    );
+    await waitForInteractive(page, '搜索任务和备注');
     await waitForSettled(page, 'body');
     const results = await analyzePage(page);
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
@@ -326,33 +313,11 @@ test('open overlays have no axe violations', async ({ page }) => {
   await page.getByLabel('密码').fill('correct horse battery staple');
   await page.getByRole('button', { name: '登录' }).click();
 
-  // Quick capture: a dialog on every shell.
-  const quickEntry =
-    test.info().project.name === 'mobile'
-      ? page.getByRole('button', { name: '打开创建菜单' })
-      : page.getByRole('button', { name: '快速添加' });
-  await waitForInteractive(
-    page,
-    test.info().project.name === 'mobile' ? '打开创建菜单' : '快速添加',
-  );
-  await quickEntry.click();
-  if (test.info().project.name === 'mobile')
-    await page.getByRole('menuitem', { name: '新建任务' }).click();
-  await expect(page.getByRole('dialog', { name: '快速添加' })).toBeVisible();
-  await waitForSettled(page, '.m3e-dialog');
-  let results = await analyzePage(page);
-  expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: '快速添加' })).toBeHidden();
-
-  // Command palette: the search surface that replaced the inline trigger box.
-  if (test.info().project.name === 'mobile') {
-    await page.getByRole('button', { name: '搜索任务和备注' }).click();
-  } else {
-    await page.getByRole('button', { name: '搜索任务和备注' }).click();
-  }
+  // Command palette: the search surface behind the app-bar trigger.
+  await waitForInteractive(page, '搜索任务和备注');
+  await page.getByRole('button', { name: '搜索任务和备注' }).click();
   await expect(page.getByRole('dialog', { name: '搜索和命令面板' })).toBeVisible();
   await waitForSettled(page, '.m3e-dialog');
-  results = await analyzePage(page);
+  const results = await analyzePage(page);
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 });

@@ -456,23 +456,13 @@ export async function buildServer(
 
       api.get('/projects', async (request) => {
         const query = z
-          .object({
-            archived: z.enum(['true', 'false']).optional(),
-            cursor: z.string().max(512).optional(),
-            limit: pageLimitSchema,
-          })
+          .object({ cursor: z.string().max(512).optional(), limit: pageLimitSchema })
           .parse(request.query);
-        const archived = query.archived === 'true';
         const page =
           store instanceof PostgresStore
-            ? await store.listProjectsPage(
-                request.auth!.ownerId,
-                archived,
-                query.cursor,
-                query.limit,
-              )
+            ? await store.listProjectsPage(request.auth!.ownerId, query.cursor, query.limit)
             : paginateList(
-                await store.listProjects(request.auth!.ownerId, archived),
+                await store.listProjects(request.auth!.ownerId),
                 query.cursor,
                 query.limit,
               );
@@ -481,17 +471,9 @@ export async function buildServer(
           nextCursor: page.nextCursor,
         };
       });
-      api.get('/projects/task-counts', async (request) => {
-        const query = z
-          .object({ archived: z.enum(['true', 'false']).optional() })
-          .parse(request.query);
-        return {
-          items: await store.listProjectTaskCounts(
-            request.auth!.ownerId,
-            query.archived === 'true',
-          ),
-        };
-      });
+      api.get('/projects/task-counts', async (request) => ({
+        items: await store.listProjectTaskCounts(request.auth!.ownerId),
+      }));
       api.get('/projects/:id', async (request) =>
         store.getProject(request.auth!.ownerId, paramId(request)),
       );
@@ -502,18 +484,6 @@ export async function buildServer(
         );
       });
       api.patch('/projects/:id', async () => {
-        throw new DomainError(
-          'CLIENT_UPGRADE_REQUIRED',
-          'v1 项目写入已关闭，请升级到 TaskDock v2 统一目录树协议',
-        );
-      });
-      api.post('/projects/:id/archive', async () => {
-        throw new DomainError(
-          'CLIENT_UPGRADE_REQUIRED',
-          'v1 项目写入已关闭，请升级到 TaskDock v2 统一目录树协议',
-        );
-      });
-      api.post('/projects/:id/restore', async () => {
         throw new DomainError(
           'CLIENT_UPGRADE_REQUIRED',
           'v1 项目写入已关闭，请升级到 TaskDock v2 统一目录树协议',
@@ -532,7 +502,6 @@ export async function buildServer(
             projectId: z.union([uuidSchema, z.literal('null')]).optional(),
             category: z.enum(['FEATURE', 'MISC']).optional(),
             status: z.enum(['TODO', 'IN_PROGRESS', 'DONE']).optional(),
-            archived: z.enum(['true', 'false']).optional(),
             timePointId: uuidSchema.optional(),
             cursor: z.string().max(512).optional(),
             limit: pageLimitSchema,
@@ -547,7 +516,6 @@ export async function buildServer(
                 : query['projectId'],
           category: enumQuery(query['category'], ['FEATURE', 'MISC']),
           status: enumQuery(query['status'], ['TODO', 'IN_PROGRESS', 'DONE']),
-          archived: query['archived'] === undefined ? false : query['archived'] === 'true',
           timePointId: query['timePointId'],
         };
         const page =
@@ -570,18 +538,6 @@ export async function buildServer(
         );
       });
       api.patch('/tasks/:id', async () => {
-        throw new DomainError(
-          'CLIENT_UPGRADE_REQUIRED',
-          'v1 任务写入已关闭，请升级到 TaskDock v2 统一目录树协议',
-        );
-      });
-      api.post('/tasks/:id/archive', async () => {
-        throw new DomainError(
-          'CLIENT_UPGRADE_REQUIRED',
-          'v1 任务写入已关闭，请升级到 TaskDock v2 统一目录树协议',
-        );
-      });
-      api.post('/tasks/:id/restore', async () => {
         throw new DomainError(
           'CLIENT_UPGRADE_REQUIRED',
           'v1 任务写入已关闭，请升级到 TaskDock v2 统一目录树协议',
@@ -610,18 +566,9 @@ export async function buildServer(
       });
       api.get('/search/tasks', async (request) => {
         const query = z
-          .object({
-            q: z.string().trim().max(500).optional(),
-            includeArchived: z.enum(['true', 'false']).optional(),
-            limit: pageLimitSchema,
-          })
+          .object({ q: z.string().trim().max(500).optional(), limit: pageLimitSchema })
           .parse(request.query);
-        const items = await store.search(
-          request.auth!.ownerId,
-          query.q ?? '',
-          query.includeArchived === 'true',
-          query.limit,
-        );
+        const items = await store.search(request.auth!.ownerId, query.q ?? '', query.limit);
         return { items };
       });
 
@@ -629,24 +576,21 @@ export async function buildServer(
         const query = z
           .object({
             type: z.enum(['DATE', 'EVENT']).optional(),
-            archived: z.enum(['true', 'false']).optional(),
             cursor: z.string().max(512).optional(),
             limit: pageLimitSchema,
           })
           .parse(request.query);
         const type = enumQuery(query.type, ['DATE', 'EVENT']);
-        const archived = query.archived === undefined ? false : query.archived === 'true';
         const page =
           store instanceof PostgresStore
             ? await store.listTimePointsPage(
                 request.auth!.ownerId,
                 type,
-                archived,
                 query.cursor,
                 query.limit,
               )
             : paginateList(
-                await store.listTimePoints(request.auth!.ownerId, type, archived),
+                await store.listTimePoints(request.auth!.ownerId, type),
                 query.cursor,
                 query.limit,
                 (point: {
@@ -696,7 +640,6 @@ export async function buildServer(
         const query = z
           .object({
             type: z.enum(['DATE', 'EVENT']),
-            archived: z.enum(['true', 'false']).optional(),
             from: localDateSchema.optional(),
             to: localDateSchema.optional(),
           })
@@ -709,7 +652,6 @@ export async function buildServer(
           items: await store.listTimePointPlacementCounts(
             request.auth!.ownerId,
             query.type,
-            query.archived === undefined ? undefined : query.archived === 'true',
             query.from,
             query.to,
           ),
@@ -742,14 +684,9 @@ export async function buildServer(
           store.reachTimePoint(ownerId, id, version),
         ),
       );
-      api.post('/time-points/:id/archive', async (request) =>
-        actionVersioned(store, request, 'timePoint.archive', (id, ownerId, version) =>
-          store.archiveTimePoint(ownerId, id, version),
-        ),
-      );
-      api.post('/time-points/:id/restore', async (request) =>
-        actionVersioned(store, request, 'timePoint.restore', (id, ownerId, version) =>
-          store.restoreTimePoint(ownerId, id, version),
+      api.delete('/time-points/:id', async (request) =>
+        actionVersioned(store, request, 'timePoint.delete', (id, ownerId, version) =>
+          store.deleteTimePoint(ownerId, id, version),
         ),
       );
       api.post('/time-points/events/reorder', async (request) => {
@@ -1031,10 +968,7 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
 
       api.get('/tree/children', async (request) => {
         const query = z
-          .object({
-            parentFolderId: z.union([uuidSchema, z.literal('root')]).optional(),
-            archived: z.enum(['true', 'false']).optional(),
-          })
+          .object({ parentFolderId: z.union([uuidSchema, z.literal('root')]).optional() })
           .parse(request.query);
         return {
           items: tree.listTreeChildren(
@@ -1042,7 +976,6 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
             query.parentFolderId === undefined || query.parentFolderId === 'root'
               ? null
               : query.parentFolderId,
-            query.archived === 'true',
           ),
           parentFolderId: query.parentFolderId === 'root' ? null : (query.parentFolderId ?? null),
         };
@@ -1050,30 +983,12 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
       api.get('/folders/:id', async (request) =>
         tree.getFolder(request.auth!.ownerId, paramId(request)),
       );
-      api.get('/folders', async (request) => {
-        const query = z
-          .object({ archived: z.enum(['true', 'false']).optional() })
-          .parse(request.query);
-        return { items: tree.listFolders(request.auth!.ownerId, query.archived === 'true') };
-      });
+      api.get('/folders', async (request) => ({
+        items: tree.listFolders(request.auth!.ownerId),
+      }));
       api.get('/folders/:id/path', async (request) => ({
         items: tree.getFolderPath(request.auth!.ownerId, paramId(request)),
       }));
-
-      api.get('/archive-operations', async (request) => {
-        const query = z
-          .object({ includeRestored: z.enum(['true', 'false']).optional() })
-          .parse(request.query);
-        return {
-          items: tree.listArchiveOperations(
-            request.auth!.ownerId,
-            query.includeRestored === 'true',
-          ),
-        };
-      });
-      api.get('/archive-operations/:id', async (request) =>
-        tree.getArchiveOperation(request.auth!.ownerId, paramId(request)),
-      );
 
       api.post('/folders', async (request, reply) => {
         const body = createFolderSchema.parse(request.body);
@@ -1119,34 +1034,6 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
           body,
         );
       });
-      api.post('/folders/:id/archive-tree', async (request) => {
-        const body = z
-          .object({ baseVersion: z.number().int().positive(), operationId: uuidSchema.optional() })
-          .parse(request.body ?? {});
-        const meta = mutationMeta(request);
-        return runV2Mutation(
-          tree,
-          request.auth!.ownerId,
-          meta,
-          'folder.archiveTree',
-          paramId(request),
-          body.baseVersion,
-          { operationId: body.operationId },
-        );
-      });
-      api.post('/folders/:id/restore-tree', async (request) => {
-        const body = z.object({ operationId: uuidSchema }).parse(request.body ?? {});
-        const meta = mutationMeta(request);
-        return runV2Mutation(
-          tree,
-          request.auth!.ownerId,
-          meta,
-          'folder.restoreTree',
-          paramId(request),
-          null,
-          body,
-        );
-      });
       api.post('/folders/:id/delete-preview', async (request) => {
         z.object({}).parse(request.body ?? {});
         return tree.previewDelete(request.auth!.ownerId, paramId(request));
@@ -1167,13 +1054,10 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
 
       api.get('/tasks', async (request) => {
         const query = z
-          .object({
-            archived: z.enum(['true', 'false']).optional(),
-            q: z.string().trim().max(500).optional(),
-          })
+          .object({ q: z.string().trim().max(500).optional() })
           .parse(request.query);
         return {
-          items: tree.listTasks(request.auth!.ownerId, query.archived === 'true', query.q),
+          items: tree.listTasks(request.auth!.ownerId, query.q),
           nextCursor: null,
         };
       });
@@ -1241,36 +1125,6 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
           { taskId: paramId(request), contentMarkdown: body.contentMarkdown },
         );
       });
-      api.post('/tasks/:id/archive', async (request) => {
-        const body = z
-          .object({ baseVersion: z.number().int().positive() })
-          .parse(request.body ?? {});
-        const meta = mutationMeta(request);
-        return runV2Mutation(
-          tree,
-          request.auth!.ownerId,
-          meta,
-          'task.archive',
-          paramId(request),
-          body.baseVersion,
-          {},
-        );
-      });
-      api.post('/tasks/:id/restore', async (request) => {
-        const body = z
-          .object({ baseVersion: z.number().int().positive() })
-          .parse(request.body ?? {});
-        const meta = mutationMeta(request);
-        return runV2Mutation(
-          tree,
-          request.auth!.ownerId,
-          meta,
-          'task.restore',
-          paramId(request),
-          body.baseVersion,
-          {},
-        );
-      });
       api.delete('/tasks/:id', async (request) => {
         const body = z
           .object({ baseVersion: z.number().int().positive() })
@@ -1311,17 +1165,10 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
 
       api.get('/time-points', async (request) => {
         const query = z
-          .object({
-            type: z.enum(['DATE', 'EVENT']).optional(),
-            archived: z.enum(['true', 'false']).optional(),
-          })
+          .object({ type: z.enum(['DATE', 'EVENT']).optional() })
           .parse(request.query);
         return {
-          items: tree.listTimePoints(
-            request.auth!.ownerId,
-            query.type,
-            query.archived === undefined ? undefined : query.archived === 'true',
-          ),
+          items: tree.listTimePoints(request.auth!.ownerId, query.type),
         };
       });
       api.get('/time-points/placement-counts', async (request) => {
@@ -1330,15 +1177,10 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
             type: z.enum(['DATE', 'EVENT']).optional(),
             from: localDateSchema.optional(),
             to: localDateSchema.optional(),
-            archived: z.enum(['true', 'false']).optional(),
           })
           .parse(request.query);
         const points = tree
-          .listTimePoints(
-            request.auth!.ownerId,
-            query.type,
-            query.archived === undefined ? false : query.archived === 'true',
-          )
+          .listTimePoints(request.auth!.ownerId, query.type)
           .filter(
             (point) =>
               !point.localDate ||
@@ -1430,11 +1272,8 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
       api.post('/time-points/:id/reach', async (request) =>
         versionedV2Action(tree, request, 'timePoint.reach'),
       );
-      api.post('/time-points/:id/archive', async (request) =>
-        versionedV2Action(tree, request, 'timePoint.archive'),
-      );
-      api.post('/time-points/:id/restore', async (request) =>
-        versionedV2Action(tree, request, 'timePoint.restore'),
+      api.delete('/time-points/:id', async (request) =>
+        versionedV2Action(tree, request, 'timePoint.delete'),
       );
       api.get('/time-points/:id/placements', async (request) => ({
         items: tree.listPlacements(request.auth!.ownerId, paramId(request)),
@@ -1622,14 +1461,9 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
         );
       });
 
-      api.get('/workflows', async (request) => {
-        const query = z
-          .object({ includeArchived: z.enum(['true', 'false']).optional() })
-          .parse(request.query);
-        return {
-          items: tree.listWorkflows(request.auth!.ownerId, query.includeArchived === 'true'),
-        };
-      });
+      api.get('/workflows', async (request) => ({
+        items: tree.listWorkflows(request.auth!.ownerId),
+      }));
       api.post('/workflows', async (request, reply) => {
         const body = createWorkflowSchema.parse(request.body);
         const meta = mutationMeta(request);
@@ -1660,12 +1494,6 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
           { name: body.name },
         );
       });
-      api.post('/workflows/:id/archive', async (request) =>
-        versionedV2Action(tree, request, 'workflow.archive'),
-      );
-      api.post('/workflows/:id/restore', async (request) =>
-        versionedV2Action(tree, request, 'workflow.restore'),
-      );
       api.delete('/workflows/:id', async (request) =>
         versionedV2Action(tree, request, 'workflow.delete'),
       );
@@ -2235,8 +2063,6 @@ function statusFor(code: string): number {
   if (
     code === 'TREE_CYCLE' ||
     code === 'PARENT_NOT_FOLDER' ||
-    code === 'TARGET_ARCHIVED' ||
-    code === 'ANCESTOR_ARCHIVED' ||
     code === 'SUBTREE_CHANGED' ||
     code === 'WORKFLOW_TASK_ALREADY_EXISTS' ||
     code === 'STAGE_WORKFLOW_MISMATCH' ||
@@ -2247,7 +2073,6 @@ function statusFor(code: string): number {
   if (code === 'SYNC_CURSOR_EXPIRED') return 410;
   if (code === 'DELETE_CONFIRMATION_REQUIRED') return 410;
   if (code === 'ENTITY_NOT_FOUND') return 404;
-  if (code === 'ENTITY_ARCHIVED') return 410;
   if (code === 'BOOTSTRAP_ALREADY_COMPLETED' || code === 'PLACEMENT_ALREADY_EXISTS') return 409;
   if (code === 'RATE_LIMITED') return 429;
   if (code === 'INTERNAL_ERROR') return 500;

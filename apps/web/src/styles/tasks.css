@@ -217,17 +217,23 @@
 
 .task-actions {
   position: relative;
-  z-index: 1;
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 2px;
 }
 
+/* When a row's overflow menu is open, lift the whole row above later
+   siblings and following sections; otherwise the absolutely positioned
+   menu is clipped/painted under the next card or the capture field. */
+.task-row:has(.m3e-menu) {
+  position: relative;
+  z-index: 30;
+}
+
 .task-reorder-actions,
 .card-reorder-actions,
-.timeline-actions,
-.archived-timeline-actions {
+.timeline-actions {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -240,9 +246,7 @@
 .project-card-shell:hover .card-reorder-actions,
 .project-card-shell:focus-within .card-reorder-actions,
 .timeline-item-shell:hover .timeline-actions,
-.timeline-item-shell:focus-within .timeline-actions,
-.timeline-item-shell:hover .archived-timeline-actions,
-.timeline-item-shell:focus-within .archived-timeline-actions {
+.timeline-item-shell:focus-within .timeline-actions {
   opacity: 1;
 }
 
@@ -278,8 +282,7 @@
 /* Timeline / events                                                          */
 /* -------------------------------------------------------------------------- */
 
-.timeline-list,
-.archived-timeline-list {
+.timeline-list {
   display: grid;
   gap: 8px;
   margin: 0;

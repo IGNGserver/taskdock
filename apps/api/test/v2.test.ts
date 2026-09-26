@@ -88,7 +88,7 @@ describe('TaskDock v2 API and sync protocol', () => {
     });
   });
 
-  it('covers the tree, archive boundary, workflows, steps, placements, deletion preview and protocol gate', async () => {
+  it('covers the tree, workflows, steps, placements, event deletion, deletion preview and protocol gate', async () => {
     const { app, store, accessToken } = await boot();
     const headers = () => ({
       authorization: `Bearer ${accessToken}`,
@@ -169,35 +169,8 @@ describe('TaskDock v2 API and sync protocol', () => {
     expect(cycle.statusCode).toBe(409);
     expect(cycle.json().code).toBe('TREE_CYCLE');
 
-    const archive = await app.inject({
-      method: 'POST',
-      url: `/api/v2/folders/${f1}/archive-tree`,
-      headers: headers(),
-      payload: { baseVersion: 1 },
-    });
-    expect(archive.statusCode).toBe(200);
-    expect(archive.json()).toMatchObject({ folderCount: 2, taskCount: 2 });
-    const operationId = archive.json().id as string;
-    const archivedChildren = await app.inject({
-      method: 'GET',
-      url: '/api/v2/tree/children?parentFolderId=root',
-      headers: { authorization: `Bearer ${accessToken}` },
-    });
-    expect(archivedChildren.json().items).toEqual([]);
-
-    const restored = await app.inject({
-      method: 'POST',
-      url: `/api/v2/folders/${f1}/restore-tree`,
-      headers: headers(),
-      payload: { operationId },
-    });
-    expect(restored.statusCode).toBe(200);
-    const restoredTask = await app.inject({
-      method: 'GET',
-      url: `/api/v2/tasks/${t2}`,
-      headers: { authorization: `Bearer ${accessToken}` },
-    });
-    expect(restoredTask.json().task.status).toBe('DONE');
+    // The archive mechanism was removed; deleting an event cascades to its
+    // placements while the tasks themselves survive.
 
     const step = await app.inject({
       method: 'POST',
@@ -343,6 +316,33 @@ describe('TaskDock v2 API and sync protocol', () => {
     });
     expect(taskPlacements.json().items).toHaveLength(1);
 
+    const eventDetail = await app.inject({
+      method: 'GET',
+      url: `/api/v2/time-points/${eventId}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    const eventDelete = await app.inject({
+      method: 'DELETE',
+      url: `/api/v2/time-points/${eventId}`,
+      headers: headers(),
+      payload: {
+        baseVersion: (eventDetail.json() as { version: number }).version,
+      },
+    });
+    expect(eventDelete.statusCode).toBe(200);
+    const eventAfterDelete = await app.inject({
+      method: 'GET',
+      url: `/api/v2/time-points/${eventId}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(eventAfterDelete.statusCode).toBe(404);
+    const taskAfterEventDelete = await app.inject({
+      method: 'GET',
+      url: `/api/v2/tasks/${t1}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(taskAfterEventDelete.statusCode).toBe(200);
+
     const preview = await app.inject({
       method: 'POST',
       url: `/api/v2/folders/${f1}/delete-preview`,
@@ -350,11 +350,17 @@ describe('TaskDock v2 API and sync protocol', () => {
       payload: {},
     });
     const previewBody = preview.json() as { confirmationToken: string };
+    const currentDetail = await app.inject({
+      method: 'GET',
+      url: `/api/v2/tasks/${t1}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    const currentVersion = (currentDetail.json() as { task: { version: number } }).task.version;
     const changed = await app.inject({
       method: 'PATCH',
       url: `/api/v2/tasks/${t1}`,
       headers: headers(),
-      payload: { status: 'IN_PROGRESS', baseVersion: 3 },
+      payload: { status: 'IN_PROGRESS', baseVersion: currentVersion },
     });
     expect(changed.statusCode).toBe(200);
     const staleDelete = await app.inject({
@@ -391,140 +397,6 @@ describe('TaskDock v2 API and sync protocol', () => {
     await app.close();
   });
 
-  it('restores only the entities created by a folder archive operation', async () => {
-    const { app, accessToken } = await boot();
-    const headers = () => ({
-      authorization: `Bearer ${accessToken}`,
-      'x-client-id': uuidv7(),
-      'idempotency-key': uuidv7(),
-    });
-    const rootId = uuidv7();
-    const childId = uuidv7();
-    const taskId = uuidv7();
-    const root = await app.inject({
-      method: 'POST',
-      url: '/api/v2/folders',
-      headers: headers(),
-      payload: { id: rootId, title: '根' },
-    });
-    await app.inject({
-      method: 'POST',
-      url: '/api/v2/folders',
-      headers: headers(),
-      payload: { id: childId, parentFolderId: rootId, title: '子' },
-    });
-    const task = await app.inject({
-      method: 'POST',
-      url: '/api/v2/tasks',
-      headers: headers(),
-      payload: { id: taskId, parentFolderId: childId, title: '预先归档' },
-    });
-    await app.inject({
-      method: 'POST',
-      url: `/api/v2/tasks/${taskId}/archive`,
-      headers: headers(),
-      payload: { baseVersion: task.json().task.version },
-    });
-    const archived = await app.inject({
-      method: 'POST',
-      url: `/api/v2/folders/${rootId}/archive-tree`,
-      headers: headers(),
-      payload: { baseVersion: root.json().version },
-    });
-    expect(archived.json()).toMatchObject({ folderCount: 2, taskCount: 0 });
-    const restored = await app.inject({
-      method: 'POST',
-      url: `/api/v2/folders/${rootId}/restore-tree`,
-      headers: headers(),
-      payload: { operationId: archived.json().id },
-    });
-    expect(restored.statusCode).toBe(200);
-    const restoredTask = await app.inject({
-      method: 'GET',
-      url: `/api/v2/tasks/${taskId}`,
-      headers: { authorization: `Bearer ${accessToken}` },
-    });
-    expect(restoredTask.json().task.archivedAt).toEqual(expect.any(String));
-    await app.close();
-  });
-
-  it('rejects moving archived folders or tasks with ENTITY_ARCHIVED', async () => {
-    const { app, accessToken } = await boot();
-    const headers = () => ({
-      authorization: `Bearer ${accessToken}`,
-      'x-client-id': uuidv7(),
-      'idempotency-key': uuidv7(),
-    });
-    const folderId = uuidv7();
-    const targetFolderId = uuidv7();
-    const taskId = uuidv7();
-
-    await app.inject({
-      method: 'POST',
-      url: '/api/v2/folders',
-      headers: headers(),
-      payload: { id: folderId, title: '待归档目录' },
-    });
-    await app.inject({
-      method: 'POST',
-      url: '/api/v2/folders',
-      headers: headers(),
-      payload: { id: targetFolderId, title: '目标目录' },
-    });
-    const taskRes = await app.inject({
-      method: 'POST',
-      url: '/api/v2/tasks',
-      headers: headers(),
-      payload: { id: taskId, parentFolderId: null, title: '待归档任务' },
-    });
-
-    // Archive folder and task
-    await app.inject({
-      method: 'POST',
-      url: `/api/v2/folders/${folderId}/archive-tree`,
-      headers: headers(),
-      payload: { baseVersion: 1 },
-    });
-    await app.inject({
-      method: 'POST',
-      url: `/api/v2/tasks/${taskId}/archive`,
-      headers: headers(),
-      payload: { baseVersion: taskRes.json().task.version },
-    });
-
-    // Attempt to move archived folder
-    const moveFolder = await app.inject({
-      method: 'POST',
-      url: '/api/v2/tree/items/move',
-      headers: headers(),
-      payload: {
-        item: { kind: 'FOLDER', id: folderId },
-        parentFolderId: targetFolderId,
-        expectedStatus: 'TODO',
-        baseVersion: 2,
-      },
-    });
-    expect(moveFolder.statusCode).toBe(410);
-    expect(moveFolder.json().code).toBe('ENTITY_ARCHIVED');
-
-    // Attempt to move archived task
-    const moveTask = await app.inject({
-      method: 'POST',
-      url: '/api/v2/tree/items/move',
-      headers: headers(),
-      payload: {
-        item: { kind: 'TASK', id: taskId },
-        parentFolderId: targetFolderId,
-        expectedStatus: 'TODO',
-        baseVersion: 2,
-      },
-    });
-    expect(moveTask.statusCode).toBe(410);
-    expect(moveTask.json().code).toBe('ENTITY_ARCHIVED');
-
-    await app.close();
-  });
-
   it('preserves client-provided defaultStageId on workflow.create', async () => {
     const { app, accessToken } = await boot();
     const headers = () => ({
@@ -548,141 +420,6 @@ describe('TaskDock v2 API and sync protocol', () => {
     expect(created.statusCode).toBe(201);
     const body = created.json() as { stages: Array<{ id: string }> };
     expect(body.stages[0]?.id).toBe(defaultStageId);
-
-    await app.close();
-  });
-
-  it('exposes top-level archive operations with counts, nested folders and standalone tasks', async () => {
-    const { app, accessToken } = await boot();
-    const headers = () => ({
-      authorization: `Bearer ${accessToken}`,
-      'x-client-id': uuidv7(),
-      'idempotency-key': uuidv7(),
-    });
-    const rootId = uuidv7();
-    const childId = uuidv7();
-    const keptTaskId = uuidv7();
-    const standaloneTaskId = uuidv7();
-
-    const root = await app.inject({
-      method: 'POST',
-      url: '/api/v2/folders',
-      headers: headers(),
-      payload: { id: rootId, title: '发布' },
-    });
-    await app.inject({
-      method: 'POST',
-      url: '/api/v2/folders',
-      headers: headers(),
-      payload: { id: childId, parentFolderId: rootId, title: '子目录' },
-    });
-    await app.inject({
-      method: 'POST',
-      url: '/api/v2/tasks',
-      headers: headers(),
-      payload: { id: keptTaskId, parentFolderId: childId, title: '随目录归档' },
-    });
-    // A task archived before the cascade must stay archived after restore.
-    const standalone = await app.inject({
-      method: 'POST',
-      url: '/api/v2/tasks',
-      headers: headers(),
-      payload: { id: standaloneTaskId, parentFolderId: null, title: '独立归档任务' },
-    });
-    await app.inject({
-      method: 'POST',
-      url: `/api/v2/tasks/${standaloneTaskId}/archive`,
-      headers: headers(),
-      payload: { baseVersion: standalone.json().task.version },
-    });
-
-    const archived = await app.inject({
-      method: 'POST',
-      url: `/api/v2/folders/${rootId}/archive-tree`,
-      headers: headers(),
-      payload: { baseVersion: root.json().version },
-    });
-    expect(archived.json()).toMatchObject({ folderCount: 2, taskCount: 1 });
-    const operationId = archived.json().id as string;
-
-    const listed = await app.inject({
-      method: 'GET',
-      url: '/api/v2/archive-operations',
-      headers: { authorization: `Bearer ${accessToken}` },
-    });
-    expect(listed.statusCode).toBe(200);
-    const items = listed.json().items as Array<Record<string, unknown>>;
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({
-      id: operationId,
-      rootFolderId: rootId,
-      rootFolderTitle: '发布',
-      folderCount: 2,
-      taskCount: 1,
-      descendantFolderCount: 2,
-      descendantTaskCount: 1,
-    });
-    expect((items[0]!.folders as Array<{ id: string }>).map((f) => f.id).sort()).toEqual(
-      [childId, rootId].sort(),
-    );
-
-    const detail = await app.inject({
-      method: 'GET',
-      url: `/api/v2/archive-operations/${operationId}`,
-      headers: { authorization: `Bearer ${accessToken}` },
-    });
-    expect(detail.statusCode).toBe(200);
-    const body = detail.json() as {
-      tasks: Array<{ id: string }>;
-      standaloneArchivedTasks: Array<{ id: string }>;
-    };
-    expect(body.tasks.map((task) => task.id)).toEqual([keptTaskId]);
-    expect(body.standaloneArchivedTasks.map((task) => task.id)).toContain(standaloneTaskId);
-
-    await app.close();
-  });
-
-  it('does not list a restored archive operation by default', async () => {
-    const { app, accessToken } = await boot();
-    const headers = () => ({
-      authorization: `Bearer ${accessToken}`,
-      'x-client-id': uuidv7(),
-      'idempotency-key': uuidv7(),
-    });
-    const rootId = uuidv7();
-    const root = await app.inject({
-      method: 'POST',
-      url: '/api/v2/folders',
-      headers: headers(),
-      payload: { id: rootId, title: '可恢复' },
-    });
-    const archived = await app.inject({
-      method: 'POST',
-      url: `/api/v2/folders/${rootId}/archive-tree`,
-      headers: headers(),
-      payload: { baseVersion: root.json().version },
-    });
-    const operationId = archived.json().id as string;
-    await app.inject({
-      method: 'POST',
-      url: `/api/v2/folders/${rootId}/restore-tree`,
-      headers: headers(),
-      payload: { operationId },
-    });
-
-    const active = await app.inject({
-      method: 'GET',
-      url: '/api/v2/archive-operations',
-      headers: { authorization: `Bearer ${accessToken}` },
-    });
-    expect(active.json().items).toHaveLength(0);
-    const all = await app.inject({
-      method: 'GET',
-      url: '/api/v2/archive-operations?includeRestored=true',
-      headers: { authorization: `Bearer ${accessToken}` },
-    });
-    expect(all.json().items).toHaveLength(1);
-    expect(all.json().items[0].restoredAt).toEqual(expect.any(String));
 
     await app.close();
   });

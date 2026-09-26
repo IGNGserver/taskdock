@@ -1,5 +1,4 @@
 import type {
-  ArchiveOperationSummaryDto,
   FolderDto,
   PlacementDto,
   TaskStatus,
@@ -17,7 +16,6 @@ import {
   type UpgradePendingMutation,
 } from '@devtodo/sync-client';
 import {
-  Archive,
   CalendarDays,
   Check,
   ChevronLeft,
@@ -41,7 +39,6 @@ import {
   Sparkles,
   Target,
   Trash2,
-  Undo2,
   Workflow as WorkflowIcon,
 } from 'lucide-react';
 import {
@@ -88,7 +85,6 @@ import {
   Button,
   ButtonGroup,
   CalendarDayCell,
-  CaptureField,
   Card,
   Chip,
   ConfirmDialog,
@@ -97,7 +93,6 @@ import {
   Dialog as M3eDialog,
   Disclosure,
   EmptyState as M3EmptyState,
-  FabMenu,
   IconButton,
   LinearProgress,
   List,
@@ -110,10 +105,8 @@ import {
   NavigationRail,
   RouterLinkAdapter,
   SearchBar,
-  SplitButton,
   Select,
   Snackbar,
-  Switch,
   TaskRowAction,
   TaskStatusControl,
   TextArea,
@@ -129,7 +122,6 @@ import { useDismissibleMenu } from './components/m3e/behavior.js';
 import { PwaLifecycleNotice } from './pwa.js';
 import { TaskDetailV2Overlay, TreePage } from './TreePage.js';
 import { WorkflowsPage } from './WorkflowsPage.js';
-import { readRecentCaptureFolder } from './folder-preference.js';
 
 type PlacementWithTask = PlacementDto & { task: TreeTaskDto };
 type PresenceState = 'entering' | 'present' | 'exiting';
@@ -524,21 +516,18 @@ function AuthenticatedApp() {
   const navigate = useNavigate();
   const sizeClass = useWindowSizeClass();
   const pageWrapRef = useRef<HTMLDivElement | null>(null);
-  const [quickOpen, setQuickOpen] = useState(false);
-  const [quickKind, setQuickKind] = useState<'task'>('task');
   const [commandOpen, setCommandOpen] = useState(false);
-  const [mobileActionOpen, setMobileActionOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [selectedTask, setSelectedTask] = useSearchParams();
-  const activeFolderId = /^\/tree\/([^/]+)/.exec(location.pathname)?.[1] ?? null;
-  const defaultTaskFolderId =
-    activeFolderId ?? readRecentCaptureFolder(auth.settings?.defaultCaptureTarget);
 
+  // Only reset scroll when the top-level route changes. Moving between
+  // /tree and /tree/:folderId must preserve the list scroll position.
+  const topRoute = `/${location.pathname.split('/')[1] ?? ''}`;
   useEffect(() => {
     pageWrapRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  }, [location.pathname]);
+  }, [topRoute]);
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -548,8 +537,6 @@ function AuthenticatedApp() {
       }
       if (event.key === 'Escape') {
         setCommandOpen(false);
-        setQuickOpen(false);
-        setMobileActionOpen(false);
         setMobileSidebarOpen(false);
       }
     };
@@ -574,8 +561,6 @@ function AuthenticatedApp() {
   useEffect(() => {
     const listener = (event: Event) => {
       if (commandOpen) setCommandOpen(false);
-      else if (quickOpen) setQuickOpen(false);
-      else if (mobileActionOpen) setMobileActionOpen(false);
       else if (selectedTask.get('task')) closeTask();
       else if (mobileSidebarOpen) setMobileSidebarOpen(false);
       else return;
@@ -583,7 +568,7 @@ function AuthenticatedApp() {
     };
     window.addEventListener('devtodo:native-back', listener);
     return () => window.removeEventListener('devtodo:native-back', listener);
-  }, [closeTask, commandOpen, mobileActionOpen, mobileSidebarOpen, quickOpen, selectedTask]);
+  }, [closeTask, commandOpen, mobileSidebarOpen, selectedTask]);
   useEffect(() => {
     const listener = (event: Event) => {
       const message = (event as CustomEvent<{ message?: string }>).detail?.message;
@@ -599,7 +584,6 @@ function AuthenticatedApp() {
       { to: '/workflows', label: '流程', icon: <WorkflowIcon size={20} /> },
       { to: '/time/calendar', label: '日历', icon: <CalendarDays size={20} /> },
       { to: '/time/events', label: '事件', icon: <Clock3 size={20} /> },
-      { to: '/archive', label: '归档', icon: <Archive size={20} /> },
       { to: '/settings', label: '设置', icon: <Settings size={20} /> },
     ],
     [],
@@ -734,21 +718,6 @@ function AuthenticatedApp() {
                     </>
                   </Button>
                   <ConnectionStatus />
-                  <SplitButton
-                    icon={<Plus size={20} />}
-                    label="快速添加"
-                    onPrimary={() => {
-                      setQuickKind('task');
-                      setQuickOpen(true);
-                    }}
-                    options={[
-                      { id: 'search', label: '搜索任务和备注', icon: <Search size={18} /> },
-                    ]}
-                    onSelect={(id) => {
-                      if (id === 'search') setCommandOpen(true);
-                    }}
-                    menuLabel="更多快捷操作"
-                  />
                 </Toolbar>
               ) : (
                 <IconButton label="搜索任务和备注" onClick={() => setCommandOpen(true)}>
@@ -759,7 +728,7 @@ function AuthenticatedApp() {
           }
         />
         <div ref={pageWrapRef} className="page-wrap">
-          <div key={location.pathname} className="route-transition">
+          <div key={topRoute} className="route-transition">
             <Routes>
               <Route path="/" element={<Navigate to="/today" replace />} />
               <Route path="/today" element={<TodayPage onOpenTask={openTask} />} />
@@ -779,7 +748,6 @@ function AuthenticatedApp() {
               />
               <Route path="/time/events" element={<EventsPage />} />
               <Route path="/time/events/:eventId" element={<EventPage onOpenTask={openTask} />} />
-              <Route path="/archive" element={<ArchivePage onOpenTask={openTask} />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route
                 path="/more"
@@ -816,45 +784,12 @@ function AuthenticatedApp() {
           className="m3e-navigation-bar--mobile-shell"
         />
       )}
-      {sizeClass === 'compact' && (
-        <div role="region" aria-label="创建" className="app-float-layer">
-          <FabMenu
-            label="打开创建菜单"
-            open={mobileActionOpen}
-            onOpenChange={setMobileActionOpen}
-            icon={<Plus size={24} />}
-            items={[
-              { id: 'task', label: '新建任务', icon: <Check size={20} /> },
-              { id: 'search', label: '搜索任务', icon: <Search size={20} /> },
-            ]}
-            onSelect={(id) => {
-              if (id === 'search') setCommandOpen(true);
-              else {
-                setQuickKind('task');
-                setQuickOpen(true);
-              }
-            }}
-          />
-        </div>
-      )}
-      <QuickCaptureDialog
-        open={quickOpen}
-        initialKind={quickKind}
-        defaultTaskFolderId={defaultTaskFolderId}
-        placeTaskOnToday={location.pathname === '/today'}
-        onClose={() => setQuickOpen(false)}
-      />
       <CommandPalette
         open={commandOpen}
         onClose={() => setCommandOpen(false)}
         onOpenTask={(id) => {
           setCommandOpen(false);
           openTask(id);
-        }}
-        onQuickCapture={(kind) => {
-          setCommandOpen(false);
-          setQuickKind(kind);
-          setQuickOpen(true);
         }}
       />
       <TaskDetailV2Overlay
@@ -1139,12 +1074,6 @@ function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
   const links = [
     { to: '/tree', label: '目录', description: '按目录浏览和整理任务。', icon: LayoutList },
     {
-      to: '/archive',
-      label: '归档',
-      description: '恢复已归档的文件夹、任务和事件。',
-      icon: Archive,
-    },
-    {
       to: '/settings',
       label: '设置',
       description: '调整时区与默认捕获位置。',
@@ -1334,149 +1263,6 @@ function useReloadable<T>(loader: () => Promise<T>, initial: T) {
   };
 }
 
-function QuickCapture({
-  defaultTaskFolderId = null,
-  onCreated,
-}: {
-  defaultTaskFolderId?: string | null;
-  onCreated?: (task: TreeTaskDto) => Promise<void> | void;
-}) {
-  const [title, setTitle] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!title.trim() || busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      const result = (await mutationV2('POST', '/tasks', {
-        parentFolderId: defaultTaskFolderId,
-        title: title.trim(),
-      })) as { task: TreeTaskDto };
-      const task = result.task;
-      setTitle('');
-      await onCreated?.(task);
-      window.dispatchEvent(new Event('devtodo:data-changed'));
-      window.dispatchEvent(new CustomEvent('devtodo:toast', { detail: { message: '任务已创建' } }));
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : '创建任务失败，请重试');
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <CaptureField
-      className="m3e-capture-field--quick"
-      label="快速创建任务"
-      value={title}
-      onChange={setTitle}
-      onSubmit={submit}
-      placeholder="现在要记下什么？"
-      leading={<Plus size={20} />}
-      trailing={
-        title.trim() ? (
-          <IconButton label="创建任务" type="submit" disabled={busy}>
-            <Plus size={20} />
-          </IconButton>
-        ) : (
-          <kbd aria-hidden="true">↵</kbd>
-        )
-      }
-      error={error}
-      disabled={busy}
-    />
-  );
-}
-
-function QuickCaptureDialog({
-  open,
-  initialKind = 'task',
-  defaultTaskFolderId,
-  placeTaskOnToday = false,
-  onClose,
-}: {
-  open: boolean;
-  initialKind?: 'task';
-  defaultTaskFolderId?: string | null;
-  placeTaskOnToday?: boolean;
-  onClose: () => void;
-}) {
-  const { settings } = useAuth();
-  const kind = 'task' as const;
-  const [title, setTitle] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  useEffect(() => {
-    if (open) {
-      setTitle('');
-      setError('');
-    }
-  }, [initialKind, open]);
-  const presence = usePresence(open);
-  if (!presence.mounted) return null;
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      if (kind === 'task') {
-        // POST /api/v2/tasks returns { task, note }; unwrap `task` before
-        // reading the id, otherwise the follow-up placement is rejected with
-        // "taskId: Required" and the task never appears on Today.
-        const created = (await mutationV2('POST', '/tasks', {
-          parentFolderId: defaultTaskFolderId ?? null,
-          title: title.trim(),
-        })) as { task: TreeTaskDto };
-        if (placeTaskOnToday) {
-          const point = (await mutationV2('POST', '/time-points/date', {
-            localDate: todayInTimezone(settings?.timezone ?? 'Asia/Shanghai'),
-          })) as TimePointDto;
-          await mutationV2('POST', '/placements', {
-            taskId: created.task.id,
-            timePointId: point.id,
-          });
-        }
-      }
-      window.dispatchEvent(new Event('devtodo:data-changed'));
-      window.dispatchEvent(
-        new CustomEvent('devtodo:toast', {
-          detail: { message: placeTaskOnToday ? '任务已创建并安排到今天' : '任务已创建' },
-        }),
-      );
-      onClose();
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : '创建失败，请重试');
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Modal title="快速添加" onClose={onClose} state={presence.state}>
-      <form onSubmit={submit} className="stack-form">
-        <Field label="任务标题" value={title} onChange={setTitle} autoComplete="off" autoFocus />
-        {kind === 'task' && (
-          <p className="field-help">
-            {placeTaskOnToday
-              ? `${defaultTaskFolderId ? '将创建到当前文件夹' : '将创建到根目录'}，并同时安排到今天。任务本体仍只保留一份。`
-              : `${defaultTaskFolderId ? '将创建到当前文件夹' : '将创建到根目录'}。之后可以从目录、任务详情或日期视图安排。`}
-          </p>
-        )}
-        {error && <Alert tone="error">{error}</Alert>}
-        <Button
-          variant="filled"
-          className="m3e-button--wide"
-          type="submit"
-          disabled={busy || !title.trim()}
-        >
-          {busy ? '保存中…' : '创建'}
-        </Button>
-      </form>
-    </Modal>
-  );
-}
-
 /**
  * Dialog adapter kept for the existing call sites that drive the presence
  * lifecycle themselves. It forwards to the M3E `Dialog`, which owns the scrim,
@@ -1507,17 +1293,14 @@ function CommandPalette({
   open,
   onClose,
   onOpenTask,
-  onQuickCapture,
 }: {
   open: boolean;
   onClose: () => void;
   onOpenTask: (id: string) => void;
-  onQuickCapture: (kind: 'task') => void;
 }) {
   const navigate = useNavigate();
   const { settings } = useAuth();
   const [query, setQuery] = useState('');
-  const [includeArchived, setIncludeArchived] = useState(false);
   const [items, setItems] = useState<TreeTaskDto[]>([]);
   const [actionError, setActionError] = useState('');
   const [statusError, setStatusError] = useState('');
@@ -1526,7 +1309,6 @@ function CommandPalette({
   useEffect(() => {
     if (!open) return;
     setQuery('');
-    setIncludeArchived(false);
     setActionError('');
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }, [open]);
@@ -1537,16 +1319,14 @@ function CommandPalette({
       return;
     }
     const timer = window.setTimeout(() => {
-      void requestV2<{ items: TreeTaskDto[] }>(
-        `/tasks?archived=${includeArchived ? 'true' : 'false'}&q=${encodeURIComponent(query.trim())}`,
-      )
+      void requestV2<{ items: TreeTaskDto[] }>(`/tasks?q=${encodeURIComponent(query.trim())}`)
         .then((result) => {
           setItems(result.items);
         })
         .catch(() => setItems([]));
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [includeArchived, query]);
+  }, [query]);
   const arrangeToday = async (taskId: string) => {
     try {
       const point = (await mutationV2('POST', '/time-points/date', {
@@ -1564,7 +1344,7 @@ function CommandPalette({
     try {
       await mutationV2('PATCH', `/tasks/${task.id}`, { status, baseVersion: task.version });
       const result = await requestV2<{ items: TreeTaskDto[] }>(
-        `/tasks?archived=${includeArchived ? 'true' : 'false'}&q=${encodeURIComponent(query.trim())}`,
+        `/tasks?q=${encodeURIComponent(query.trim())}`,
       );
       setItems(result.items);
       window.dispatchEvent(new Event('devtodo:data-changed'));
@@ -1587,12 +1367,6 @@ function CommandPalette({
             placeholder="搜索任务、备注或引用 ID…"
             leadingIcon={<Search size={20} />}
           />
-          <Switch
-            label="包含归档任务"
-            checked={includeArchived}
-            onChange={setIncludeArchived}
-            helperText="搜索归档中的任务"
-          />
         </div>
         {query ? (
           <div className="command-results-wrap">
@@ -1611,12 +1385,12 @@ function CommandPalette({
                     leadingControl={
                       <TaskStatusControl
                         status={task.status}
-                        disabled={Boolean(task.archivedAt || task.deletedAt)}
+                        disabled={Boolean(task.deletedAt)}
                         onStatusChange={(status) => changeTaskStatus(task, status)}
                       />
                     }
                     headline={task.title}
-                    supporting={`${task.referenceId} · ${task.archivedAt ? '已归档' : '目录任务'}`}
+                    supporting={`${task.referenceId} · 目录任务`}
                     trailing={<ChevronRight size={16} />}
                     onClick={() => onOpenTask(task.id)}
                     actions={
@@ -1633,7 +1407,7 @@ function CommandPalette({
                 compact
                 icon={<Search size={22} />}
                 title="没有找到匹配任务"
-                description="可以尝试更短的关键词，或改为搜索归档。"
+                description="可以尝试更短的关键词。"
               />
             )}
           </div>
@@ -1645,9 +1419,6 @@ function CommandPalette({
             description="搜索任务标题、备注和引用 ID，或直接创建一条新任务。"
             action={
               <div className="command-actions">
-                <Button variant="tonal" size="s" onClick={() => onQuickCapture('task')}>
-                  新建任务
-                </Button>
                 <Button
                   variant="text"
                   size="s"
@@ -1671,14 +1442,13 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const compact = useWindowSizeClass() === 'compact';
   const { settings } = useAuth();
   const localDate = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
-  const defaultTaskFolderId = readRecentCaptureFolder(settings?.defaultCaptureTarget);
   const loader = useCallback(async () => {
     const point = (await mutationV2('POST', '/time-points/date', { localDate })) as TimePointDto;
     const [placementResponse, eventResponse, eventCountResponse] = await Promise.all([
       requestV2<{ items: PlacementWithTask[] }>(`/time-points/${point.id}/placements`),
-      requestV2<{ items: TimePointDto[] }>('/time-points?type=EVENT&archived=false'),
+      requestV2<{ items: TimePointDto[] }>('/time-points?type=EVENT'),
       requestV2<{ items: TimePointPlacementCountDto[] }>(
-        '/time-points/placement-counts?type=EVENT&archived=false',
+        '/time-points/placement-counts?type=EVENT',
       ),
     ]);
     return {
@@ -1797,7 +1567,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                 <span className="today-overview-label">今天的焦点</span>
                 <strong>{total ? `${done.length} / ${total} 已完成` : '还没有安排任务'}</strong>
                 <span className="today-overview-supporting">
-                  {total ? '完成一个任务，下一步会自然浮现' : '从捕获一个小任务开始'}
+                  {total ? '完成一个任务，下一步会自然浮现' : '从目录安排第一个任务开始'}
                 </span>
               </div>
             </div>
@@ -1817,60 +1587,6 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               )}
             </div>
           </section>
-          <aside
-            className={`today-context${data.reachedEvents.length === 0 ? ' today-context--empty' : ''}`}
-            aria-labelledby="today-context-title"
-          >
-            <div className="today-context-heading">
-              <div>
-                <span className="today-context-eyebrow">上下文</span>
-                <h2 id="today-context-title">今天的上下文</h2>
-              </div>
-              <span className="today-context-mark" aria-hidden="true">
-                <Clock3 size={18} />
-              </span>
-            </div>
-            {data.reachedEvents.length > 0 ? (
-              <div className="today-context-events">
-                <span className="today-context-label">已到达的事件</span>
-                {data.reachedEvents.slice(0, 3).map((event) => (
-                  <NavigationCard
-                    key={event.id}
-                    variant="context"
-                    to={`/time/events/${event.id}`}
-                    className="m3e-navigation-card--today-context-event"
-                  >
-                    <span className="m3e-navigation-card__timeline-node is-reached" />
-                    <span className="m3e-navigation-card__content">
-                      <strong>{event.title}</strong>
-                      <small>{data.eventCounts[event.id]?.openCount ?? 0} 项未完成</small>
-                    </span>
-                    <ChevronRight
-                      className="m3e-navigation-card__trailing"
-                      size={16}
-                      aria-hidden="true"
-                    />
-                  </NavigationCard>
-                ))}
-                {data.reachedEvents.length > 3 && (
-                  <NavigationCard
-                    variant="inline"
-                    to="/time/events"
-                    className="m3e-navigation-card--today-context-more"
-                  >
-                    查看全部事件
-                  </NavigationCard>
-                )}
-              </div>
-            ) : (
-              <div className="today-context-note">
-                <span className="today-context-note-icon" aria-hidden="true">
-                  <Target size={18} />
-                </span>
-                <p>没有已到达的事件。任务完成状态与事件到达状态始终独立。</p>
-              </div>
-            )}
-          </aside>
         </section>
       )}
       {rollover && (
@@ -1949,27 +1665,9 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           </aside>
         </section>
       ) : null}
-      <section className="capture-zone" aria-labelledby="capture-zone-title">
-        <div className="capture-zone-copy">
-          <span className="capture-zone-eyebrow">捕获</span>
-          <h2 id="capture-zone-title">先记下来，再决定怎么安排</h2>
-          <p>今天创建的任务会自动安排到今天；需要整理时再移动到其他日期或事件。</p>
-        </div>
-        <QuickCapture
-          defaultTaskFolderId={defaultTaskFolderId}
-          onCreated={async (task) => {
-            const point =
-              data.point ??
-              ((await mutationV2('POST', '/time-points/date', { localDate })) as TimePointDto);
-            await mutationV2('POST', '/placements', { taskId: task.id, timePointId: point.id });
-            await reload();
-          }}
-        />
-      </section>
       {showTaskPicker && data.point && (
         <AddTaskModal
           pointId={data.point.id}
-          defaultFolderId={defaultTaskFolderId}
           onClose={() => setShowTaskPicker(false)}
           onAdded={() => {
             setShowTaskPicker(false);
@@ -1988,11 +1686,8 @@ function SkeletonList() {
 
 function EventsPage() {
   const loader = useCallback(async () => {
-    const [active, archived, countResponse] = await Promise.all([
-      requestV2<{ items: TimePointDto[] }>('/time-points?type=EVENT&archived=false').then(
-        (result) => result.items,
-      ),
-      requestV2<{ items: TimePointDto[] }>('/time-points?type=EVENT&archived=true').then(
+    const [active, countResponse] = await Promise.all([
+      requestV2<{ items: TimePointDto[] }>('/time-points?type=EVENT').then(
         (result) => result.items,
       ),
       requestV2<{ items: TimePointPlacementCountDto[] }>(
@@ -2001,19 +1696,16 @@ function EventsPage() {
     ]);
     return {
       active,
-      archived,
       counts: Object.fromEntries(countResponse.map((item) => [item.timePointId, item])),
     };
   }, []);
   const { data, initialLoading, hasData, error, reload } = useReloadable(loader, {
     active: [] as TimePointDto[],
-    archived: [] as TimePointDto[],
     counts: {} as Record<string, TimePointPlacementCountDto>,
   });
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<TimePointDto | null>(null);
   const [actionError, setActionError] = useState('');
-  const [restoreBusyId, setRestoreBusyId] = useState<string | null>(null);
   const moveEvent = async (eventId: string, direction: 'up' | 'down') => {
     setActionError('');
     try {
@@ -2029,19 +1721,6 @@ function EventsPage() {
       window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
       setActionError(cause instanceof ApiError ? cause.message : '事件排序失败，请重试');
-    }
-  };
-  const restoreEvent = async (point: TimePointDto) => {
-    if (restoreBusyId) return;
-    setRestoreBusyId(point.id);
-    setActionError('');
-    try {
-      await mutationV2('POST', `/time-points/${point.id}/restore`, { baseVersion: point.version });
-      await reload();
-    } catch (cause) {
-      setActionError(cause instanceof ApiError ? cause.message : '恢复事件失败，请重试');
-    } finally {
-      setRestoreBusyId(null);
     }
   };
   const renderEvent = (point: TimePointDto) => {
@@ -2118,7 +1797,7 @@ function EventsPage() {
       )}
       {initialLoading ? (
         <SkeletonList />
-      ) : !hasData ? null : data.active.length || data.archived.length ? (
+      ) : !hasData ? null : data.active.length ? (
         <>
           {data.active.length > 0 && (
             <div className="timeline-list">
@@ -2133,37 +1812,6 @@ function EventsPage() {
                 }
               />
               {data.active.map(renderEvent)}
-            </div>
-          )}
-          {data.archived.length > 0 && (
-            <div className="timeline-list archived-timeline-list">
-              <SectionTitle title="已归档" count={data.archived.length} />
-              {data.archived.map((point) => (
-                <div className="timeline-item-shell" key={point.id}>
-                  <NavigationCard variant="timeline" to={`/time/events/${point.id}`}>
-                    <span className="m3e-navigation-card__timeline-node" />
-                    <span className="m3e-navigation-card__timeline-copy">
-                      <strong>{point.title}</strong>
-                      <small>已归档 · {point.reachedAt ? '曾到达' : '未到达'}</small>
-                    </span>
-                    <span className="m3e-navigation-card__meta">
-                      <EventCount count={data.counts[point.id]?.openCount} />
-                    </span>
-                    <ChevronRight className="m3e-navigation-card__trailing" size={16} />
-                  </NavigationCard>
-                  <div className="timeline-actions archived-timeline-actions">
-                    <Button
-                      variant="tonal"
-                      size="s"
-                      type="submit"
-                      disabled={restoreBusyId === point.id}
-                      onClick={() => void restoreEvent(point)}
-                    >
-                      {restoreBusyId === point.id ? '恢复中…' : '恢复事件'}
-                    </Button>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
         </>
@@ -2296,10 +1944,6 @@ function EventCount({ count }: { count?: number }) {
 
 function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const { eventId } = useParams();
-  const { settings } = useAuth();
-  // Date/event pages may only add Tasks, never Folders (spec 15.4), and a new
-  // Task must land in the recent/current folder rather than always in root.
-  const captureFolderId = readRecentCaptureFolder(settings?.defaultCaptureTarget);
   const [point, setPoint] = useState<TimePointDto | null>(null);
   const [items, setItems] = useState<PlacementWithTask[]>([]);
   const [loadedEventId, setLoadedEventId] = useState<string | null>(null);
@@ -2309,7 +1953,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const loadSequence = useRef(0);
   const [showAdd, setShowAdd] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const load = useCallback(async () => {
     if (!eventId) return;
@@ -2354,25 +1998,15 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         <SkeletonList />
       </div>
     );
-  const changeEventState = async (): Promise<boolean> => {
+  const deleteEvent = async (): Promise<boolean> => {
     setActionBusy(true);
     setActionError('');
     try {
-      if (point.archivedAt)
-        await mutationV2('POST', `/time-points/${point.id}/restore`, {
-          baseVersion: point.version,
-        });
-      else if (point.reachedAt)
-        await mutationV2('POST', `/time-points/${point.id}/archive`, {
-          baseVersion: point.version,
-        });
-      else
-        await mutationV2('POST', `/time-points/${point.id}/reach`, { baseVersion: point.version });
-      await load();
+      await mutationV2('DELETE', `/time-points/${point.id}`, { baseVersion: point.version });
       window.dispatchEvent(new Event('devtodo:data-changed'));
       return true;
     } catch (cause) {
-      setActionError(cause instanceof ApiError ? cause.message : '操作失败');
+      setActionError(cause instanceof ApiError ? cause.message : '删除失败');
       return false;
     } finally {
       setActionBusy(false);
@@ -2405,37 +2039,43 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             <Button
               variant="outlined"
               leadingIcon={<Pencil size={16} />}
-              disabled={Boolean(point.archivedAt) || actionBusy}
+              disabled={actionBusy}
               onClick={() => setEditOpen(true)}
             >
               编辑事件
             </Button>
             <Button
               variant="outlined"
-              leadingIcon={
-                point.archivedAt ? (
-                  <Undo2 size={16} />
-                ) : point.reachedAt ? (
-                  <Archive size={16} />
-                ) : (
-                  <Check size={16} />
-                )
-              }
-              disabled={actionBusy}
+              leadingIcon={<Check size={16} />}
+              disabled={actionBusy || Boolean(point.reachedAt)}
               onClick={() =>
-                point.archivedAt || !point.reachedAt
-                  ? void changeEventState()
-                  : setArchiveConfirmOpen(true)
+                void mutationV2('POST', `/time-points/${point.id}/reach`, {
+                  baseVersion: point.version,
+                })
+                  .then(load)
+                  .then(() => window.dispatchEvent(new Event('devtodo:data-changed')))
+                  .catch((cause: unknown) =>
+                    setActionError(cause instanceof ApiError ? cause.message : '操作失败'),
+                  )
               }
             >
-              {point.archivedAt ? '恢复事件' : point.reachedAt ? '归档事件' : '标记已到达'}
+              {point.reachedAt ? '已到达' : '标记已到达'}
+            </Button>
+            <Button
+              variant="outlined"
+              className="m3e-button--danger"
+              leadingIcon={<Trash2 size={16} />}
+              disabled={actionBusy}
+              onClick={() => setDeleteConfirmOpen(true)}
+            >
+              删除事件
             </Button>
           </div>
         }
       />
       <div className="event-state-line">
         <span className={`event-state ${point.reachedAt ? 'reached' : ''}`}>
-          {point.archivedAt ? '已归档' : point.reachedAt ? '已到达' : '等待中'}
+          {point.reachedAt ? '已到达' : '等待中'}
         </span>
         <span>任务完成状态与事件到达状态互不影响</span>
       </div>
@@ -2463,7 +2103,6 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             variant="tonal"
             leadingIcon={<Plus size={16} />}
             onClick={() => setShowAdd(true)}
-            disabled={Boolean(point.archivedAt)}
           >
             从目录加入
           </Button>
@@ -2474,8 +2113,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         pointId={point.id}
         onOpenTask={onOpenTask}
         onChanged={load}
-        onMove={point.archivedAt ? undefined : movePlacement}
-        readOnly={Boolean(point.archivedAt)}
+        onMove={movePlacement}
         emptyTitle="这个事件还没有安排"
         emptyDescription="从目录加入已有任务；它不会创建新的 Task。"
         emptyAction={
@@ -2487,7 +2125,6 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       {showAdd && (
         <AddTaskModal
           pointId={point.id}
-          defaultFolderId={captureFolderId}
           onClose={() => setShowAdd(false)}
           onAdded={() => {
             setShowAdd(false);
@@ -2506,14 +2143,17 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           }}
         />
       )}
-      {archiveConfirmOpen && (
+      {deleteConfirmOpen && (
         <ConfirmDialog
-          title="归档事件"
-          description={`确定要归档“${point.title ?? ''}”吗？其中的任务安排会保留，但这个事件将从默认列表隐藏；之后可以从归档中心恢复。`}
-          confirmLabel="归档事件"
+          title="删除事件"
+          description={`确定要永久删除“${point.title ?? ''}”吗？其中的任务安排会一并移除，任务本体仍保留在目录中；此操作不可撤销。`}
+          confirmLabel="永久删除"
           error={actionError}
-          onClose={() => setArchiveConfirmOpen(false)}
-          onConfirm={changeEventState}
+          onClose={() => setDeleteConfirmOpen(false)}
+          onConfirm={async () => {
+            const ok = await deleteEvent();
+            if (ok) setDeleteConfirmOpen(false);
+          }}
         />
       )}
     </div>
@@ -2982,7 +2622,7 @@ function PlacementTargetModal({
   const today = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
   const tomorrow = shiftLocalDate(today, 1);
   useEffect(() => {
-    void requestV2<{ items: TimePointDto[] }>('/time-points?archived=false')
+    void requestV2<{ items: TimePointDto[] }>('/time-points')
       .then((result) => setPoints(result.items))
       .catch((cause) => setError(cause instanceof ApiError ? cause.message : '事件加载失败'));
   }, []);
@@ -3114,15 +2754,11 @@ function AddTaskModal({
   pointId,
   onClose,
   onAdded,
-  defaultFolderId,
 }: {
   pointId: string;
   onClose: () => void;
   onAdded: () => void;
-  defaultFolderId?: string | null;
 }) {
-  const [activeTab, setActiveTab] = useState<'existing' | 'create'>('create');
-  const [createTitle, setCreateTitle] = useState('');
   const [query, setQuery] = useState('');
   const [folderId, setFolderId] = useState<string | null>(null);
   const [items, setItems] = useState<TreeItemDto[]>([]);
@@ -3138,7 +2774,6 @@ function AddTaskModal({
   const [pickerLoading, setPickerLoading] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<Map<string, TreeTaskDto>>(() => new Map());
   const [addingSelected, setAddingSelected] = useState(false);
-  const [creating, setCreating] = useState(false);
   const pickerLoadSequence = useRef(0);
   const searchLoadSequence = useRef(0);
 
@@ -3170,7 +2805,6 @@ function AddTaskModal({
   }, [folderId]);
 
   useEffect(() => {
-    if (activeTab !== 'existing') return;
     void loadPicker();
     const listener = () => {
       setSearchIndex(null);
@@ -3180,18 +2814,18 @@ function AddTaskModal({
     };
     window.addEventListener('devtodo:data-changed', listener);
     return () => window.removeEventListener('devtodo:data-changed', listener);
-  }, [activeTab, loadPicker]);
+  }, [loadPicker]);
 
   useEffect(() => {
     const searchText = query.trim();
-    if (activeTab !== 'existing' || !searchText || searchIndex) return;
+    if (!searchText || searchIndex) return;
     let cancelled = false;
     const sequence = ++searchLoadSequence.current;
     const timeout = window.setTimeout(() => {
       setSearchError('');
       void Promise.all([
-        requestV2<{ items: TreeTaskDto[] }>('/tasks?archived=false'),
-        requestV2<{ items: FolderDto[] }>('/folders?archived=false'),
+        requestV2<{ items: TreeTaskDto[] }>('/tasks'),
+        requestV2<{ items: FolderDto[] }>('/folders'),
       ])
         .then(([taskResult, folderResult]) => {
           if (cancelled || sequence !== searchLoadSequence.current) return;
@@ -3207,14 +2841,13 @@ function AddTaskModal({
       window.clearTimeout(timeout);
       if (sequence === searchLoadSequence.current) searchLoadSequence.current += 1;
     };
-  }, [activeTab, query, searchIndex, searchRetry]);
+  }, [query, searchIndex, searchRetry]);
 
   const activeItems = useMemo(
     () =>
       items.filter(
         (item) =>
-          item.kind === 'FOLDER' ||
-          (!item.task.archivedAt && !item.task.deletedAt && item.task.status !== 'DONE'),
+          item.kind === 'FOLDER' || (!item.task.deletedAt && item.task.status !== 'DONE'),
       ),
     [items],
   );
@@ -3244,7 +2877,6 @@ function AddTaskModal({
     if (!needle || !searchIndex) return [];
     return searchIndex.tasks.filter(
       (task) =>
-        !task.archivedAt &&
         !task.deletedAt &&
         task.status !== 'DONE' &&
         (task.title.toLocaleLowerCase().includes(needle) ||
@@ -3252,33 +2884,11 @@ function AddTaskModal({
           taskLocation(task).toLocaleLowerCase().includes(needle)),
     );
   }, [query, searchIndex, taskLocation]);
-  const searchLoading =
-    activeTab === 'existing' && Boolean(query.trim()) && !searchIndex && !searchError;
+  const searchLoading = Boolean(query.trim()) && !searchIndex && !searchError;
 
   const openFolder = (id: string | null) => {
     setQuery('');
     setFolderId(id);
-  };
-  const handleCreateNew = async (e: FormEvent) => {
-    e.preventDefault();
-    const title = createTitle.trim();
-    if (!title || creating) return;
-    setCreating(true);
-    setError('');
-    try {
-      const result = (await mutationV2('POST', '/tasks', {
-        parentFolderId: defaultFolderId ?? null,
-        title,
-      })) as { task?: TreeTaskDto; id?: string };
-      const taskId = result.task?.id ?? result.id;
-      if (!taskId) throw new Error('任务创建失败');
-      await mutationV2('POST', '/placements', { taskId, timePointId: pointId });
-      onAdded();
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : '创建并安排任务失败');
-    } finally {
-      setCreating(false);
-    }
   };
   const toggleTaskSelection = (task: TreeTaskDto) => {
     setSelectedTasks((current) => {
@@ -3384,76 +2994,31 @@ function AddTaskModal({
       title="安排任务"
       onClose={onClose}
       footer={
-        activeTab === 'create' ? (
-          <>
-            <Button variant="text" type="button" disabled={creating} onClick={onClose}>
-              取消
-            </Button>
-            <Button
-              variant="filled"
-              type="submit"
-              form="add-task-create-form"
-              disabled={creating || !createTitle.trim()}
-            >
-              {creating ? '创建中…' : '立即创建并安排'}
-            </Button>
-          </>
-        ) : (
-          <>
-            <span className="task-picker-selection-count" aria-live="polite">
-              已选择 {selectedTasks.size} 项
-            </span>
-            <Button
-              variant="text"
-              size="s"
-              disabled={selectedTasks.size === 0 || addingSelected}
-              onClick={() => setSelectedTasks(new Map())}
-            >
-              清空选择
-            </Button>
-            <Button
-              variant="filled"
-              disabled={selectedTasks.size === 0 || addingSelected}
-              onClick={() => void addSelected()}
-            >
-              {addingSelected
-                ? '正在加入…'
-                : `加入日程${selectedTasks.size ? `（${selectedTasks.size}）` : ''}`}
-            </Button>
-          </>
-        )
+        <>
+          <span className="task-picker-selection-count" aria-live="polite">
+            已选择 {selectedTasks.size} 项
+          </span>
+          <Button
+            variant="text"
+            size="s"
+            disabled={selectedTasks.size === 0 || addingSelected}
+            onClick={() => setSelectedTasks(new Map())}
+          >
+            清空选择
+          </Button>
+          <Button
+            variant="filled"
+            disabled={selectedTasks.size === 0 || addingSelected}
+            onClick={() => void addSelected()}
+          >
+            {addingSelected
+              ? '正在加入…'
+              : `加入日程${selectedTasks.size ? `（${selectedTasks.size}）` : ''}`}
+          </Button>
+        </>
       }
     >
-      <ButtonGroup
-        label="安排方式"
-        value={activeTab}
-        options={[
-          { value: 'create' as const, label: '新建任务并安排' },
-          { value: 'existing' as const, label: '从目录加入已有' },
-        ]}
-        onChange={setActiveTab}
-        className="m3e-button-group--add-task-mode"
-      />
-
-      {activeTab === 'create' ? (
-        <form
-          id="add-task-create-form"
-          className="stack-form add-task-create-form"
-          onSubmit={handleCreateNew}
-        >
-          <TextField
-            label="任务标题"
-            autoFocus
-            value={createTitle}
-            onChange={(event) => setCreateTitle(event.target.value)}
-            placeholder="输入任务标题..."
-            disabled={creating}
-          />
-          {error && <Alert tone="error">{error}</Alert>}
-        </form>
-      ) : (
-        <>
-          <SearchBar
+      <SearchBar
             label="搜索任务或目录"
             variant="view"
             autoFocus
@@ -3583,8 +3148,8 @@ function AddTaskModal({
                         title={folderId ? '此目录没有可安排的任务' : '没有未完成任务'}
                         description={
                           folderId
-                            ? '当前目录中没有未完成任务；可以返回上级目录或切换到新建任务。'
-                            : '可以切换到新建任务并立即安排。'
+                            ? '当前目录中没有未完成任务；可以返回上级目录。'
+                            : '根目录下没有未完成任务。'
                         }
                       />
                     )}
@@ -3592,8 +3157,6 @@ function AddTaskModal({
                 )}
               </div>
             </>
-          )}
-        </>
       )}
     </Modal>
   );
@@ -3601,7 +3164,6 @@ function AddTaskModal({
 
 function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const { settings } = useAuth();
-  const captureFolderId = readRecentCaptureFolder(settings?.defaultCaptureTarget);
   const params = useParams();
   const initial = params.localDate ?? todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
   const [month, setMonth] = useState(initial.slice(0, 7));
@@ -3808,7 +3370,6 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           {showAdd && point && (
             <AddTaskModal
               pointId={point.id}
-              defaultFolderId={captureFolderId}
               onClose={() => setShowAdd(false)}
               onAdded={() => {
                 setShowAdd(false);
@@ -3818,309 +3379,6 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           )}
         </Card>
       </div>
-    </div>
-  );
-}
-
-function ArchivePage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
-  const operationLoader = useCallback(
-    () =>
-      requestV2<{ items?: ArchiveOperationSummaryDto[] }>('/archive-operations').then(
-        (result) => result.items ?? [],
-      ),
-    [],
-  );
-  const taskLoader = useCallback(
-    () =>
-      requestV2<{ items?: TreeTaskDto[] }>('/tasks?archived=true').then(
-        (result) => result.items ?? [],
-      ),
-    [],
-  );
-  const folderLoader = useCallback(
-    () =>
-      requestV2<{ items?: FolderDto[] }>('/folders?archived=true').then(
-        (result) => result.items ?? [],
-      ),
-    [],
-  );
-  const eventLoader = useCallback(
-    () =>
-      requestV2<{ items?: TimePointDto[] }>('/time-points?type=EVENT&archived=true').then(
-        (result) => result.items ?? [],
-      ),
-    [],
-  );
-  const operations = useReloadable(operationLoader, [] as ArchiveOperationSummaryDto[]);
-  const tasks = useReloadable(taskLoader, [] as TreeTaskDto[]);
-  const folders = useReloadable(folderLoader, [] as FolderDto[]);
-  const events = useReloadable(eventLoader, [] as TimePointDto[]);
-  const [actionError, setActionError] = useState('');
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const reloadAll = async () => {
-    await Promise.all([operations.reload(), tasks.reload(), folders.reload(), events.reload()]);
-  };
-  const runAction = async (id: string, action: () => Promise<void>) => {
-    if (busyId) return;
-    setBusyId(id);
-    setActionError('');
-    try {
-      await action();
-      await reloadAll();
-      window.dispatchEvent(new Event('devtodo:data-changed'));
-    } catch (cause) {
-      setActionError(cause instanceof ApiError ? cause.message : '恢复失败，请重试');
-    } finally {
-      setBusyId(null);
-    }
-  };
-  // A folder archived outside a cascade operation has no archive operation to
-  // restore by id. Never send `{}`: the server requires a real operationId.
-  const restoreFolder = (folder: FolderDto) => {
-    if (!folder.archivedByOperationId) {
-      setActionError(
-        '该文件夹不是通过级联归档产生的，无法按归档操作精确恢复。请恢复其父目录，或先在目录页恢复。',
-      );
-      return;
-    }
-    return runAction(folder.id, async () => {
-      await mutationV2('POST', `/folders/${folder.id}/restore-tree`, {
-        operationId: folder.archivedByOperationId,
-      });
-    });
-  };
-  const operationFolderIds = new Set(
-    operations.data.flatMap((operation) => operation.folders.map((folder) => folder.id)),
-  );
-  const looseFolders = folders.data.filter((folder) => !operationFolderIds.has(folder.id));
-  const looseTasks = tasks.data.filter(
-    (task) => !task.parentFolderId || !operationFolderIds.has(task.parentFolderId),
-  );
-  return (
-    <div className="page">
-      <PageHeader
-        eyebrow="HISTORY"
-        title="归档"
-        description="归档只影响默认可见性，任务、备注、安排和历史引用仍然保留。"
-      />
-      {actionError && (
-        <Alert tone="error" className="m3e-alert--inline">
-          {actionError}
-        </Alert>
-      )}
-      {(operations.error || tasks.error || folders.error || events.error) && (
-        <ErrorState
-          error={operations.error || tasks.error || folders.error || events.error}
-          onRetry={() => void reloadAll()}
-        />
-      )}
-      <SectionTitle
-        title="整棵目录归档"
-        count={operations.hasData ? operations.data.length : undefined}
-      />
-      {operations.initialLoading ? (
-        <SkeletonList />
-      ) : !operations.hasData ? null : operations.data.length === 0 ? (
-        <div className="quiet-empty">没有整棵目录归档记录</div>
-      ) : (
-        <div className="archive-project-list">
-          {operations.data.map((operation) => {
-            const expanded = expandedId === operation.id;
-            const busy = busyId === operation.id;
-            return (
-              <div className="archive-project" key={operation.id}>
-                <span>
-                  <strong>{operation.rootFolderTitle || '（未命名目录）'}</strong>
-                  <small>
-                    {operation.descendantFolderCount} 个文件夹 · {operation.descendantTaskCount}{' '}
-                    个任务
-                    {operation.previouslyArchivedFolderCount +
-                      operation.previouslyArchivedTaskCount >
-                    0
-                      ? ` · 另有 ${operation.previouslyArchivedFolderCount} 个文件夹、${operation.previouslyArchivedTaskCount} 个任务原本已归档`
-                      : ''}
-                  </small>
-                  <small>归档于 {formatTime(operation.createdAt)}</small>
-                </span>
-                <div className="archive-project-actions">
-                  <Button
-                    variant="tonal"
-                    size="s"
-                    type="button"
-                    aria-expanded={expanded}
-                    onClick={() => setExpandedId(expanded ? null : operation.id)}
-                  >
-                    {expanded ? '收起明细' : '查看明细'}
-                  </Button>
-                  <Button
-                    variant="tonal"
-                    size="s"
-                    type="submit"
-                    disabled={busy}
-                    onClick={() =>
-                      void runAction(operation.id, async () => {
-                        await mutationV2(
-                          'POST',
-                          `/folders/${operation.rootFolderId}/restore-tree`,
-                          { operationId: operation.id },
-                        );
-                      })
-                    }
-                  >
-                    {busy ? '恢复中…' : '恢复整棵目录'}
-                  </Button>
-                </div>
-                {expanded && (
-                  <div className="archive-operation-children">
-                    {operation.folders.map((folder) => (
-                      <div key={folder.id} className="archive-operation-child">
-                        <span>
-                          {folder.parentFolderId ? '└ ' : ''}
-                          {folder.title}
-                        </span>
-                        {folder.archivedAt ? (
-                          <small>
-                            {folder.archivedByOperationId === operation.id
-                              ? '由本次归档'
-                              : '原本已归档，恢复时保留'}
-                          </small>
-                        ) : (
-                          <small>已恢复</small>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-      <SectionTitle title="单独归档的任务" count={tasks.hasData ? looseTasks.length : undefined} />
-      {tasks.initialLoading ? (
-        <SkeletonList />
-      ) : tasks.hasData ? (
-        <div className="task-list">
-          {looseTasks.length === 0 ? (
-            <div className="quiet-empty">没有单独归档的任务</div>
-          ) : (
-            looseTasks.map((task) => (
-              <div
-                className={`task-row${
-                  task.status === 'IN_PROGRESS' ? ' is-progress' : ''
-                }${task.status === 'DONE' ? ' is-done' : ''}`}
-                key={task.id}
-              >
-                <TaskStatusControl status={task.status} disabled onStatusChange={() => undefined} />
-                <TaskRowAction
-                  className="task-main"
-                  onClick={() => onOpenTask(task.id)}
-                  aria-label={`打开已归档任务 ${task.title}`}
-                >
-                  <span className="task-title">{task.title}</span>
-                  <span className="task-meta">
-                    <span className="reference-id">{task.referenceId}</span>
-                    <span className="status-label">已归档</span>
-                  </span>
-                </TaskRowAction>
-                <div className="task-actions">
-                  <Button
-                    variant="tonal"
-                    size="s"
-                    type="submit"
-                    disabled={busyId === task.id}
-                    onClick={() =>
-                      void runAction(task.id, async () => {
-                        await mutationV2('POST', `/tasks/${task.id}/restore`, {
-                          baseVersion: task.version,
-                        });
-                      })
-                    }
-                  >
-                    {busyId === task.id ? '恢复中…' : '恢复任务'}
-                  </Button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      ) : null}
-      {(folders.initialLoading || (folders.hasData && looseFolders.length > 0)) && (
-        <>
-          <SectionTitle
-            title="单独归档的文件夹"
-            count={folders.hasData ? looseFolders.length : undefined}
-          />
-          {folders.initialLoading ? (
-            <SkeletonList />
-          ) : (
-            <div className="archive-project-list">
-              {looseFolders.map((folder) => (
-                <div className="archive-project" key={folder.id}>
-                  <span>
-                    <strong>{folder.title}</strong>
-                    <small>
-                      {folder.archivedByOperationId
-                        ? '来自批量归档操作'
-                        : '单独归档（需先恢复父目录）'}
-                    </small>
-                  </span>
-                  <Button
-                    variant="tonal"
-                    size="s"
-                    type="submit"
-                    disabled={busyId === folder.id || !folder.archivedByOperationId}
-                    title={
-                      folder.archivedByOperationId ? undefined : '独立归档文件夹不能按归档操作恢复'
-                    }
-                    onClick={() => void restoreFolder(folder)}
-                  >
-                    {busyId === folder.id ? '恢复中…' : '恢复文件夹'}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-      {(events.initialLoading || (events.hasData && events.data.length > 0)) && (
-        <>
-          <SectionTitle title="事件" count={events.hasData ? events.data.length : undefined} />
-          {events.initialLoading ? (
-            <SkeletonList />
-          ) : (
-            <div className="archive-project-list">
-              {events.data.map((event) => (
-                <div className="archive-project" key={event.id}>
-                  <span>
-                    <strong>{event.title}</strong>
-                    <small>
-                      已归档 ·{' '}
-                      {event.reachedAt ? `已到达 · ${formatTime(event.reachedAt)}` : '未到达'}
-                    </small>
-                  </span>
-                  <Button
-                    variant="tonal"
-                    size="s"
-                    type="submit"
-                    disabled={busyId === event.id}
-                    onClick={() =>
-                      void runAction(event.id, async () => {
-                        await mutationV2('POST', `/time-points/${event.id}/restore`, {
-                          baseVersion: event.version,
-                        });
-                      })
-                    }
-                  >
-                    {busyId === event.id ? '恢复中…' : '恢复事件'}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 }
@@ -4370,17 +3628,10 @@ function ConflictInboxItem({
     return JSON.stringify({ ...base, ...(isRecord(item.local) ? item.local : {}) }, null, 2);
   });
   const [error, setError] = useState('');
-  // Show "restore then apply local" for every entity type whose sync engine has
-  // a real restore path: v1 handles project/task/timePoint, v2 handles
-  // task/timePoint/workflow (folders restore through their cascade operation).
-  const restoreAvailable =
-    isRecord(server) &&
-    Boolean(server['archivedAt']) &&
-    ['project', 'task', 'timePoint', 'workflow'].includes(item.entityType);
   // Older IndexedDB conflict rows do not have command; keep them resolvable,
   // but do not expose a merge action unless the command is known.
   const mergeSupported = isMergeableConflictCommand(item.command ?? '');
-  const resolve = async (strategy: 'server' | 'local' | 'merged' | 'discard' | 'restore') => {
+  const resolve = async (strategy: 'server' | 'local' | 'merged' | 'discard') => {
     if (!engine || item.id === undefined) return;
     setError('');
     try {
@@ -4439,11 +3690,6 @@ function ConflictInboxItem({
         <Button variant="tonal" size="s" type="button" onClick={() => void resolve('local')}>
           保留本地并重试
         </Button>
-        {restoreAvailable && (
-          <Button variant="tonal" size="s" type="button" onClick={() => void resolve('restore')}>
-            恢复后应用本地
-          </Button>
-        )}
         {mergeSupported && (
           <Button variant="filled" size="s" type="button" onClick={() => void resolve('merged')}>
             保存合并版本
@@ -4593,7 +3839,6 @@ function breadcrumb(pathname: string): string {
   if (pathname.startsWith('/time/calendar')) return '计划 / 日历';
   if (pathname.startsWith('/time/events')) return '计划 / 事件';
   if (pathname === '/time' || pathname.startsWith('/time/')) return '计划';
-  if (pathname.startsWith('/archive')) return '归档';
   if (pathname.startsWith('/settings')) return '设置';
   return 'TaskDock';
 }

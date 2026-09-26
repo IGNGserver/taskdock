@@ -24,10 +24,9 @@ describe('task rules', () => {
   });
 
   it('keeps event state independent from task state', () => {
-    expect(deriveEventState('EVENT', null, null)).toBe('WAITING');
-    expect(deriveEventState('EVENT', now(), null)).toBe('REACHED');
-    expect(deriveEventState('EVENT', now(), now())).toBe('ARCHIVED');
-    expect(deriveEventState('DATE', null, null)).toBeNull();
+    expect(deriveEventState('EVENT', null)).toBe('WAITING');
+    expect(deriveEventState('EVENT', now())).toBe('REACHED');
+    expect(deriveEventState('DATE', null)).toBeNull();
   });
 
   it('enforces global misc invariant', () => {
@@ -56,7 +55,7 @@ describe('task rules', () => {
     expect(html).toContain('rel="noreferrer noopener"');
   });
 
-  it('derives mixed descendant folder status without counting archived data', () => {
+  it('derives mixed descendant folder status without counting deleted data', () => {
     const folders = [
       { id: 'root', parentFolderId: null },
       { id: 'child', parentFolderId: 'root' },
@@ -65,7 +64,7 @@ describe('task rules', () => {
       deriveFolderAggregate('root', folders, [
         { id: 'a', parentFolderId: 'child', status: 'TODO' },
         { id: 'b', parentFolderId: 'child', status: 'DONE' },
-        { id: 'c', parentFolderId: 'child', status: 'DONE', archivedAt: 'now' },
+        { id: 'c', parentFolderId: 'child', status: 'DONE', deletedAt: 'now' },
       ]),
     ).toEqual({
       status: 'IN_PROGRESS',
@@ -92,7 +91,6 @@ describe('task rules', () => {
         title: 'Folder',
         rank: '2048',
         version: 1,
-        archivedAt: null,
         createdAt: '',
         updatedAt: '',
       },
@@ -115,7 +113,6 @@ describe('task rules', () => {
         rank: '1024',
         version: 1,
         completedAt: null,
-        archivedAt: null,
         createdAt: '',
         updatedAt: '',
       },

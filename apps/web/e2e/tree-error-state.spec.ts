@@ -33,7 +33,6 @@ test('tree separates load errors from empty folders and recovers task detail in 
     rank: '1024',
     version: 1,
     completedAt: null,
-    archivedAt: null,
     createdAt: user.createdAt,
     updatedAt: user.createdAt,
   };
@@ -102,7 +101,6 @@ test('tree separates load errors from empty folders and recovers task detail in 
         workflows: [],
         workflowStages: [],
         workflowTaskMemberships: [],
-        archiveOperations: [],
         settings,
         cursor: '0',
       });
@@ -131,11 +129,7 @@ test('tree separates load errors from empty folders and recovers task detail in 
     await page.getByLabel('用户名').fill(user.username);
     await page.getByLabel('密码').fill('correct horse battery staple');
     await page.getByRole('button', { name: '登录' }).click();
-    const authenticatedShellAction =
-      test.info().project.name === 'mobile'
-        ? page.getByRole('button', { name: '打开创建菜单' })
-        : page.getByRole('button', { name: '快速添加' });
-    await expect(authenticatedShellAction).toBeVisible();
+    await expect(page.getByRole('button', { name: '搜索任务和备注' })).toBeVisible();
 
     await page.goto('/tree');
     await expect(page.locator('.m3e-alert--error')).toContainText('目录暂时不可用');
