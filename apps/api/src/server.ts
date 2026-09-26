@@ -583,12 +583,7 @@ export async function buildServer(
         const type = enumQuery(query.type, ['DATE', 'EVENT']);
         const page =
           store instanceof PostgresStore
-            ? await store.listTimePointsPage(
-                request.auth!.ownerId,
-                type,
-                query.cursor,
-                query.limit,
-              )
+            ? await store.listTimePointsPage(request.auth!.ownerId, type, query.cursor, query.limit)
             : paginateList(
                 await store.listTimePoints(request.auth!.ownerId, type),
                 query.cursor,
@@ -1053,9 +1048,7 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
       });
 
       api.get('/tasks', async (request) => {
-        const query = z
-          .object({ q: z.string().trim().max(500).optional() })
-          .parse(request.query);
+        const query = z.object({ q: z.string().trim().max(500).optional() }).parse(request.query);
         return {
           items: tree.listTasks(request.auth!.ownerId, query.q),
           nextCursor: null,
@@ -1164,9 +1157,7 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
       });
 
       api.get('/time-points', async (request) => {
-        const query = z
-          .object({ type: z.enum(['DATE', 'EVENT']).optional() })
-          .parse(request.query);
+        const query = z.object({ type: z.enum(['DATE', 'EVENT']).optional() }).parse(request.query);
         return {
           items: tree.listTimePoints(request.auth!.ownerId, query.type),
         };

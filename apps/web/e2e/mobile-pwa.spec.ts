@@ -145,9 +145,7 @@ test('production PWA caches assets and can reopen the workspace offline', async 
       notice.right > control.left &&
       notice.top < control.bottom &&
       notice.bottom > control.top;
-    const controls = [
-      ...document.querySelectorAll('.m3e-navigation-bar'),
-    ];
+    const controls = [...document.querySelectorAll('.m3e-navigation-bar')];
     return {
       overlaps: controls.some((element) => overlaps(element.getBoundingClientRect())),
       notice: { top: notice.top, bottom: notice.bottom, left: notice.left, right: notice.right },

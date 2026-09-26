@@ -573,7 +573,12 @@ export function WorkflowsPage() {
             );
             const candidates = tasks.filter((task) => !memberIds.has(task.id));
             return (
-              <Card as="article" variant="outlined" className="m3e-card--workflow" key={workflow.id}>
+              <Card
+                as="article"
+                variant="outlined"
+                className="m3e-card--workflow"
+                key={workflow.id}
+              >
                 <header className="workflow-card__header">
                   <div className="workflow-card__heading">
                     <h2 className="workflow-card__name">{workflow.name}</h2>
@@ -706,7 +711,7 @@ export function WorkflowsPage() {
                                   leadingControl={
                                     <TaskStatusControl
                                       status={task.status}
-                                                                            onStatusChange={(status) => changeTaskStatus(task, status)}
+                                      onStatusChange={(status) => changeTaskStatus(task, status)}
                                     />
                                   }
                                   headline={

@@ -913,8 +913,7 @@ export class MemoryStore {
     this.getUser(ownerId);
     return [...this.state.timePoints.values()]
       .filter(
-        (point) =>
-          point.ownerId === ownerId && !point.deletedAt && (!type || point.type === type),
+        (point) => point.ownerId === ownerId && !point.deletedAt && (!type || point.type === type),
       )
       .sort((a, b) =>
         a.type === 'DATE' && b.type === 'DATE'
@@ -1008,22 +1007,11 @@ export class MemoryStore {
     point.updatedAt = this.now();
     this.recordChange(ownerId, 'timePoint', id, point.version, 'delete', null);
     for (const placement of this.state.placements.values()) {
-      if (
-        placement.ownerId === ownerId &&
-        placement.timePointId === id &&
-        !placement.deletedAt
-      ) {
+      if (placement.ownerId === ownerId && placement.timePointId === id && !placement.deletedAt) {
         placement.deletedAt = this.now();
         placement.version += 1;
         placement.updatedAt = this.now();
-        this.recordChange(
-          ownerId,
-          'placement',
-          placement.id,
-          placement.version,
-          'delete',
-          null,
-        );
+        this.recordChange(ownerId, 'placement', placement.id, placement.version, 'delete', null);
       }
     }
     return this.timePointDto(point);
@@ -1798,17 +1786,7 @@ export class MemoryStore {
     return { id, taskId, contentMarkdown, version, updatedAt };
   }
   private timePointDto(point: TimePointRecord): TimePointDto {
-    const {
-      id,
-      type,
-      localDate,
-      title,
-      rank,
-      version,
-      reachedAt,
-      createdAt,
-      updatedAt,
-    } = point;
+    const { id, type, localDate, title, rank, version, reachedAt, createdAt, updatedAt } = point;
     return {
       id,
       type,

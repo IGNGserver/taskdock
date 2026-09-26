@@ -59,12 +59,7 @@
     "schemas": {
       "Error": {
         "type": "object",
-        "required": [
-          "code",
-          "message",
-          "requestId",
-          "details"
-        ],
+        "required": ["code", "message", "requestId", "details"],
         "properties": {
           "code": {
             "type": "string"
@@ -101,34 +96,19 @@
             "type": "string"
           },
           "projectId": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "category": {
-            "enum": [
-              "FEATURE",
-              "MISC"
-            ]
+            "enum": ["FEATURE", "MISC"]
           },
           "title": {
             "type": "string"
           },
           "status": {
-            "enum": [
-              "TODO",
-              "IN_PROGRESS",
-              "DONE"
-            ]
+            "enum": ["TODO", "IN_PROGRESS", "DONE"]
           },
           "priority": {
-            "enum": [
-              "NONE",
-              "LOW",
-              "MEDIUM",
-              "HIGH"
-            ]
+            "enum": ["NONE", "LOW", "MEDIUM", "HIGH"]
           },
           "rank": {
             "type": "string"
@@ -140,13 +120,7 @@
       },
       "Placement": {
         "type": "object",
-        "required": [
-          "id",
-          "taskId",
-          "timePointId",
-          "rank",
-          "version"
-        ],
+        "required": ["id", "taskId", "timePointId", "rank", "version"],
         "properties": {
           "id": {
             "type": "string",

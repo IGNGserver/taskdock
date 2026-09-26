@@ -401,8 +401,7 @@ export async function applyOfflineWrite(
     )
       throw new Error('只能在同一任务分组内排序');
     const expected = tasks.filter(
-      (task) =>
-        task.projectId === first.projectId && task.category === first.category,
+      (task) => task.projectId === first.projectId && task.category === first.category,
     );
     if (expected.length !== ids.length || expected.some((task) => !ids.includes(task.id)))
       throw new Error('任务排序列表必须包含整个活动分组');
@@ -1472,8 +1471,7 @@ async function applyOfflineV2Write(
   if (method === 'POST' && addWorkflowTask) {
     const stage = await db.workflowStages.get(addWorkflowTask[1]!);
     const taskRow = typeof body['taskId'] === 'string' ? await task(body['taskId']) : null;
-    if (!stage || stage.deletedAt || !taskRow)
-      throw new Error('流程阶段或任务不可用');
+    if (!stage || stage.deletedAt || !taskRow) throw new Error('流程阶段或任务不可用');
     const workflow = await db.workflows.get(stage.workflowId);
     if (!workflow || workflow.deletedAt) throw new Error('本地流程不可用');
     const duplicate = (
@@ -2486,9 +2484,7 @@ async function readV2LocalInTransaction(
   const pointDetail = /^\/time-points\/([^/]+)$/.exec(pathname);
   if (pointDetail) return db.timePoints.get(pointDetail[1]!);
   if (pathname === '/workflows') {
-    const workflows = (await db.workflows.toArray()).filter(
-      (workflow) => !workflow.deletedAt,
-    );
+    const workflows = (await db.workflows.toArray()).filter((workflow) => !workflow.deletedAt);
     const stages = (await db.workflowStages.toArray()).filter((stage) => !stage.deletedAt);
     const memberships = (await db.workflowTaskMemberships.toArray()).filter(
       (membership) => !membership.deletedAt,
