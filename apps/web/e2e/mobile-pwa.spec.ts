@@ -5,6 +5,19 @@ import { expect, test, type Page } from '@playwright/test';
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, serviceWorkers: 'allow' });
 test.skip(process.env['E2E_REAL'] !== '1', 'requires the isolated real API fixture');
 
+/*
+ * This suite drives the installed service worker and toggles `context.setOffline`,
+ * and Playwright supports both only on the Chromium family. Its subject is the two
+ * mobile shell variants, which the `chromium` and `mobile` projects already cover,
+ * so Firefox and WebKit add nothing here and keep their coverage in the mocked gate.
+ */
+function skipEnginesWithoutServiceWorker(): void {
+  test.skip(
+    !['chromium', 'mobile'].includes(test.info().project.name),
+    'service worker installation and offline emulation are Chromium-only',
+  );
+}
+
 async function login(page: Page) {
   await page.goto('/login');
   await page.getByLabel('用户名').fill(process.env['E2E_USERNAME'] ?? 'e2e-real-owner');
@@ -51,6 +64,7 @@ for (const width of [320, 390, 430]) {
   test(`mobile ${width}: capture, edit, navigation and long forms remain reachable`, async ({
     page,
   }, info) => {
+    skipEnginesWithoutServiceWorker();
     test.setTimeout(90_000);
     await page.setViewportSize({ width, height: 844 });
     if (width === 430) await page.emulateMedia({ colorScheme: 'dark' });
@@ -96,10 +110,10 @@ for (const width of [320, 390, 430]) {
     await detail.getByRole('button', { name: '关闭', exact: true }).click();
     await expect(detail).toBeHidden();
 
-    // All product routes retain the app shell and fit a narrow viewport.
+    // All product routes retain the app shell and fit a narrow viewport. `/tasks`
+    // is a redirect alias of `/tree`, so the drawer exposes only the directory.
     for (const route of [
       '/tree',
-      '/tasks',
       '/workflows',
       '/time',
       '/time/calendar',
@@ -125,7 +139,7 @@ for (const width of [320, 390, 430]) {
       await assertFits(page);
       if (route === '/time/calendar')
         await page.screenshot({ path: info.outputPath(`calendar-${width}.png`) });
-      if (['/tasks', '/archive', '/settings'].includes(route))
+      if (['/archive', '/settings'].includes(route))
         await expect(
           page.getByRole('navigation', { name: '移动导航' }).getByRole('link', { name: '更多' }),
         ).toHaveAttribute('aria-current', 'page');
@@ -138,6 +152,7 @@ test('production PWA caches assets and can reopen the workspace offline', async 
   page,
   context,
 }) => {
+  skipEnginesWithoutServiceWorker();
   test.skip(process.env['E2E_PWA'] !== '1', 'requires a production build with the service worker');
   await login(page);
   const snackbar = page.locator('.m3e-snackbar');
@@ -188,6 +203,7 @@ test('production PWA caches assets and can reopen the workspace offline', async 
 });
 
 test('landscape and enlarged text keep navigation and forms within reach', async ({ page }) => {
+  skipEnginesWithoutServiceWorker();
   await login(page);
   await page.setViewportSize({ width: 780, height: 390 });
   await assertFits(page);
