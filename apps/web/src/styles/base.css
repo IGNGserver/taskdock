@@ -70,6 +70,7 @@ body {
   flex: 1 1 auto;
   min-block-size: 0;
   inline-size: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-color: color-mix(in srgb, var(--m3-primary) 54%, transparent) transparent;

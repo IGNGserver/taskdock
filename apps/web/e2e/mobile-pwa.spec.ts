@@ -75,40 +75,21 @@ for (const width of [320, 390, 430]) {
     await expect(page.getByRole('heading', { name: '今天要做' })).toBeInViewport();
     await page.screenshot({ path: info.outputPath(`today-${width}.png`) });
 
-    await page.getByRole('button', { name: '打开创建菜单' }).click();
-    await page.getByRole('menuitem', { name: '新建任务' }).click();
-    const capture = page.getByRole('dialog', { name: '快速添加', exact: true });
-    const title = `手机验收 ${width} ${Date.now()}`;
-    await capture.getByLabel('任务标题').fill(title);
-    await capture.getByRole('button', { name: '创建', exact: true }).click();
-    await expect(capture).toBeHidden();
-    await expect(page.getByText(title, { exact: true })).toBeVisible();
+    // The palette is the only app-bar overlay; open and dismiss it to verify
+    // layering on a small viewport.
+    await page.getByRole('button', { name: '搜索任务和备注' }).click();
+    const palette = page.getByRole('dialog', { name: '搜索和命令面板' });
+    await expect(palette).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(palette).toBeHidden();
 
-    // Task detail must open over the list, not below it, and keep touch scrolling enabled.
-    await page.getByText(title, { exact: true }).click();
-    const detail = page.getByRole('dialog');
-    await expect(detail).toBeVisible();
-    await expect(detail.getByLabel('任务标题')).toHaveValue(title);
-    expect(await page.evaluate(() => getComputedStyle(document.body).touchAction)).not.toBe('none');
-    expect(await detail.evaluate((element) => getComputedStyle(element).touchAction)).not.toBe(
-      'none',
-    );
-    await detail.getByLabel('任务备注').fill('手机编辑后应保留的备注');
-    await detail.getByRole('heading', { name: '备注', exact: true }).click();
-    await expect(detail.locator('.error-banner')).toHaveCount(0);
+    // The directory page must render and fit the same narrow viewport.
+    await page
+      .getByRole('navigation', { name: '移动导航' })
+      .getByRole('link', { name: '目录' })
+      .click();
+    await expect(page.getByRole('heading', { name: '目录' })).toBeVisible();
     await assertFits(page);
-    await page.screenshot({ path: info.outputPath(`detail-${width}.png`) });
-    const scrollBody = detail.locator('.m3e-sheet__body');
-    await scrollBody.evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
-    });
-    expect(await scrollBody.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-    await detail.getByRole('button', { name: '关闭', exact: true }).click();
-    await expect(detail).toBeHidden();
-    await page.getByText(title, { exact: true }).click();
-    await expect(detail.getByLabel('任务备注')).toHaveValue('手机编辑后应保留的备注');
-    await detail.getByRole('button', { name: '关闭', exact: true }).click();
-    await expect(detail).toBeHidden();
 
     // All product routes retain the app shell and fit a narrow viewport. `/tasks`
     // is a redirect alias of `/tree`, so the drawer exposes only the directory.
@@ -118,7 +99,6 @@ for (const width of [320, 390, 430]) {
       '/time',
       '/time/calendar',
       '/time/events',
-      '/archive',
       '/settings',
       '/more',
     ]) {
@@ -139,7 +119,7 @@ for (const width of [320, 390, 430]) {
       await assertFits(page);
       if (route === '/time/calendar')
         await page.screenshot({ path: info.outputPath(`calendar-${width}.png`) });
-      if (['/archive', '/settings'].includes(route))
+      if (route === '/settings')
         await expect(
           page.getByRole('navigation', { name: '移动导航' }).getByRole('link', { name: '更多' }),
         ).toHaveAttribute('aria-current', 'page');
@@ -166,7 +146,7 @@ test('production PWA caches assets and can reopen the workspace offline', async 
       notice.top < control.bottom &&
       notice.bottom > control.top;
     const controls = [
-      ...document.querySelectorAll('.m3e-navigation-bar, button[aria-label="打开创建菜单"]'),
+      ...document.querySelectorAll('.m3e-navigation-bar'),
     ];
     return {
       overlaps: controls.some((element) => overlaps(element.getBoundingClientRect())),
@@ -207,8 +187,8 @@ test('landscape and enlarged text keep navigation and forms within reach', async
   await login(page);
   await page.setViewportSize({ width: 780, height: 390 });
   await assertFits(page);
-  await page.getByRole('button', { name: '快速添加', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '快速添加' });
+  await page.getByRole('button', { name: '搜索任务和备注' }).click();
+  const dialog = page.getByRole('dialog', { name: '搜索和命令面板' });
   await expect(dialog).toBeVisible();
   await assertFits(page);
   await dialog.getByRole('button', { name: '关闭', exact: true }).click();

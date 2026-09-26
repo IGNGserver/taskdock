@@ -59,11 +59,10 @@ export const projects = pgTable(
     taskPrefix: varchar('task_prefix', { length: 10 }).notNull(),
     nextTaskNumber: integer('next_task_number').notNull().default(1),
     rank: bigint('rank', { mode: 'bigint' }).notNull().default(1024n),
-    archivedAt: timestamp('archived_at', { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
-    index('projects_owner_archived_rank_idx').on(table.ownerId, table.archivedAt, table.rank),
+    index('projects_owner_rank_idx').on(table.ownerId, table.rank, table.id),
     uniqueIndex('projects_owner_prefix_uq').on(table.ownerId, table.taskPrefix),
     uniqueIndex('projects_owner_id_uq').on(table.ownerId, table.id),
   ],
@@ -80,15 +79,13 @@ export const folders = pgTable(
     title: varchar('title', { length: 160 }).notNull(),
     rank: bigint('rank', { mode: 'bigint' }).notNull().default(1024n),
     ...timestamps,
-    archivedAt: timestamp('archived_at', { withTimezone: true }),
-    archivedByOperationId: uuid('archived_by_operation_id'),
   },
   (table) => [
     index('folders_owner_parent_active_rank_idx').on(
       table.ownerId,
       table.parentFolderId,
-      table.archivedAt,
       table.rank,
+      table.id,
     ),
     uniqueIndex('folders_owner_id_uq').on(table.ownerId, table.id),
   ],
@@ -103,7 +100,6 @@ export const tasks = pgTable(
       .references(() => users.id),
     projectId: uuid('project_id'),
     parentFolderId: uuid('parent_folder_id'),
-    archivedByOperationId: uuid('archived_by_operation_id'),
     category: text('category').notNull(),
     referenceId: varchar('reference_id', { length: 32 }).notNull(),
     title: varchar('title', { length: 500 }).notNull(),
@@ -111,7 +107,6 @@ export const tasks = pgTable(
     priority: text('priority').notNull().default('NONE'),
     rank: bigint('rank', { mode: 'bigint' }).notNull().default(1024n),
     completedAt: timestamp('completed_at', { withTimezone: true }),
-    archivedAt: timestamp('archived_at', { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
@@ -131,9 +126,9 @@ export const tasks = pgTable(
       table.ownerId,
       table.projectId,
       table.category,
-      table.archivedAt,
       table.status,
       table.rank,
+      table.id,
     ),
   ],
 );
@@ -171,7 +166,6 @@ export const timePoints = pgTable(
     title: varchar('title', { length: 200 }),
     rank: bigint('rank', { mode: 'bigint' }).notNull().default(1024n),
     reachedAt: timestamp('reached_at', { withTimezone: true }),
-    archivedAt: timestamp('archived_at', { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
@@ -179,8 +173,8 @@ export const timePoints = pgTable(
     index('time_points_owner_event_state_idx').on(
       table.ownerId,
       table.type,
-      table.archivedAt,
       table.reachedAt,
+      table.id,
     ),
     uniqueIndex('time_points_owner_id_uq').on(table.ownerId, table.id),
   ],
@@ -213,26 +207,6 @@ export const placements = pgTable(
       columns: [table.ownerId, table.timePointId],
       foreignColumns: [timePoints.ownerId, timePoints.id],
     }),
-  ],
-);
-
-export const archiveOperations = pgTable(
-  'archive_operations',
-  {
-    id: uuid('id').primaryKey(),
-    ownerId: uuid('owner_id')
-      .notNull()
-      .references(() => users.id),
-    rootFolderId: uuid('root_folder_id').notNull(),
-    rootBaseVersion: integer('root_base_version').notNull(),
-    folderCount: integer('folder_count').notNull(),
-    taskCount: integer('task_count').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    restoredAt: timestamp('restored_at', { withTimezone: true }),
-  },
-  (table) => [
-    uniqueIndex('archive_operations_owner_id_uq').on(table.ownerId, table.id),
-    index('archive_operations_owner_root_idx').on(table.ownerId, table.rootFolderId),
   ],
 );
 
@@ -272,10 +246,9 @@ export const workflows = pgTable(
     name: varchar('name', { length: 200 }).notNull(),
     rank: bigint('rank', { mode: 'bigint' }).notNull().default(1024n),
     ...timestamps,
-    archivedAt: timestamp('archived_at', { withTimezone: true }),
   },
   (table) => [
-    index('workflows_owner_active_rank_idx').on(table.ownerId, table.archivedAt, table.rank),
+    index('workflows_owner_active_rank_idx').on(table.ownerId, table.rank, table.id),
     uniqueIndex('workflows_owner_id_uq').on(table.ownerId, table.id),
   ],
 );

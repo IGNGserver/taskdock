@@ -376,7 +376,10 @@
 
 .m3e-menu {
   position: absolute;
-  z-index: 6;
+  /* High enough that a menu opened inside a card/row is never painted under
+     later sibling cards, section surfaces or floating toolbars; the anchor's
+     stacking context still keeps it local to its own row. */
+  z-index: 60;
   inset-block-start: calc(100% + 6px);
   min-inline-size: 200px;
   max-inline-size: min(360px, calc(100vw - 32px));

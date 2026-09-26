@@ -1,8 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type {
-  ArchiveOperationDetailDto,
-  ArchiveOperationDto,
-  ArchiveOperationSummaryDto,
   FolderAggregateDto,
   FolderDto,
   NoteDto,
@@ -40,7 +37,6 @@ type NullableDate = string | null;
 
 interface FolderRecord extends FolderDto {
   ownerId: string;
-  archivedByOperationId: string | null;
   deletedAt: NullableDate;
 }
 interface TreeTaskRecord extends TreeTaskDto {
@@ -68,9 +64,6 @@ interface MembershipRecord extends WorkflowTaskMembershipDto {
   ownerId: string;
   deletedAt: NullableDate;
 }
-interface ArchiveRecord extends ArchiveOperationDto {
-  ownerId: string;
-}
 interface PlacementRecord extends PlacementDto {
   ownerId: string;
   deletedAt: NullableDate;
@@ -93,8 +86,7 @@ export interface V2SyncChange {
     | 'workflow'
     | 'workflowStage'
     | 'workflowTaskMembership'
-    | 'settings'
-    | 'archiveOperation';
+    | 'settings';
   entityId: string;
   entityVersion: number;
   operation: 'upsert' | 'delete';
@@ -126,7 +118,6 @@ export interface V2Snapshot {
   workflows: WorkflowDto[];
   workflowStages: WorkflowStageDto[];
   workflowTaskMemberships: WorkflowTaskMembershipDto[];
-  archiveOperations: ArchiveOperationDto[];
   settings: V2SettingsDto;
   cursor: string;
 }
@@ -152,15 +143,9 @@ export function v2MutationIdempotencyInput(
 export interface V2TreeStore {
   prepare?(ownerId: string): void | Promise<void>;
   withMutation<T>(fn: () => T | Promise<T>): Promise<T>;
-  listTreeChildren(
-    ownerId: string,
-    parentFolderId: string | null,
-    archived?: boolean,
-  ): TreeItemDto[];
-  listFolders(ownerId: string, archived?: boolean): FolderDto[];
-  listArchiveOperations(ownerId: string, includeRestored?: boolean): ArchiveOperationSummaryDto[];
-  getArchiveOperation(ownerId: string, operationId: string): ArchiveOperationDetailDto;
-  getFolder(ownerId: string, id: string, includeArchived?: boolean): FolderDto;
+  listTreeChildren(ownerId: string, parentFolderId: string | null): TreeItemDto[];
+  listFolders(ownerId: string): FolderDto[];
+  getFolder(ownerId: string, id: string): FolderDto;
   getFolderPath(ownerId: string, id: string): Array<Pick<FolderDto, 'id' | 'title'>>;
   createFolder(
     ownerId: string,
@@ -178,13 +163,6 @@ export interface V2TreeStore {
       baseVersion: number;
     },
   ): TreeItemDto;
-  archiveTree(
-    ownerId: string,
-    id: string,
-    baseVersion: number,
-    requestedOperationId?: string,
-  ): ArchiveOperationDto;
-  restoreTree(ownerId: string, id: string, operationId: string): ArchiveOperationDto;
   previewDelete(ownerId: string, id: string): DeletePreviewDto;
   deleteTree(
     ownerId: string,
@@ -195,8 +173,8 @@ export interface V2TreeStore {
     ownerId: string,
     input: { id?: string; parentFolderId: string | null; title: string },
   ): { task: TreeTaskDto; note: NoteDto };
-  listTasks(ownerId: string, archived?: boolean, query?: string): TreeTaskDto[];
-  getTask(ownerId: string, id: string, includeArchived?: boolean): TreeTaskDto;
+  listTasks(ownerId: string, query?: string): TreeTaskDto[];
+  getTask(ownerId: string, id: string): TreeTaskDto;
   updateTask(
     ownerId: string,
     id: string,
@@ -209,8 +187,6 @@ export interface V2TreeStore {
     contentMarkdown: string,
     baseVersion: number,
   ): NoteDto;
-  archiveTask(ownerId: string, id: string, baseVersion: number): TreeTaskDto;
-  restoreTask(ownerId: string, id: string, baseVersion: number): TreeTaskDto;
   deleteTask(ownerId: string, id: string, baseVersion: number): TreeTaskDto;
   duplicateTask(
     ownerId: string,
@@ -239,13 +215,12 @@ export interface V2TreeStore {
   deleteStep(ownerId: string, id: string, baseVersion: number): TaskStepDto;
   createDate(ownerId: string, localDate: string, id?: string): TimePointDto;
   createEvent(ownerId: string, title: string, id?: string): TimePointDto;
-  listTimePoints(ownerId: string, type?: TimePointType, archived?: boolean): TimePointDto[];
+  listTimePoints(ownerId: string, type?: TimePointType): TimePointDto[];
   reorderTimePoints(ownerId: string, ids: string[]): TimePointDto[];
   getTimePoint(ownerId: string, id: string): TimePointDto;
   updateTimePoint(ownerId: string, id: string, title: string, baseVersion: number): TimePointDto;
   reachTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto;
-  archiveTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto;
-  restoreTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto;
+  deleteTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto;
   addPlacement(
     ownerId: string,
     taskId: string,
@@ -290,15 +265,13 @@ export interface V2TreeStore {
     patch: Partial<Pick<V2SettingsDto, 'timezone' | 'weekStartsOn' | 'defaultCaptureTarget'>>,
     baseVersion: number,
   ): V2SettingsDto;
-  listWorkflows(ownerId: string, includeArchived?: boolean): WorkflowDto[];
+  listWorkflows(ownerId: string): WorkflowDto[];
   getWorkflow(ownerId: string, id: string): WorkflowDto;
   createWorkflow(
     ownerId: string,
     input: { id?: string; name: string; defaultStageId?: string },
   ): WorkflowDto;
   updateWorkflow(ownerId: string, id: string, name: string, baseVersion: number): WorkflowDto;
-  archiveWorkflow(ownerId: string, id: string, baseVersion: number): WorkflowDto;
-  restoreWorkflow(ownerId: string, id: string, baseVersion: number): WorkflowDto;
   deleteWorkflow(ownerId: string, id: string, baseVersion: number): WorkflowDto;
   createStage(
     ownerId: string,
@@ -367,7 +340,6 @@ export class MemoryTreeStore implements V2TreeStore {
   private readonly workflows = new Map<string, WorkflowRecord>();
   private readonly stages = new Map<string, StageRecord>();
   private readonly memberships = new Map<string, MembershipRecord>();
-  private readonly archiveOperations = new Map<string, ArchiveRecord>();
   private readonly timePoints = new Map<string, TimePointRecord>();
   private readonly placements = new Map<string, PlacementRecord>();
   private readonly settings = new Map<string, V2SettingsDto>();
@@ -406,7 +378,6 @@ export class MemoryTreeStore implements V2TreeStore {
       workflows: own(this.workflows.values()),
       stages: own(this.stages.values()),
       memberships: own(this.memberships.values()),
-      archiveOperations: own(this.archiveOperations.values()),
       timePoints: own(this.timePoints.values()),
       placements: own(this.placements.values()),
       settings: this.settings.get(ownerId) ?? this.defaultSettings(ownerId),
@@ -430,7 +401,6 @@ export class MemoryTreeStore implements V2TreeStore {
     replace(this.workflows, state.workflows);
     replace(this.stages, state.stages);
     replace(this.memberships, state.memberships);
-    replace(this.archiveOperations, state.archiveOperations);
     replace(this.timePoints, state.timePoints);
     replace(this.placements, state.placements);
     if (state.settings && typeof state.settings === 'object')
@@ -472,11 +442,7 @@ export class MemoryTreeStore implements V2TreeStore {
     }
   }
 
-  listTreeChildren(
-    ownerId: string,
-    parentFolderId: string | null,
-    archived = false,
-  ): TreeItemDto[] {
+  listTreeChildren(ownerId: string, parentFolderId: string | null): TreeItemDto[] {
     this.ensureOwner(ownerId);
     const items: TreeItemDto[] = [];
     for (const folder of this.folders.values()) {
@@ -486,7 +452,6 @@ export class MemoryTreeStore implements V2TreeStore {
         folder.parentFolderId !== parentFolderId
       )
         continue;
-      if (!archived && folder.archivedAt) continue;
       items.push({
         kind: 'FOLDER',
         folder: this.folderDto(folder),
@@ -496,124 +461,19 @@ export class MemoryTreeStore implements V2TreeStore {
     for (const task of this.tasks.values()) {
       if (task.ownerId !== ownerId || task.deletedAt || task.parentFolderId !== parentFolderId)
         continue;
-      if (!archived && task.archivedAt) continue;
       items.push({ kind: 'TASK', task: this.taskDto(task) });
     }
     return sortTreeItems(items);
   }
 
-  listFolders(ownerId: string, archived = false): FolderDto[] {
+  listFolders(ownerId: string): FolderDto[] {
     return this.ownerFolders(ownerId)
-      .filter((folder) => (archived ? Boolean(folder.archivedAt) : !folder.archivedAt))
       .sort((left, right) => rankSort(left, right))
       .map((folder) => this.folderDto(folder));
   }
 
-  /**
-   * Top-level cascade-archive entries for the archive centre. Each operation is
-   * returned once with the folders/tasks it actually controls, instead of
-   * flattening every archived descendant into a thousand separate rows.
-   */
-  listArchiveOperations(ownerId: string, includeRestored = false): ArchiveOperationSummaryDto[] {
-    this.ensureOwner(ownerId);
-    const archivedFolders = this.ownerFolders(ownerId).filter((row) => row.archivedAt);
-    const archivedTasks = [...this.tasks.values()].filter(
-      (row) => row.ownerId === ownerId && !row.deletedAt && row.archivedAt,
-    );
-    return [...this.archiveOperations.values()]
-      .filter((operation) => operation.ownerId === ownerId)
-      .filter((operation) => includeRestored || !operation.restoredAt)
-      .sort((left, right) => (left.createdAt < right.createdAt ? 1 : -1))
-      .map((operation) => this.archiveOperationSummary(operation, archivedFolders, archivedTasks));
-  }
-
-  getArchiveOperation(ownerId: string, operationId: string): ArchiveOperationDetailDto {
-    this.ensureOwner(ownerId);
-    const operation = this.archiveOperations.get(operationId);
-    if (!operation || operation.ownerId !== ownerId)
-      throw new DomainError('ENTITY_NOT_FOUND', '归档操作不存在');
-    const archivedFolders = this.ownerFolders(ownerId).filter((row) => row.archivedAt);
-    const archivedTasks = [...this.tasks.values()].filter(
-      (row) => row.ownerId === ownerId && !row.deletedAt && row.archivedAt,
-    );
-    const summary = this.archiveOperationSummary(operation, archivedFolders, archivedTasks);
-    const folders = this.subtreeFolders(ownerId, operation.rootFolderId);
-    const folderIds = new Set(folders.map((row) => row.id));
-    const tasks = archivedTasks
-      .filter((task) => {
-        const operationValue = (task as TreeTaskRecord & { archivedByOperationId?: string | null })
-          .archivedByOperationId;
-        if (operationValue === operationId) return true;
-        return Boolean(task.parentFolderId && folderIds.has(task.parentFolderId));
-      })
-      .map((task) => this.taskDto(task))
-      .sort((left, right) => (left.rank < right.rank ? -1 : left.rank > right.rank ? 1 : 0));
-    // Independently archived tasks: archived but not tied to any archive operation.
-    const standaloneArchivedTasks = [...this.tasks.values()]
-      .filter(
-        (row) =>
-          row.ownerId === ownerId &&
-          !row.deletedAt &&
-          row.archivedAt &&
-          !(row as TreeTaskRecord & { archivedByOperationId?: string | null })
-            .archivedByOperationId &&
-          !(row.parentFolderId && folderIds.has(row.parentFolderId)),
-      )
-      .map((row) => this.taskDto(row))
-      .sort((left, right) => (left.updatedAt < right.updatedAt ? 1 : -1));
-    return { ...summary, tasks, standaloneArchivedTasks };
-  }
-
-  private archiveOperationSummary(
-    operation: ArchiveRecord,
-    archivedFolders: readonly FolderRecord[],
-    archivedTasks: readonly TreeTaskRecord[],
-  ): ArchiveOperationSummaryDto {
-    const subtree = this.subtreeFolders(operation.ownerId, operation.rootFolderId);
-    const subtreeIds = new Set(subtree.map((row) => row.id));
-    // Folders restored by this operation are no longer archived, so only count
-    // currently archived rows; the tree shape still comes from the subtree.
-    const controlledFolders = archivedFolders.filter(
-      (folder) => subtreeIds.has(folder.id) && folder.archivedByOperationId === operation.id,
-    );
-    const previouslyArchivedFolders = archivedFolders.filter(
-      (folder) => subtreeIds.has(folder.id) && folder.archivedByOperationId !== operation.id,
-    );
-    const inSubtree = (task: TreeTaskRecord) =>
-      Boolean(task.parentFolderId && subtreeIds.has(task.parentFolderId));
-    const operationIdOf = (task: TreeTaskRecord) =>
-      (task as TreeTaskRecord & { archivedByOperationId?: string | null }).archivedByOperationId;
-    const controlledTasks = archivedTasks.filter(
-      (task) => inSubtree(task) && operationIdOf(task) === operation.id,
-    );
-    // Descendants archived before this operation ran must stay archived on restore.
-    const previouslyArchivedTasks = archivedTasks.filter(
-      (task) => inSubtree(task) && operationIdOf(task) !== operation.id,
-    );
-    return {
-      ...this.archiveDto(operation),
-      rootFolderTitle: this.folders.get(operation.rootFolderId)?.title ?? '',
-      descendantFolderCount: controlledFolders.length,
-      descendantTaskCount: controlledTasks.length,
-      previouslyArchivedFolderCount: previouslyArchivedFolders.length,
-      previouslyArchivedTaskCount: previouslyArchivedTasks.length,
-      folders: [...subtree]
-        .sort((left, right) => rankSort(left, right))
-        .map((folder) => ({
-          id: folder.id,
-          parentFolderId: folder.parentFolderId,
-          title: folder.title,
-          archivedAt: folder.archivedAt,
-          archivedByOperationId: folder.archivedByOperationId,
-          version: folder.version,
-        })),
-    };
-  }
-
-  getFolder(ownerId: string, id: string, includeArchived = true): FolderDto {
+  getFolder(ownerId: string, id: string): FolderDto {
     const folder = this.folder(ownerId, id);
-    if (!includeArchived && folder.archivedAt)
-      throw new DomainError('ENTITY_ARCHIVED', '文件夹已归档');
     return this.folderDto(folder);
   }
 
@@ -645,8 +505,6 @@ export class MemoryTreeStore implements V2TreeStore {
       title,
       rank,
       version: 1,
-      archivedAt: null,
-      archivedByOperationId: null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -686,11 +544,6 @@ export class MemoryTreeStore implements V2TreeStore {
       input.item.kind === 'FOLDER'
         ? this.folder(ownerId, input.item.id)
         : this.taskRecord(ownerId, input.item.id);
-    if (current.archivedAt)
-      throw new DomainError(
-        'ENTITY_ARCHIVED',
-        input.item.kind === 'FOLDER' ? '文件夹已归档' : '任务已归档',
-      );
     this.assertVersion(
       current.version,
       input.baseVersion,
@@ -758,114 +611,6 @@ export class MemoryTreeStore implements V2TreeStore {
     task.updatedAt = this.now();
     this.record(ownerId, 'task', task.id, task.version, 'upsert', this.taskDto(task));
     return { kind: 'TASK', task: this.taskDto(task) };
-  }
-
-  archiveTree(
-    ownerId: string,
-    id: string,
-    baseVersion: number,
-    requestedOperationId?: string,
-  ): ArchiveOperationDto {
-    this.ensureOwner(ownerId);
-    const root = this.folder(ownerId, id);
-    if (requestedOperationId) {
-      const existing = this.archiveOperations.get(requestedOperationId);
-      if (existing) {
-        if (existing.ownerId !== ownerId || existing.rootFolderId !== id) {
-          throw new DomainError('MUTATION_REJECTED', '归档操作 ID 已被其他目录使用');
-        }
-        return this.archiveDto(existing);
-      }
-    }
-    this.assertVersion(root.version, baseVersion, this.folderDto(root));
-    if (root.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '文件夹已归档');
-    const operationId = requestedOperationId ?? uuidv7();
-    const folders = this.subtreeFolders(ownerId, id);
-    const folderIds = new Set(folders.map((row) => row.id));
-    const tasks = [...this.tasks.values()].filter(
-      (task) =>
-        task.ownerId === ownerId &&
-        !task.deletedAt &&
-        task.parentFolderId &&
-        folderIds.has(task.parentFolderId),
-    );
-    const now = this.now();
-    const operation: ArchiveRecord = {
-      id: operationId,
-      ownerId,
-      rootFolderId: id,
-      rootBaseVersion: baseVersion,
-      folderCount: folders.filter((row) => !row.archivedAt).length,
-      taskCount: tasks.filter((row) => !row.archivedAt).length,
-      createdAt: now,
-      restoredAt: null,
-    };
-    this.archiveOperations.set(operationId, operation);
-    for (const folder of folders) {
-      if (folder.archivedAt) continue;
-      folder.archivedAt = now;
-      folder.archivedByOperationId = operationId;
-      folder.version += 1;
-      folder.updatedAt = now;
-      this.record(ownerId, 'folder', folder.id, folder.version, 'upsert', this.folderDto(folder));
-    }
-    for (const task of tasks) {
-      if (task.archivedAt) continue;
-      task.archivedAt = now;
-      task.version += 1;
-      // The operation id is not part of the public Task DTO but is retained in
-      // the record for exact restoration and included in the sync snapshot.
-      (task as TreeTaskRecord & { archivedByOperationId?: string | null }).archivedByOperationId =
-        operationId;
-      task.updatedAt = now;
-      this.record(ownerId, 'task', task.id, task.version, 'upsert', this.taskDto(task));
-    }
-    this.record(ownerId, 'archiveOperation', operationId, 1, 'upsert', this.archiveDto(operation));
-    return this.archiveDto(operation);
-  }
-
-  restoreTree(ownerId: string, id: string, operationId: string): ArchiveOperationDto {
-    this.ensureOwner(ownerId);
-    const root = this.folder(ownerId, id);
-    const operation = this.archiveOperations.get(operationId);
-    if (
-      !operation ||
-      operation.ownerId !== ownerId ||
-      operation.rootFolderId !== id ||
-      operation.restoredAt
-    )
-      throw new DomainError('ENTITY_NOT_FOUND', '归档操作不存在或已恢复');
-    const rootOperation = (root as FolderRecord).archivedByOperationId;
-    if (rootOperation !== operationId)
-      throw new DomainError('ANCESTOR_ARCHIVED', '祖先归档边界不允许单独恢复');
-    const now = this.now();
-    for (const folder of this.folders.values()) {
-      if (
-        folder.ownerId !== ownerId ||
-        folder.deletedAt ||
-        folder.archivedByOperationId !== operationId
-      )
-        continue;
-      folder.archivedAt = null;
-      folder.archivedByOperationId = null;
-      folder.version += 1;
-      folder.updatedAt = now;
-      this.record(ownerId, 'folder', folder.id, folder.version, 'upsert', this.folderDto(folder));
-    }
-    for (const task of this.tasks.values()) {
-      const operationValue = (task as TreeTaskRecord & { archivedByOperationId?: string | null })
-        .archivedByOperationId;
-      if (task.ownerId !== ownerId || task.deletedAt || operationValue !== operationId) continue;
-      task.archivedAt = null;
-      delete (task as TreeTaskRecord & { archivedByOperationId?: string | null })
-        .archivedByOperationId;
-      task.version += 1;
-      task.updatedAt = now;
-      this.record(ownerId, 'task', task.id, task.version, 'upsert', this.taskDto(task));
-    }
-    operation.restoredAt = now;
-    this.record(ownerId, 'archiveOperation', operation.id, 2, 'upsert', this.archiveDto(operation));
-    return this.archiveDto(operation);
   }
 
   previewDelete(ownerId: string, id: string): DeletePreviewDto {
@@ -996,7 +741,6 @@ export class MemoryTreeStore implements V2TreeStore {
       rank: this.nextSiblingRank(ownerId, input.parentFolderId, 'TASK'),
       version: 1,
       completedAt: null,
-      archivedAt: null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -1018,16 +762,11 @@ export class MemoryTreeStore implements V2TreeStore {
     return { task: this.taskDto(task), note: this.noteDto(note) };
   }
 
-  listTasks(ownerId: string, archived = false, query = ''): TreeTaskDto[] {
+  listTasks(ownerId: string, query = ''): TreeTaskDto[] {
     this.ensureOwner(ownerId);
     const needle = query.trim().toLocaleLowerCase();
     return [...this.tasks.values()]
-      .filter(
-        (row) =>
-          row.ownerId === ownerId &&
-          !row.deletedAt &&
-          (archived ? Boolean(row.archivedAt) : !row.archivedAt),
-      )
+      .filter((row) => row.ownerId === ownerId && !row.deletedAt)
       .filter((row) => {
         if (!needle) return true;
         const note = [...this.notes.values()].find(
@@ -1048,9 +787,8 @@ export class MemoryTreeStore implements V2TreeStore {
       .map((row) => this.taskDto(row));
   }
 
-  getTask(ownerId: string, id: string, includeArchived = true): TreeTaskDto {
+  getTask(ownerId: string, id: string): TreeTaskDto {
     const task = this.taskRecord(ownerId, id);
-    if (!includeArchived && task.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '任务已归档');
     return this.taskDto(task);
   }
 
@@ -1099,29 +837,6 @@ export class MemoryTreeStore implements V2TreeStore {
     note.updatedAt = this.now();
     this.record(ownerId, 'note', note.id, note.version, 'upsert', this.noteDto(note));
     return this.noteDto(note);
-  }
-
-  archiveTask(ownerId: string, id: string, baseVersion: number): TreeTaskDto {
-    const task = this.taskRecord(ownerId, id);
-    this.assertVersion(task.version, baseVersion, this.taskDto(task));
-    task.archivedAt = this.now();
-    task.version += 1;
-    task.updatedAt = this.now();
-    this.record(ownerId, 'task', id, task.version, 'upsert', this.taskDto(task));
-    return this.taskDto(task);
-  }
-
-  restoreTask(ownerId: string, id: string, baseVersion: number): TreeTaskDto {
-    const task = this.taskRecord(ownerId, id);
-    this.assertVersion(task.version, baseVersion, this.taskDto(task));
-    assertTreeParentIsActiveFolder(task.parentFolderId, this.ownerFolders(ownerId));
-    task.archivedAt = null;
-    delete (task as TreeTaskRecord & { archivedByOperationId?: string | null })
-      .archivedByOperationId;
-    task.version += 1;
-    task.updatedAt = this.now();
-    this.record(ownerId, 'task', id, task.version, 'upsert', this.taskDto(task));
-    return this.taskDto(task);
   }
 
   deleteTask(ownerId: string, id: string, baseVersion: number): TreeTaskDto {
@@ -1339,15 +1054,12 @@ export class MemoryTreeStore implements V2TreeStore {
     return this.createTimePoint(ownerId, { type: 'EVENT', title, id });
   }
 
-  listTimePoints(ownerId: string, type?: TimePointType, archived?: boolean): TimePointDto[] {
+  listTimePoints(ownerId: string, type?: TimePointType): TimePointDto[] {
     this.ensureOwner(ownerId);
     return [...this.timePoints.values()]
       .filter(
         (point) =>
-          point.ownerId === ownerId &&
-          !point.deletedAt &&
-          (!type || point.type === type) &&
-          (archived === undefined || archived === Boolean(point.archivedAt)),
+          point.ownerId === ownerId && !point.deletedAt && (!type || point.type === type),
       )
       .sort((left, right) =>
         left.type === 'DATE' && right.type === 'DATE'
@@ -1365,11 +1077,7 @@ export class MemoryTreeStore implements V2TreeStore {
     if (points.some((point) => point.type !== 'EVENT'))
       throw new DomainError('VALIDATION_FAILED', '只能排序事件');
     const expected = [...this.timePoints.values()].filter(
-      (point) =>
-        point.ownerId === ownerId &&
-        point.type === 'EVENT' &&
-        !point.deletedAt &&
-        !point.archivedAt,
+      (point) => point.ownerId === ownerId && point.type === 'EVENT' && !point.deletedAt,
     );
     if (expected.length !== ids.length || expected.some((point) => !ids.includes(point.id)))
       throw new DomainError('VALIDATION_FAILED', '时间点排序列表必须包含整个活动列表');
@@ -1380,7 +1088,7 @@ export class MemoryTreeStore implements V2TreeStore {
       point.updatedAt = this.now();
       this.record(ownerId, 'timePoint', id, point.version, 'upsert', this.timePointDto(point));
     }
-    return this.listTimePoints(ownerId, 'EVENT', false);
+    return this.listTimePoints(ownerId, 'EVENT');
   }
 
   getTimePoint(ownerId: string, id: string): TimePointDto {
@@ -1407,7 +1115,6 @@ export class MemoryTreeStore implements V2TreeStore {
   reachTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto {
     const point = this.timePoint(ownerId, id);
     if (point.type !== 'EVENT') throw new DomainError('VALIDATION_FAILED', '日期没有到达状态');
-    if (point.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '时间点已归档');
     this.assertVersion(point.version, baseVersion, this.timePointDto(point));
     point.reachedAt ??= this.now();
     point.version += 1;
@@ -1416,27 +1123,17 @@ export class MemoryTreeStore implements V2TreeStore {
     return this.timePointDto(point);
   }
 
-  archiveTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto {
-    return this.setTimePointArchived(ownerId, id, baseVersion, true);
-  }
-
-  restoreTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto {
-    return this.setTimePointArchived(ownerId, id, baseVersion, false);
-  }
-
-  private setTimePointArchived(
-    ownerId: string,
-    id: string,
-    baseVersion: number,
-    archived: boolean,
-  ): TimePointDto {
+  /** Deleting an event keeps the task entities and only removes their placements here. */
+  deleteTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto {
     const point = this.timePoint(ownerId, id);
-    if (point.type !== 'EVENT') throw new DomainError('VALIDATION_FAILED', '日期不能归档或恢复');
+    if (point.type !== 'EVENT') throw new DomainError('VALIDATION_FAILED', '日期不能删除');
     this.assertVersion(point.version, baseVersion, this.timePointDto(point));
-    point.archivedAt = archived ? this.now() : null;
-    point.version += 1;
-    point.updatedAt = this.now();
-    this.record(ownerId, 'timePoint', id, point.version, 'upsert', this.timePointDto(point));
+    const now = this.now();
+    for (const placement of this.placements.values()) {
+      if (placement.ownerId === ownerId && placement.timePointId === id && !placement.deletedAt)
+        this.tombstone(ownerId, 'placement', placement, now);
+    }
+    this.tombstone(ownerId, 'timePoint', point, now);
     return this.timePointDto(point);
   }
 
@@ -1446,10 +1143,9 @@ export class MemoryTreeStore implements V2TreeStore {
     timePointId: string,
     id?: string,
   ): { placement: PlacementDto; existed: boolean } {
-    const task = this.taskRecord(ownerId, taskId);
-    const point = this.timePoint(ownerId, timePointId);
-    if (task.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '任务已归档');
-    if (point.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '时间点已归档');
+    // Both records must exist even though only their ids feed the placement.
+    this.taskRecord(ownerId, taskId);
+    this.timePoint(ownerId, timePointId);
     const existing = [...this.placements.values()].find(
       (placement) =>
         placement.ownerId === ownerId &&
@@ -1530,10 +1226,9 @@ export class MemoryTreeStore implements V2TreeStore {
   ): { placement: PlacementDto; sourcePlacementId: string; existed: boolean } {
     const source = this.placement(ownerId, id);
     this.assertVersion(source.version, baseVersion, this.placementDto(source));
-    const target = this.timePoint(ownerId, targetTimePointId);
+    this.timePoint(ownerId, targetTimePointId);
     if (source.timePointId === targetTimePointId)
       throw new DomainError('VALIDATION_FAILED', '安排已经位于目标时间点');
-    if (target.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '时间点已归档');
     const existing = [...this.placements.values()].find(
       (placement) =>
         placement.ownerId === ownerId &&
@@ -1612,7 +1307,7 @@ export class MemoryTreeStore implements V2TreeStore {
       .sort(rankSort);
     for (const placement of sourcePlacements) {
       const task = this.tasks.get(placement.taskId);
-      if (!task || task.deletedAt || task.archivedAt || task.status === 'DONE') {
+      if (!task || task.deletedAt || task.status === 'DONE') {
         skippedTaskIds.push(placement.taskId);
         continue;
       }
@@ -1642,12 +1337,10 @@ export class MemoryTreeStore implements V2TreeStore {
     return { removedIds, skippedIds };
   }
 
-  listWorkflows(ownerId: string, includeArchived = false): WorkflowDto[] {
+  listWorkflows(ownerId: string): WorkflowDto[] {
     this.ensureOwner(ownerId);
     return [...this.workflows.values()]
-      .filter(
-        (row) => row.ownerId === ownerId && !row.deletedAt && (includeArchived || !row.archivedAt),
-      )
+      .filter((row) => row.ownerId === ownerId && !row.deletedAt)
       .sort(rankSort)
       .map((row) => this.workflowDtoWithChildren(ownerId, row));
   }
@@ -1672,7 +1365,6 @@ export class MemoryTreeStore implements V2TreeStore {
       name,
       rank: this.nextWorkflowRank(ownerId),
       version: 1,
-      archivedAt: null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -1696,14 +1388,6 @@ export class MemoryTreeStore implements V2TreeStore {
     return this.workflowDtoWithChildren(ownerId, workflow);
   }
 
-  archiveWorkflow(ownerId: string, id: string, baseVersion: number): WorkflowDto {
-    return this.setWorkflowArchived(ownerId, id, baseVersion, true);
-  }
-
-  restoreWorkflow(ownerId: string, id: string, baseVersion: number): WorkflowDto {
-    return this.setWorkflowArchived(ownerId, id, baseVersion, false);
-  }
-
   deleteWorkflow(ownerId: string, id: string, baseVersion: number): WorkflowDto {
     const workflow = this.workflow(ownerId, id);
     this.assertVersion(workflow.version, baseVersion, this.workflowDto(workflow));
@@ -1723,8 +1407,7 @@ export class MemoryTreeStore implements V2TreeStore {
     workflowId: string,
     input: { id?: string; name: string },
   ): WorkflowStageDto {
-    const workflow = this.workflow(ownerId, workflowId);
-    if (workflow.archivedAt) throw new DomainError('TARGET_ARCHIVED', '流程已归档');
+    this.workflow(ownerId, workflowId);
     const name = input.name.trim();
     if (!name || name.length > 200) throw new DomainError('VALIDATION_FAILED', '阶段名称无效');
     const id = this.entityId(input.id);
@@ -1827,11 +1510,9 @@ export class MemoryTreeStore implements V2TreeStore {
   ): WorkflowTaskMembershipDto {
     const workflow = this.workflow(ownerId, workflowId);
     const stage = this.stage(ownerId, stageId);
-    const task = this.taskRecord(ownerId, taskId);
+    this.taskRecord(ownerId, taskId);
     if (stage.workflowId !== workflow.id)
       throw new DomainError('STAGE_WORKFLOW_MISMATCH', '阶段不属于该流程');
-    if (workflow.archivedAt || task.archivedAt)
-      throw new DomainError('TARGET_ARCHIVED', '流程或任务已归档');
     if (
       [...this.memberships.values()].some(
         (row) =>
@@ -1970,9 +1651,6 @@ export class MemoryTreeStore implements V2TreeStore {
       workflowTaskMemberships: [...this.memberships.values()]
         .filter((row) => row.ownerId === ownerId && !row.deletedAt)
         .map((row) => this.membershipDto(row)),
-      archiveOperations: [...this.archiveOperations.values()]
-        .filter((row) => row.ownerId === ownerId)
-        .map((row) => this.archiveDto(row)),
       settings: this.settings.get(ownerId) ?? this.defaultSettings(ownerId),
       cursor: this.cursor.toString(),
     };
@@ -2063,15 +1741,6 @@ export class MemoryTreeStore implements V2TreeStore {
           stringValue(p.title),
           numberValue(base),
         );
-      case 'folder.archiveTree':
-        return this.archiveTree(
-          ownerId,
-          mutation.entityId,
-          numberValue(base),
-          optionalString(p.operationId),
-        );
-      case 'folder.restoreTree':
-        return this.restoreTree(ownerId, mutation.entityId, stringValue(p.operationId));
       case 'folder.deleteTree':
         return this.deleteTree(ownerId, mutation.entityId, stringValue(p.confirmationToken));
       case 'tree.move':
@@ -2115,10 +1784,6 @@ export class MemoryTreeStore implements V2TreeStore {
           stringValueAllowEmpty(p.contentMarkdown),
           numberValue(base),
         );
-      case 'task.archive':
-        return this.archiveTask(ownerId, mutation.entityId, numberValue(base));
-      case 'task.restore':
-        return this.restoreTask(ownerId, mutation.entityId, numberValue(base));
       case 'task.delete':
         return this.deleteTask(ownerId, mutation.entityId, numberValue(base));
       case 'task.duplicate':
@@ -2167,10 +1832,8 @@ export class MemoryTreeStore implements V2TreeStore {
         );
       case 'timePoint.reach':
         return this.reachTimePoint(ownerId, mutation.entityId, numberValue(base));
-      case 'timePoint.archive':
-        return this.archiveTimePoint(ownerId, mutation.entityId, numberValue(base));
-      case 'timePoint.restore':
-        return this.restoreTimePoint(ownerId, mutation.entityId, numberValue(base));
+      case 'timePoint.delete':
+        return this.deleteTimePoint(ownerId, mutation.entityId, numberValue(base));
       case 'timePoint.reorder':
         return this.reorderTimePoints(ownerId, stringArrayValue(p.ids));
       case 'placement.create':
@@ -2226,10 +1889,6 @@ export class MemoryTreeStore implements V2TreeStore {
           stringValue(p.name),
           numberValue(base),
         );
-      case 'workflow.archive':
-        return this.archiveWorkflow(ownerId, mutation.entityId, numberValue(base));
-      case 'workflow.restore':
-        return this.restoreWorkflow(ownerId, mutation.entityId, numberValue(base));
       case 'workflow.delete':
         return this.deleteWorkflow(ownerId, mutation.entityId, numberValue(base));
       case 'workflowStage.create':
@@ -2283,7 +1942,6 @@ export class MemoryTreeStore implements V2TreeStore {
         (row) => row.ownerId === ownerId && !row.deletedAt,
       );
       for (const project of legacyProjects) {
-        const archiveOperationId = project.archivedAt ? project.id : null;
         this.folders.set(project.id, {
           id: project.id,
           ownerId,
@@ -2291,36 +1949,16 @@ export class MemoryTreeStore implements V2TreeStore {
           title: project.name,
           rank: project.rank,
           version: project.version,
-          archivedAt: project.archivedAt,
-          archivedByOperationId: archiveOperationId,
           createdAt: project.createdAt,
           updatedAt: project.updatedAt,
-          deletedAt: null,
+          // Legacy archived projects surface as deleted now that the archive
+          // mechanism no longer exists.
+          deletedAt: this.legacy?.legacyArchivedAt(project) ?? null,
         });
-        if (archiveOperationId && project.archivedAt) {
-          const taskCount = [...this.legacy.state.tasks.values()].filter(
-            (task) =>
-              task.ownerId === ownerId &&
-              task.projectId === project.id &&
-              !task.deletedAt &&
-              !task.archivedAt,
-          ).length;
-          this.archiveOperations.set(archiveOperationId, {
-            id: archiveOperationId,
-            ownerId,
-            rootFolderId: project.id,
-            rootBaseVersion: project.version,
-            folderCount: 1,
-            taskCount,
-            createdAt: project.archivedAt,
-            restoredAt: null,
-          });
-        }
       }
       for (const task of this.legacy.state.tasks.values()) {
         if (task.ownerId !== ownerId || task.deletedAt) continue;
         const parent = task.projectId && this.folders.has(task.projectId) ? task.projectId : null;
-        const project = task.projectId ? this.legacy.state.projects.get(task.projectId) : undefined;
         this.tasks.set(task.id, {
           id: task.id,
           ownerId,
@@ -2331,16 +1969,11 @@ export class MemoryTreeStore implements V2TreeStore {
           rank: task.rank,
           version: task.version,
           completedAt: task.completedAt,
-          archivedAt: task.archivedAt,
           createdAt: task.createdAt,
           updatedAt: task.updatedAt,
-          deletedAt: null,
+          // Same policy as folders: legacy archived tasks become deleted.
+          deletedAt: this.legacy?.legacyArchivedAt(task) ?? null,
         });
-        if (project?.archivedAt && !task.archivedAt) {
-          (
-            this.tasks.get(task.id)! as TreeTaskRecord & { archivedByOperationId?: string | null }
-          ).archivedByOperationId = project.id;
-        }
       }
       for (const note of this.legacy.state.notes.values()) {
         if (note.ownerId !== ownerId || note.deletedAt) continue;
@@ -2348,7 +1981,11 @@ export class MemoryTreeStore implements V2TreeStore {
       }
       for (const point of this.legacy.state.timePoints.values())
         if (point.ownerId === ownerId && !point.deletedAt)
-          this.timePoints.set(point.id, { ...point });
+          this.timePoints.set(point.id, {
+            ...point,
+            // Legacy archived events become deleted.
+            deletedAt: this.legacy.legacyArchivedAt(point) ?? point.deletedAt ?? null,
+          });
       for (const placement of this.legacy.state.placements.values())
         if (placement.ownerId === ownerId && !placement.deletedAt)
           this.placements.set(placement.id, { ...placement });
@@ -2612,7 +2249,6 @@ export class MemoryTreeStore implements V2TreeStore {
       ).toString(),
       version: 1,
       reachedAt: null,
-      archivedAt: null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -2693,20 +2329,6 @@ export class MemoryTreeStore implements V2TreeStore {
       )
       .digest('hex');
   }
-  private setWorkflowArchived(
-    ownerId: string,
-    id: string,
-    baseVersion: number,
-    archived: boolean,
-  ): WorkflowDto {
-    const workflow = this.workflow(ownerId, id);
-    this.assertVersion(workflow.version, baseVersion, this.workflowDto(workflow));
-    workflow.archivedAt = archived ? this.now() : null;
-    workflow.version += 1;
-    workflow.updatedAt = this.now();
-    this.record(ownerId, 'workflow', id, workflow.version, 'upsert', this.workflowDto(workflow));
-    return this.workflowDtoWithChildren(ownerId, workflow);
-  }
   private tombstone(
     ownerId: string,
     entityType: V2SyncChange['entityType'],
@@ -2748,7 +2370,6 @@ export class MemoryTreeStore implements V2TreeStore {
       workflows: this.workflows,
       stages: this.stages,
       memberships: this.memberships,
-      archiveOperations: this.archiveOperations,
       timePoints: this.timePoints,
       placements: this.placements,
       settings: this.settings,
@@ -2853,8 +2474,6 @@ export class MemoryTreeStore implements V2TreeStore {
       title,
       rank,
       version,
-      archivedAt,
-      archivedByOperationId,
       deletedAt,
       createdAt,
       updatedAt,
@@ -2865,8 +2484,6 @@ export class MemoryTreeStore implements V2TreeStore {
       title,
       rank,
       version,
-      archivedAt,
-      archivedByOperationId,
       deletedAt,
       createdAt,
       updatedAt,
@@ -2882,12 +2499,10 @@ export class MemoryTreeStore implements V2TreeStore {
       rank,
       version,
       completedAt,
-      archivedAt,
-      archivedByOperationId,
       createdAt,
       updatedAt,
       deletedAt,
-    } = row as TreeTaskRecord & { archivedByOperationId?: string | null };
+    } = row;
     return {
       id,
       referenceId,
@@ -2897,8 +2512,6 @@ export class MemoryTreeStore implements V2TreeStore {
       rank,
       version,
       completedAt,
-      archivedAt,
-      archivedByOperationId,
       deletedAt,
       createdAt,
       updatedAt,
@@ -2937,8 +2550,8 @@ export class MemoryTreeStore implements V2TreeStore {
     };
   }
   private workflowDto(row: WorkflowRecord): WorkflowDto {
-    const { id, name, rank, version, archivedAt, createdAt, updatedAt, deletedAt } = row;
-    return { id, name, rank, version, archivedAt, createdAt, updatedAt, deletedAt };
+    const { id, name, rank, version, createdAt, updatedAt, deletedAt } = row;
+    return { id, name, rank, version, createdAt, updatedAt, deletedAt };
   }
   private workflowDtoWithChildren(ownerId: string, row: WorkflowRecord): WorkflowDto {
     const dto = this.workflowDto(row);
@@ -2958,7 +2571,7 @@ export class MemoryTreeStore implements V2TreeStore {
           .sort(rankSort);
         const visibleMemberships = memberships.filter((membership) => {
           const task = this.tasks.get(membership.taskId);
-          return task && !task.deletedAt && !task.archivedAt;
+          return task && !task.deletedAt;
         });
         return {
           ...this.stageDto(stage),
@@ -2979,11 +2592,6 @@ export class MemoryTreeStore implements V2TreeStore {
     const { id, workflowId, stageId, taskId, rank, version, createdAt, updatedAt, deletedAt } = row;
     return { id, workflowId, stageId, taskId, rank, version, createdAt, updatedAt, deletedAt };
   }
-  private archiveDto(row: ArchiveRecord): ArchiveOperationDto {
-    const { id, rootFolderId, rootBaseVersion, folderCount, taskCount, createdAt, restoredAt } =
-      row;
-    return { id, rootFolderId, rootBaseVersion, folderCount, taskCount, createdAt, restoredAt };
-  }
   private placementDto(row: PlacementRecord): PlacementDto {
     const { id, taskId, timePointId, rank, version, createdAt, updatedAt, deletedAt } = row;
     return { id, taskId, timePointId, rank, version, createdAt, updatedAt, deletedAt };
@@ -2997,7 +2605,6 @@ export class MemoryTreeStore implements V2TreeStore {
       rank,
       version,
       reachedAt,
-      archivedAt,
       deletedAt,
       createdAt,
       updatedAt,
@@ -3010,7 +2617,6 @@ export class MemoryTreeStore implements V2TreeStore {
       rank,
       version,
       reachedAt,
-      archivedAt,
       createdAt,
       updatedAt,
       deletedAt,

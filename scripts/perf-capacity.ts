@@ -19,7 +19,6 @@ const ownerScopedTables = [
   'workflow_task_memberships',
   'workflow_stages',
   'workflows',
-  'archive_operations',
   'time_points',
   'tasks',
   'projects',
@@ -211,7 +210,7 @@ async function main(): Promise<void> {
       store.listTasksPage(ownerId, { projectId }, cursor, PAGE_SIZE),
     );
     const walkedDates = await walkPages((cursor) =>
-      store.listTimePointsPage(ownerId, 'DATE', false, cursor, PAGE_SIZE),
+      store.listTimePointsPage(ownerId, 'DATE', cursor, PAGE_SIZE),
     );
     const walkedPlacements = await walkPages((cursor) =>
       store.listPlacementsPage(ownerId, firstDateId, cursor, PAGE_SIZE),
@@ -235,7 +234,7 @@ async function main(): Promise<void> {
     );
     results.push(
       await benchmark('time-points.date-page', 40, () =>
-        store.listTimePointsPage(ownerId, 'DATE', false, undefined, PAGE_SIZE),
+        store.listTimePointsPage(ownerId, 'DATE', undefined, PAGE_SIZE),
       ),
     );
     results.push(
@@ -245,7 +244,7 @@ async function main(): Promise<void> {
     );
     results.push(
       await benchmark('search.owner-scoped', 40, () =>
-        store.search(ownerId, 'Perf task 499', false, PAGE_SIZE),
+        store.search(ownerId, 'Perf task 499', PAGE_SIZE),
       ),
     );
     results.push(

@@ -16,7 +16,6 @@ import { ApiError } from './api.js';
 import {
   captureLocalStateImage,
   type DevTodoDatabase,
-  type LocalArchiveOperation,
   type LocalFolder,
   type LocalNote,
   type LocalPlacement,
@@ -53,7 +52,6 @@ const entityTables = (db: DevTodoDatabase) =>
     db.workflows,
     db.workflowStages,
     db.workflowTaskMemberships,
-    db.archiveOperations,
     db.syncMeta,
     db.outbox,
   ] as const;
@@ -140,7 +138,6 @@ export async function applyOfflineWrite(
       taskPrefix,
       rank: nextRank(await context.db.projects.toArray()),
       version: 1,
-      archivedAt: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -166,7 +163,6 @@ export async function applyOfflineWrite(
     if (projectId) {
       const project = await context.db.projects.get(projectId);
       if (!project) throw new Error('本地项目不存在');
-      if (project.archivedAt) throw new Error('项目已归档');
     }
     const task = createLocalTask(
       taskId,
@@ -201,7 +197,7 @@ export async function applyOfflineWrite(
     const localDate = requiredString(body['localDate']);
     validateLocalDate(localDate);
     const existing = (await context.db.timePoints.toArray()).find(
-      (point) => point.type === 'DATE' && point.localDate === localDate && !point.archivedAt,
+      (point) => point.type === 'DATE' && point.localDate === localDate && !point.deletedAt,
     );
     if (existing) return { value: existing };
     const point = createLocalTimePoint(uuidv7(), 'DATE', localDate, undefined, now);
@@ -243,8 +239,8 @@ export async function applyOfflineWrite(
     const timePointId = requiredString(body['timePointId']);
     const task = await context.db.tasks.get(taskId);
     const point = await context.db.timePoints.get(timePointId);
-    if (!task || task.archivedAt) throw new Error('任务不存在或已归档');
-    if (!point || point.archivedAt) throw new Error('时间点不存在或已归档');
+    if (!task || task.deletedAt) throw new Error('任务不存在');
+    if (!point || point.deletedAt) throw new Error('时间点不存在');
     const existing = (await context.db.placements.toArray()).find(
       (placement) => placement.taskId === taskId && placement.timePointId === timePointId,
     );
@@ -297,7 +293,6 @@ export async function applyOfflineWrite(
     if (nextProjectId) {
       const project = await context.db.projects.get(nextProjectId);
       if (!project) throw new Error('本地项目不存在');
-      if (project.archivedAt && nextProjectId !== task.projectId) throw new Error('项目已归档');
     }
     const next = updateLocalTask(task, body, timestamp());
     return enqueue(
@@ -341,7 +336,7 @@ export async function applyOfflineWrite(
     );
   }
 
-  const taskAction = /^\/tasks\/([^/]+)\/(archive|restore|duplicate)$/.exec(cleanPath);
+  const taskAction = /^\/tasks\/([^/]+)\/(duplicate)$/.exec(cleanPath);
   if (method === 'POST' && taskAction) {
     const taskId = taskAction[1]!;
     const action = taskAction[2]!;
@@ -354,7 +349,6 @@ export async function applyOfflineWrite(
         referenceId: null,
         status: 'TODO',
         completedAt: null,
-        archivedAt: null,
         rank: nextRank(
           (await context.db.tasks.toArray()).filter(
             (candidate) =>
@@ -389,28 +383,8 @@ export async function applyOfflineWrite(
         },
       );
     }
-    const task = await getTask(context.db, taskId);
-    assertBaseVersion(task.version, body['baseVersion']);
-    const next: LocalTaskDto = {
-      ...task,
-      archivedAt: action === 'archive' ? timestamp() : null,
-      version: task.version + 1,
-      updatedAt: timestamp(),
-      pendingSync: true,
-    };
-    return enqueue(
-      context,
-      mutationId,
-      clientId,
-      `task.${action}`,
-      taskId,
-      task.version,
-      body,
-      async () => {
-        await context.db.tasks.put(next);
-        return next;
-      },
-    );
+    void action;
+    throw new Error('v1 归档写入已关闭');
   }
 
   if (method === 'POST' && cleanPath === '/tasks/reorder') {
@@ -428,7 +402,7 @@ export async function applyOfflineWrite(
       throw new Error('只能在同一任务分组内排序');
     const expected = tasks.filter(
       (task) =>
-        !task.archivedAt && task.projectId === first.projectId && task.category === first.category,
+        task.projectId === first.projectId && task.category === first.category,
     );
     if (expected.length !== ids.length || expected.some((task) => !ids.includes(task.id)))
       throw new Error('任务排序列表必须包含整个活动分组');
@@ -496,32 +470,9 @@ export async function applyOfflineWrite(
     );
   }
 
-  const projectAction = /^\/projects\/([^/]+)\/(archive|restore)$/.exec(cleanPath);
-  if (method === 'POST' && projectAction) {
-    const projectId = projectAction[1]!;
-    const action = projectAction[2]!;
-    const project = await context.db.projects.get(projectId);
-    if (!project) throw new Error('本地项目不存在');
-    assertBaseVersion(project.version, body['baseVersion']);
-    const next: ProjectDto = {
-      ...project,
-      archivedAt: action === 'archive' ? timestamp() : null,
-      version: project.version + 1,
-      updatedAt: timestamp(),
-    };
-    return enqueue(
-      context,
-      mutationId,
-      clientId,
-      `project.${action}`,
-      projectId,
-      project.version,
-      body,
-      async () => {
-        await context.db.projects.put({ ...next, pendingSync: true });
-        return next;
-      },
-    );
+  if (method === 'POST' && /^\/projects\/[^/]+\/(archive|restore)$/.test(cleanPath)) {
+    // The archive mechanism was removed; these v1 writes are closed.
+    throw new Error('v1 归档写入已关闭');
   }
 
   if (method === 'POST' && cleanPath === '/projects/reorder') {
@@ -530,7 +481,7 @@ export async function applyOfflineWrite(
     const projects = await context.db.projects.toArray();
     const selected = ids.map((id) => projects.find((project) => project.id === id));
     if (selected.some((project) => !project)) throw new Error('本地项目不存在');
-    const expected = projects.filter((project) => !project.archivedAt);
+    const expected = projects;
     if (expected.length !== ids.length || expected.some((project) => !ids.includes(project.id)))
       throw new Error('项目排序列表必须包含整个活动列表');
     return enqueue(
@@ -583,7 +534,7 @@ export async function applyOfflineWrite(
     );
   }
 
-  const pointAction = /^\/time-points\/([^/]+)\/(reach|archive|restore)$/.exec(cleanPath);
+  const pointAction = /^\/time-points\/([^/]+)\/(reach)$/.exec(cleanPath);
   if (method === 'POST' && pointAction) {
     const pointId = pointAction[1]!;
     const action = pointAction[2]!;
@@ -593,8 +544,6 @@ export async function applyOfflineWrite(
     const next: TimePointDto = {
       ...point,
       reachedAt: action === 'reach' ? (point.reachedAt ?? timestamp()) : point.reachedAt,
-      archivedAt:
-        action === 'archive' ? timestamp() : action === 'restore' ? null : point.archivedAt,
       version: point.version + 1,
       updatedAt: timestamp(),
     };
@@ -620,7 +569,7 @@ export async function applyOfflineWrite(
     const selected = ids.map((id) => points.find((point) => point.id === id));
     if (selected.some((point) => !point || point.type !== 'EVENT'))
       throw new Error('本地事件不存在');
-    const expected = points.filter((point) => point.type === 'EVENT' && !point.archivedAt);
+    const expected = points.filter((point) => point.type === 'EVENT' && !point.deletedAt);
     if (expected.length !== ids.length || expected.some((point) => !ids.includes(point.id)))
       throw new Error('时间点排序列表必须包含整个活动列表');
     return enqueue(
@@ -676,7 +625,7 @@ export async function applyOfflineWrite(
     if (action === 'move' && targetTimePointId === source.timePointId)
       throw new Error('安排已经位于目标时间点');
     const target = await context.db.timePoints.get(targetTimePointId);
-    if (!target || target.archivedAt) throw new Error('目标时间点不存在或已归档');
+    if (!target || target.deletedAt) throw new Error('目标时间点不存在');
     const existing = (await context.db.placements.toArray()).find(
       (candidate) =>
         candidate.taskId === source.taskId && candidate.timePointId === targetTimePointId,
@@ -829,10 +778,7 @@ async function applyOfflineV2Write(
     const id = typeof body['id'] === 'string' ? body['id'] : uuidv7();
     const parentFolderId =
       body['parentFolderId'] === null ? null : requiredString(body['parentFolderId']);
-    if (parentFolderId) {
-      const parent = await folder(parentFolderId);
-      if (parent.archivedAt) throw new Error('目标文件夹已归档');
-    }
+    if (parentFolderId) await folder(parentFolderId);
     const title = boundedTrimmedString(body['title'], 160, '文件夹名称无效');
     const folders = await db.folders.toArray();
     const created: LocalFolder = {
@@ -841,8 +787,6 @@ async function applyOfflineV2Write(
       title,
       rank: nextRank(folders.filter((candidate) => candidate.parentFolderId === parentFolderId)),
       version: 1,
-      archivedAt: null,
-      archivedByOperationId: null,
       createdAt: now,
       updatedAt: now,
       pendingSync: true,
@@ -888,10 +832,7 @@ async function applyOfflineV2Write(
     if (!kind || !id) throw new Error('目录项无效');
     const targetParent =
       body['parentFolderId'] === null ? null : requiredString(body['parentFolderId']);
-    if (targetParent) {
-      const target = await folder(targetParent);
-      if (target.archivedAt) throw new Error('目标文件夹已归档');
-    }
+    if (targetParent) await folder(targetParent);
     const current = kind === 'FOLDER' ? await folder(id) : await task(id);
     assertBaseVersion(current.version, baseVersion);
     const nextRankValue = nextRank([
@@ -924,134 +865,23 @@ async function applyOfflineV2Write(
     );
   }
 
-  const folderArchive = /^\/folders\/([^/]+)\/(archive-tree|restore-tree)$/.exec(path);
-  if (method === 'POST' && folderArchive) {
-    const root = await folder(folderArchive[1]!);
-    if (folderArchive[2] === 'restore-tree') {
-      const operationId = requiredString(body['operationId']);
-      const operation = await db.archiveOperations.get(operationId);
-      if (!operation) throw new Error('本地归档操作不存在');
-      const folders = await db.folders.toArray();
-      const tasks = (await db.tasks.toArray()) as LocalTreeTask[];
-      const restoredAt = timestamp();
-      return enqueueV2('folder.restoreTree', root.id, null, { operationId }, async () => {
-        await db.folders.bulkPut(
-          folders.map((candidate) =>
-            candidate.archivedByOperationId === operationId
-              ? {
-                  ...candidate,
-                  archivedAt: null,
-                  archivedByOperationId: null,
-                  version: candidate.version + 1,
-                  updatedAt: restoredAt,
-                  pendingSync: true,
-                }
-              : candidate,
-          ),
-        );
-        await db.tasks.bulkPut(
-          tasks.map((candidate) =>
-            candidate.archivedByOperationId === operationId
-              ? {
-                  ...candidate,
-                  archivedAt: null,
-                  archivedByOperationId: null,
-                  version: candidate.version + 1,
-                  updatedAt: restoredAt,
-                  pendingSync: true,
-                }
-              : candidate,
-          ),
-        );
-        await db.archiveOperations.put({ ...operation, restoredAt, pendingSync: true });
-        return operation;
-      });
-    }
-    assertBaseVersion(root.version, baseVersion);
-    const operationId = uuidv7();
-    const folders = await db.folders.toArray();
-    const folderIds = new Set<string>();
-    const stack = [root.id];
-    while (stack.length) {
-      const id = stack.pop()!;
-      if (folderIds.has(id)) continue;
-      folderIds.add(id);
-      folders
-        .filter((candidate) => candidate.parentFolderId === id)
-        .forEach((candidate) => stack.push(candidate.id));
-    }
-    const tasks = (await db.tasks.toArray()) as LocalTreeTask[];
-    const affectedFolders = folders.filter(
-      (candidate) => folderIds.has(candidate.id) && !candidate.archivedAt,
-    );
-    const affectedTasks = tasks.filter(
-      (candidate) =>
-        candidate.parentFolderId &&
-        folderIds.has(candidate.parentFolderId) &&
-        !candidate.archivedAt,
-    );
-    const operation = {
-      id: operationId,
-      rootFolderId: root.id,
-      rootBaseVersion: root.version,
-      folderCount: affectedFolders.length,
-      taskCount: affectedTasks.length,
-      createdAt: now,
-      restoredAt: null,
-      pendingSync: true,
-    } satisfies LocalArchiveOperation;
-    return enqueueV2('folder.archiveTree', root.id, root.version, { operationId }, async () => {
-      await db.folders.bulkPut(
-        folders.map((candidate) =>
-          folderIds.has(candidate.id)
-            ? {
-                ...candidate,
-                archivedAt: candidate.archivedAt ?? now,
-                archivedByOperationId: operationId,
-                version: candidate.version + 1,
-                updatedAt: now,
-                pendingSync: true,
-              }
-            : candidate,
-        ),
-      );
-      await db.tasks.bulkPut(
-        tasks.map((candidate) =>
-          candidate.parentFolderId && folderIds.has(candidate.parentFolderId)
-            ? {
-                ...candidate,
-                archivedAt: candidate.archivedAt ?? now,
-                archivedByOperationId: candidate.archivedAt
-                  ? (candidate.archivedByOperationId ?? null)
-                  : operationId,
-                version: candidate.version + 1,
-                updatedAt: now,
-                pendingSync: true,
-              }
-            : candidate,
-        ),
-      );
-      await db.archiveOperations.put(operation);
-      return operation;
-    });
-  }
   // Deleting a whole folder tree is online-only: it is irreversible and needs a
-  // server-signed preview token. Fail closed here so the user sees the
-  // "archive instead" guidance instead of a generic network error. This must
-  // run before the DELETE guard because the UI previews first.
+  // server-signed preview token. Fail closed here so the user sees clear
+  // guidance instead of a generic network error. This must run before the
+  // DELETE guard because the UI previews first.
   if (method === 'POST' && /^\/folders\/[^/]+\/delete-preview$/.test(path)) {
     throw new ApiError(
       'OFFLINE_TREE_DELETE_FORBIDDEN',
-      '离线状态禁止删除整棵目录及其内容；请先递归归档目录，待恢复网络并在线预览后再执行永久删除。',
-      { suggestion: 'ARCHIVE_INSTEAD' },
+      '离线状态禁止删除整棵目录及其内容；请恢复网络并在线预览后再执行永久删除。',
+      { suggestion: 'RETRY_ONLINE' },
       400,
     );
   }
   if (method === 'DELETE' && /^\/folders\/[^/]+\/tree$/.test(path)) {
     throw new ApiError(
       'OFFLINE_TREE_DELETE_FORBIDDEN',
-      '离线状态禁止删除整棵目录及其内容；请先递归归档目录，待恢复网络并在线预览后再执行永久删除。',
-      { suggestion: 'ARCHIVE_INSTEAD' },
+      '离线状态禁止删除整棵目录及其内容；请恢复网络并在线预览后再执行永久删除。',
+      { suggestion: 'RETRY_ONLINE' },
       400,
     );
   }
@@ -1080,8 +910,6 @@ async function applyOfflineV2Write(
     const id = typeof body['id'] === 'string' ? body['id'] : uuidv7();
     const parentFolderId =
       body['parentFolderId'] === null ? null : requiredString(body['parentFolderId']);
-    if (parentFolderId && (await folder(parentFolderId)).archivedAt)
-      throw new Error('目标文件夹已归档');
     const title = boundedTrimmedString(body['title'], 500, '任务标题无效');
     const tasks = (await db.tasks.toArray()).map((candidate) => candidate as LocalTreeTask);
     const created: LocalTreeTask = {
@@ -1093,8 +921,6 @@ async function applyOfflineV2Write(
       rank: nextRank(tasks.filter((candidate) => candidate.parentFolderId === parentFolderId)),
       version: 1,
       completedAt: null,
-      archivedAt: null,
-      archivedByOperationId: null,
       createdAt: now,
       updatedAt: now,
       pendingSync: true,
@@ -1173,22 +999,6 @@ async function applyOfflineV2Write(
         return next;
       },
     );
-  }
-  const taskAction = /^\/tasks\/([^/]+)\/(archive|restore)$/.exec(path);
-  if (method === 'POST' && taskAction) {
-    const current = await task(taskAction[1]!);
-    assertBaseVersion(current.version, baseVersion);
-    const next: LocalTreeTask = {
-      ...current,
-      archivedAt: taskAction[2] === 'archive' ? timestamp() : null,
-      version: current.version + 1,
-      updatedAt: timestamp(),
-      pendingSync: true,
-    };
-    return enqueueV2(`task.${taskAction[2]}`, current.id, current.version, {}, async () => {
-      await db.tasks.put(next);
-      return next;
-    });
   }
   const taskDelete = /^\/tasks\/([^/]+)$/.exec(path);
   if (method === 'DELETE' && taskDelete) {
@@ -1276,8 +1086,6 @@ async function applyOfflineV2Write(
       ),
       version: 1,
       completedAt: null,
-      archivedAt: null,
-      archivedByOperationId: null,
       createdAt: now,
       updatedAt: now,
       pendingSync: true,
@@ -1326,7 +1134,6 @@ async function applyOfflineV2Write(
   const taskSteps = /^\/tasks\/([^/]+)\/steps$/.exec(path);
   if (method === 'POST' && taskSteps) {
     const taskRow = await task(taskSteps[1]!);
-    if (taskRow.archivedAt) throw new Error('已归档任务不可添加步骤');
     const id = typeof body['id'] === 'string' ? body['id'] : uuidv7();
     const title = boundedTrimmedString(body['title'], 500, '步骤标题无效');
     const noteMarkdown = markdownString(body['noteMarkdown'] ?? '');
@@ -1456,7 +1263,6 @@ async function applyOfflineV2Write(
       name,
       rank: nextRank(await db.workflows.toArray()),
       version: 1,
-      archivedAt: null,
       createdAt: now,
       updatedAt: now,
       pendingSync: true,
@@ -1500,23 +1306,6 @@ async function applyOfflineV2Write(
         return next;
       },
     );
-  }
-  const workflowAction = /^\/workflows\/([^/]+)\/(archive|restore)$/.exec(path);
-  if (method === 'POST' && workflowAction) {
-    const current = await db.workflows.get(workflowAction[1]!);
-    if (!current || current.deletedAt) throw new Error('本地流程不存在');
-    assertBaseVersion(current.version, baseVersion);
-    const next: LocalWorkflow = {
-      ...current,
-      archivedAt: workflowAction[2] === 'archive' ? timestamp() : null,
-      version: current.version + 1,
-      updatedAt: timestamp(),
-      pendingSync: true,
-    };
-    return enqueueV2(`workflow.${workflowAction[2]}`, current.id, current.version, {}, async () => {
-      await db.workflows.put(next);
-      return next;
-    });
   }
   const workflowDelete = /^\/workflows\/([^/]+)$/.exec(path);
   if (method === 'DELETE' && workflowDelete) {
@@ -1562,7 +1351,7 @@ async function applyOfflineV2Write(
   const workflowStages = /^\/workflows\/([^/]+)\/stages$/.exec(path);
   if (method === 'POST' && workflowStages) {
     const workflow = await db.workflows.get(workflowStages[1]!);
-    if (!workflow || workflow.deletedAt || workflow.archivedAt) throw new Error('本地流程不可用');
+    if (!workflow || workflow.deletedAt) throw new Error('本地流程不可用');
     const id = typeof body['id'] === 'string' ? body['id'] : uuidv7();
     const name = boundedTrimmedString(body['name'], 200, '阶段名称无效');
     const stage: LocalWorkflowStage = {
@@ -1683,10 +1472,10 @@ async function applyOfflineV2Write(
   if (method === 'POST' && addWorkflowTask) {
     const stage = await db.workflowStages.get(addWorkflowTask[1]!);
     const taskRow = typeof body['taskId'] === 'string' ? await task(body['taskId']) : null;
-    if (!stage || stage.deletedAt || !taskRow || taskRow.archivedAt)
+    if (!stage || stage.deletedAt || !taskRow)
       throw new Error('流程阶段或任务不可用');
     const workflow = await db.workflows.get(stage.workflowId);
-    if (!workflow || workflow.archivedAt || workflow.deletedAt) throw new Error('本地流程不可用');
+    if (!workflow || workflow.deletedAt) throw new Error('本地流程不可用');
     const duplicate = (
       await db.workflowTaskMemberships.where('workflowId').equals(workflow.id).toArray()
     ).find((membership) => membership.taskId === taskRow.id && !membership.deletedAt);
@@ -1783,7 +1572,7 @@ async function applyOfflineV2Write(
     const localDate = requiredString(body['localDate']);
     validateLocalDate(localDate);
     const existing = (await db.timePoints.toArray()).find(
-      (point) => point.type === 'DATE' && point.localDate === localDate && !point.archivedAt,
+      (point) => point.type === 'DATE' && point.localDate === localDate && !point.deletedAt,
     );
     if (existing) return { value: existing };
     const point = createLocalTimePoint(uuidv7(), 'DATE', localDate, undefined, now);
@@ -1828,7 +1617,7 @@ async function applyOfflineV2Write(
       },
     );
   }
-  const pointAction = /^\/time-points\/([^/]+)\/(reach|archive|restore)$/.exec(path);
+  const pointAction = /^\/time-points\/([^/]+)\/(reach)$/.exec(path);
   if (method === 'POST' && pointAction) {
     const current = await db.timePoints.get(pointAction[1]!);
     if (!current || current.type !== 'EVENT') throw new Error('本地事件不存在');
@@ -1837,14 +1626,44 @@ async function applyOfflineV2Write(
     const next: LocalTimePoint = {
       ...current,
       reachedAt: action === 'reach' ? (current.reachedAt ?? timestamp()) : current.reachedAt,
-      archivedAt:
-        action === 'archive' ? timestamp() : action === 'restore' ? null : current.archivedAt,
       version: current.version + 1,
       updatedAt: timestamp(),
       pendingSync: true,
     };
     return enqueueV2(`timePoint.${action}`, current.id, current.version, {}, async () => {
       await db.timePoints.put(next);
+      return next;
+    });
+  }
+  const pointDelete = /^\/time-points\/([^/]+)$/.exec(path);
+  if (method === 'DELETE' && pointDelete) {
+    const current = await db.timePoints.get(pointDelete[1]!);
+    if (!current || current.type !== 'EVENT') throw new Error('本地事件不存在');
+    assertBaseVersion(current.version, baseVersion);
+    const at = timestamp();
+    const next: LocalTimePoint = {
+      ...current,
+      deletedAt: at,
+      version: current.version + 1,
+      updatedAt: at,
+      pendingSync: true,
+    };
+    return enqueueV2('timePoint.delete', current.id, current.version, {}, async () => {
+      await db.timePoints.put(next);
+      const placements = await db.placements
+        .where('timePointId')
+        .equals(current.id)
+        .toArray()
+        .then((rows) => rows.filter((row) => !row.deletedAt));
+      await db.placements.bulkPut(
+        placements.map((placement) => ({
+          ...placement,
+          deletedAt: at,
+          version: placement.version + 1,
+          updatedAt: at,
+          pendingSync: true,
+        })),
+      );
       return next;
     });
   }
@@ -1872,7 +1691,7 @@ async function applyOfflineV2Write(
     const timePointId = requiredString(body['timePointId']);
     const taskRow = await task(taskId);
     const point = await db.timePoints.get(timePointId);
-    if (taskRow.archivedAt || !point || point.archivedAt) throw new Error('任务或时间点不可安排');
+    if (taskRow.deletedAt || !point || point.deletedAt) throw new Error('任务或时间点不可安排');
     const existing = (await db.placements.toArray()).find(
       (candidate) => candidate.taskId === taskId && candidate.timePointId === timePointId,
     );
@@ -1912,7 +1731,7 @@ async function applyOfflineV2Write(
     const targetTimePointId = requiredString(body['timePointId']);
     if (!current) throw new Error('本地安排不存在');
     const target = await db.timePoints.get(targetTimePointId);
-    if (!target || target.archivedAt) throw new Error('目标时间点不可用');
+    if (!target || target.deletedAt) throw new Error('目标时间点不可用');
     if (placementAction[2] === 'move') assertBaseVersion(current.version, baseVersion);
     const duplicate = (await db.placements.toArray()).find(
       (candidate) =>
@@ -2119,11 +1938,6 @@ async function cacheResponseInTransaction(
     await db.placements.bulkPut(value as PlacementDto[]);
     return;
   }
-  const taskAction = /^\/tasks\/([^/]+)\/(archive|restore)$/.exec(pathname ?? '');
-  if (taskAction && isTaskDto(value)) {
-    await db.tasks.put(value as TaskDto);
-    return;
-  }
   if (/^\/tasks\/[^/]+$/.test(pathname ?? '') && isRecord(value) && isTaskDto(value)) {
     await db.tasks.put(value as TaskDto);
     return;
@@ -2161,7 +1975,7 @@ async function cacheResponseInTransaction(
     await db.projects.put(value as unknown as ProjectDto);
     return;
   }
-  const timePointAction = /^\/time-points\/[^/]+\/(reach|archive|restore)$/.exec(pathname ?? '');
+  const timePointAction = /^\/time-points\/[^/]+\/(reach)$/.exec(pathname ?? '');
   if (timePointAction && isTimePointDto(value)) {
     await db.timePoints.put(value as TimePointDto);
     return;
@@ -2189,15 +2003,7 @@ async function cacheV2ResponseInTransaction(
   if (Array.isArray(items)) {
     for (const item of items) {
       if (!isRecord(item)) continue;
-      // Archive operations are cached so the archive centre can still render
-      // its operation groups while offline.
-      if (
-        typeof item['id'] === 'string' &&
-        typeof item['rootFolderId'] === 'string' &&
-        typeof item['folderCount'] === 'number'
-      )
-        await db.archiveOperations.put(item as unknown as LocalArchiveOperation);
-      else if (item['kind'] === 'FOLDER' && isRecord(item['folder']))
+      if (item['kind'] === 'FOLDER' && isRecord(item['folder']))
         await db.folders.put(item['folder'] as unknown as LocalFolder);
       else if (item['kind'] === 'TASK' && isRecord(item['task']))
         await db.tasks.put(item['task'] as unknown as LocalTreeTask);
@@ -2241,8 +2047,6 @@ async function cacheV2ResponseInTransaction(
     await db.workflowTaskMemberships.put(
       value['membership'] as unknown as LocalWorkflowTaskMembership,
     );
-  if (typeof value['id'] === 'string' && typeof value['rootFolderId'] === 'string')
-    await db.archiveOperations.put(value as unknown as LocalArchiveOperation);
   if (typeof value['id'] === 'string' && typeof value['type'] === 'string' && 'localDate' in value)
     await db.timePoints.put(value as unknown as LocalTimePoint);
   if (
@@ -2276,9 +2080,6 @@ async function putV2Snapshot(db: DevTodoDatabase, value: Record<string, unknown>
   const workflowTaskMemberships = Array.isArray(value['workflowTaskMemberships'])
     ? (value['workflowTaskMemberships'] as LocalWorkflowTaskMembership[])
     : [];
-  const archiveOperations = Array.isArray(value['archiveOperations'])
-    ? (value['archiveOperations'] as LocalArchiveOperation[])
-    : [];
   await db.folders.bulkPut(folders);
   await db.tasks.bulkPut(tasks);
   await db.notes.bulkPut(notes);
@@ -2288,7 +2089,6 @@ async function putV2Snapshot(db: DevTodoDatabase, value: Record<string, unknown>
   await db.workflows.bulkPut(workflows);
   await db.workflowStages.bulkPut(workflowStages);
   await db.workflowTaskMemberships.bulkPut(workflowTaskMemberships);
-  await db.archiveOperations.bulkPut(archiveOperations);
   if (isRecord(value['settings']))
     await db.settings.put(value['settings'] as unknown as SettingsDto);
   if (typeof value['cursor'] === 'string')
@@ -2311,10 +2111,7 @@ async function readLocalInTransaction(db: DevTodoDatabase, path: string): Promis
   }
   if (pathname === '/settings') return db.settings.toCollection().first();
   if (pathname === '/projects/task-counts') {
-    const archived = params.get('archived') === 'true';
-    const projects = (await db.projects.toArray()).filter((project) =>
-      archived ? Boolean(project.archivedAt) : !project.archivedAt,
-    );
+    const projects = (await db.projects.toArray()).filter((project) => !project.deletedAt);
     const counts = new Map(
       projects.map((project) => [
         project.id,
@@ -2322,7 +2119,7 @@ async function readLocalInTransaction(db: DevTodoDatabase, path: string): Promis
       ]),
     );
     for (const task of await db.tasks.toArray()) {
-      if (task.archivedAt || !task.projectId) continue;
+      if (task.deletedAt || !task.projectId) continue;
       const count = counts.get(task.projectId);
       if (!count) continue;
       if (task.status === 'DONE') count.doneCount += 1;
@@ -2331,15 +2128,11 @@ async function readLocalInTransaction(db: DevTodoDatabase, path: string): Promis
     return { items: projects.map((project) => counts.get(project.id)) };
   }
   if (pathname === '/projects') {
-    const archived = params.get('archived') === 'true';
-    const items = (await db.projects.toArray()).filter((project) =>
-      archived ? Boolean(project.archivedAt) : !project.archivedAt,
-    );
+    const items = (await db.projects.toArray()).filter((project) => !project.deletedAt);
     return { items: sortByRank(items), nextCursor: null };
   }
   if (pathname === '/tasks') {
     let items = await db.tasks.toArray();
-    const archived = params.get('archived') === 'true';
     if (params.has('projectId')) {
       const projectId = params.get('projectId');
       items = items.filter((task) => task.projectId === (projectId === 'null' ? null : projectId));
@@ -2347,7 +2140,7 @@ async function readLocalInTransaction(db: DevTodoDatabase, path: string): Promis
     if (params.has('category'))
       items = items.filter((task) => task.category === params.get('category'));
     if (params.has('status')) items = items.filter((task) => task.status === params.get('status'));
-    items = items.filter((task) => (archived ? Boolean(task.archivedAt) : !task.archivedAt));
+    items = items.filter((task) => !task.deletedAt);
     const timePointId = params.get('timePointId');
     if (timePointId) {
       const taskIds = new Set(
@@ -2361,7 +2154,6 @@ async function readLocalInTransaction(db: DevTodoDatabase, path: string): Promis
   }
   if (pathname === '/search/tasks') {
     const q = (params.get('q') ?? '').trim().toLocaleLowerCase();
-    const includeArchived = params.get('includeArchived') === 'true';
     if (!q) return { items: [] };
     const [tasks, projects, notes] = await Promise.all([
       db.tasks.toArray(),
@@ -2372,7 +2164,7 @@ async function readLocalInTransaction(db: DevTodoDatabase, path: string): Promis
     const noteMap = new Map(notes.map((note) => [note.taskId, note]));
     return {
       items: tasks
-        .filter((task) => includeArchived || !task.archivedAt)
+        .filter((task) => !task.deletedAt)
         .filter((task) => {
           const project = task.projectId ? projectMap.get(task.projectId) : undefined;
           const note = noteMap.get(task.id);
@@ -2403,21 +2195,17 @@ async function readLocalInTransaction(db: DevTodoDatabase, path: string): Promis
     let items = await db.timePoints.toArray();
     const type = params.get('type');
     if (type) items = items.filter((point) => point.type === type);
-    const archived = params.get('archived');
-    items = items.filter((point) =>
-      archived === null ? !point.archivedAt : Boolean(point.archivedAt) === (archived === 'true'),
-    );
+    items = items.filter((point) => !point.deletedAt);
     return { items: items.sort(timePointSort), nextCursor: null };
   }
   if (pathname === '/time-points/placement-counts') {
     const type = params.get('type');
-    const archived = params.get('archived');
     const from = params.get('from');
     const to = params.get('to');
     const points = (await db.timePoints.toArray()).filter(
       (point) =>
         point.type === type &&
-        (archived === null || Boolean(point.archivedAt) === (archived === 'true')) &&
+        !point.deletedAt &&
         (from === null || (point.localDate ?? '') >= from) &&
         (to === null || (point.localDate ?? '') <= to),
     );
@@ -2437,7 +2225,7 @@ async function readLocalInTransaction(db: DevTodoDatabase, path: string): Promis
     for (const placement of await db.placements.toArray()) {
       const count = counts.get(placement.timePointId);
       const task = tasks.get(placement.taskId);
-      if (!count || !task || task.archivedAt) continue;
+      if (!count || !task || task.deletedAt) continue;
       count.totalCount += 1;
       if (task.status === 'DONE') count.doneCount += 1;
       else count.openCount += 1;
@@ -2507,11 +2295,8 @@ async function readV2LocalInTransaction(
   const tasks = (await db.tasks.toArray())
     .map((row) => row as LocalTreeTask)
     .filter((row) => row.parentFolderId !== undefined);
-  const active = params.get('archived') !== 'true';
-  const visibleFolder = (folder: LocalFolder) =>
-    !folder.deletedAt && (active ? !folder.archivedAt : Boolean(folder.archivedAt));
-  const visibleTask = (task: LocalTreeTask) =>
-    !task.deletedAt && (active ? !task.archivedAt : Boolean(task.archivedAt));
+  const visibleFolder = (folder: LocalFolder) => !folder.deletedAt;
+  const visibleTask = (task: LocalTreeTask) => !task.deletedAt;
   const descendantFolders = (rootId: string): Set<string> => {
     const ids = new Set<string>();
     const stack = [rootId];
@@ -2529,12 +2314,7 @@ async function readV2LocalInTransaction(
     const ids = descendantFolders(folderId);
     const counts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
     for (const task of tasks)
-      if (
-        task.parentFolderId &&
-        ids.has(task.parentFolderId) &&
-        !task.deletedAt &&
-        !task.archivedAt
-      ) {
+      if (task.parentFolderId && ids.has(task.parentFolderId) && !task.deletedAt) {
         let parent: string | null = task.parentFolderId;
         let valid = true;
         const seen = new Set<string>();
@@ -2545,7 +2325,7 @@ async function readV2LocalInTransaction(
           }
           seen.add(parent);
           const ancestor = folders.find((candidate) => candidate.id === parent);
-          if (!ancestor || ancestor.archivedAt) {
+          if (!ancestor || ancestor.deletedAt) {
             valid = false;
             break;
           }
@@ -2664,19 +2444,14 @@ async function readV2LocalInTransaction(
     return {
       items: (await db.timePoints.toArray())
         .filter((point) => params.get('type') === null || point.type === params.get('type'))
-        .filter((point) =>
-          params.get('archived') === null
-            ? !point.archivedAt
-            : Boolean(point.archivedAt) === (params.get('archived') === 'true'),
-        )
+        .filter((point) => !point.deletedAt)
         .sort(timePointSort),
     };
   if (pathname === '/time-points/placement-counts') {
     const points = (await db.timePoints.toArray()).filter(
       (point) =>
         (params.get('type') === null || point.type === params.get('type')) &&
-        (params.get('archived') === null ||
-          Boolean(point.archivedAt) === (params.get('archived') === 'true')) &&
+        !point.deletedAt &&
         (!params.get('from') || (point.localDate ?? '') >= params.get('from')!) &&
         (!params.get('to') || (point.localDate ?? '') <= params.get('to')!),
     );
@@ -2712,7 +2487,7 @@ async function readV2LocalInTransaction(
   if (pointDetail) return db.timePoints.get(pointDetail[1]!);
   if (pathname === '/workflows') {
     const workflows = (await db.workflows.toArray()).filter(
-      (workflow) => !workflow.deletedAt && !workflow.archivedAt,
+      (workflow) => !workflow.deletedAt,
     );
     const stages = (await db.workflowStages.toArray()).filter((stage) => !stage.deletedAt);
     const memberships = (await db.workflowTaskMemberships.toArray()).filter(
@@ -2753,7 +2528,6 @@ async function readV2LocalInTransaction(
       workflows,
       workflowStages,
       workflowTaskMemberships,
-      archiveOperations,
       settings,
       cursor,
     ] = await Promise.all([
@@ -2764,7 +2538,6 @@ async function readV2LocalInTransaction(
       db.workflows.toArray(),
       db.workflowStages.toArray(),
       db.workflowTaskMemberships.toArray(),
-      db.archiveOperations.toArray(),
       db.settings.toCollection().first(),
       db.syncMeta.get('v2:cursor'),
     ]);
@@ -2779,7 +2552,6 @@ async function readV2LocalInTransaction(
       workflows,
       workflowStages,
       workflowTaskMemberships,
-      archiveOperations,
       settings: settings as V2SettingsDto,
       cursor: cursor?.value ?? '0',
     };
@@ -2838,7 +2610,6 @@ function createLocalTask(
     ),
     version: 1,
     completedAt: null,
-    archivedAt: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -2859,7 +2630,6 @@ function createLocalTimePoint(
     rank: '1024',
     version: 1,
     reachedAt: null,
-    archivedAt: null,
     createdAt: now,
     updatedAt: now,
   };

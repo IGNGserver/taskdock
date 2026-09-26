@@ -672,7 +672,7 @@ export class PostgresStore implements Store {
       'INSERT INTO projects ' +
         '(id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at) ' +
         'VALUES ($1, $2, $3, $4, 1, (SELECT COALESCE(MAX(rank), 0) + 1024 FROM projects WHERE owner_id = $2 AND deleted_at IS NULL), 1, $5, $5) ' +
-        'RETURNING id, owner_id, name, task_prefix, next_task_number, rank, version, archived_at, created_at, updated_at, deleted_at',
+        'RETURNING id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at, deleted_at',
       [newEntityId(id), ownerId, normalizedName, normalizedPrefix, this.now()],
     );
     const project = projectRecord(result.rows[0]!);
@@ -681,19 +681,17 @@ export class PostgresStore implements Store {
     return dto;
   }
 
-  async listProjects(ownerId: string, archived = false): Promise<ProjectDto[]> {
+  async listProjects(ownerId: string): Promise<ProjectDto[]> {
     await this.owner(ownerId);
     const result = await this.query(
-      'SELECT id, owner_id, name, task_prefix, next_task_number, rank, version, archived_at, created_at, updated_at, deleted_at ' +
-        'FROM projects WHERE owner_id = $1 AND deleted_at IS NULL AND archived_at IS ' +
-        (archived ? 'NOT ' : '') +
-        'NULL ORDER BY rank, id',
+      'SELECT id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at, deleted_at ' +
+        'FROM projects WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY rank, id',
       [ownerId],
     );
     return result.rows.map((row) => projectDto(projectRecord(row)));
   }
 
-  async listProjectTaskCounts(ownerId: string, archived = false): Promise<ProjectTaskCountDto[]> {
+  async listProjectTaskCounts(ownerId: string): Promise<ProjectTaskCountDto[]> {
     await this.owner(ownerId);
     const result = await this.query(
       'SELECT p.id AS project_id, ' +
@@ -701,10 +699,8 @@ export class PostgresStore implements Store {
         "COUNT(t.id) FILTER (WHERE t.status = 'DONE')::int AS done_count " +
         'FROM projects p ' +
         'LEFT JOIN tasks t ON t.owner_id = p.owner_id AND t.project_id = p.id ' +
-        'AND t.deleted_at IS NULL AND t.archived_at IS NULL ' +
-        'WHERE p.owner_id = $1 AND p.deleted_at IS NULL AND p.archived_at IS ' +
-        (archived ? 'NOT ' : '') +
-        'NULL GROUP BY p.id, p.rank ORDER BY p.rank, p.id',
+        'AND t.deleted_at IS NULL ' +
+        'WHERE p.owner_id = $1 AND p.deleted_at IS NULL GROUP BY p.id, p.rank ORDER BY p.rank, p.id',
       [ownerId],
     );
     return result.rows.map((row) => ({
@@ -716,23 +712,18 @@ export class PostgresStore implements Store {
 
   async listProjectsPage(
     ownerId: string,
-    archived = false,
     cursor?: string,
     limit = 100,
   ): Promise<PostgresPage<ProjectDto>> {
     const pageSize = checkedPageLimit(limit);
     await this.owner(ownerId);
     const values: unknown[] = [ownerId];
-    const where = [
-      'owner_id = $1',
-      'deleted_at IS NULL',
-      'archived_at IS ' + (archived ? 'NOT ' : '') + 'NULL',
-    ];
+    const where = ['owner_id = $1', 'deleted_at IS NULL'];
     const after = cursor ? requirePageCursor(cursor, 'rank') : undefined;
     if (after) appendRankCursor(where, values, 'rank', 'id', after);
     values.push(pageSize + 1);
     const result = await this.query(
-      'SELECT id, owner_id, name, task_prefix, next_task_number, rank, version, archived_at, created_at, updated_at, deleted_at ' +
+      'SELECT id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at, deleted_at ' +
         'FROM projects WHERE ' +
         where.join(' AND ') +
         ' ORDER BY rank, id LIMIT $' +
@@ -746,10 +737,8 @@ export class PostgresStore implements Store {
     );
   }
 
-  async getProject(ownerId: string, id: string, includeArchived = true): Promise<ProjectDto> {
+  async getProject(ownerId: string, id: string): Promise<ProjectDto> {
     const project = await this.projectRecord(ownerId, id);
-    if (!includeArchived && project.archivedAt)
-      throw new DomainError('ENTITY_ARCHIVED', '项目已归档');
     return projectDto(project);
   }
 
@@ -783,37 +772,8 @@ export class PostgresStore implements Store {
     const result = await this.query(
       'UPDATE projects SET name = $3, task_prefix = $4, version = version + 1, updated_at = $5 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $6 ' +
-        'RETURNING id, owner_id, name, task_prefix, next_task_number, rank, version, archived_at, created_at, updated_at, deleted_at',
+        'RETURNING id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at, deleted_at',
       [ownerId, id, name, taskPrefix, this.now(), baseVersion],
-    );
-    const next = projectRecord(requireUpdatedRow(result, '项目版本已变化'));
-    const dto = projectDto(next);
-    await this.appendChange(ownerId, 'project', id, next.version, 'upsert', dto);
-    return dto;
-  }
-
-  async archiveProject(ownerId: string, id: string, baseVersion: number): Promise<ProjectDto> {
-    return this.setProjectArchived(ownerId, id, baseVersion, true);
-  }
-
-  async restoreProject(ownerId: string, id: string, baseVersion: number): Promise<ProjectDto> {
-    return this.setProjectArchived(ownerId, id, baseVersion, false);
-  }
-
-  private async setProjectArchived(
-    ownerId: string,
-    id: string,
-    baseVersion: number,
-    archived: boolean,
-  ): Promise<ProjectDto> {
-    await this.lockOwner(ownerId);
-    const project = await this.projectRecord(ownerId, id, true);
-    assertVersion(project.version, baseVersion, projectDto(project));
-    const result = await this.query(
-      'UPDATE projects SET archived_at = $3, version = version + 1, updated_at = $4 ' +
-        'WHERE owner_id = $1 AND id = $2 AND version = $5 ' +
-        'RETURNING id, owner_id, name, task_prefix, next_task_number, rank, version, archived_at, created_at, updated_at, deleted_at',
-      [ownerId, id, archived ? this.now() : null, this.now(), baseVersion],
     );
     const next = projectRecord(requireUpdatedRow(result, '项目版本已变化'));
     const dto = projectDto(next);
@@ -825,13 +785,12 @@ export class PostgresStore implements Store {
     await this.lockOwner(ownerId);
     ensureUnique(ids, '项目排序列表不能有重复项');
     const result = await this.query(
-      'SELECT id, owner_id, name, task_prefix, next_task_number, rank, version, archived_at, created_at, updated_at, deleted_at ' +
+      'SELECT id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at, deleted_at ' +
         'FROM projects WHERE owner_id = $1 AND deleted_at IS NULL',
       [ownerId],
     );
     const projects = result.rows.map((row) => projectRecord(row));
-    const active = projects.filter((project) => !project.archivedAt);
-    if (active.length !== ids.length || active.some((project) => !ids.includes(project.id)))
+    if (projects.length !== ids.length || projects.some((project) => !ids.includes(project.id)))
       throw new DomainError('VALIDATION_FAILED', '项目排序列表必须包含整个活动列表');
     const byId = new Map(projects.map((project) => [project.id, project]));
     const ranks = ranksForIds(ids);
@@ -843,10 +802,7 @@ export class PostgresStore implements Store {
       );
       byId.set(id, next);
     }
-    return [...byId.values()]
-      .filter((project) => !project.archivedAt)
-      .sort(rankSort)
-      .map(projectDto);
+    return [...byId.values()].sort(rankSort).map(projectDto);
   }
 
   async createTask(
@@ -863,7 +819,6 @@ export class PostgresStore implements Store {
     const projectId = input.projectId ?? null;
     assertTaskPlacement(projectId, input.category);
     const project = projectId ? await this.projectRecord(ownerId, projectId, true) : null;
-    if (project?.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '项目已归档');
     const title = input.title.trim();
     if (!title || title.length > 500) throw new DomainError('VALIDATION_FAILED', '任务标题无效');
     const number = project ? project.nextTaskNumber : user.nextMiscTaskNumber;
@@ -876,7 +831,7 @@ export class PostgresStore implements Store {
         "VALUES ($1, $2, $3, $4, $5, $6, 'TODO', $7, " +
         '(SELECT COALESCE(MAX(rank), 0) + 1024 FROM tasks WHERE owner_id = $2 AND project_id IS NOT DISTINCT FROM $3 AND category = $4 AND deleted_at IS NULL), ' +
         '1, $8, $8) ' +
-        'RETURNING id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, archived_at, created_at, updated_at, deleted_at',
+        'RETURNING id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, created_at, updated_at, deleted_at',
       [taskId, ownerId, projectId, input.category, referenceId, title, input.priority, this.now()],
     );
     await this.query(
@@ -925,8 +880,6 @@ export class PostgresStore implements Store {
       values.push(filters.status);
       where.push('t.status = $' + values.length);
     }
-    if (filters.archived !== undefined)
-      where.push('t.archived_at IS ' + (filters.archived ? 'NOT ' : '') + 'NULL');
     if (filters.timePointId) {
       values.push(filters.timePointId);
       where.push(
@@ -937,7 +890,7 @@ export class PostgresStore implements Store {
     }
     const result = await this.query(
       'SELECT t.id, t.owner_id, t.project_id, t.category, t.reference_id, t.title, t.status, t.priority, ' +
-        't.rank, t.version, t.completed_at, t.archived_at, t.created_at, t.updated_at, t.deleted_at ' +
+        't.rank, t.version, t.completed_at, t.created_at, t.updated_at, t.deleted_at ' +
         'FROM tasks t WHERE ' +
         where.join(' AND ') +
         ' ORDER BY t.rank, t.id',
@@ -971,8 +924,6 @@ export class PostgresStore implements Store {
       values.push(filters.status);
       where.push('t.status = $' + values.length);
     }
-    if (filters.archived !== undefined)
-      where.push('t.archived_at IS ' + (filters.archived ? 'NOT ' : '') + 'NULL');
     if (filters.timePointId) {
       values.push(filters.timePointId);
       where.push(
@@ -986,7 +937,7 @@ export class PostgresStore implements Store {
     values.push(pageSize + 1);
     const result = await this.query(
       'SELECT t.id, t.owner_id, t.project_id, t.category, t.reference_id, t.title, t.status, t.priority, ' +
-        't.rank, t.version, t.completed_at, t.archived_at, t.created_at, t.updated_at, t.deleted_at ' +
+        't.rank, t.version, t.completed_at, t.created_at, t.updated_at, t.deleted_at ' +
         'FROM tasks t WHERE ' +
         where.join(' AND ') +
         ' ORDER BY t.rank, t.id LIMIT $' +
@@ -1000,9 +951,8 @@ export class PostgresStore implements Store {
     );
   }
 
-  async getTask(ownerId: string, id: string, includeArchived = true): Promise<TaskDto> {
+  async getTask(ownerId: string, id: string): Promise<TaskDto> {
     const task = await this.taskRecord(ownerId, id);
-    if (!includeArchived && task.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '任务已归档');
     return taskDto(task);
   }
 
@@ -1047,9 +997,7 @@ export class PostgresStore implements Store {
     const projectId = patch.projectId === undefined ? task.projectId : patch.projectId;
     const category = patch.category ?? task.category;
     assertTaskPlacement(projectId, category);
-    const project = projectId ? await this.projectRecord(ownerId, projectId, true) : null;
-    if (project?.archivedAt && projectId !== task.projectId)
-      throw new DomainError('ENTITY_ARCHIVED', '不能移入已归档项目');
+    if (projectId) await this.projectRecord(ownerId, projectId, true);
     const title = patch.title === undefined ? task.title : patch.title.trim();
     if (!title || title.length > 500) throw new DomainError('VALIDATION_FAILED', '任务标题无效');
     const priority = patch.priority ?? task.priority;
@@ -1072,7 +1020,7 @@ export class PostgresStore implements Store {
       'UPDATE tasks SET project_id = $3, category = $4, title = $5, status = $6, priority = $7, ' +
         'rank = $8, completed_at = $9, version = version + 1, updated_at = $10 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $11 ' +
-        'RETURNING id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, archived_at, created_at, updated_at, deleted_at',
+        'RETURNING id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, created_at, updated_at, deleted_at',
       [
         ownerId,
         id,
@@ -1093,41 +1041,12 @@ export class PostgresStore implements Store {
     return dto;
   }
 
-  async archiveTask(ownerId: string, id: string, baseVersion: number): Promise<TaskDto> {
-    return this.setTaskArchived(ownerId, id, baseVersion, true);
-  }
-
-  async restoreTask(ownerId: string, id: string, baseVersion: number): Promise<TaskDto> {
-    return this.setTaskArchived(ownerId, id, baseVersion, false);
-  }
-
-  private async setTaskArchived(
-    ownerId: string,
-    id: string,
-    baseVersion: number,
-    archived: boolean,
-  ): Promise<TaskDto> {
-    await this.lockOwner(ownerId);
-    const task = await this.taskRecord(ownerId, id, true);
-    assertVersion(task.version, baseVersion, taskDto(task));
-    const result = await this.query(
-      'UPDATE tasks SET archived_at = $3, version = version + 1, updated_at = $4 ' +
-        'WHERE owner_id = $1 AND id = $2 AND version = $5 ' +
-        'RETURNING id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, archived_at, created_at, updated_at, deleted_at',
-      [ownerId, id, archived ? this.now() : null, this.now(), baseVersion],
-    );
-    const next = taskRecord(requireUpdatedRow(result, '任务版本已变化'));
-    const dto = taskDto(next);
-    await this.appendChange(ownerId, 'task', id, next.version, 'upsert', dto);
-    return dto;
-  }
-
   async reorderTasks(ownerId: string, ids: string[]): Promise<TaskDto[]> {
     await this.lockOwner(ownerId);
     ensureUnique(ids, '任务排序列表不能有重复项');
     if (ids.length === 0) return [];
     const result = await this.query(
-      'SELECT id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, archived_at, created_at, updated_at, deleted_at ' +
+      'SELECT id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, created_at, updated_at, deleted_at ' +
         'FROM tasks WHERE owner_id = $1 AND deleted_at IS NULL',
       [ownerId],
     );
@@ -1143,8 +1062,7 @@ export class PostgresStore implements Store {
     )
       throw new DomainError('VALIDATION_FAILED', '只能在同一任务分组内排序');
     const expected = tasks.filter(
-      (task) =>
-        !task.archivedAt && task.projectId === first.projectId && task.category === first.category,
+      (task) => task.projectId === first.projectId && task.category === first.category,
     );
     if (expected.length !== ids.length || expected.some((task) => !ids.includes(task.id)))
       throw new DomainError('VALIDATION_FAILED', '任务排序列表必须包含整个活动分组');
@@ -1154,12 +1072,7 @@ export class PostgresStore implements Store {
       byId.set(id, next);
     }
     return [...byId.values()]
-      .filter(
-        (task) =>
-          !task.archivedAt &&
-          task.projectId === first.projectId &&
-          task.category === first.category,
-      )
+      .filter((task) => task.projectId === first.projectId && task.category === first.category)
       .sort(rankSort)
       .map(taskDto);
   }
@@ -1184,7 +1097,7 @@ export class PostgresStore implements Store {
         "VALUES ($1, $2, $3, $4, $5, $6, 'TODO', $7, " +
         '(SELECT COALESCE(MAX(rank), 0) + 1024 FROM tasks WHERE owner_id = $2 AND project_id IS NOT DISTINCT FROM $3 AND category = $4 AND deleted_at IS NULL), ' +
         '1, $8, $8) ' +
-        'RETURNING id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, archived_at, created_at, updated_at, deleted_at',
+        'RETURNING id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, created_at, updated_at, deleted_at',
       [
         taskId,
         ownerId,
@@ -1255,7 +1168,7 @@ export class PostgresStore implements Store {
     validateLocalDate(localDate);
     await this.lockOwner(ownerId);
     const existing = await this.query(
-      'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, archived_at, created_at, updated_at, deleted_at ' +
+      'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at ' +
         "FROM time_points WHERE owner_id = $1 AND type = 'DATE' AND local_date = $2 AND deleted_at IS NULL",
       [ownerId, localDate],
     );
@@ -1287,12 +1200,12 @@ export class PostgresStore implements Store {
         (input.type === 'DATE'
           ? "ON CONFLICT (owner_id, local_date) WHERE type = 'DATE' AND deleted_at IS NULL DO NOTHING "
           : '') +
-        'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, archived_at, created_at, updated_at, deleted_at',
+        'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at',
       [newEntityId(input.id), ownerId, input.type, input.localDate ?? null, title, this.now()],
     );
     if (!result.rows[0] && input.type === 'DATE') {
       const existing = await this.query(
-        'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, archived_at, created_at, updated_at, deleted_at ' +
+        'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at ' +
           "FROM time_points WHERE owner_id = $1 AND type = 'DATE' AND local_date = $2 AND deleted_at IS NULL",
         [ownerId, input.localDate],
       );
@@ -1304,11 +1217,7 @@ export class PostgresStore implements Store {
     return dto;
   }
 
-  async listTimePoints(
-    ownerId: string,
-    type?: TimePointType,
-    archived?: boolean,
-  ): Promise<TimePointDto[]> {
+  async listTimePoints(ownerId: string, type?: TimePointType): Promise<TimePointDto[]> {
     await this.owner(ownerId);
     const values: unknown[] = [ownerId];
     const where = ['owner_id = $1', 'deleted_at IS NULL'];
@@ -1316,9 +1225,8 @@ export class PostgresStore implements Store {
       values.push(type);
       where.push('type = $' + values.length);
     }
-    if (archived !== undefined) where.push('archived_at IS ' + (archived ? 'NOT ' : '') + 'NULL');
     const result = await this.query(
-      'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, archived_at, created_at, updated_at, deleted_at ' +
+      'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at ' +
         'FROM time_points WHERE ' +
         where.join(' AND ') +
         " ORDER BY CASE WHEN type = 'DATE' THEN 0 ELSE 1 END, local_date NULLS LAST, rank, id",
@@ -1330,15 +1238,12 @@ export class PostgresStore implements Store {
   async listTimePointPlacementCounts(
     ownerId: string,
     type: TimePointType,
-    archived?: boolean,
     fromDate?: string,
     toDate?: string,
   ): Promise<TimePointPlacementCountDto[]> {
     await this.owner(ownerId);
     const values: unknown[] = [ownerId, type];
     const where = ['tp.owner_id = $1', 'tp.type = $2', 'tp.deleted_at IS NULL'];
-    if (archived !== undefined)
-      where.push('tp.archived_at IS ' + (archived ? 'NOT ' : '') + 'NULL');
     if (fromDate !== undefined) {
       values.push(fromDate);
       where.push('tp.local_date >= $' + values.length + '::date');
@@ -1356,7 +1261,7 @@ export class PostgresStore implements Store {
         'LEFT JOIN placements p ON p.owner_id = tp.owner_id AND p.time_point_id = tp.id ' +
         'AND p.deleted_at IS NULL ' +
         'LEFT JOIN tasks t ON t.owner_id = p.owner_id AND t.id = p.task_id ' +
-        'AND t.deleted_at IS NULL AND t.archived_at IS NULL ' +
+        'AND t.deleted_at IS NULL ' +
         'WHERE ' +
         where.join(' AND ') +
         ' GROUP BY tp.id, tp.local_date ' +
@@ -1375,7 +1280,6 @@ export class PostgresStore implements Store {
   async listTimePointsPage(
     ownerId: string,
     type?: TimePointType,
-    archived?: boolean,
     cursor?: string,
     limit = 100,
   ): Promise<PostgresPage<TimePointDto>> {
@@ -1387,7 +1291,6 @@ export class PostgresStore implements Store {
       values.push(type);
       where.push('type = $' + values.length);
     }
-    if (archived !== undefined) where.push('archived_at IS ' + (archived ? 'NOT ' : '') + 'NULL');
     const after = cursor ? requirePageCursor(cursor) : undefined;
     if (after) {
       if (type) {
@@ -1411,7 +1314,7 @@ export class PostgresStore implements Store {
     }
     values.push(pageSize + 1);
     const result = await this.query(
-      'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, archived_at, created_at, updated_at, deleted_at ' +
+      'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at ' +
         'FROM time_points WHERE ' +
         where.join(' AND ') +
         " ORDER BY CASE WHEN type = 'DATE' THEN 0 ELSE 1 END, local_date NULLS LAST, rank, id LIMIT $" +
@@ -1445,19 +1348,18 @@ export class PostgresStore implements Store {
     const normalized = title.trim();
     if (!normalized || normalized.length > 200)
       throw new DomainError('VALIDATION_FAILED', '时间点名称无效');
-    return this.updateTimePointRow(ownerId, point, normalized, point.archivedAt);
+    return this.updateTimePointRow(ownerId, point, normalized);
   }
 
   async reachTimePoint(ownerId: string, id: string, baseVersion: number): Promise<TimePointDto> {
     await this.lockOwner(ownerId);
     const point = await this.timePointRecord(ownerId, id, true);
     if (point.type !== 'EVENT') throw new DomainError('VALIDATION_FAILED', '日期没有到达状态');
-    if (point.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '时间点已归档');
     assertVersion(point.version, baseVersion, timePointDto(point));
     const result = await this.query(
       'UPDATE time_points SET reached_at = COALESCE(reached_at, $3), version = version + 1, updated_at = $4 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $5 ' +
-        'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, archived_at, created_at, updated_at, deleted_at',
+        'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at',
       [ownerId, id, this.now(), this.now(), baseVersion],
     );
     const next = timePointRecord(requireUpdatedRow(result, '时间点版本已变化'));
@@ -1466,38 +1368,50 @@ export class PostgresStore implements Store {
     return dto;
   }
 
-  async archiveTimePoint(ownerId: string, id: string, baseVersion: number): Promise<TimePointDto> {
-    return this.setTimePointArchived(ownerId, id, baseVersion, true);
-  }
-
-  async restoreTimePoint(ownerId: string, id: string, baseVersion: number): Promise<TimePointDto> {
-    return this.setTimePointArchived(ownerId, id, baseVersion, false);
-  }
-
-  private async setTimePointArchived(
-    ownerId: string,
-    id: string,
-    baseVersion: number,
-    archived: boolean,
-  ): Promise<TimePointDto> {
+  /** Deleting an event keeps the task entities and only removes their placements here. */
+  async deleteTimePoint(ownerId: string, id: string, baseVersion: number): Promise<TimePointDto> {
     await this.lockOwner(ownerId);
     const point = await this.timePointRecord(ownerId, id, true);
-    if (point.type !== 'EVENT') throw new DomainError('VALIDATION_FAILED', '日期不能归档');
+    if (point.type !== 'EVENT') throw new DomainError('VALIDATION_FAILED', '日期不能删除');
     assertVersion(point.version, baseVersion, timePointDto(point));
-    return this.updateTimePointRow(ownerId, point, point.title, archived ? this.now() : null);
+    const now = this.now();
+    const placements = await this.query(
+      'UPDATE placements SET deleted_at = $3, version = version + 1, updated_at = $3 ' +
+        'WHERE owner_id = $1 AND time_point_id = $2 AND deleted_at IS NULL ' +
+        'RETURNING id, version',
+      [ownerId, id, now],
+    );
+    for (const row of placements.rows) {
+      await this.appendChange(
+        ownerId,
+        'placement',
+        String(row.id),
+        Number(row.version),
+        'delete',
+        null,
+      );
+    }
+    const result = await this.query(
+      'UPDATE time_points SET deleted_at = $3, version = version + 1, updated_at = $3 ' +
+        'WHERE owner_id = $1 AND id = $2 AND version = $4 ' +
+        'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at',
+      [ownerId, id, now, baseVersion],
+    );
+    const next = timePointRecord(requireUpdatedRow(result, '时间点版本已变化'));
+    await this.appendChange(ownerId, 'timePoint', id, next.version, 'delete', null);
+    return timePointDto(next);
   }
 
   async reorderEvents(ownerId: string, ids: string[]): Promise<TimePointDto[]> {
     await this.lockOwner(ownerId);
     ensureUnique(ids, '时间点排序列表不能有重复项');
     const result = await this.query(
-      'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, archived_at, created_at, updated_at, deleted_at ' +
+      'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at ' +
         "FROM time_points WHERE owner_id = $1 AND type = 'EVENT' AND deleted_at IS NULL",
       [ownerId],
     );
     const points = result.rows.map((row) => timePointRecord(row));
-    const active = points.filter((point) => !point.archivedAt);
-    if (active.length !== ids.length || active.some((point) => !ids.includes(point.id)))
+    if (points.length !== ids.length || points.some((point) => !ids.includes(point.id)))
       throw new DomainError('VALIDATION_FAILED', '时间点排序列表必须包含整个活动列表');
     const byId = new Map(points.map((point) => [point.id, point]));
     const ranks = ranksForIds(ids);
@@ -1509,10 +1423,7 @@ export class PostgresStore implements Store {
       );
       byId.set(id, next);
     }
-    return [...byId.values()]
-      .filter((point) => !point.archivedAt)
-      .sort(rankSort)
-      .map(timePointDto);
+    return [...byId.values()].sort(rankSort).map(timePointDto);
   }
 
   async addPlacement(
@@ -1531,10 +1442,9 @@ export class PostgresStore implements Store {
     timePointId: string,
     id?: string,
   ): Promise<{ placement: PlacementDto; existed: boolean }> {
-    const task = await this.taskRecord(ownerId, taskId, true);
-    const point = await this.timePointRecord(ownerId, timePointId, true);
-    if (task.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '任务已归档');
-    if (point.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '时间点已归档');
+    // Both records must exist; the FK constraints plus these reads enforce it.
+    await this.taskRecord(ownerId, taskId, true);
+    await this.timePointRecord(ownerId, timePointId, true);
     const existing = await this.query(
       'SELECT id, owner_id, task_id, time_point_id, rank, version, created_at, updated_at, deleted_at ' +
         'FROM placements WHERE owner_id = $1 AND task_id = $2 AND time_point_id = $3 AND deleted_at IS NULL',
@@ -1574,7 +1484,7 @@ export class PostgresStore implements Store {
     const result = await this.query(
       'SELECT p.id, p.owner_id, p.task_id, p.time_point_id, p.rank, p.version, p.created_at, p.updated_at, p.deleted_at, ' +
         't.id AS task_id_value, t.owner_id AS task_owner_id, t.project_id, t.category, t.reference_id, t.title, t.status, t.priority, ' +
-        't.rank AS task_rank, t.version AS task_version, t.completed_at, t.archived_at, t.created_at AS task_created_at, t.updated_at AS task_updated_at, t.deleted_at AS task_deleted_at ' +
+        't.rank AS task_rank, t.version AS task_version, t.completed_at, t.created_at AS task_created_at, t.updated_at AS task_updated_at, t.deleted_at AS task_deleted_at ' +
         'FROM placements p JOIN tasks t ON t.owner_id = p.owner_id AND t.id = p.task_id ' +
         'WHERE p.owner_id = $1 AND p.time_point_id = $2 AND p.deleted_at IS NULL AND t.deleted_at IS NULL ORDER BY p.rank, p.id',
       [ownerId, timePointId],
@@ -1606,7 +1516,7 @@ export class PostgresStore implements Store {
     const result = await this.query(
       'SELECT p.id, p.owner_id, p.task_id, p.time_point_id, p.rank, p.version, p.created_at, p.updated_at, p.deleted_at, ' +
         't.id AS task_id_value, t.owner_id AS task_owner_id, t.project_id, t.category, t.reference_id, t.title, t.status, t.priority, ' +
-        't.rank AS task_rank, t.version AS task_version, t.completed_at, t.archived_at, t.created_at AS task_created_at, t.updated_at AS task_updated_at, t.deleted_at AS task_deleted_at ' +
+        't.rank AS task_rank, t.version AS task_version, t.completed_at, t.created_at AS task_created_at, t.updated_at AS task_updated_at, t.deleted_at AS task_deleted_at ' +
         'FROM placements p JOIN tasks t ON t.owner_id = p.owner_id AND t.id = p.task_id ' +
         'WHERE ' +
         where.join(' AND ') +
@@ -1649,10 +1559,9 @@ export class PostgresStore implements Store {
     await this.lockOwner(ownerId);
     const source = await this.placementRecord(ownerId, id);
     assertVersion(source.version, baseVersion, placementDto(source));
-    const target = await this.timePointRecord(ownerId, targetTimePointId, true);
+    await this.timePointRecord(ownerId, targetTimePointId, true);
     if (source.timePointId === targetTimePointId)
       throw new DomainError('VALIDATION_FAILED', '安排已经位于目标时间点');
-    if (target.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '时间点已归档');
     const existing = await this.query(
       'SELECT id, owner_id, task_id, time_point_id, rank, version, created_at, updated_at, deleted_at ' +
         'FROM placements WHERE owner_id = $1 AND task_id = $2 AND time_point_id = $3 AND deleted_at IS NULL',
@@ -1749,7 +1658,7 @@ export class PostgresStore implements Store {
     const result = await this.query(
       'SELECT p.id, p.owner_id, p.task_id, p.time_point_id, p.rank, p.version, p.created_at, p.updated_at, p.deleted_at, ' +
         't.id AS task_id_value, t.owner_id AS task_owner_id, t.project_id, t.category, t.reference_id, t.title, t.status, t.priority, ' +
-        't.rank AS task_rank, t.version AS task_version, t.completed_at, t.archived_at, t.created_at AS task_created_at, t.updated_at AS task_updated_at, t.deleted_at AS task_deleted_at ' +
+        't.rank AS task_rank, t.version AS task_version, t.completed_at, t.created_at AS task_created_at, t.updated_at AS task_updated_at, t.deleted_at AS task_deleted_at ' +
         'FROM placements p JOIN tasks t ON t.owner_id = p.owner_id AND t.id = p.task_id ' +
         'WHERE p.owner_id = $1 AND p.time_point_id = $2 AND p.deleted_at IS NULL ORDER BY p.rank, p.id',
       [ownerId, source.id],
@@ -1758,7 +1667,7 @@ export class PostgresStore implements Store {
     const skippedTaskIds: string[] = [];
     for (const row of result.rows) {
       const task = taskRecordFromJoin(row);
-      if (task.status === 'DONE' || task.archivedAt || task.deletedAt) {
+      if (task.status === 'DONE' || task.deletedAt) {
         skippedTaskIds.push(task.id);
         continue;
       }
@@ -1821,7 +1730,6 @@ export class PostgresStore implements Store {
   async search(
     ownerId: string,
     query: string,
-    includeArchived = false,
     limit = 100,
   ): Promise<Array<{ task: TaskDto; project: ProjectDto | null; note: NoteDto }>> {
     await this.owner(ownerId);
@@ -1830,14 +1738,13 @@ export class PostgresStore implements Store {
     const pattern = '%' + escapeLike(normalized) + '%';
     const boundedLimit = checkedPageLimit(limit);
     const result = await this.query(
-      'SELECT t.id, t.owner_id, t.project_id, t.category, t.reference_id, t.title, t.status, t.priority, t.rank, t.version, t.completed_at, t.archived_at, t.created_at, t.updated_at, t.deleted_at, ' +
-        'p.id AS project_id_value, p.owner_id AS project_owner_id, p.name AS project_name, p.task_prefix AS project_task_prefix, p.next_task_number AS project_next_task_number, p.rank AS project_rank, p.version AS project_version, p.archived_at AS project_archived_at, p.created_at AS project_created_at, p.updated_at AS project_updated_at, p.deleted_at AS project_deleted_at, ' +
+      'SELECT t.id, t.owner_id, t.project_id, t.category, t.reference_id, t.title, t.status, t.priority, t.rank, t.version, t.completed_at, t.created_at, t.updated_at, t.deleted_at, ' +
+        'p.id AS project_id_value, p.owner_id AS project_owner_id, p.name AS project_name, p.task_prefix AS project_task_prefix, p.next_task_number AS project_next_task_number, p.rank AS project_rank, p.version AS project_version, p.created_at AS project_created_at, p.updated_at AS project_updated_at, p.deleted_at AS project_deleted_at, ' +
         'n.id AS note_id_value, n.owner_id AS note_owner_id, n.task_id AS note_task_id, n.content_markdown, n.version AS note_version, n.created_at AS note_created_at, n.updated_at AS note_updated_at, n.deleted_at AS note_deleted_at ' +
         'FROM tasks t LEFT JOIN projects p ON p.owner_id = t.owner_id AND p.id = t.project_id ' +
         'LEFT JOIN notes n ON n.owner_id = t.owner_id AND n.task_id = t.id AND n.deleted_at IS NULL ' +
-        'WHERE t.owner_id = $1 AND t.deleted_at IS NULL AND (' +
-        (includeArchived ? 'TRUE' : 't.archived_at IS NULL') +
-        ") AND (t.title ILIKE $2 OR t.reference_id ILIKE $2 OR COALESCE(p.name, '') ILIKE $2 OR COALESCE(n.content_markdown, '') ILIKE $2) " +
+        'WHERE t.owner_id = $1 AND t.deleted_at IS NULL AND ' +
+        "(t.title ILIKE $2 OR t.reference_id ILIKE $2 OR COALESCE(p.name, '') ILIKE $2 OR COALESCE(n.content_markdown, '') ILIKE $2) " +
         'ORDER BY t.updated_at DESC, t.id LIMIT $3',
       [ownerId, pattern, boundedLimit],
     );
@@ -1940,10 +1847,6 @@ export class PostgresStore implements Store {
           },
           numberValue(mutation.baseVersion),
         );
-      case 'project.archive':
-        return this.archiveProject(ownerId, mutation.entityId, numberValue(mutation.baseVersion));
-      case 'project.restore':
-        return this.restoreProject(ownerId, mutation.entityId, numberValue(mutation.baseVersion));
       case 'project.reorder':
         return this.reorderProjects(ownerId, stringArrayValue(payload.ids));
       case 'task.create': {
@@ -1970,10 +1873,6 @@ export class PostgresStore implements Store {
           },
           numberValue(mutation.baseVersion),
         );
-      case 'task.archive':
-        return this.archiveTask(ownerId, mutation.entityId, numberValue(mutation.baseVersion));
-      case 'task.restore':
-        return this.restoreTask(ownerId, mutation.entityId, numberValue(mutation.baseVersion));
       case 'task.reorder':
         return this.reorderTasks(ownerId, stringArrayValue(payload.ids));
       case 'task.duplicate':
@@ -2001,10 +1900,6 @@ export class PostgresStore implements Store {
         );
       case 'timePoint.reach':
         return this.reachTimePoint(ownerId, mutation.entityId, numberValue(mutation.baseVersion));
-      case 'timePoint.archive':
-        return this.archiveTimePoint(ownerId, mutation.entityId, numberValue(mutation.baseVersion));
-      case 'timePoint.restore':
-        return this.restoreTimePoint(ownerId, mutation.entityId, numberValue(mutation.baseVersion));
       case 'timePoint.reorder':
         return this.reorderEvents(ownerId, stringArrayValue(payload.ids));
       case 'placement.create':
@@ -2176,7 +2071,6 @@ export class PostgresStore implements Store {
 
   eventState(point: TimePointDto): string | null {
     if (point.type !== 'EVENT') return null;
-    if (point.archivedAt) return 'ARCHIVED';
     return point.reachedAt ? 'REACHED' : 'WAITING';
   }
 
@@ -2246,7 +2140,7 @@ export class PostgresStore implements Store {
 
   private async projectRecord(ownerId: string, id: string, lock = false): Promise<ProjectRecord> {
     const result = await this.query(
-      'SELECT id, owner_id, name, task_prefix, next_task_number, rank, version, archived_at, created_at, updated_at, deleted_at ' +
+      'SELECT id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at, deleted_at ' +
         'FROM projects WHERE owner_id = $1 AND id = $2 AND deleted_at IS NULL' +
         (lock ? ' FOR UPDATE' : ''),
       [ownerId, id],
@@ -2257,7 +2151,7 @@ export class PostgresStore implements Store {
 
   private async taskRecord(ownerId: string, id: string, lock = false): Promise<TaskRecord> {
     const result = await this.query(
-      'SELECT id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, archived_at, created_at, updated_at, deleted_at ' +
+      'SELECT id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, created_at, updated_at, deleted_at ' +
         'FROM tasks WHERE owner_id = $1 AND id = $2 AND deleted_at IS NULL' +
         (lock ? ' FOR UPDATE' : ''),
       [ownerId, id],
@@ -2286,7 +2180,7 @@ export class PostgresStore implements Store {
     lock = false,
   ): Promise<TimePointRecord> {
     const result = await this.query(
-      'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, archived_at, created_at, updated_at, deleted_at ' +
+      'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at ' +
         'FROM time_points WHERE owner_id = $1 AND id = $2 AND deleted_at IS NULL' +
         (lock ? ' FOR UPDATE' : ''),
       [ownerId, id],
@@ -2318,7 +2212,7 @@ export class PostgresStore implements Store {
     const result = await this.query(
       'UPDATE projects SET rank = $3, version = version + 1, updated_at = $4 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $5 ' +
-        'RETURNING id, owner_id, name, task_prefix, next_task_number, rank, version, archived_at, created_at, updated_at, deleted_at',
+        'RETURNING id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at, deleted_at',
       [ownerId, project.id, rank, this.now(), project.version],
     );
     const next = projectRecord(requireUpdatedRow(result, '项目版本已变化'));
@@ -2334,7 +2228,7 @@ export class PostgresStore implements Store {
     const result = await this.query(
       'UPDATE tasks SET rank = $3, version = version + 1, updated_at = $4 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $5 ' +
-        'RETURNING id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, archived_at, created_at, updated_at, deleted_at',
+        'RETURNING id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, created_at, updated_at, deleted_at',
       [ownerId, task.id, rank, this.now(), task.version],
     );
     const next = taskRecord(requireUpdatedRow(result, '任务版本已变化'));
@@ -2346,13 +2240,12 @@ export class PostgresStore implements Store {
     ownerId: string,
     point: TimePointRecord,
     title: string | null,
-    archivedAt: string | null,
   ): Promise<TimePointDto> {
     const result = await this.query(
-      'UPDATE time_points SET title = $3, archived_at = $4, version = version + 1, updated_at = $5 ' +
-        'WHERE owner_id = $1 AND id = $2 AND version = $6 ' +
-        'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, archived_at, created_at, updated_at, deleted_at',
-      [ownerId, point.id, title, archivedAt, this.now(), point.version],
+      'UPDATE time_points SET title = $3, version = version + 1, updated_at = $4 ' +
+        'WHERE owner_id = $1 AND id = $2 AND version = $5 ' +
+        'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at',
+      [ownerId, point.id, title, this.now(), point.version],
     );
     const next = timePointRecord(requireUpdatedRow(result, '时间点版本已变化'));
     const dto = timePointDto(next);
@@ -2368,7 +2261,7 @@ export class PostgresStore implements Store {
     const result = await this.query(
       'UPDATE time_points SET rank = $3, version = version + 1, updated_at = $4 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $5 ' +
-        'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, archived_at, created_at, updated_at, deleted_at',
+        'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at',
       [ownerId, point.id, rank, this.now(), point.version],
     );
     const next = timePointRecord(requireUpdatedRow(result, '时间点版本已变化'));
@@ -2408,7 +2301,7 @@ export class PostgresStore implements Store {
 
   private async snapshotProjects(ownerId: string): Promise<ProjectDto[]> {
     const result = await this.query(
-      'SELECT id, owner_id, name, task_prefix, next_task_number, rank, version, archived_at, created_at, updated_at, deleted_at ' +
+      'SELECT id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at, deleted_at ' +
         'FROM projects WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY id',
       [ownerId],
     );
@@ -2417,7 +2310,7 @@ export class PostgresStore implements Store {
 
   private async snapshotTasks(ownerId: string): Promise<TaskDto[]> {
     const result = await this.query(
-      'SELECT id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, archived_at, created_at, updated_at, deleted_at ' +
+      'SELECT id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, created_at, updated_at, deleted_at ' +
         'FROM tasks WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY id',
       [ownerId],
     );
@@ -2435,7 +2328,7 @@ export class PostgresStore implements Store {
 
   private async snapshotTimePoints(ownerId: string): Promise<TimePointDto[]> {
     const result = await this.query(
-      'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, archived_at, created_at, updated_at, deleted_at ' +
+      'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at ' +
         'FROM time_points WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY id',
       [ownerId],
     );
@@ -2515,7 +2408,6 @@ function projectRecord(row: Row): ProjectRecord {
     nextTaskNumber: Number(row.next_task_number),
     rank: String(row.rank),
     version: Number(row.version),
-    archivedAt: nullableIso(row.archived_at),
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     deletedAt: nullableIso(row.deleted_at),
@@ -2531,7 +2423,6 @@ function projectRecordFromSearch(row: Row): ProjectRecord {
     nextTaskNumber: Number(row.project_next_task_number),
     rank: String(row.project_rank),
     version: Number(row.project_version),
-    archivedAt: nullableIso(row.project_archived_at),
     createdAt: iso(row.project_created_at),
     updatedAt: iso(row.project_updated_at),
     deletedAt: nullableIso(row.project_deleted_at),
@@ -2545,7 +2436,6 @@ function projectDto(value: ProjectRecord): ProjectDto {
     taskPrefix: value.taskPrefix,
     rank: value.rank,
     version: value.version,
-    archivedAt: value.archivedAt,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
   };
@@ -2564,7 +2454,6 @@ function taskRecord(row: Row): TaskRecord {
     rank: String(row.rank),
     version: Number(row.version),
     completedAt: nullableIso(row.completed_at),
-    archivedAt: nullableIso(row.archived_at),
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     deletedAt: nullableIso(row.deleted_at),
@@ -2584,7 +2473,6 @@ function taskRecordFromJoin(row: Row): TaskRecord {
     rank: String(row.task_rank),
     version: Number(row.task_version),
     completedAt: nullableIso(row.completed_at),
-    archivedAt: nullableIso(row.archived_at),
     createdAt: iso(row.task_created_at),
     updatedAt: iso(row.task_updated_at),
     deletedAt: nullableIso(row.task_deleted_at),
@@ -2603,7 +2491,6 @@ function taskDto(value: TaskRecord): TaskDto {
     rank: value.rank,
     version: value.version,
     completedAt: value.completedAt,
-    archivedAt: value.archivedAt,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
   };
@@ -2655,7 +2542,6 @@ function timePointRecord(row: Row): TimePointRecord {
     rank: String(row.rank),
     version: Number(row.version),
     reachedAt: nullableIso(row.reached_at),
-    archivedAt: nullableIso(row.archived_at),
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     deletedAt: nullableIso(row.deleted_at),
@@ -2696,7 +2582,6 @@ function timePointDto(value: TimePointRecord): TimePointDto {
     rank: value.rank,
     version: value.version,
     reachedAt: value.reachedAt,
-    archivedAt: value.archivedAt,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
   };

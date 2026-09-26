@@ -112,7 +112,7 @@ describe('DevTodo store invariants', () => {
     expect(store.eventState(event)).toBe('WAITING');
   });
 
-  it('aggregates project and time-point task counts without counting archived records', () => {
+  it('aggregates project and time-point task counts for active records', () => {
     const { store, owner } = fixture();
     const project = store.createProject(owner.id, '统计项目', 'CNT');
     const openTask = store.createTask(owner.id, {
@@ -137,7 +137,7 @@ describe('DevTodo store invariants', () => {
     expect(store.listProjectTaskCounts(owner.id)).toEqual([
       { projectId: project.id, openCount: 1, doneCount: 1 },
     ]);
-    expect(store.listTimePointPlacementCounts(owner.id, 'DATE', false)).toEqual([
+    expect(store.listTimePointPlacementCounts(owner.id, 'DATE')).toEqual([
       {
         timePointId: date.id,
         localDate: '2026-09-04',
@@ -146,7 +146,7 @@ describe('DevTodo store invariants', () => {
         doneCount: 1,
       },
     ]);
-    expect(store.listTimePointPlacementCounts(owner.id, 'EVENT', false)).toEqual([
+    expect(store.listTimePointPlacementCounts(owner.id, 'EVENT')).toEqual([
       {
         timePointId: event.id,
         localDate: null,
@@ -156,19 +156,11 @@ describe('DevTodo store invariants', () => {
       },
     ]);
 
-    store.archiveTask(owner.id, openTask.id, openTask.version);
-    expect(store.listProjectTaskCounts(owner.id)).toEqual([
-      { projectId: project.id, openCount: 0, doneCount: 1 },
-    ]);
-    expect(store.listTimePointPlacementCounts(owner.id, 'EVENT', false)).toEqual([
-      {
-        timePointId: event.id,
-        localDate: null,
-        totalCount: 0,
-        openCount: 0,
-        doneCount: 0,
-      },
-    ]);
+    // Deleting the event cascades to its placements while the tasks survive;
+    // the deleted event disappears from the placement counts entirely.
+    store.deleteTimePoint(owner.id, event.id, event.version);
+    expect(store.listTimePointPlacementCounts(owner.id, 'EVENT')).toEqual([]);
+    expect(store.listTimePoints(owner.id, 'EVENT')).toEqual([]);
     expect(done.status).toBe('DONE');
   });
 
@@ -329,28 +321,20 @@ describe('DevTodo store invariants', () => {
     expect(notifications).toEqual([]);
   });
 
-  it('rejects new tasks or placements under archived containers', () => {
+  it('rejects placements on deleted events and rejects archiving a DATE', () => {
     const { store, owner } = fixture();
-    const project = store.createProject(owner.id, 'Archived', 'ARC');
-    store.archiveProject(owner.id, project.id, project.version);
-    expect(() =>
-      store.createTask(owner.id, {
-        projectId: project.id,
-        category: 'FEATURE',
-        title: '不可创建',
-        priority: 'NONE',
-      }),
-    ).toThrow(DomainError);
-
     const task = store.createTask(owner.id, {
       projectId: null,
       category: 'MISC',
-      title: '可安排后再归档',
+      title: '可安排的任务',
       priority: 'NONE',
     });
-    const event = store.createEvent(owner.id, 'Archived event');
-    store.archiveTimePoint(owner.id, event.id, event.version);
+    const event = store.createEvent(owner.id, '已删除事件');
+    store.deleteTimePoint(owner.id, event.id, event.version);
     expect(() => store.addPlacement(owner.id, task.id, event.id)).toThrow(DomainError);
+
+    const date = store.createDate(owner.id, '2026-09-04');
+    expect(() => store.deleteTimePoint(owner.id, date.id, date.version)).toThrow(DomainError);
   });
 
   it('verifies PostgresTreeStore transaction locking, rollback, and no notification on error', async () => {
@@ -384,7 +368,6 @@ describe('DevTodo store invariants', () => {
             text.includes('workflows') ||
             text.includes('workflow_stages') ||
             text.includes('workflow_task_memberships') ||
-            text.includes('archive_operations') ||
             text.includes('time_points') ||
             text.includes('placements') ||
             text.includes('user_settings'))

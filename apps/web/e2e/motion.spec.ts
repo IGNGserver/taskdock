@@ -63,7 +63,6 @@ async function installMockApi(page: Page): Promise<void> {
           localDate: '2026-09-19',
           timezone: 'Asia/Shanghai',
           reachedAt: null,
-          archivedAt: null,
           version: 1,
           createdAt: '2026-09-19T00:00:00.000Z',
           updatedAt: '2026-09-19T00:00:00.000Z',
@@ -83,7 +82,6 @@ async function installMockApi(page: Page): Promise<void> {
           workflows: [],
           workflowStages: [],
           workflowTaskMemberships: [],
-          archiveOperations: [],
           settings,
           cursor: '0',
         }),
@@ -121,11 +119,7 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel('用户名').fill(user.username);
   await page.getByLabel('密码').fill('correct horse battery staple');
   await page.getByRole('button', { name: '登录' }).click();
-  await expect(
-    test.info().project.name === 'mobile'
-      ? page.getByRole('button', { name: '打开创建菜单' })
-      : page.getByRole('button', { name: '快速添加' }),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: '搜索任务和备注' })).toBeVisible();
 }
 
 /**

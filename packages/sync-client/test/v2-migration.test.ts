@@ -118,25 +118,22 @@ describe('Dexie v2 migration', () => {
       });
       expect(await db.outbox.count()).toBe(originalOutbox);
       const pending = await convertV1OutboxForV2(db);
-      expect(pending).toEqual([]);
+      // The archive mechanism was removed: the queued v1 archive/restore pair
+      // can no longer be applied and must surface in the upgrade queue.
+      expect(pending.map((item) => item.command)).toEqual(['project.archive', 'project.restore']);
       const commands = (await db.outbox.orderBy('id').toArray()).map((item) => item.command);
       expect(commands).toEqual([
         'folder.create',
-        'folder.archiveTree',
-        'folder.restoreTree',
+        // The archive/restore pair stays queued but blocked (pending upgrade).
+        'project.archive',
+        'project.restore',
         'task.create',
       ]);
-      expect((await db.outbox.orderBy('id').toArray())[1]?.payload).toMatchObject({
-        operationId: archiveMutationId,
-      });
-      expect((await db.outbox.orderBy('id').toArray())[2]?.payload).toMatchObject({
-        operationId: archiveMutationId,
-      });
       expect((await db.outbox.orderBy('id').last())?.payload).toMatchObject({
         parentFolderId: projectId,
         title: '离线新任务',
       });
-      expect((await db.syncMeta.get('schemaVersion'))?.value).toBe('3');
+      expect((await db.syncMeta.get('schemaVersion'))?.value).toBe('4');
     } finally {
       await db.delete();
     }
@@ -191,7 +188,6 @@ describe('Dexie v2 migration', () => {
           workflows: [],
           workflowStages: [],
           workflowTaskMemberships: [],
-          archiveOperations: [],
           settings,
           cursor: '41',
         };
@@ -284,7 +280,6 @@ describe('Dexie v2 migration', () => {
           workflows: [],
           workflowStages: [],
           workflowTaskMemberships: [],
-          archiveOperations: [],
           settings: {
             ownerId: 'owner-1',
             timezone: 'Asia/Shanghai',
@@ -354,7 +349,6 @@ describe('Dexie v2 migration', () => {
           workflows: [],
           workflowStages: [],
           workflowTaskMemberships: [],
-          archiveOperations: [],
           settings: {
             ownerId: 'owner-1',
             timezone: 'Asia/Shanghai',
@@ -404,184 +398,6 @@ describe('Dexie v2 migration', () => {
     }
   });
 
-  it('restores an archived task and re-applies the local intent on the restored version', async () => {
-    const restoreDbName = `devtodo:restore-conflict-${uuidv7()}`;
-    const db = new DevTodoDatabase(restoreDbName);
-    const previousNavigator = globalThis.navigator;
-    Object.defineProperty(globalThis, 'navigator', {
-      configurable: true,
-      value: { onLine: true },
-    });
-    const taskId = uuidv7();
-
-    const pushed: string[] = [];
-    const engine = new V2SyncEngine(db, uuidv7(), {
-      async push(request) {
-        pushed.push(...request.mutations.map((mutation) => mutation.command));
-        return {
-          protocolVersion: 2,
-          results: request.mutations.map((m) => ({
-            mutationId: m.mutationId,
-            status: 'conflict' as const,
-            error: {
-              code: 'VERSION_CONFLICT',
-              message: '版本冲突',
-              details: {
-                id: taskId,
-                title: '服务端标题',
-                status: 'TODO',
-                archivedAt: '2026-09-13T00:00:00.000Z',
-                version: 4,
-              },
-            },
-          })),
-        };
-      },
-      async pull() {
-        return { changes: [], nextCursor: '300', hasMore: false };
-      },
-      async snapshot() {
-        return {
-          folders: [],
-          tasks: [],
-          notes: [],
-          taskSteps: [],
-          timePoints: [],
-          placements: [],
-          workflows: [],
-          workflowStages: [],
-          workflowTaskMemberships: [],
-          archiveOperations: [],
-          settings: {
-            ownerId: 'owner-1',
-            timezone: 'Asia/Shanghai',
-            weekStartsOn: 1,
-            defaultCaptureTarget: 'ROOT',
-            version: 1,
-            updatedAt: '2026-09-13T00:00:00.000Z',
-          },
-          cursor: '300',
-        };
-      },
-    });
-
-    try {
-      await engine.queue({
-        command: 'task.update',
-        entityId: taskId,
-        baseVersion: 1,
-        occurredAt: new Date().toISOString(),
-        payload: { title: '本地标题', status: 'IN_PROGRESS' },
-      });
-      await engine.sync();
-      const conflicts = await db.conflicts.toArray();
-      expect(conflicts).toHaveLength(1);
-      expect(conflicts[0]?.entityType).toBe('task');
-
-      await engine.resolveConflict(conflicts[0]!.id!, 'restore');
-
-      // The archived server row is adopted...
-      const restored = (await db.tasks.get(taskId)) as { archivedAt?: string | null } | undefined;
-      expect(restored).toBeDefined();
-      expect(restored?.archivedAt).toBeNull();
-
-      // ...the queue contains a restore followed by the original intent...
-      const queued = await db.outbox.orderBy('id').toArray();
-      expect(queued.map((item) => item.command)).toEqual(['task.restore', 'task.update']);
-      expect(queued[0]?.baseVersion).toBe(4);
-      expect(queued[1]?.baseVersion).toBe(5);
-      expect(queued[0]?.nextAttemptAt).toBeLessThanOrEqual(queued[1]!.nextAttemptAt);
-
-      // ...and the conflict is closed.
-      expect((await db.conflicts.get(conflicts[0]!.id!))?.resolvedAt).toEqual(expect.any(String));
-    } finally {
-      await db.delete();
-      Object.defineProperty(globalThis, 'navigator', {
-        configurable: true,
-        value: previousNavigator,
-      });
-    }
-  });
-
-  it('rejects restore when the entity type has no v2 restore path', async () => {
-    const unsupportedName = `devtodo:restore-unsupported-${uuidv7()}`;
-    const db = new DevTodoDatabase(unsupportedName);
-    const previousNavigator = globalThis.navigator;
-    Object.defineProperty(globalThis, 'navigator', {
-      configurable: true,
-      value: { onLine: true },
-    });
-    const folderId = uuidv7();
-
-    const engine = new V2SyncEngine(db, uuidv7(), {
-      async push(request) {
-        return {
-          protocolVersion: 2,
-          results: request.mutations.map((m) => ({
-            mutationId: m.mutationId,
-            status: 'conflict' as const,
-            error: {
-              code: 'VERSION_CONFLICT',
-              message: '版本冲突',
-              details: { id: folderId, title: '目录', version: 2 },
-            },
-          })),
-        };
-      },
-      async pull() {
-        return { changes: [], nextCursor: '400', hasMore: false };
-      },
-      async snapshot() {
-        return {
-          folders: [],
-          tasks: [],
-          notes: [],
-          taskSteps: [],
-          timePoints: [],
-          placements: [],
-          workflows: [],
-          workflowStages: [],
-          workflowTaskMemberships: [],
-          archiveOperations: [],
-          settings: {
-            ownerId: 'owner-1',
-            timezone: 'Asia/Shanghai',
-            weekStartsOn: 1,
-            defaultCaptureTarget: 'ROOT',
-            version: 1,
-            updatedAt: '2026-09-13T00:00:00.000Z',
-          },
-          cursor: '400',
-        };
-      },
-    });
-
-    try {
-      await engine.queue({
-        command: 'folder.update',
-        entityId: folderId,
-        baseVersion: 1,
-        occurredAt: new Date().toISOString(),
-        payload: { title: '新目录名' },
-      });
-      await engine.sync();
-      const conflicts = await db.conflicts.toArray();
-      expect(conflicts).toHaveLength(1);
-
-      await expect(engine.resolveConflict(conflicts[0]!.id!, 'restore')).rejects.toThrow(
-        /不支持恢复后应用/,
-      );
-      // The conflict stays open so the user can pick another strategy.
-      expect((await db.conflicts.get(conflicts[0]!.id!))?.resolvedAt).toBeUndefined();
-    } finally {
-      await db.delete();
-      Object.defineProperty(globalThis, 'navigator', {
-        configurable: true,
-        value: previousNavigator,
-      });
-    }
-  });
-
   it('does not roll a newer local row back with a stale pulled change', async () => {
     const staleName = `devtodo:stale-change-${uuidv7()}`;
     const db = new DevTodoDatabase(staleName);
@@ -618,7 +434,6 @@ describe('Dexie v2 migration', () => {
                 rank: '1024',
                 version: pullCount === 1 ? 5 : 2,
                 completedAt: null,
-                archivedAt: null,
                 createdAt: '2026-09-13T00:00:00.000Z',
                 updatedAt: '2026-09-13T00:00:00.000Z',
               },
@@ -639,7 +454,6 @@ describe('Dexie v2 migration', () => {
           workflows: [],
           workflowStages: [],
           workflowTaskMemberships: [],
-          archiveOperations: [],
           settings: {
             ownerId: 'owner-1',
             timezone: 'Asia/Shanghai',

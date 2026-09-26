@@ -32,7 +32,6 @@ test('calendar distinguishes a failed load from an empty day and recovers on ret
     rank: '1024',
     version: 1,
     reachedAt: null,
-    archivedAt: null,
     createdAt: user.createdAt,
     updatedAt: user.createdAt,
   };
@@ -87,7 +86,6 @@ test('calendar distinguishes a failed load from an empty day and recovers on ret
         workflows: [],
         workflowStages: [],
         workflowTaskMemberships: [],
-        archiveOperations: [],
         settings,
         cursor: '0',
       });
@@ -114,11 +112,7 @@ test('calendar distinguishes a failed load from an empty day and recovers on ret
     await page.getByLabel('用户名').fill(user.username);
     await page.getByLabel('密码').fill('correct horse battery staple');
     await page.getByRole('button', { name: '登录' }).click();
-    const authenticatedShellAction =
-      test.info().project.name === 'mobile'
-        ? page.getByRole('button', { name: '打开创建菜单' })
-        : page.getByRole('button', { name: '快速添加' });
-    await expect(authenticatedShellAction).toBeVisible();
+    await expect(page.getByRole('button', { name: '搜索任务和备注' })).toBeVisible();
 
     await page.goto('/time/calendar/2026-09-21');
     await expect(page.locator('.m3e-alert--error')).toContainText('数据库事务被拒绝');

@@ -861,15 +861,6 @@
   min-block-size: calc(64px + var(--dt-safe-bottom, 0px));
 }
 
-.m3e-navigation-card--today-context-event,
-.m3e-navigation-card--today-context-more {
-  min-block-size: 56px;
-}
-
-.m3e-chip--workflow-archive {
-  flex: none;
-}
-
 .m3e-stagger > * {
   animation: m3e-rise-in var(--m3-spring-spatial-duration) var(--m3-spring-spatial) both;
 }

@@ -34,7 +34,7 @@ export interface CaptureTargetFolderInput {
   /** `auth.settings?.defaultCaptureTarget`. */
   defaultCaptureTarget: 'ROOT' | 'RECENT_FOLDER' | string | undefined;
   /** Folders the client currently knows about. */
-  folders: ReadonlyArray<{ id: string; archivedAt: string | null; updatedAt?: string }>;
+  folders: ReadonlyArray<{ id: string; deletedAt?: string | null; updatedAt?: string }>;
 }
 
 /**
@@ -45,7 +45,7 @@ export interface CaptureTargetFolderInput {
 export function resolveCaptureFolder(input: CaptureTargetFolderInput): string | null {
   const { activeFolderId, defaultCaptureTarget, folders } = input;
   const isValid = (id: string | null | undefined): id is string =>
-    Boolean(id) && folders.some((folder) => folder.id === id && !folder.archivedAt);
+    Boolean(id) && folders.some((folder) => folder.id === id && !folder.deletedAt);
   // The folder the user is looking at always wins, regardless of preference:
   // creating into the visible folder is the least surprising behaviour.
   if (isValid(activeFolderId)) return activeFolderId;
@@ -55,7 +55,7 @@ export function resolveCaptureFolder(input: CaptureTargetFolderInput): string | 
   // No usable recent folder: fall back to the most recently updated one so the
   // user still captures into the tree instead of a silently empty root.
   const mostRecent = [...folders]
-    .filter((folder) => !folder.archivedAt)
+    .filter((folder) => !folder.deletedAt)
     .sort((left, right) => (right.updatedAt ?? '').localeCompare(left.updatedAt ?? ''))[0];
   return mostRecent?.id ?? null;
 }

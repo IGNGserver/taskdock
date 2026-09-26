@@ -72,7 +72,6 @@ async function mockSession(page: Page, handleV2: (route: Route, path: string) =>
         workflows: [],
         workflowStages: [],
         workflowTaskMemberships: [],
-        archiveOperations: [],
         settings,
         cursor: '0',
       });
@@ -94,11 +93,7 @@ async function mockSession(page: Page, handleV2: (route: Route, path: string) =>
       await page.getByLabel('用户名').fill(user.username);
       await page.getByLabel('密码').fill('correct horse battery staple');
       await page.getByRole('button', { name: '登录' }).click();
-      const authenticatedShellAction =
-        test.info().project.name === 'mobile'
-          ? page.getByRole('button', { name: '打开创建菜单' })
-          : page.getByRole('button', { name: '快速添加' });
-      await expect(authenticatedShellAction).toBeVisible();
+      await expect(page.getByRole('button', { name: '搜索任务和备注' })).toBeVisible();
     },
   };
 }
@@ -170,7 +165,6 @@ test('event detail keeps loaded content visible when an event action fails', asy
     rank: '1024',
     version: 1,
     reachedAt: null,
-    archivedAt: null,
     createdAt: user.createdAt,
     updatedAt: user.createdAt,
   };
@@ -232,13 +226,8 @@ test('event list retries a failed first read without showing a false empty state
     releaseRetry = resolve;
   });
   const session = await mockSession(page, async (route, path) => {
-    const url = new URL(route.request().url());
     const refererPath = new URL(route.request().headers().referer ?? 'http://localhost').pathname;
-    if (
-      path.endsWith('/time-points') &&
-      url.searchParams.get('archived') === 'false' &&
-      refererPath === '/time/events'
-    ) {
+    if (path.endsWith('/time-points') && refererPath === '/time/events') {
       activeEventReads += 1;
       if (activeEventReads === 1)
         return route.fulfill({
@@ -309,46 +298,6 @@ test('workflow list only shows its empty state after a successful read', async (
     await expect(page.getByText('还没有流程')).toBeVisible();
   } finally {
     releaseRetry();
-    session.releaseSyncPull();
-  }
-});
-
-test('archive center does not label a failed task read as an empty archive', async ({ page }) => {
-  let failArchivedTasks = true;
-  const session = await mockSession(page, async (route, path) => {
-    const url = new URL(route.request().url());
-    if (path.endsWith('/archive-operations'))
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ items: [] }),
-      });
-    if (path.endsWith('/tasks') && url.searchParams.get('archived') === 'true') {
-      if (failArchivedTasks) {
-        failArchivedTasks = false;
-        return route.fulfill({
-          status: 503,
-          contentType: 'application/json',
-          body: JSON.stringify({ code: 'UNAVAILABLE', message: '归档任务暂时不可用' }),
-        });
-      }
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ items: [] }),
-      });
-    }
-    return route.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' });
-  });
-
-  try {
-    await session.login();
-    await page.goto('/archive');
-    await expect(page.locator('.m3e-alert--error')).toContainText('归档任务暂时不可用');
-    await expect(page.getByText('没有单独归档的任务')).toHaveCount(0);
-    await page.getByRole('button', { name: '重试' }).click();
-    await expect(page.getByText('没有单独归档的任务')).toBeVisible();
-  } finally {
     session.releaseSyncPull();
   }
 });

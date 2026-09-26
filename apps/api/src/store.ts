@@ -97,8 +97,7 @@ export interface SyncChange {
     | 'taskStep'
     | 'workflow'
     | 'workflowStage'
-    | 'workflowTaskMembership'
-    | 'archiveOperation';
+    | 'workflowTaskMembership';
   entityId: string;
   entityVersion: number;
   operation: 'upsert' | 'delete';
@@ -142,7 +141,6 @@ export interface TaskFilters {
   projectId?: string | null;
   category?: TaskCategory;
   status?: TaskStatus;
-  archived?: boolean;
   timePointId?: string;
 }
 
@@ -186,6 +184,12 @@ export class MemoryStore {
   async init(): Promise<void> {}
 
   async close(): Promise<void> {}
+
+  /** Migrating owners keep any legacy archived rows visible as deleted rows. */
+  legacyArchivedAt(entity: object): string | null {
+    const value = (entity as { archivedAt?: string | null }).archivedAt;
+    return typeof value === 'string' ? value : null;
+  }
 
   createNativeChallenge(origin: string, expiresAt: string): string {
     const id = uuidv7();
@@ -462,7 +466,6 @@ export class MemoryStore {
       nextTaskNumber: 1,
       rank: rank.toString(),
       version: 1,
-      archivedAt: null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -479,28 +482,18 @@ export class MemoryStore {
     return this.projectDto(project);
   }
 
-  listProjects(ownerId: string, archived = false): ProjectDto[] {
+  listProjects(ownerId: string): ProjectDto[] {
     this.getUser(ownerId);
     return [...this.state.projects.values()]
-      .filter(
-        (project) =>
-          project.ownerId === ownerId &&
-          !project.deletedAt &&
-          (archived ? Boolean(project.archivedAt) : !project.archivedAt),
-      )
+      .filter((project) => project.ownerId === ownerId && !project.deletedAt)
       .sort(rankSort)
       .map((project) => this.projectDto(project));
   }
 
-  listProjectTaskCounts(ownerId: string, archived = false): ProjectTaskCountDto[] {
+  listProjectTaskCounts(ownerId: string): ProjectTaskCountDto[] {
     this.getUser(ownerId);
     const projects = [...this.state.projects.values()]
-      .filter(
-        (project) =>
-          project.ownerId === ownerId &&
-          !project.deletedAt &&
-          (archived ? Boolean(project.archivedAt) : !project.archivedAt),
-      )
+      .filter((project) => project.ownerId === ownerId && !project.deletedAt)
       .sort(rankSort);
     const counts = new Map<string, ProjectTaskCountDto>(
       projects.map((project) => [
@@ -509,8 +502,7 @@ export class MemoryStore {
       ]),
     );
     for (const task of this.state.tasks.values()) {
-      if (task.ownerId !== ownerId || task.deletedAt || task.archivedAt || !task.projectId)
-        continue;
+      if (task.ownerId !== ownerId || task.deletedAt || !task.projectId) continue;
       const count = counts.get(task.projectId);
       if (!count) continue;
       if (task.status === 'DONE') count.doneCount += 1;
@@ -519,10 +511,8 @@ export class MemoryStore {
     return projects.map((project) => counts.get(project.id)!);
   }
 
-  getProject(ownerId: string, id: string, includeArchived = true): ProjectDto {
+  getProject(ownerId: string, id: string): ProjectDto {
     const project = this.owned(this.state.projects, ownerId, id, '项目');
-    if (!includeArchived && project.archivedAt)
-      throw new DomainError('ENTITY_ARCHIVED', '项目已归档');
     return this.projectDto(project);
   }
 
@@ -562,33 +552,13 @@ export class MemoryStore {
     return this.projectDto(project);
   }
 
-  archiveProject(ownerId: string, id: string, baseVersion: number): ProjectDto {
-    const project = this.owned(this.state.projects, ownerId, id, '项目');
-    this.assertVersion(project.version, baseVersion, this.projectDto(project));
-    project.archivedAt = this.now();
-    project.version += 1;
-    project.updatedAt = this.now();
-    this.recordChange(ownerId, 'project', id, project.version, 'upsert', this.projectDto(project));
-    return this.projectDto(project);
-  }
-
-  restoreProject(ownerId: string, id: string, baseVersion: number): ProjectDto {
-    const project = this.owned(this.state.projects, ownerId, id, '项目');
-    this.assertVersion(project.version, baseVersion, this.projectDto(project));
-    project.archivedAt = null;
-    project.version += 1;
-    project.updatedAt = this.now();
-    this.recordChange(ownerId, 'project', id, project.version, 'upsert', this.projectDto(project));
-    return this.projectDto(project);
-  }
-
   reorderProjects(ownerId: string, ids: string[]): ProjectDto[] {
     this.getUser(ownerId);
     if (new Set(ids).size !== ids.length)
       throw new DomainError('VALIDATION_FAILED', '项目排序列表不能有重复项');
     const projects = ids.map((id) => this.owned(this.state.projects, ownerId, id, '项目'));
     const expected = [...this.state.projects.values()].filter(
-      (project) => project.ownerId === ownerId && !project.deletedAt && !project.archivedAt,
+      (project) => project.ownerId === ownerId && !project.deletedAt,
     );
     if (expected.length !== ids.length || expected.some((project) => !ids.includes(project.id)))
       throw new DomainError('VALIDATION_FAILED', '项目排序列表必须包含整个活动列表');
@@ -627,7 +597,6 @@ export class MemoryStore {
     const project = projectId
       ? this.owned(this.state.projects, ownerId, projectId, '项目')
       : undefined;
-    if (project?.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '项目已归档');
     const title = input.title.trim();
     if (!title || title.length > 500) throw new DomainError('VALIDATION_FAILED', '任务标题无效');
     const number = project ? project.nextTaskNumber++ : user.nextMiscTaskNumber++;
@@ -652,7 +621,6 @@ export class MemoryStore {
       rank: (this.maxRank(list.map((item) => item.rank)) + 1024n).toString(),
       version: 1,
       completedAt: null,
-      archivedAt: null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -683,10 +651,6 @@ export class MemoryStore {
       result = result.filter((task) => task.projectId === filters.projectId);
     if (filters.category) result = result.filter((task) => task.category === filters.category);
     if (filters.status) result = result.filter((task) => task.status === filters.status);
-    if (filters.archived !== undefined)
-      result = result.filter((task) =>
-        filters.archived ? Boolean(task.archivedAt) : !task.archivedAt,
-      );
     if (filters.timePointId) {
       const taskIds = new Set(
         [...this.state.placements.values()]
@@ -703,9 +667,8 @@ export class MemoryStore {
     return result.sort(rankSort).map((task) => this.taskDto(task));
   }
 
-  getTask(ownerId: string, id: string, includeArchived = true): TaskDto {
+  getTask(ownerId: string, id: string): TaskDto {
     const task = this.owned(this.state.tasks, ownerId, id, '任务');
-    if (!includeArchived && task.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '任务已归档');
     return this.taskDto(task);
   }
 
@@ -727,11 +690,7 @@ export class MemoryStore {
     const projectId = patch.projectId === undefined ? task.projectId : patch.projectId;
     const category = patch.category ?? task.category;
     assertTaskPlacement(projectId, category);
-    const project = projectId
-      ? this.owned(this.state.projects, ownerId, projectId, '项目')
-      : undefined;
-    if (project?.archivedAt && projectId !== task.projectId)
-      throw new DomainError('ENTITY_ARCHIVED', '不能移入已归档项目');
+    if (projectId) this.owned(this.state.projects, ownerId, projectId, '项目');
     if (patch.title !== undefined) {
       const title = patch.title.trim();
       if (!title || title.length > 500) throw new DomainError('VALIDATION_FAILED', '任务标题无效');
@@ -763,26 +722,6 @@ export class MemoryStore {
     return this.taskDto(task);
   }
 
-  archiveTask(ownerId: string, id: string, baseVersion: number): TaskDto {
-    const task = this.owned(this.state.tasks, ownerId, id, '任务');
-    this.assertVersion(task.version, baseVersion, this.taskDto(task));
-    task.archivedAt = this.now();
-    task.version += 1;
-    task.updatedAt = this.now();
-    this.recordChange(ownerId, 'task', id, task.version, 'upsert', this.taskDto(task));
-    return this.taskDto(task);
-  }
-
-  restoreTask(ownerId: string, id: string, baseVersion: number): TaskDto {
-    const task = this.owned(this.state.tasks, ownerId, id, '任务');
-    this.assertVersion(task.version, baseVersion, this.taskDto(task));
-    task.archivedAt = null;
-    task.version += 1;
-    task.updatedAt = this.now();
-    this.recordChange(ownerId, 'task', id, task.version, 'upsert', this.taskDto(task));
-    return this.taskDto(task);
-  }
-
   reorderTasks(ownerId: string, ids: string[]): TaskDto[] {
     this.getUser(ownerId);
     if (new Set(ids).size !== ids.length)
@@ -798,7 +737,6 @@ export class MemoryStore {
       (task) =>
         task.ownerId === ownerId &&
         !task.deletedAt &&
-        !task.archivedAt &&
         task.projectId === first.projectId &&
         task.category === first.category,
     );
@@ -814,7 +752,6 @@ export class MemoryStore {
     return this.listTasks(ownerId, {
       projectId: first.projectId,
       category: first.category,
-      archived: false,
     });
   }
 
@@ -841,13 +778,11 @@ export class MemoryStore {
       referenceId: allocateReference(project?.taskPrefix ?? 'MISC', number),
       status: 'TODO',
       completedAt: null,
-      archivedAt: null,
       rank: (
         this.maxRank(
           this.listTasks(ownerId, {
             projectId: source.projectId,
             category: source.category,
-            archived: false,
           }).map((item) => item.rank),
         ) + 1024n
       ).toString(),
@@ -965,7 +900,6 @@ export class MemoryStore {
       rank: (this.maxRank(list.map((item) => item.rank)) + 1024n).toString(),
       version: 1,
       reachedAt: null,
-      archivedAt: null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -975,15 +909,12 @@ export class MemoryStore {
     return this.timePointDto(point);
   }
 
-  listTimePoints(ownerId: string, type?: TimePointType, archived?: boolean): TimePointDto[] {
+  listTimePoints(ownerId: string, type?: TimePointType): TimePointDto[] {
     this.getUser(ownerId);
     return [...this.state.timePoints.values()]
       .filter(
         (point) =>
-          point.ownerId === ownerId &&
-          !point.deletedAt &&
-          (!type || point.type === type) &&
-          (archived === undefined || archived === Boolean(point.archivedAt)),
+          point.ownerId === ownerId && !point.deletedAt && (!type || point.type === type),
       )
       .sort((a, b) =>
         a.type === 'DATE' && b.type === 'DATE'
@@ -996,7 +927,6 @@ export class MemoryStore {
   listTimePointPlacementCounts(
     ownerId: string,
     type: TimePointType,
-    archived?: boolean,
     fromDate?: string,
     toDate?: string,
   ): TimePointPlacementCountDto[] {
@@ -1007,7 +937,6 @@ export class MemoryStore {
           point.ownerId === ownerId &&
           !point.deletedAt &&
           point.type === type &&
-          (archived === undefined || archived === Boolean(point.archivedAt)) &&
           (fromDate === undefined || (point.localDate ?? '') >= fromDate) &&
           (toDate === undefined || (point.localDate ?? '') <= toDate),
       )
@@ -1033,7 +962,7 @@ export class MemoryStore {
       const count = counts.get(placement.timePointId);
       if (!count) continue;
       const task = this.state.tasks.get(placement.taskId);
-      if (!task || task.ownerId !== ownerId || task.deletedAt || task.archivedAt) continue;
+      if (!task || task.ownerId !== ownerId || task.deletedAt) continue;
       count.totalCount += 1;
       if (task.status === 'DONE') count.doneCount += 1;
       else count.openCount += 1;
@@ -1062,7 +991,6 @@ export class MemoryStore {
   reachTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto {
     const point = this.owned(this.state.timePoints, ownerId, id, '时间点');
     if (point.type !== 'EVENT') throw new DomainError('VALIDATION_FAILED', '日期没有到达状态');
-    if (point.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '时间点已归档');
     this.assertVersion(point.version, baseVersion, this.timePointDto(point));
     point.reachedAt ??= this.now();
     point.version += 1;
@@ -1071,25 +999,33 @@ export class MemoryStore {
     return this.timePointDto(point);
   }
 
-  archiveTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto {
+  deleteTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto {
     const point = this.owned(this.state.timePoints, ownerId, id, '时间点');
-    if (point.type !== 'EVENT') throw new DomainError('VALIDATION_FAILED', '日期不能归档');
+    if (point.type !== 'EVENT') throw new DomainError('VALIDATION_FAILED', '日期不能删除');
     this.assertVersion(point.version, baseVersion, this.timePointDto(point));
-    point.archivedAt = this.now();
+    point.deletedAt = this.now();
     point.version += 1;
     point.updatedAt = this.now();
-    this.recordChange(ownerId, 'timePoint', id, point.version, 'upsert', this.timePointDto(point));
-    return this.timePointDto(point);
-  }
-
-  restoreTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto {
-    const point = this.owned(this.state.timePoints, ownerId, id, '时间点');
-    if (point.type !== 'EVENT') throw new DomainError('VALIDATION_FAILED', '日期不能恢复');
-    this.assertVersion(point.version, baseVersion, this.timePointDto(point));
-    point.archivedAt = null;
-    point.version += 1;
-    point.updatedAt = this.now();
-    this.recordChange(ownerId, 'timePoint', id, point.version, 'upsert', this.timePointDto(point));
+    this.recordChange(ownerId, 'timePoint', id, point.version, 'delete', null);
+    for (const placement of this.state.placements.values()) {
+      if (
+        placement.ownerId === ownerId &&
+        placement.timePointId === id &&
+        !placement.deletedAt
+      ) {
+        placement.deletedAt = this.now();
+        placement.version += 1;
+        placement.updatedAt = this.now();
+        this.recordChange(
+          ownerId,
+          'placement',
+          placement.id,
+          placement.version,
+          'delete',
+          null,
+        );
+      }
+    }
     return this.timePointDto(point);
   }
 
@@ -1101,11 +1037,7 @@ export class MemoryStore {
     if (points.some((point) => point.type !== 'EVENT'))
       throw new DomainError('VALIDATION_FAILED', '只能排序事件');
     const expected = [...this.state.timePoints.values()].filter(
-      (point) =>
-        point.ownerId === ownerId &&
-        point.type === 'EVENT' &&
-        !point.deletedAt &&
-        !point.archivedAt,
+      (point) => point.ownerId === ownerId && point.type === 'EVENT' && !point.deletedAt,
     );
     if (expected.length !== ids.length || expected.some((point) => !ids.includes(point.id)))
       throw new DomainError('VALIDATION_FAILED', '时间点排序列表必须包含整个活动列表');
@@ -1134,8 +1066,6 @@ export class MemoryStore {
   ): { placement: PlacementDto; existed: boolean } {
     const task = this.owned(this.state.tasks, ownerId, taskId, '任务');
     const point = this.owned(this.state.timePoints, ownerId, timePointId, '时间点');
-    if (task.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '任务已归档');
-    if (point.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '时间点已归档');
     const existing = [...this.state.placements.values()].find(
       (placement) =>
         placement.ownerId === ownerId &&
@@ -1214,10 +1144,9 @@ export class MemoryStore {
   ): { placement: PlacementDto; sourcePlacementId: string; existed: boolean } {
     const source = this.owned(this.state.placements, ownerId, id, '安排');
     this.assertVersion(source.version, baseVersion, this.placementDto(source));
-    const target = this.owned(this.state.timePoints, ownerId, targetTimePointId, '时间点');
+    this.owned(this.state.timePoints, ownerId, targetTimePointId, '时间点');
     if (source.timePointId === targetTimePointId)
       throw new DomainError('VALIDATION_FAILED', '安排已经位于目标时间点');
-    if (target.archivedAt) throw new DomainError('ENTITY_ARCHIVED', '时间点已归档');
     const existing = [...this.state.placements.values()].find(
       (placement) =>
         placement.ownerId === ownerId &&
@@ -1307,7 +1236,7 @@ export class MemoryStore {
     const skippedTaskIds: string[] = [];
     for (const placement of sourcePlacements) {
       const task = this.state.tasks.get(placement.taskId);
-      if (!task || task.status === 'DONE' || task.deletedAt || task.archivedAt) {
+      if (!task || task.status === 'DONE' || task.deletedAt) {
         skippedTaskIds.push(placement.taskId);
         continue;
       }
@@ -1357,17 +1286,13 @@ export class MemoryStore {
   search(
     ownerId: string,
     query: string,
-    includeArchived = false,
     limit = 100,
   ): Array<{ task: TaskDto; project: ProjectDto | null; note: NoteDto }> {
     this.getUser(ownerId);
     const q = query.trim().toLocaleLowerCase();
     if (!q) return [];
     return [...this.state.tasks.values()]
-      .filter(
-        (task) =>
-          task.ownerId === ownerId && !task.deletedAt && (includeArchived || !task.archivedAt),
-      )
+      .filter((task) => task.ownerId === ownerId && !task.deletedAt)
       .flatMap((task) => {
         const project = task.projectId ? this.state.projects.get(task.projectId) : undefined;
         const note = this.findNote(ownerId, task.id);
@@ -1478,22 +1403,6 @@ export class MemoryStore {
           ),
         };
       }
-      case 'project.archive':
-        return {
-          result: this.archiveProject(
-            ownerId,
-            mutation.entityId,
-            numberValue(mutation.baseVersion),
-          ),
-        };
-      case 'project.restore':
-        return {
-          result: this.restoreProject(
-            ownerId,
-            mutation.entityId,
-            numberValue(mutation.baseVersion),
-          ),
-        };
       case 'project.reorder':
         return {
           result: this.reorderProjects(ownerId, stringArrayValue(payload['ids'])),
@@ -1523,14 +1432,6 @@ export class MemoryStore {
             },
             numberValue(mutation.baseVersion),
           ),
-        };
-      case 'task.archive':
-        return {
-          result: this.archiveTask(ownerId, mutation.entityId, numberValue(mutation.baseVersion)),
-        };
-      case 'task.restore':
-        return {
-          result: this.restoreTask(ownerId, mutation.entityId, numberValue(mutation.baseVersion)),
         };
       case 'task.reorder':
         return { result: this.reorderTasks(ownerId, stringArrayValue(payload['ids'])) };
@@ -1575,17 +1476,9 @@ export class MemoryStore {
             numberValue(mutation.baseVersion),
           ),
         };
-      case 'timePoint.archive':
+      case 'timePoint.delete':
         return {
-          result: this.archiveTimePoint(
-            ownerId,
-            mutation.entityId,
-            numberValue(mutation.baseVersion),
-          ),
-        };
-      case 'timePoint.restore':
-        return {
-          result: this.restoreTimePoint(
+          result: this.deleteTimePoint(
             ownerId,
             mutation.entityId,
             numberValue(mutation.baseVersion),
@@ -1721,7 +1614,7 @@ export class MemoryStore {
   }
 
   eventState(point: TimePointDto): string | null {
-    return deriveEventState(point.type, point.reachedAt, point.archivedAt);
+    return deriveEventState(point.type, point.reachedAt);
   }
 
   subscribeChanges(listener: (ownerId: string, cursor: string) => void): () => void {
@@ -1867,8 +1760,8 @@ export class MemoryStore {
     return { ownerId, timezone, weekStartsOn, defaultCaptureTarget, version, updatedAt };
   }
   private projectDto(project: ProjectRecord): ProjectDto {
-    const { id, name, taskPrefix, rank, version, archivedAt, createdAt, updatedAt } = project;
-    return { id, name, taskPrefix, rank, version, archivedAt, createdAt, updatedAt };
+    const { id, name, taskPrefix, rank, version, createdAt, updatedAt } = project;
+    return { id, name, taskPrefix, rank, version, createdAt, updatedAt };
   }
   private taskDto(task: TaskRecord): TaskDto {
     const {
@@ -1882,7 +1775,6 @@ export class MemoryStore {
       rank,
       version,
       completedAt,
-      archivedAt,
       createdAt,
       updatedAt,
     } = task;
@@ -1897,7 +1789,6 @@ export class MemoryStore {
       rank,
       version,
       completedAt,
-      archivedAt,
       createdAt,
       updatedAt,
     };
@@ -1915,7 +1806,6 @@ export class MemoryStore {
       rank,
       version,
       reachedAt,
-      archivedAt,
       createdAt,
       updatedAt,
     } = point;
@@ -1927,7 +1817,6 @@ export class MemoryStore {
       rank,
       version,
       reachedAt,
-      archivedAt,
       createdAt,
       updatedAt,
     };
@@ -1987,17 +1876,15 @@ export interface Store {
     taskPrefix: string,
     id?: string,
   ): MaybePromise<ProjectDto>;
-  listProjects(ownerId: string, archived?: boolean): MaybePromise<ProjectDto[]>;
-  listProjectTaskCounts(ownerId: string, archived?: boolean): MaybePromise<ProjectTaskCountDto[]>;
-  getProject(ownerId: string, id: string, includeArchived?: boolean): MaybePromise<ProjectDto>;
+  listProjects(ownerId: string): MaybePromise<ProjectDto[]>;
+  listProjectTaskCounts(ownerId: string): MaybePromise<ProjectTaskCountDto[]>;
+  getProject(ownerId: string, id: string): MaybePromise<ProjectDto>;
   updateProject(
     ownerId: string,
     id: string,
     patch: { name?: string; taskPrefix?: string },
     baseVersion: number,
   ): MaybePromise<ProjectDto>;
-  archiveProject(ownerId: string, id: string, baseVersion: number): MaybePromise<ProjectDto>;
-  restoreProject(ownerId: string, id: string, baseVersion: number): MaybePromise<ProjectDto>;
   reorderProjects(ownerId: string, ids: string[]): MaybePromise<ProjectDto[]>;
   createTask(
     ownerId: string,
@@ -2010,7 +1897,7 @@ export interface Store {
     },
   ): MaybePromise<TaskDto>;
   listTasks(ownerId: string, filters?: TaskFilters): MaybePromise<TaskDto[]>;
-  getTask(ownerId: string, id: string, includeArchived?: boolean): MaybePromise<TaskDto>;
+  getTask(ownerId: string, id: string): MaybePromise<TaskDto>;
   getTaskDetails(
     ownerId: string,
     taskId: string,
@@ -2032,8 +1919,6 @@ export interface Store {
     },
     baseVersion: number,
   ): MaybePromise<TaskDto>;
-  archiveTask(ownerId: string, id: string, baseVersion: number): MaybePromise<TaskDto>;
-  restoreTask(ownerId: string, id: string, baseVersion: number): MaybePromise<TaskDto>;
   reorderTasks(ownerId: string, ids: string[]): MaybePromise<TaskDto[]>;
   duplicateTask(
     ownerId: string,
@@ -2049,15 +1934,10 @@ export interface Store {
   ): MaybePromise<NoteDto>;
   createDate(ownerId: string, localDate: string, id?: string): MaybePromise<TimePointDto>;
   createEvent(ownerId: string, title: string, id?: string): MaybePromise<TimePointDto>;
-  listTimePoints(
-    ownerId: string,
-    type?: TimePointType,
-    archived?: boolean,
-  ): MaybePromise<TimePointDto[]>;
+  listTimePoints(ownerId: string, type?: TimePointType): MaybePromise<TimePointDto[]>;
   listTimePointPlacementCounts(
     ownerId: string,
     type: TimePointType,
-    archived?: boolean,
     fromDate?: string,
     toDate?: string,
   ): MaybePromise<TimePointPlacementCountDto[]>;
@@ -2069,8 +1949,7 @@ export interface Store {
     baseVersion: number,
   ): MaybePromise<TimePointDto>;
   reachTimePoint(ownerId: string, id: string, baseVersion: number): MaybePromise<TimePointDto>;
-  archiveTimePoint(ownerId: string, id: string, baseVersion: number): MaybePromise<TimePointDto>;
-  restoreTimePoint(ownerId: string, id: string, baseVersion: number): MaybePromise<TimePointDto>;
+  deleteTimePoint(ownerId: string, id: string, baseVersion: number): MaybePromise<TimePointDto>;
   reorderEvents(ownerId: string, ids: string[]): MaybePromise<TimePointDto[]>;
   addPlacement(
     ownerId: string,
@@ -2120,7 +1999,6 @@ export interface Store {
   search(
     ownerId: string,
     query: string,
-    includeArchived?: boolean,
     limit?: number,
   ): MaybePromise<Array<{ task: TaskDto; project: ProjectDto | null; note: NoteDto }>>;
   withIdempotency<T>(

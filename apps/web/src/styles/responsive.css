@@ -52,9 +52,23 @@
   .narrow-page,
   .page-section {
     inline-size: calc(100% - 32px);
+    /* Guard against horizontal overflow on small screens: wide children must
+       shrink instead of forcing the page-wrap into a sideways scroll. */
+    max-inline-size: calc(100% - 32px);
     padding-block-start: 20px;
     /* Clear the fixed FAB menu so it cannot permanently cover the last row. */
     padding-block-end: calc(176px + var(--dt-safe-bottom));
+  }
+
+  .page *,
+  .narrow-page *,
+  .page-section * {
+    min-inline-size: 0;
+  }
+
+  .calendar-detail-head h2,
+  .page-header h1 {
+    overflow-wrap: anywhere;
   }
 
   .page--today {
@@ -108,16 +122,6 @@
     inline-size: 60px;
     block-size: 72px;
     font-size: var(--m3-type-headline-small-size);
-  }
-
-  .today-context {
-    padding: var(--m3-space-4);
-  }
-
-  .capture-zone {
-    grid-template-columns: 1fr;
-    gap: var(--m3-space-3);
-    padding: var(--m3-space-4);
   }
 
   .today-task-workspace {
@@ -249,7 +253,7 @@
   .task-reorder-actions,
   .card-reorder-actions,
   .timeline-actions,
-  .archived-timeline-actions {
+  .timeline-actions {
     opacity: 1;
   }
 
@@ -528,9 +532,7 @@ html.drawer-open .page-wrap {
   .today-day-marker,
   .today-overview-label,
   .today-overview-supporting,
-  .today-overview-empty-metric,
-  .capture-zone-copy,
-  .today-context--empty {
+  .today-overview-empty-metric {
     display: none;
   }
 
@@ -545,28 +547,6 @@ html.drawer-open .page-wrap {
 
   .today-overview-percent {
     color: var(--m3-on-surface-variant);
-  }
-
-  .today-context {
-    min-block-size: 0;
-    padding: 12px;
-  }
-
-  .today-context-heading {
-    margin-block-end: 8px;
-  }
-
-  .today-context-eyebrow,
-  .today-context-mark {
-    display: none;
-  }
-
-  .capture-zone {
-    display: block;
-    margin-block: 12px 20px;
-    padding: 0;
-    border: 0;
-    background: transparent;
   }
 
   .today-task-workspace {

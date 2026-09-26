@@ -24,7 +24,7 @@ test('explains that first-run initialization happens during deployment', async (
   await expect(page.getByRole('button', { name: '登录' })).toBeDisabled();
 });
 
-test('opens the authenticated quick-capture dialog and exposes mobile navigation', async ({
+test('opens the authenticated command palette and exposes mobile navigation', async ({
   page,
 }, testInfo) => {
   const user = {
@@ -38,7 +38,6 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
     taskPrefix: 'INGNSITE',
     rank: '1024',
     version: 1,
-    archivedAt: null,
     createdAt: '2026-09-04T10:00:00.000Z',
     updatedAt: '2026-09-04T10:00:00.000Z',
   };
@@ -58,7 +57,6 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
     rank: '1024',
     version: 1,
     reachedAt: null,
-    archivedAt: null,
     createdAt: user.createdAt,
     updatedAt: user.createdAt,
   };
@@ -182,7 +180,6 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
         workflows: [],
         workflowStages: [],
         workflowTaskMemberships: [],
-        archiveOperations: [],
         settings: { ...settings, defaultCaptureTarget: 'ROOT' },
         cursor: '0',
       });
@@ -200,13 +197,9 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
   await page.getByLabel('用户名').fill(user.username);
   await page.getByLabel('密码').fill('correct horse battery staple');
   await page.getByRole('button', { name: '登录' }).click();
-  const quickEntry =
-    testInfo.project.name === 'mobile'
-      ? page.getByRole('button', { name: '打开创建菜单' })
-      : page.getByRole('button', { name: '快速添加' });
-  await expect(quickEntry).toBeVisible();
+  const searchEntry = page.getByRole('button', { name: '搜索任务和备注' });
+  await expect(searchEntry).toBeVisible();
   if (testInfo.project.name === 'mobile') {
-    await expect(page.locator('.quick-capture kbd')).toBeHidden();
     await expect(page.getByRole('navigation', { name: '移动导航' })).toBeVisible();
     const menuButton = page.getByRole('button', { name: '打开侧边栏' });
     await menuButton.click();
@@ -228,17 +221,10 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
     await expect(page.getByRole('heading', { name: '目录' })).toBeVisible();
   }
 
-  await quickEntry.click();
-  if (testInfo.project.name === 'mobile') {
-    // M3E replaced the modal action sheet with a FAB menu: the FAB expands its
-    // actions in place, and the close button is a contrasting secondary FAB.
-    const fabMenu = page.locator('.m3e-fab-menu');
-    await expect(fabMenu).toHaveClass(/is-open/);
-    await page.getByRole('menuitem', { name: '新建任务' }).click();
-  }
-  const dialog = page.getByRole('dialog', { name: '快速添加' });
+  // The command palette is the single overlay entry left in the app bar.
+  await searchEntry.click();
+  const dialog = page.getByRole('dialog', { name: '搜索和命令面板' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel('任务标题')).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
 });
