@@ -1,5 +1,13 @@
 import { expect, test, type Route } from '@playwright/test';
 
+/*
+ * This suite fabricates API failures with `page.route`, so it belongs to the
+ * mocked gate. Under `E2E_REAL=1` the fixture answers for itself, the injected
+ * 409/503 never happens, and the assertions below would measure an error state
+ * the run never produced.
+ */
+test.skip(process.env['E2E_REAL'] === '1', 'drives failures through page.route mocks');
+
 test('tree separates load errors from empty folders and recovers task detail in place', async ({
   page,
 }) => {
