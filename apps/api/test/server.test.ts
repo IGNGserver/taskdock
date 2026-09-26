@@ -50,6 +50,58 @@ describe('Fastify API', () => {
     await app.close();
   });
 
+  it('answers 429 once AUTH_LOGIN_RATE_LIMIT is exhausted for that address and username', async () => {
+    const token = 'test-bootstrap-token-that-is-long-enough-rate-limit';
+    const { app } = await buildServer({
+      store: new MemoryStore(),
+      config: {
+        nodeEnv: 'test',
+        webRoot: '/tmp/devtodo-no-web',
+        bootstrapToken: token,
+        accessTokenSecret: 'test-access-secret-that-is-long-enough-1234567890',
+        refreshTokenPepper: 'test-refresh-pepper-that-is-long-enough-1234567890',
+        authLoginRateLimit: 2,
+      },
+    });
+    const bootstrap = await app.inject({
+      method: 'POST',
+      url: '/api/v1/bootstrap',
+      payload: { token, username: 'rate-limited-owner', password: 'rate-limit-password' },
+    });
+    expect(bootstrap.statusCode).toBe(201);
+    const attempt = () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: { username: 'rate-limited-owner', password: 'rate-limit-password' },
+      });
+    expect((await attempt()).statusCode).toBe(200);
+    expect((await attempt()).statusCode).toBe(200);
+    const limited = await attempt();
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json().code).toBe('RATE_LIMITED');
+    expect(limited.json().details.retryAfterSeconds).toBeGreaterThan(0);
+    await app.close();
+  });
+
+  it('refuses an AUTH_LOGIN_RATE_LIMIT that would disable brute-force protection in production', async () => {
+    await expect(
+      buildServer({
+        store: new MemoryStore(),
+        config: {
+          nodeEnv: 'production',
+          webRoot: '/tmp/devtodo-no-web',
+          bootstrapToken: 'test-bootstrap-token-that-is-long-enough-rate-cap',
+          accessTokenSecret: 'test-access-secret-that-is-long-enough-1234567890',
+          refreshTokenPepper: 'test-refresh-pepper-that-is-long-enough-1234567890',
+          databaseUrl: 'postgres://devtodo:password@localhost:5432/devtodo',
+          devMemoryStore: false,
+          authLoginRateLimit: 100_000,
+        },
+      }),
+    ).rejects.toThrow('AUTH_LOGIN_RATE_LIMIT must stay at or below 1000 in production');
+  });
+
   it('allows the Android HTTP WebView origin for bootstrap status', async () => {
     const { app } = await buildServer({
       store: new MemoryStore(),

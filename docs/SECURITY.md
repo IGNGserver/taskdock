@@ -4,6 +4,7 @@
 - 原生客户端（Android/桌面/Capacitor）的 refresh token 会长期保留，只在用户主动退出、中枢明确回 `AUTH_SESSION_REVOKED`，或换中枢地址时清除；挑战校验失败、限流、超时等一律保留凭证并在下次启动重试。Android 同时维护 AndroidX 加密文件与 Keystore 副本两份密文，任一份损坏或暂不可读都不等于丢失登录；桌面的钥匙环暂时不可读视为可重试状态，不等同于登出。
 - refresh token 单次使用并重放即撤销整条链；客户端在请求前先落盘自己生成的后继密钥，因此「中枢已轮转但响应丢失」可以用同一对 token 幂等恢复，而不必依赖宽限期，也不会让不知道后继密钥的重放者受益。
 - Web 使用 HttpOnly refresh Cookie、显式 CORS、CSP/安全响应头、请求体限制和 Owner 范围查询。支持 HTTP 或 HTTPS 入口；HTTP 登录页会显示安全警告，但密码和会话信息仍会明文传输，公网应使用 HTTPS。
+- 认证接口按「客户端地址（按 `TRUST_PROXY` 还原）+ 用户名」限流，超限返回 `RATE_LIMITED`（HTTP 429，带 `retryAfterSeconds`）：`/auth/login` 默认 15 分钟 10 次，`/bootstrap` 15 分钟 5 次，`/auth/refresh` 与原生客户端挑战每 60 秒 30 次。登录上限可由 `AUTH_LOGIN_RATE_LIMIT` 调整，供大量用户共享同一出口地址（NAT、企业代理）的部署放宽；生产环境取值大于 1000 时中枢拒绝启动，避免把它变成关闭暴破防护的开关。
 - 所有 REST/WebSocket 输入通过 Zod 或显式参数校验；写入要求 Idempotency-Key，更新要求 baseVersion。
 - Markdown 原始 HTML、脚本、事件属性和危险 URL scheme 禁止；预览再次 sanitize，外链强制安全打开。
 - Electron 关闭 nodeIntegration，开启 contextIsolation、sandbox、webSecurity；preload 不暴露原始 ipcRenderer，窗口导航和外链使用 allowlist。
