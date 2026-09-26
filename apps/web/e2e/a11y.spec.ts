@@ -131,6 +131,30 @@ async function installMockApi(page: Page): Promise<void> {
 }
 
 /**
+ * Entrance transitions are the enemy of a colour audit: an `on-surface` label
+ * inside a card that is still at ~60% opacity measures 3.7:1 against its own
+ * container, and neither waiting for a quiet window nor seeking animations to
+ * their end state helps when content mounts *after* the check — which is what the
+ * three different webkit failures were. Disable animations and transitions for the
+ * audited document instead, so every element renders its settled base style and no
+ * late-mounted content can start a transition at all. This makes the measurement
+ * engine-independent rather than racing the engine.
+ *
+ * The preview document carries no CSP header, so the injected sheet applies; the
+ * rule is idempotent and stays for the lifetime of the page.
+ */
+async function freezeAuditedStyling(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    if (document.getElementById('a11y-audit-static')) return;
+    const style = document.createElement('style');
+    style.id = 'a11y-audit-static';
+    style.textContent =
+      '*,*::before,*::after{animation:none !important;transition:none !important}';
+    document.head.append(style);
+  });
+}
+
+/**
  * WCAG 1.4.3 exempts text in an *inactive* user interface component, and the M3
  * spec renders disabled content at 38% opacity — deliberately below the 4.5:1
  * floor that applies to active text. axe reports the label `<span>` inside a
@@ -139,7 +163,8 @@ async function installMockApi(page: Page): Promise<void> {
  * disabled subtree. Disabled controls are inert, so no interaction rule loses
  * coverage; every other rule still applies to them.
  */
-function analyzePage(page: Page) {
+async function analyzePage(page: Page) {
+  await freezeAuditedStyling(page);
   return new AxeBuilder({ page })
     .options({
       rules: {
