@@ -86,6 +86,11 @@ async function main(): Promise<void> {
     REFRESH_TOKEN_PEPPER:
       process.env['E2E_REFRESH_TOKEN_PEPPER'] ?? 'devtodo-e2e-refresh-pepper-change-me-now',
     LOG_LEVEL: 'warn',
+    // One gate run performs a login per test across four browser projects, which
+    // is far beyond what a person does in 15 minutes; the default 10 would turn
+    // the later projects' logins into HTTP 429 and the pages would sit on the
+    // sign-in form. This fixture is disposable and never fronts real data.
+    AUTH_LOGIN_RATE_LIMIT: '400',
   };
   if (databaseUrl) apiEnv.DATABASE_URL = databaseUrl;
 

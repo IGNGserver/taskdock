@@ -75,6 +75,14 @@ export interface AppConfig extends AuthConfig {
   dbLockTimeoutMs: number;
   httpRequestTimeoutMs: number;
   httpConnectionTimeoutMs: number;
+  /**
+   * Login attempts allowed per client address and username within the fixed
+   * 15-minute window. Operators behind a shared NAT can raise it; the browser
+   * E2E fixture does so because one run performs far more logins than a person
+   * would. Production refuses an absurd value so brute-force protection cannot
+   * be switched off through this knob.
+   */
+  authLoginRateLimit: number;
 }
 
 export interface BuildServerOptions {
@@ -141,6 +149,7 @@ const defaultConfig: AppConfig = {
   dbLockTimeoutMs: Number(process.env['DB_LOCK_TIMEOUT_MS'] ?? 5_000),
   httpRequestTimeoutMs: Number(process.env['HTTP_REQUEST_TIMEOUT_MS'] ?? 30_000),
   httpConnectionTimeoutMs: Number(process.env['HTTP_CONNECTION_TIMEOUT_MS'] ?? 10_000),
+  authLoginRateLimit: Number(process.env['AUTH_LOGIN_RATE_LIMIT'] ?? 10),
 };
 
 export async function buildServer(
@@ -338,7 +347,7 @@ export async function buildServer(
         const body = loginSchema
           .extend({ nativeChallenge: uuidSchema.optional() })
           .parse(request.body);
-        rateLimiter.check(request, 'login', body.username, 10, 15 * 60_000);
+        rateLimiter.check(request, 'login', body.username, config.authLoginRateLimit, 15 * 60_000);
         const nativeExchange = await requireNativeExchange(
           request,
           config,
@@ -1990,6 +1999,12 @@ function validateRuntimeConfig(config: AppConfig): void {
     boundedTimeouts.some((value) => value > 120_000)
   )
     throw new Error('retention windows and timeout values must be integers between 1 and 120000');
+  if (!Number.isInteger(config.authLoginRateLimit) || config.authLoginRateLimit < 1)
+    throw new Error('AUTH_LOGIN_RATE_LIMIT must be an integer of at least 1');
+  // The window is fixed, so this is the only knob — keep it from becoming a way
+  // to switch brute-force protection off in production.
+  if (config.nodeEnv === 'production' && config.authLoginRateLimit > 1_000)
+    throw new Error('AUTH_LOGIN_RATE_LIMIT must stay at or below 1000 in production');
   if (config.nodeEnv !== 'production') return;
   const insecureMarkers = ['change-me', 'local-access-secret', 'local-refresh-pepper'];
   if (
