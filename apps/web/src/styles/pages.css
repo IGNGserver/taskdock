@@ -167,7 +167,7 @@
 }
 
 .tree-main-button code,
-.workflow-task code {
+.workflow-task__meta code {
   color: var(--m3-on-surface-variant);
   font-family: var(--m3-font-mono);
   font-size: var(--m3-type-label-small-size);
@@ -202,97 +202,208 @@
 /* Workflows (v2)                                                             */
 /* -------------------------------------------------------------------------- */
 
-.workflow-card {
+.workflows-header {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-block-end: 18px;
-  padding: 18px;
-  border: 1px solid var(--m3-outline-variant);
-  border-radius: var(--m3-shape-lg);
-  background-color: var(--m3-surface-container-lowest);
-}
-
-.workflow-card > header {
-  display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
 }
 
-.workflow-card h2 {
-  margin: 0;
-  font-size: var(--m3-type-title-large-size);
-}
-
-.workflow-name-input,
-.workflow-stage-name-input {
-  min-block-size: 44px;
-  padding: 0 12px;
-  border: 1px solid transparent;
-  border-radius: var(--m3-shape-xs);
-  background: transparent;
-  color: var(--m3-on-surface);
-  font-family: inherit;
-  font-size: var(--m3-type-title-medium-size);
-  font-weight: 600;
-}
-
-.workflow-name-input:hover,
-.workflow-stage-name-input:hover {
-  border-color: var(--m3-outline-variant);
-}
-
-.workflow-name-input:focus,
-.workflow-stage-name-input:focus {
-  border-color: var(--m3-primary);
-  background-color: var(--m3-surface-container);
-  outline: 0;
-}
-
-.workflow-stage-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.workflow-stages {
-  display: grid;
-  gap: 14px;
-}
-
-.workflow-stages section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px;
-  border-radius: var(--m3-shape-md);
-  background-color: var(--m3-surface-container);
-}
-
-.workflow-stages h3 {
-  margin: 0;
-  font-size: var(--m3-type-title-small-size);
-  font-weight: 650;
-}
-
-.workflow-task {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-block-size: 48px;
-  padding: 6px 10px;
-  border-radius: var(--m3-shape-sm);
-  background-color: var(--m3-surface-container-high);
-}
-
-.workflow-add-task,
-.workflow-add-stage {
+.workflows-header__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+.workflow-board {
+  display: grid;
+  gap: 16px;
+}
+
+.workflow-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workflow-card__heading {
+  display: grid;
+  gap: 4px;
+  min-inline-size: 0;
+}
+
+.workflow-card__name {
+  margin: 0;
+  overflow: hidden;
+  color: var(--m3-on-surface);
+  font-size: var(--m3-type-title-large-size);
+  line-height: var(--m3-type-title-large-line);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+}
+
+/*
+ * Stages read left to right and wrap onto new rows, so the board never needs a
+ * nested scroll container that would clip the row overflow menus.
+ */
+.workflow-stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 272px), 1fr));
+  align-items: start;
+  gap: 12px;
+}
+
+.workflow-stage {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-inline-size: 0;
+  padding: 12px;
+  border-radius: var(--m3-shape-lg);
+  background-color: var(--m3-surface-container);
+}
+
+.workflow-stage__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.workflow-stage__name {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--m3-on-surface);
+  font-size: var(--m3-type-title-small-size);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-stage__count {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 22px;
+  padding-inline: 6px;
+  border-radius: var(--m3-shape-full);
+  background-color: var(--m3-surface-container-high);
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-label-small-size);
+}
+
+.workflow-stage__notice,
+.workflow-stage__empty {
+  margin: 0;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+}
+
+.workflow-stage__empty {
+  padding: 14px 10px;
+  border: 1px dashed color-mix(in srgb, var(--m3-outline-variant) 70%, transparent);
+  border-radius: var(--m3-shape-md);
+  text-align: center;
+}
+
+.workflow-stage__add {
+  inline-size: 100%;
+  justify-content: flex-start;
+}
+
+.workflow-stage-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-block-size: 48px;
+  padding: 12px;
+  border: 1px dashed var(--m3-outline);
+  border-radius: var(--m3-shape-lg);
+  background: transparent;
+  color: var(--m3-on-surface-variant);
+  font-family: inherit;
+  font-size: var(--m3-type-label-large-size);
+  cursor: pointer;
+}
+
+.workflow-stage-add:hover:not(:disabled) {
+  border-color: var(--m3-primary);
+  background-color: color-mix(in srgb, var(--m3-primary) 8%, transparent);
+  color: var(--m3-primary);
+}
+
+.workflow-stage-add:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Anchors the row, column and card overflow menus. */
+.workflow-menu {
+  position: relative;
+  flex: none;
+}
+
+.workflow-task__title {
+  display: block;
+  inline-size: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.workflow-task__title:hover {
+  color: var(--m3-primary);
+}
+
+.m3e-list-item.is-task-done .workflow-task__title {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, currentColor 46%, transparent);
+}
+
+.workflow-task__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.workflow-task__folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-label-small-size);
+}
+
+/* The dialog body is the only scroll container, so the picker list just adds
+   spacing instead of capping its own height. */
+.workflow-add-task__list {
+  margin-block-start: 12px;
+  overflow: visible;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1647,45 +1758,6 @@
   inset-block-start: calc(100% - 2px);
 }
 
-.workflow-empty-state {
-  margin-block-start: 20px;
-}
-
-.workflow-card {
-  gap: 16px;
-  margin-block-end: 16px;
-  padding: 16px;
-  border-radius: var(--m3-shape-lg);
-  background-color: var(--m3-surface-container-low);
-  box-shadow: none;
-}
-
-.workflow-card > header {
-  align-items: flex-start;
-}
-
-.workflow-card > header > div:first-child {
-  min-inline-size: 0;
-}
-
-.workflow-card > header > div:first-child > span {
-  display: block;
-  margin-block-start: 2px;
-  padding-inline: 12px;
-  color: var(--m3-on-surface-variant);
-  font-size: var(--m3-type-body-small-size);
-}
-
-.workflow-stages section {
-  padding: 12px;
-  border: 1px solid var(--m3-outline-variant);
-  background-color: var(--m3-surface-container);
-}
-
-.workflow-task {
-  background-color: var(--m3-surface-container-low);
-}
-
 .today-toolbar {
   padding: 0;
   border: 0;
@@ -1832,10 +1904,6 @@
 .m3e-field--tree-inline .m3e-field__input {
   padding-block: 0;
   line-height: var(--m3-type-body-large-line);
-}
-
-.workflows-page > .tree-capture-form {
-  margin-block: 8px 24px;
 }
 
 .m3e-card--tree-group {

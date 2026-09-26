@@ -249,8 +249,8 @@ test('verifies v2 workflow reordering, direct status toggles, folder display, an
 
   // Navigate to Workflows page
   await page.goto('/workflows');
-  await expect(page.getByRole('textbox', { name: '流程名称' })).toHaveValue('发布流程');
-  await expect(page.getByRole('textbox', { name: '阶段名称' })).toHaveValue('开发阶段');
+  await expect(page.getByRole('heading', { level: 2, name: '发布流程' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 3, name: '开发阶段' })).toBeVisible();
   await expect(page.getByText('任务一')).toBeVisible();
   await expect(
     page
@@ -259,9 +259,11 @@ test('verifies v2 workflow reordering, direct status toggles, folder display, an
       .getByText(/工作项目/),
   ).toBeVisible();
 
-  // Check that down-button exists on first task and up-button exists on second task for in-stage sorting
-  await expect(page.getByTitle('阶段内下移')).toBeVisible();
-  await expect(page.getByTitle('阶段内上移')).toBeVisible();
+  // Row verbs live in one overflow menu per task, so in-stage reordering is
+  // reached from the first row and correctly disabled at the list boundary.
+  await page.getByRole('button', { name: '任务一 的操作' }).click();
+  await expect(page.getByRole('menuitem', { name: /在阶段内下移/ })).toBeEnabled();
+  await expect(page.getByRole('menuitem', { name: /在阶段内上移/ })).toBeDisabled();
 
   // Test deep-link jump to directory with focusTask query parameter
   await page.goto(`/tree/${folder.id}?focusTask=${task1.id}`);

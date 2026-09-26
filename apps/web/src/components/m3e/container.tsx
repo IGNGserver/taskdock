@@ -423,6 +423,7 @@ export function Dialog({
   onClose,
   title,
   children,
+  footer,
   state,
   size = 'basic',
 }: {
@@ -430,6 +431,8 @@ export function Dialog({
   onClose: () => void;
   title: ReactNode;
   children: ReactNode;
+  /** Pinned under the scrolling body so a confirm action is always reachable. */
+  footer?: ReactNode;
   /** Overrides the internal presence state, for callers that own the lifecycle. */
   state?: DialogState;
   size?: 'basic' | 'full-screen';
@@ -471,6 +474,7 @@ export function Dialog({
           </IconButton>
         </header>
         <div className="m3e-dialog__body">{children}</div>
+        {footer && <footer className="m3e-dialog__footer">{footer}</footer>}
       </div>
     </div>
   );

@@ -430,24 +430,18 @@
   padding-inline: 10px;
 }
 
-.m3e-field--inline-capture,
-.m3e-field--workflow-add-task,
-.m3e-field--workflow-add-stage {
+.m3e-field--inline-capture {
   flex: 1 1 190px;
   min-inline-size: 0;
 }
 
-.m3e-field--inline-capture .m3e-field__box,
-.m3e-field--workflow-add-task .m3e-field__box,
-.m3e-field--workflow-add-stage .m3e-field__box {
+.m3e-field--inline-capture .m3e-field__box {
   min-block-size: 48px;
   border-radius: var(--m3-shape-md);
   background: var(--m3-surface-container-low);
 }
 
-.m3e-field--inline-capture .m3e-field__input,
-.m3e-field--workflow-add-task .m3e-field__input,
-.m3e-field--workflow-add-stage .m3e-field__input {
+.m3e-field--inline-capture .m3e-field__input {
   min-block-size: 48px;
   padding-inline: 14px;
   font-size: var(--m3-type-body-medium-size);
@@ -501,28 +495,30 @@
   padding: 10px 12px;
 }
 
+/*
+ * The detail title hides its floating label, so the padding reserved for that
+ * label has to go as well. Symmetric block padding plus a line-height that
+ * matches the larger font keeps the text optically centred and stops the
+ * single-line input from turning into a scrollable box.
+ */
 .m3e-field--task-detail-title .m3e-field__input {
+  min-block-size: 48px;
+  padding-block: 10px;
+  overflow: hidden;
   font-size: var(--m3-type-title-large-size);
+  line-height: var(--m3-type-title-large-line);
   font-weight: 600;
-}
-
-.m3e-field--workflow-name,
-.m3e-field--workflow-stage-name {
-  flex: 1 1 auto;
-  min-inline-size: 0;
 }
 
 .m3e-select--step-status,
 .m3e-select--task-folder,
-.m3e-select--tree-view,
-.m3e-select--workflow-add-task {
+.m3e-select--tree-view {
   min-inline-size: 0;
 }
 
 .m3e-select--step-status .m3e-select__trigger,
 .m3e-select--task-folder .m3e-select__trigger,
-.m3e-select--tree-view .m3e-select__trigger,
-.m3e-select--workflow-add-task .m3e-select__trigger {
+.m3e-select--tree-view .m3e-select__trigger {
   min-block-size: 48px;
   border-radius: var(--m3-shape-md);
 }

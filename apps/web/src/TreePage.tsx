@@ -7,7 +7,6 @@ import type {
   TimePointDto,
   TreeItemDto,
   TreeTaskDto,
-  WorkflowDto,
 } from '@devtodo/contracts';
 import {
   useCallback,
@@ -20,21 +19,8 @@ import {
   type ReactNode,
 } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ChevronRight,
-  Folder,
-  FolderPlus,
-  MoreHorizontal,
-  Plus,
-  Trash2,
-  Workflow as WorkflowGlyph,
-} from 'lucide-react';
+import { ChevronRight, Folder, FolderPlus, MoreHorizontal, Plus } from 'lucide-react';
 import { ApiError, mutationV2, requestV2 } from './api.js';
-import { useAuth } from './auth.js';
 import {
   Alert,
   BottomSheet,
@@ -59,7 +45,7 @@ import {
   useWindowSizeClass,
   type MenuOption,
 } from './components/m3e/index.js';
-import { recordLastFolderId, resolveCaptureFolder } from './folder-preference.js';
+import { recordLastFolderId } from './folder-preference.js';
 
 function statusLabel(status: string): string {
   return status === 'IN_PROGRESS' ? '进行中' : status === 'DONE' ? '已完成' : '待开始';
@@ -67,6 +53,11 @@ function statusLabel(status: string): string {
 
 function statusClass(status: string): string {
   return status === 'IN_PROGRESS' ? 'in-progress' : status === 'DONE' ? 'done' : 'todo';
+}
+
+/** Stable identity for a directory row, whichever kind it holds. */
+function treeItemId(item: TreeItemDto): string {
+  return item.kind === 'FOLDER' ? item.folder.id : item.task.id;
 }
 
 type TaskPlacementDetail = PlacementDto & { timePoint: TimePointDto };
@@ -200,41 +191,83 @@ export function TreePage() {
   const [moveParentId, setMoveParentId] = useState('');
   const [moveBusy, setMoveBusy] = useState(false);
   const [groupByStatus, setGroupByStatus] = useState(false);
+  /**
+   * Status edits are painted onto the row in place so the circle answers the tap
+   * immediately, and the row must not move at all until the directory is opened
+   * again. Two pins hold it there across the background syncs the edit triggers:
+   * `groupPins` remembers the status the row was loaded with so it stays in its
+   * group, and `orderLock` remembers the whole row order so a server re-rank
+   * cannot shuffle it within that group. Both are released by any load the user
+   * asked for directly, so reordering, moving, creating and deleting still land
+   * immediately.
+   */
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, TreeTaskDto>>({});
+  const [groupPins, setGroupPins] = useState<Record<string, TaskStatus>>({});
+  const [orderLock, setOrderLock] = useState<string[] | null>(null);
   const loadedFolder = useRef<string | null | undefined>(undefined);
   const loadSequence = useRef(0);
 
-  const load = useCallback(async () => {
-    const sequence = ++loadSequence.current;
-    // Keep rows mounted during background sync so open touch menus survive.
-    if (loadedFolder.current !== folderId) setLoading(true);
-    setLoadError('');
-    setError('');
-    try {
-      const query = folderId
-        ? `?parentFolderId=${encodeURIComponent(folderId)}`
-        : '?parentFolderId=root';
-      const [children, nextPath] = await Promise.all([
-        requestV2<{ items: TreeItemDto[] }>(`/tree/children${query}`),
-        folderId
-          ? requestV2<{ items: Array<Pick<FolderDto, 'id' | 'title'>> }>(
-              `/folders/${folderId}/path`,
-            )
-          : Promise.resolve({ items: [] }),
-      ]);
-      if (sequence !== loadSequence.current) return;
-      loadedFolder.current = folderId;
-      setItems(children.items);
-      setPath(nextPath.items);
-      // Remember the folder the user is actually browsing so later quick
-      // captures can resolve "most recent valid folder".
-      recordLastFolderId(folderId);
-    } catch (cause) {
-      if (sequence === loadSequence.current)
-        setLoadError(cause instanceof Error ? cause.message : '目录加载失败');
-    } finally {
-      if (sequence === loadSequence.current) setLoading(false);
-    }
-  }, [folderId]);
+  const load = useCallback(
+    async (options: { keepPins?: boolean } = {}) => {
+      const sequence = ++loadSequence.current;
+      const entering = loadedFolder.current !== folderId;
+      // Only the background sync triggered by our own status edit may keep the
+      // row pinned; arriving in the directory always shows the fresh grouping.
+      const keepPins = options.keepPins === true && !entering;
+      // Keep rows mounted during background sync so open touch menus survive.
+      if (entering) setLoading(true);
+      setLoadError('');
+      setError('');
+      try {
+        const query = folderId
+          ? `?parentFolderId=${encodeURIComponent(folderId)}`
+          : '?parentFolderId=root';
+        const [children, nextPath] = await Promise.all([
+          requestV2<{ items: TreeItemDto[] }>(`/tree/children${query}`),
+          folderId
+            ? requestV2<{ items: Array<Pick<FolderDto, 'id' | 'title'>> }>(
+                `/folders/${folderId}/path`,
+              )
+            : Promise.resolve({ items: [] }),
+        ]);
+        if (sequence !== loadSequence.current) return;
+        loadedFolder.current = folderId;
+        setItems(children.items);
+        // A fresh read is authoritative for the circle.
+        setStatusOverrides({});
+        if (keepPins) {
+          // Drop rows that disappeared; anything still on screen keeps its place.
+          const alive = children.items.map(treeItemId);
+          setGroupPins((pins) => {
+            if (Object.keys(pins).length === 0) return pins;
+            const survivors = new Set(alive);
+            const kept: Record<string, TaskStatus> = {};
+            for (const [id, status] of Object.entries(pins))
+              if (survivors.has(id)) kept[id] = status;
+            return kept;
+          });
+          setOrderLock((lock) => {
+            if (!lock) return lock;
+            const survivors = new Set(alive);
+            return lock.filter((id) => survivors.has(id));
+          });
+        } else {
+          setGroupPins({});
+          setOrderLock(null);
+        }
+        setPath(nextPath.items);
+        // Remember the folder the user is actually browsing so later quick
+        // captures can resolve "most recent valid folder".
+        recordLastFolderId(folderId);
+      } catch (cause) {
+        if (sequence === loadSequence.current)
+          setLoadError(cause instanceof Error ? cause.message : '目录加载失败');
+      } finally {
+        if (sequence === loadSequence.current) setLoading(false);
+      }
+    },
+    [folderId],
+  );
 
   useEffect(() => {
     void load();
@@ -257,10 +290,45 @@ export function TreePage() {
     }
   }, [focusTaskId, items]);
   useEffect(() => {
-    const handler = () => void load();
+    // Announced from our own status edit and from the sync engine that follows
+    // it, so this refresh must not undo the pins that keep the row in place.
+    const handler = () => void load({ keepPins: true });
     window.addEventListener('devtodo:data-changed', handler);
     return () => window.removeEventListener('devtodo:data-changed', handler);
   }, [load]);
+
+  const displayTask = useCallback(
+    (task: TreeTaskDto): TreeTaskDto => statusOverrides[task.id] ?? task,
+    [statusOverrides],
+  );
+
+  /**
+   * The group a row belongs to. A task the user just re-statused keeps the status
+   * it was loaded with, so it only changes group on the next visit.
+   */
+  const groupingStatus = useCallback(
+    (item: TreeItemDto) =>
+      item.kind === 'FOLDER'
+        ? item.aggregate.status
+        : (groupPins[item.task.id] ?? item.task.status),
+    [groupPins],
+  );
+
+  /**
+   * The rows in the order they are drawn. While a status edit is pending the
+   * locked order wins, so the background sync that follows the edit can refresh
+   * the row's contents without sliding it to a new position. Rows that appeared
+   * after the lock was taken are appended rather than dropped.
+   */
+  const orderedItems = useMemo(() => {
+    if (!orderLock) return items;
+    const locked = new Map(orderLock.map((id, index) => [id, index]));
+    const held: TreeItemDto[] = [];
+    const added: TreeItemDto[] = [];
+    for (const item of items) (locked.has(treeItemId(item)) ? held : added).push(item);
+    held.sort((a, b) => (locked.get(treeItemId(a)) ?? 0) - (locked.get(treeItemId(b)) ?? 0));
+    return [...held, ...added];
+  }, [items, orderLock]);
 
   const groups = useMemo(
     () =>
@@ -270,23 +338,21 @@ export function TreePage() {
         { key: 'DONE', label: '已完成' },
       ].map((group) => ({
         ...group,
-        items: items.filter(
-          (item) =>
-            (item.kind === 'FOLDER' ? item.aggregate.status : item.task.status) === group.key,
-        ),
+        items: orderedItems.filter((item) => groupingStatus(item) === group.key),
       })),
-    [items],
+    [orderedItems, groupingStatus],
   );
-  const visibleGroups = groupByStatus ? groups : [{ key: 'ALL', label: '当前目录', items }];
+  const visibleGroups = groupByStatus
+    ? groups
+    : [{ key: 'ALL', label: '当前目录', items: orderedItems }];
   const statusPosition = (item: TreeItemDto) => {
-    const status = item.kind === 'FOLDER' ? item.aggregate.status : item.task.status;
+    const status = groupingStatus(item);
     const group = groups.find((candidate) => candidate.key === status);
-    const id = item.kind === 'FOLDER' ? item.folder.id : item.task.id;
+    const id = treeItemId(item);
     const index =
-      group?.items.findIndex((candidate) => {
-        const candidateId = candidate.kind === 'FOLDER' ? candidate.folder.id : candidate.task.id;
-        return candidate.kind === item.kind && candidateId === id;
-      }) ?? 0;
+      group?.items.findIndex(
+        (candidate) => candidate.kind === item.kind && treeItemId(candidate) === id,
+      ) ?? 0;
     return { index, length: group?.items.length ?? 1 };
   };
 
@@ -345,9 +411,30 @@ export function TreePage() {
   };
   const changeTaskStatus = async (task: TreeTaskDto, status: TaskStatus) => {
     setError('');
+    const current = displayTask(task);
+    if (current.status === status) return;
+    // Freeze the order currently on screen before the request goes out: the
+    // reloads this edit triggers must not slide the row to a new place.
+    setOrderLock((lock) => lock ?? items.map(treeItemId));
     try {
-      await mutationV2('PATCH', `/tasks/${task.id}`, { status, baseVersion: task.version });
-      await load();
+      const response = (await mutationV2('PATCH', `/tasks/${task.id}`, {
+        status,
+        baseVersion: current.version,
+      })) as Partial<TreeTaskDto> | null;
+      // Keep the row exactly where it is: the circle, its label and the version
+      // we send next update locally, while the grouping pin remembers the status
+      // this directory was loaded with.
+      setStatusOverrides((overrides) => ({
+        ...overrides,
+        [task.id]: {
+          ...current,
+          ...response,
+          id: task.id,
+          status: response?.status ?? status,
+          version: response?.version ?? current.version + 1,
+        },
+      }));
+      setGroupPins((pins) => (task.id in pins ? pins : { ...pins, [task.id]: task.status }));
       window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '更新任务状态失败，请重试');
@@ -510,8 +597,8 @@ export function TreePage() {
     <section className="page-section tree-page" aria-labelledby="tree-title">
       <div className="page-header tree-page-header">
         <div>
-          <p className="eyebrow">任务库</p>
-          <h1 id="tree-title">任务库</h1>
+          <p className="eyebrow">目录</p>
+          <h1 id="tree-title">目录</h1>
           <p className="page-subtitle">按目录整理任务；日期、事件和流程是任务的其他视图。</p>
         </div>
         <div className="tree-header-actions">
@@ -582,7 +669,7 @@ export function TreePage() {
         </Button>
       </form>
       {error && (
-        <Alert tone="error" title="任务库操作失败">
+        <Alert tone="error" title="目录操作失败">
           {error}
         </Alert>
       )}
@@ -665,12 +752,12 @@ export function TreePage() {
                     <ListItem
                       id={`task-${item.task.id}`}
                       className={`m3e-list-item--tree-row${
-                        item.task.status === 'DONE' ? ' is-task-done' : ''
+                        displayTask(item.task).status === 'DONE' ? ' is-task-done' : ''
                       }`}
                       key={`task-${item.task.id}`}
                       leadingControl={
                         <TaskStatusControl
-                          status={item.task.status}
+                          status={displayTask(item.task).status}
                           onStatusChange={(status) => changeTaskStatus(item.task, status)}
                         />
                       }
@@ -761,7 +848,7 @@ export function TreePage() {
       <TaskDetailV2Overlay
         taskId={selectedTaskId}
         onClose={() => setSelectedTaskId(null)}
-        onChanged={load}
+        onChanged={() => void load()}
       />
     </section>
   );
@@ -1035,14 +1122,6 @@ function TaskDetailV2({
       setError(cause instanceof Error ? cause.message : '安排移除失败');
     }
   };
-  const duplicate = async () => {
-    try {
-      await mutationV2('POST', `/tasks/${taskRecord.id}/duplicate`, {});
-      await onChanged();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '任务复制失败');
-    }
-  };
   const deleteTask = async () => {
     try {
       await mutationV2('DELETE', `/tasks/${taskRecord.id}`, {
@@ -1071,17 +1150,6 @@ function TaskDetailV2({
               title.trim() !== taskRecord.title && void updateTask({ title: title.trim() })
             }
           />
-        </div>
-        <div className="header-actions">
-          <Button
-            variant="tonal"
-            size="s"
-            type="button"
-            disabled={archived}
-            onClick={() => void duplicate()}
-          >
-            复制任务
-          </Button>
         </div>
       </div>
       {error && (
@@ -1362,662 +1430,5 @@ function TaskDetailV2({
         </div>
       </DestructiveSection>
     </div>
-  );
-}
-
-export function WorkflowsPage() {
-  const { settings } = useAuth();
-  const [workflows, setWorkflows] = useState<WorkflowDto[]>([]);
-  const [tasks, setTasks] = useState<TreeTaskDto[]>([]);
-  const [folders, setFolders] = useState<FolderDto[]>([]);
-  const [name, setName] = useState('');
-  const [stageDrafts, setStageDrafts] = useState<Record<string, string>>({});
-  const [workflowDrafts, setWorkflowDrafts] = useState<Record<string, string>>({});
-  const [stageNameDrafts, setStageNameDrafts] = useState<Record<string, string>>({});
-  const [taskDrafts, setTaskDrafts] = useState<Record<string, string>>({});
-  const [newTaskDrafts, setNewTaskDrafts] = useState<Record<string, string>>({});
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [confirmation, setConfirmation] = useState<ConfirmRequest | null>(null);
-  const [loadError, setLoadError] = useState('');
-  const [actionError, setActionError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [hasData, setHasData] = useState(false);
-  const loadSequence = useRef(0);
-
-  const load = useCallback(async () => {
-    const sequence = ++loadSequence.current;
-    setLoading(true);
-    setLoadError('');
-    try {
-      const [workflowResult, taskResult, folderResult] = await Promise.all([
-        requestV2<{ items: WorkflowDto[] }>('/workflows?includeArchived=true'),
-        requestV2<{ items: TreeTaskDto[] }>('/tasks'),
-        requestV2<{ items: FolderDto[] }>('/folders'),
-      ]);
-      if (sequence !== loadSequence.current) return;
-      setWorkflows(workflowResult.items);
-      setTasks(taskResult.items);
-      setFolders(folderResult.items);
-      setHasData(true);
-      setActionError('');
-    } catch (cause) {
-      if (sequence === loadSequence.current)
-        setLoadError(cause instanceof Error ? cause.message : '流程加载失败');
-    } finally {
-      if (sequence === loadSequence.current) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-    const listener = () => void load();
-    window.addEventListener('devtodo:data-changed', listener);
-    return () => {
-      loadSequence.current += 1;
-      window.removeEventListener('devtodo:data-changed', listener);
-    };
-  }, [load]);
-
-  const run = async (action: () => Promise<unknown>) => {
-    setActionError('');
-    try {
-      await action();
-      await load();
-    } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : '流程操作失败');
-    }
-  };
-
-  const create = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!name.trim()) return;
-    await run(() => mutationV2('POST', '/workflows', { name }));
-    setName('');
-  };
-  const addExistingTaskToStage = async (stage: NonNullable<WorkflowDto['stages']>[number]) => {
-    const taskId = taskDrafts[stage.id];
-    if (!taskId) return;
-    await run(() =>
-      mutationV2('POST', `/workflow-stages/${stage.id}/tasks`, { taskId }).then(() =>
-        setTaskDrafts((current) => ({ ...current, [stage.id]: '' })),
-      ),
-    );
-  };
-  const createTaskInStage = async (stage: NonNullable<WorkflowDto['stages']>[number]) => {
-    const title = newTaskDrafts[stage.id]?.trim();
-    if (!title) return;
-    // Honour the same capture-target contract as the tree and Today page: the
-    // open folder wins, otherwise the recent/updated folder, and ROOT means root.
-    const validFolderId = resolveCaptureFolder({
-      activeFolderId: null,
-      defaultCaptureTarget: settings?.defaultCaptureTarget,
-      folders,
-    });
-    await run(async () => {
-      const created = (await mutationV2('POST', '/tasks', {
-        parentFolderId: validFolderId,
-        title,
-      })) as {
-        task: TreeTaskDto;
-      };
-      await mutationV2('POST', `/workflow-stages/${stage.id}/tasks`, { taskId: created.task.id });
-      setNewTaskDrafts((current) => ({ ...current, [stage.id]: '' }));
-    });
-  };
-  const createStage = async (workflow: WorkflowDto) => {
-    const name = stageDrafts[workflow.id]?.trim();
-    if (!name) return;
-    await run(() =>
-      mutationV2('POST', `/workflows/${workflow.id}/stages`, { name }).then(() =>
-        setStageDrafts((current) => ({ ...current, [workflow.id]: '' })),
-      ),
-    );
-  };
-
-  return (
-    <section className="page-section workflows-page" aria-labelledby="workflows-title">
-      <div className="page-header">
-        <div>
-          <p className="eyebrow">流程</p>
-          <h1 id="workflows-title">流程</h1>
-          <p className="page-subtitle">一个任务可以加入多个流程；阶段只表示流程位置。</p>
-        </div>
-      </div>
-      {loadError && (
-        <Alert
-          tone="error"
-          title="流程加载失败"
-          action={
-            <Button variant="text" size="s" onClick={() => void load()}>
-              重试
-            </Button>
-          }
-        >
-          {loadError}
-        </Alert>
-      )}
-      {actionError && (
-        <Alert
-          tone="error"
-          title="流程操作失败"
-          action={
-            <Button variant="text" size="s" onClick={() => void load()}>
-              刷新
-            </Button>
-          }
-        >
-          {actionError}
-        </Alert>
-      )}
-      <form onSubmit={create} className="tree-capture-form">
-        <TextField
-          label="新建流程"
-          hideLabel
-          className="m3e-field--tree-inline"
-          placeholder="新建流程…"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
-        <Button variant="filled" type="submit">
-          创建流程
-        </Button>
-      </form>
-      {loading && !hasData ? (
-        <LoadingState label="正在加载流程" description="正在准备流程、阶段和可加入的任务。" />
-      ) : !hasData ? null : (
-        <>
-          {loading && <LoadingState label="正在更新流程" />}
-          {workflows.length === 0 ? (
-            <EmptyState
-              className="m3e-empty-state--workflow"
-              icon={<WorkflowGlyph size={24} aria-hidden="true" />}
-              title="还没有流程"
-              description="把重复的发布、插件或维护步骤拆成可复用的阶段。"
-            />
-          ) : (
-            workflows.map((workflow) => {
-              const stages = workflow.stages ?? [];
-              const memberIds = new Set(
-                stages.flatMap((stage) => stage.tasks.map((task) => task.id)),
-              );
-              const availableTasks = tasks.filter(
-                (task) => !task.archivedAt && !memberIds.has(task.id),
-              );
-              const archived = Boolean(workflow.archivedAt);
-              return (
-                <Card
-                  as="article"
-                  variant={archived ? 'outlined' : 'filled'}
-                  className="m3e-card--workflow"
-                  key={workflow.id}
-                >
-                  <header className="workflow-card__header">
-                    <div className="workflow-card__summary">
-                      <TextField
-                        label="流程名称"
-                        className="m3e-field--workflow-name"
-                        value={workflowDrafts[workflow.id] ?? workflow.name}
-                        disabled={archived}
-                        onChange={(event) =>
-                          setWorkflowDrafts((current) => ({
-                            ...current,
-                            [workflow.id]: event.target.value,
-                          }))
-                        }
-                        onBlur={() => {
-                          const nextName = workflowDrafts[workflow.id]?.trim();
-                          if (nextName && nextName !== workflow.name)
-                            void run(() =>
-                              mutationV2('PATCH', `/workflows/${workflow.id}`, {
-                                name: nextName,
-                                baseVersion: workflow.version,
-                              }),
-                            );
-                        }}
-                      />
-                      <div className="workflow-card__meta">
-                        <Chip
-                          kind="assist"
-                          label={`${stages.length} 个阶段 · ${memberIds.size} 个任务`}
-                        />
-                        {archived && (
-                          <Chip
-                            kind="assist"
-                            label="已归档"
-                            className="m3e-chip--workflow-archive"
-                          />
-                        )}
-                      </div>
-                    </div>
-                    <div className="header-actions">
-                      <Button
-                        variant="tonal"
-                        size="s"
-                        type="button"
-                        onClick={() =>
-                          void run(() =>
-                            mutationV2(
-                              'POST',
-                              `/workflows/${workflow.id}/${archived ? 'restore' : 'archive'}`,
-                              { baseVersion: workflow.version },
-                            ),
-                          )
-                        }
-                      >
-                        {archived ? '恢复流程' : '归档流程'}
-                      </Button>
-                      <Button
-                        variant="filled"
-                        size="s"
-                        className="m3e-button--danger"
-                        type="button"
-                        onClick={() =>
-                          setConfirmation({
-                            title: '删除流程',
-                            description: `删除“${workflow.name}”的阶段与成员关系，但不会删除任务。此操作不可恢复。`,
-                            confirmLabel: '删除流程',
-                            danger: true,
-                            onConfirm: async () => {
-                              await mutationV2('DELETE', `/workflows/${workflow.id}`, {
-                                baseVersion: workflow.version,
-                              });
-                              await load();
-                              return true;
-                            },
-                          })
-                        }
-                      >
-                        删除
-                      </Button>
-                    </div>
-                  </header>
-                  <div className="workflow-stages">
-                    {stages.map((stage, index) => (
-                      <Card
-                        as="section"
-                        variant="outlined"
-                        className="m3e-card--workflow-stage"
-                        key={stage.id}
-                      >
-                        <header className="workflow-stage__header">
-                          <div className="workflow-stage__summary">
-                            <TextField
-                              label="阶段名称"
-                              className="m3e-field--workflow-stage-name"
-                              value={stageNameDrafts[stage.id] ?? stage.name}
-                              disabled={archived}
-                              onChange={(event) =>
-                                setStageNameDrafts((current) => ({
-                                  ...current,
-                                  [stage.id]: event.target.value,
-                                }))
-                              }
-                              onBlur={() => {
-                                const nextName = stageNameDrafts[stage.id]?.trim();
-                                if (nextName && nextName !== stage.name)
-                                  void run(() =>
-                                    mutationV2('PATCH', `/workflow-stages/${stage.id}`, {
-                                      name: nextName,
-                                      baseVersion: stage.version,
-                                    }),
-                                  );
-                              }}
-                            />
-                            {stage.hiddenTaskCount ? (
-                              <span className="workflow-stage__hidden-count">
-                                {stage.hiddenTaskCount} 个已归档任务已隐藏
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className="workflow-stage__actions">
-                            <IconButton
-                              label="阶段上移"
-                              type="button"
-                              disabled={archived || index === 0}
-                              onClick={() =>
-                                void run(() =>
-                                  mutationV2('POST', `/workflow-stages/${stage.id}/move`, {
-                                    beforeId: stages[index - 1]?.id ?? null,
-                                    afterId: null,
-                                    baseVersion: stage.version,
-                                  }),
-                                )
-                              }
-                            >
-                              <ArrowUp size={18} />
-                            </IconButton>
-                            <IconButton
-                              label="阶段下移"
-                              type="button"
-                              disabled={archived || index === stages.length - 1}
-                              onClick={() =>
-                                void run(() =>
-                                  mutationV2('POST', `/workflow-stages/${stage.id}/move`, {
-                                    beforeId: null,
-                                    afterId: stages[index + 1]?.id ?? null,
-                                    baseVersion: stage.version,
-                                  }),
-                                )
-                              }
-                            >
-                              <ArrowDown size={18} />
-                            </IconButton>
-                            <IconButton
-                              label={`删除阶段 ${stage.name}`}
-                              className="m3e-icon-button--danger"
-                              type="button"
-                              disabled={archived}
-                              onClick={() =>
-                                setConfirmation({
-                                  title: '删除阶段',
-                                  description: `删除“${stage.name}”及其中的流程成员关系，但不会删除任务。此操作不可恢复。`,
-                                  confirmLabel: '删除阶段',
-                                  danger: true,
-                                  onConfirm: async () => {
-                                    await mutationV2('DELETE', `/workflow-stages/${stage.id}`, {
-                                      baseVersion: stage.version,
-                                    });
-                                    await load();
-                                    return true;
-                                  },
-                                })
-                              }
-                            >
-                              <Trash2 size={18} />
-                            </IconButton>
-                          </div>
-                        </header>
-                        <List gap className="m3e-list--workflow-stage">
-                          {stage.tasks.map((task, taskIndex) => {
-                            const membership = stage.memberships?.find(
-                              (candidate) => candidate.taskId === task.id,
-                            );
-                            const folderTitle = task.parentFolderId
-                              ? (folders.find((folder) => folder.id === task.parentFolderId)
-                                  ?.title ?? '目录')
-                              : '根目录';
-                            const prevMember = taskIndex > 0 ? stage.tasks[taskIndex - 1] : null;
-                            const nextMember =
-                              taskIndex < stage.tasks.length - 1
-                                ? stage.tasks[taskIndex + 1]
-                                : null;
-                            return (
-                              <ListItem
-                                className={`m3e-list-item--workflow-task${
-                                  task.status === 'DONE' ? ' is-task-done' : ''
-                                }`}
-                                key={task.id}
-                                leadingControl={
-                                  <TaskStatusControl
-                                    status={task.status}
-                                    disabled={archived}
-                                    onStatusChange={async (status) => {
-                                      await run(() =>
-                                        mutationV2('PATCH', `/tasks/${task.id}`, {
-                                          status,
-                                          baseVersion: task.version,
-                                        }),
-                                      );
-                                      window.dispatchEvent(new Event('devtodo:data-changed'));
-                                    }}
-                                  />
-                                }
-                                headline={
-                                  <Button
-                                    variant="text"
-                                    size="s"
-                                    type="button"
-                                    className="m3e-button--workflow-task-primary"
-                                    onClick={() => setSelectedTaskId(task.id)}
-                                  >
-                                    {task.title}
-                                  </Button>
-                                }
-                                supporting={
-                                  <span className="workflow-task__meta">
-                                    <code>{task.referenceId}</code>
-                                    <span className="workflow-task__folder">
-                                      <Folder size={15} aria-hidden="true" />
-                                      {folderTitle}
-                                    </span>
-                                  </span>
-                                }
-                                trailing={
-                                  <span className="workflow-task__actions">
-                                    {taskIndex > 0 && membership && prevMember && (
-                                      <IconButton
-                                        label="在阶段内上移"
-                                        type="button"
-                                        disabled={archived}
-                                        onClick={() =>
-                                          void run(() =>
-                                            mutationV2(
-                                              'POST',
-                                              `/workflow-memberships/${membership.id}/move`,
-                                              {
-                                                stageId: stage.id,
-                                                beforeId: stage.memberships?.find(
-                                                  (candidate) => candidate.taskId === prevMember.id,
-                                                )?.id,
-                                                baseVersion: membership.version,
-                                              },
-                                            ),
-                                          )
-                                        }
-                                      >
-                                        <ArrowUp size={17} />
-                                      </IconButton>
-                                    )}
-                                    {taskIndex < stage.tasks.length - 1 &&
-                                      membership &&
-                                      nextMember && (
-                                        <IconButton
-                                          label="在阶段内下移"
-                                          type="button"
-                                          disabled={archived}
-                                          onClick={() =>
-                                            void run(() =>
-                                              mutationV2(
-                                                'POST',
-                                                `/workflow-memberships/${membership.id}/move`,
-                                                {
-                                                  stageId: stage.id,
-                                                  afterId: stage.memberships?.find(
-                                                    (candidate) =>
-                                                      candidate.taskId === nextMember.id,
-                                                  )?.id,
-                                                  baseVersion: membership.version,
-                                                },
-                                              ),
-                                            )
-                                          }
-                                        >
-                                          <ArrowDown size={17} />
-                                        </IconButton>
-                                      )}
-                                    {index > 0 && membership && (
-                                      <IconButton
-                                        label="移到上一阶段"
-                                        type="button"
-                                        disabled={archived}
-                                        onClick={() =>
-                                          void run(() =>
-                                            mutationV2(
-                                              'POST',
-                                              `/workflow-memberships/${membership.id}/move`,
-                                              {
-                                                stageId: stages[index - 1]!.id,
-                                                baseVersion: membership.version,
-                                              },
-                                            ),
-                                          )
-                                        }
-                                      >
-                                        <ArrowLeft size={17} />
-                                      </IconButton>
-                                    )}
-                                    {index < stages.length - 1 && membership && (
-                                      <IconButton
-                                        label="移到下一阶段"
-                                        type="button"
-                                        disabled={archived}
-                                        onClick={() =>
-                                          void run(() =>
-                                            mutationV2(
-                                              'POST',
-                                              `/workflow-memberships/${membership.id}/move`,
-                                              {
-                                                stageId: stages[index + 1]!.id,
-                                                baseVersion: membership.version,
-                                              },
-                                            ),
-                                          )
-                                        }
-                                      >
-                                        <ArrowRight size={17} />
-                                      </IconButton>
-                                    )}
-                                    {membership && (
-                                      <IconButton
-                                        label={`从阶段中移除 ${task.title}`}
-                                        type="button"
-                                        className="m3e-icon-button--danger"
-                                        disabled={archived}
-                                        onClick={() =>
-                                          void run(() =>
-                                            mutationV2(
-                                              'DELETE',
-                                              `/workflow-memberships/${membership.id}`,
-                                              {
-                                                baseVersion: membership.version,
-                                              },
-                                            ),
-                                          )
-                                        }
-                                      >
-                                        <Trash2 size={17} />
-                                      </IconButton>
-                                    )}
-                                  </span>
-                                }
-                              />
-                            );
-                          })}
-                        </List>
-                        <div className="workflow-add-task">
-                          <div className="workflow-add-task__existing">
-                            <Select
-                              label="添加已有任务"
-                              className="m3e-select--workflow-add-task"
-                              value={taskDrafts[stage.id] ?? ''}
-                              disabled={archived}
-                              options={[
-                                { value: '', label: '添加已有任务…' },
-                                ...availableTasks.map((task) => ({
-                                  value: task.id,
-                                  label: task.title,
-                                })),
-                              ]}
-                              onChange={(value) =>
-                                setTaskDrafts((current) => ({ ...current, [stage.id]: value }))
-                              }
-                            />
-                            <Button
-                              variant="tonal"
-                              size="s"
-                              type="button"
-                              disabled={archived || !taskDrafts[stage.id]}
-                              onClick={() => void addExistingTaskToStage(stage)}
-                            >
-                              添加
-                            </Button>
-                          </div>
-                          <form
-                            className="workflow-add-task__create"
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              void createTaskInStage(stage);
-                            }}
-                          >
-                            <TextField
-                              label={`在${stage.name}中新建任务`}
-                              hideLabel
-                              className="m3e-field--workflow-add-task"
-                              placeholder="新建任务…"
-                              value={newTaskDrafts[stage.id] ?? ''}
-                              disabled={archived}
-                              onChange={(event) =>
-                                setNewTaskDrafts((current) => ({
-                                  ...current,
-                                  [stage.id]: event.target.value,
-                                }))
-                              }
-                            />
-                            <Button
-                              variant="tonal"
-                              size="s"
-                              type="submit"
-                              disabled={archived || !newTaskDrafts[stage.id]?.trim()}
-                            >
-                              新建并加入
-                            </Button>
-                          </form>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                  <form
-                    className="workflow-add-stage"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void createStage(workflow);
-                    }}
-                  >
-                    <TextField
-                      label={`为${workflow.name}新增阶段`}
-                      hideLabel
-                      className="m3e-field--workflow-add-stage"
-                      placeholder="新增阶段…"
-                      value={stageDrafts[workflow.id] ?? ''}
-                      disabled={archived}
-                      onChange={(event) =>
-                        setStageDrafts((current) => ({
-                          ...current,
-                          [workflow.id]: event.target.value,
-                        }))
-                      }
-                    />
-                    <Button
-                      variant="tonal"
-                      size="s"
-                      type="submit"
-                      disabled={archived || !stageDrafts[workflow.id]?.trim()}
-                    >
-                      新增阶段
-                    </Button>
-                  </form>
-                </Card>
-              );
-            })
-          )}
-        </>
-      )}
-      {confirmation && (
-        <ConfirmDialog
-          open
-          title={confirmation.title}
-          description={confirmation.description}
-          confirmLabel={confirmation.confirmLabel}
-          danger={confirmation.danger}
-          onClose={() => setConfirmation(null)}
-          onConfirm={confirmation.onConfirm}
-        />
-      )}
-      <TaskDetailV2Overlay
-        taskId={selectedTaskId}
-        onClose={() => setSelectedTaskId(null)}
-        onChanged={load}
-      />
-    </section>
   );
 }

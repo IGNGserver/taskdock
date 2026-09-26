@@ -475,12 +475,13 @@
   margin-block: 4px;
 }
 
+/*
+ * The dialog body is the single scroll container, so the picker panes only add
+ * region semantics and spacing. An inner height cap here used to leave roughly
+ * half of a small-screen dialog unusable.
+ */
 .task-picker-scroll {
-  max-block-size: min(48dvh, 420px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  -webkit-overflow-scrolling: touch;
+  min-inline-size: 0;
 }
 
 .task-picker-scroll .m3e-list--picker {
@@ -506,26 +507,12 @@
   background-color: var(--m3-primary);
 }
 
-.task-picker-selection-footer {
-  position: sticky;
-  z-index: 2;
-  inset-block-end: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 12px -24px -24px;
-  padding: 12px 24px calc(16px + var(--dt-safe-bottom, 0px));
-  border-block-start: 1px solid var(--m3-outline-variant);
-  background-color: var(--m3-surface-container-high);
-}
-
-.task-picker-selection-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+/* Sits in the dialog's pinned footer, left of the confirm action. */
+.task-picker-selection-count {
+  margin-inline-end: auto;
   color: var(--m3-on-surface-variant);
   font-size: var(--m3-type-body-small-size);
+  white-space: nowrap;
 }
 
 .task-picker-location {

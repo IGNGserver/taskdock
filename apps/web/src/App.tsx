@@ -127,7 +127,8 @@ import {
 } from './components/m3e/index.js';
 import { useDismissibleMenu } from './components/m3e/behavior.js';
 import { PwaLifecycleNotice } from './pwa.js';
-import { TaskDetailV2Overlay, TreePage, WorkflowsPage } from './TreePage.js';
+import { TaskDetailV2Overlay, TreePage } from './TreePage.js';
+import { WorkflowsPage } from './WorkflowsPage.js';
 import { readRecentCaptureFolder } from './folder-preference.js';
 
 type PlacementWithTask = PlacementDto & { task: TreeTaskDto };
@@ -594,7 +595,7 @@ function AuthenticatedApp() {
   const navItems = useMemo<NavigationDestination[]>(
     () => [
       { to: '/today', label: '今日', icon: <Target size={20} /> },
-      { to: '/tree', label: '任务库', icon: <LayoutList size={20} /> },
+      { to: '/tree', label: '目录', icon: <LayoutList size={20} /> },
       { to: '/workflows', label: '流程', icon: <WorkflowIcon size={20} /> },
       { to: '/time/calendar', label: '日历', icon: <CalendarDays size={20} /> },
       { to: '/time/events', label: '事件', icon: <Clock3 size={20} /> },
@@ -607,7 +608,7 @@ function AuthenticatedApp() {
   const compactNavItems = useMemo<NavigationDestination[]>(
     () => [
       { to: '/today', label: '今日', icon: <Target size={22} /> },
-      { to: '/tree', label: '任务库', icon: <LayoutList size={22} /> },
+      { to: '/tree', label: '目录', icon: <LayoutList size={22} /> },
       { to: '/workflows', label: '流程', icon: <WorkflowIcon size={22} /> },
       { to: '/time', label: '计划', icon: <Clock3 size={22} /> },
       { to: '/more', label: '更多', icon: <MoreHorizontal size={22} /> },
@@ -1136,7 +1137,7 @@ function TimeHubPage() {
 
 function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
   const links = [
-    { to: '/tree', label: '任务库', description: '按目录浏览和整理任务。', icon: LayoutList },
+    { to: '/tree', label: '目录', description: '按目录浏览和整理任务。', icon: LayoutList },
     {
       to: '/archive',
       label: '归档',
@@ -1155,7 +1156,7 @@ function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
       <PageHeader
         eyebrow="MORE"
         title="更多"
-        description="次要入口集中在这里，底部导航保持专注于今天、任务库和计划。"
+        description="次要入口集中在这里，底部导航保持专注于今天、目录和计划。"
       />
       <Button
         variant="tonal"
@@ -1485,15 +1486,18 @@ function Modal({
   title,
   onClose,
   children,
+  footer,
   state,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** Rendered in the dialog's pinned footer, outside the scrolling body. */
+  footer?: ReactNode;
   state?: PresenceState;
 }) {
   return (
-    <M3eDialog title={title} onClose={onClose} open state={state}>
+    <M3eDialog title={title} onClose={onClose} open state={state} footer={footer}>
       {children}
     </M3eDialog>
   );
@@ -1769,7 +1773,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               onClick={() => setShowTaskPicker(true)}
               disabled={!data.point}
             >
-              从任务库加入
+              从目录加入
             </Button>
             <Button
               variant="outlined"
@@ -1893,7 +1897,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               onChanged={reload}
               onMove={movePlacement}
               emptyTitle="今天还没有安排"
-              emptyDescription="可以从任务库中安排内容，或先捕获一个位于最近目录的任务。"
+              emptyDescription="可以从目录中安排内容，或先捕获一个位于最近文件夹的任务。"
               emptyAction={
                 data.point ? (
                   <Button
@@ -1901,7 +1905,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
                     leadingIcon={<Plus size={16} />}
                     onClick={() => setShowTaskPicker(true)}
                   >
-                    从任务库加入
+                    从目录加入
                   </Button>
                 ) : undefined
               }
@@ -2461,7 +2465,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             onClick={() => setShowAdd(true)}
             disabled={Boolean(point.archivedAt)}
           >
-            从任务库加入
+            从目录加入
           </Button>
         }
       />
@@ -2473,7 +2477,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         onMove={point.archivedAt ? undefined : movePlacement}
         readOnly={Boolean(point.archivedAt)}
         emptyTitle="这个事件还没有安排"
-        emptyDescription="从任务库加入已有任务；它不会创建新的 Task。"
+        emptyDescription="从目录加入已有任务；它不会创建新的 Task。"
         emptyAction={
           <Button leadingIcon={<Plus size={16} />} onClick={() => setShowAdd(true)}>
             加入任务
@@ -3376,20 +3380,67 @@ function AddTaskModal({
     );
 
   return (
-    <Modal title="安排任务" onClose={onClose}>
+    <Modal
+      title="安排任务"
+      onClose={onClose}
+      footer={
+        activeTab === 'create' ? (
+          <>
+            <Button variant="text" type="button" disabled={creating} onClick={onClose}>
+              取消
+            </Button>
+            <Button
+              variant="filled"
+              type="submit"
+              form="add-task-create-form"
+              disabled={creating || !createTitle.trim()}
+            >
+              {creating ? '创建中…' : '立即创建并安排'}
+            </Button>
+          </>
+        ) : (
+          <>
+            <span className="task-picker-selection-count" aria-live="polite">
+              已选择 {selectedTasks.size} 项
+            </span>
+            <Button
+              variant="text"
+              size="s"
+              disabled={selectedTasks.size === 0 || addingSelected}
+              onClick={() => setSelectedTasks(new Map())}
+            >
+              清空选择
+            </Button>
+            <Button
+              variant="filled"
+              disabled={selectedTasks.size === 0 || addingSelected}
+              onClick={() => void addSelected()}
+            >
+              {addingSelected
+                ? '正在加入…'
+                : `加入日程${selectedTasks.size ? `（${selectedTasks.size}）` : ''}`}
+            </Button>
+          </>
+        )
+      }
+    >
       <ButtonGroup
         label="安排方式"
         value={activeTab}
         options={[
           { value: 'create' as const, label: '新建任务并安排' },
-          { value: 'existing' as const, label: '从任务库加入已有' },
+          { value: 'existing' as const, label: '从目录加入已有' },
         ]}
         onChange={setActiveTab}
         className="m3e-button-group--add-task-mode"
       />
 
       {activeTab === 'create' ? (
-        <form className="stack-form add-task-create-form" onSubmit={handleCreateNew}>
+        <form
+          id="add-task-create-form"
+          className="stack-form add-task-create-form"
+          onSubmit={handleCreateNew}
+        >
           <TextField
             label="任务标题"
             autoFocus
@@ -3399,9 +3450,6 @@ function AddTaskModal({
             disabled={creating}
           />
           {error && <Alert tone="error">{error}</Alert>}
-          <Button variant="filled" type="submit" disabled={creating || !createTitle.trim()}>
-            {creating ? '创建中…' : '立即创建并安排'}
-          </Button>
         </form>
       ) : (
         <>
@@ -3545,29 +3593,6 @@ function AddTaskModal({
               </div>
             </>
           )}
-          <div className="task-picker-selection-footer">
-            <div className="task-picker-selection-summary" aria-live="polite">
-              <span>已选择 {selectedTasks.size} 项</span>
-              <Button
-                variant="text"
-                size="s"
-                disabled={selectedTasks.size === 0 || addingSelected}
-                onClick={() => setSelectedTasks(new Map())}
-              >
-                清空选择
-              </Button>
-            </div>
-            <Button
-              variant="filled"
-              className="m3e-button--wide"
-              disabled={selectedTasks.size === 0 || addingSelected}
-              onClick={() => void addSelected()}
-            >
-              {addingSelected
-                ? '正在加入…'
-                : `加入日程${selectedTasks.size ? `（${selectedTasks.size}）` : ''}`}
-            </Button>
-          </div>
         </>
       )}
     </Modal>
@@ -3777,7 +3802,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               onChanged={loadSelected}
               onMove={movePlacement}
               emptyTitle="这一天还没有安排"
-              emptyDescription="从任务库添加已有任务，任务本体不会被复制。"
+              emptyDescription="从目录添加已有任务，任务本体不会被复制。"
             />
           )}
           {showAdd && point && (
@@ -4557,14 +4582,14 @@ function isHttpOrigin(value: string): boolean {
 
 function breadcrumb(pathname: string): string {
   if (pathname.startsWith('/today')) return '今日';
-  if (pathname.startsWith('/tree')) return '任务库';
+  if (pathname.startsWith('/tree')) return '目录';
   if (pathname.startsWith('/workflows')) return '流程';
   if (
     pathname.startsWith('/projects') ||
     pathname.startsWith('/inbox') ||
     pathname.startsWith('/misc')
   )
-    return '任务库';
+    return '目录';
   if (pathname.startsWith('/time/calendar')) return '计划 / 日历';
   if (pathname.startsWith('/time/events')) return '计划 / 事件';
   if (pathname === '/time' || pathname.startsWith('/time/')) return '计划';

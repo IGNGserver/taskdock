@@ -203,8 +203,8 @@ test('login and authenticated shell have no axe violations', async ({ page }) =>
  */
 const ROUTES: ReadonlyArray<{ path: string; heading: string | RegExp }> = [
   { path: '/today', heading: /今日|今天/ },
-  { path: '/tree', heading: '任务库' },
-  { path: '/tasks', heading: '全部任务' },
+  // /tasks is a redirect alias of /tree, so the directory shell is audited once.
+  { path: '/tree', heading: '目录' },
   { path: '/workflows', heading: '流程' },
   { path: '/time', heading: '计划' },
   { path: '/time/calendar', heading: '日历' },
