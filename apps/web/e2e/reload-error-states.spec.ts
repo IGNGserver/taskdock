@@ -95,7 +95,7 @@ async function mockSession(page: Page, handleV2: (route: Route, path: string) =>
   };
 }
 
-test('task library keeps real empty state separate from failed and refreshing reads', async ({
+test('directory keeps real empty state separate from failed and refreshing reads', async ({
   page,
 }) => {
   const task = {
@@ -106,26 +106,26 @@ test('task library keeps real empty state separate from failed and refreshing re
     status: 'TODO',
     version: 1,
   };
-  let taskReads = 0;
+  let childReads = 0;
   let holdRefresh = false;
   let releaseRefresh!: () => void;
   const refreshGate = new Promise<void>((resolve) => {
     releaseRefresh = resolve;
   });
   const session = await mockSession(page, async (route, path) => {
-    if (path.endsWith('/tasks')) {
-      taskReads += 1;
-      if (taskReads === 1)
+    if (path.endsWith('/tree/children')) {
+      childReads += 1;
+      if (childReads === 1)
         return route.fulfill({
           status: 503,
           contentType: 'application/json',
-          body: JSON.stringify({ code: 'UNAVAILABLE', message: '任务库暂时不可用' }),
+          body: JSON.stringify({ code: 'UNAVAILABLE', message: '目录暂时不可用' }),
         });
-      if (holdRefresh && taskReads > 2) await refreshGate;
+      if (holdRefresh && childReads > 2) await refreshGate;
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ items: [task] }),
+        body: JSON.stringify({ items: [{ kind: 'TASK', task }] }),
       });
     }
     return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
@@ -133,17 +133,19 @@ test('task library keeps real empty state separate from failed and refreshing re
 
   try {
     await session.login();
-    await page.goto('/tasks');
-    await expect(page.locator('.m3e-alert--error')).toContainText('任务库暂时不可用');
-    await expect(page.getByText('没有符合条件的任务')).toHaveCount(0);
+    await page.goto('/tree');
+    await expect(page.locator('.m3e-alert--error')).toContainText('目录暂时不可用');
+    await expect(page.getByText('创建任务或文件夹后，它们会显示在这里。')).toHaveCount(0);
     await page.getByRole('button', { name: '重试' }).click();
-    const taskButton = page.getByRole('button', { name: `打开任务 ${task.title}` });
-    await expect(taskButton).toBeVisible();
+    const row = page.locator('.m3e-list-item--tree-row', { hasText: task.title });
+    await expect(row).toBeVisible();
 
     holdRefresh = true;
     await page.evaluate(() => window.dispatchEvent(new Event('devtodo:data-changed')));
-    await expect(page.getByText('正在更新任务')).toBeVisible();
-    await expect(taskButton).toBeVisible();
+    // A held background refresh must neither blank the directory nor swap the
+    // loaded rows for a loading state.
+    await expect(row).toBeVisible();
+    await expect(page.getByText('正在加载目录')).toHaveCount(0);
   } finally {
     holdRefresh = false;
     releaseRefresh();

@@ -178,13 +178,13 @@
     max-inline-size: 12ch;
   }
 
-  .workflow-card > header,
-  .workflow-stage-heading {
-    flex-wrap: wrap;
+  .workflows-header {
+    align-items: flex-start;
   }
 
-  .workflow-card .header-actions {
+  .workflows-header__actions {
     inline-size: 100%;
+    justify-content: flex-end;
   }
 
   .today-progress {
@@ -452,11 +452,6 @@ html.drawer-open .page-wrap {
     max-block-size: 100%;
   }
 
-  .m3e-dialog {
-    display: flex;
-    flex-direction: column;
-  }
-
   .keyboard-visible .mobile-bottom-nav,
   .keyboard-visible .app-float-layer {
     display: none;
@@ -621,7 +616,6 @@ html.drawer-open .page-wrap {
 
   .tree-header-actions,
   .settings-actions,
-  .workflow-add-task,
   .calendar-detail-head {
     flex-wrap: wrap;
   }
@@ -636,15 +630,20 @@ html.drawer-open .page-wrap {
     max-inline-size: 100%;
   }
 
-  .workflow-card,
-  .workflow-stages section {
+  /* One stage per row: the board becomes a list on a phone-sized viewport. */
+  .workflow-stages {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .m3e-card--workflow,
+  .workflow-stage {
     padding: 12px;
   }
 
   .calendar-layout > *,
   .page-header-line > *,
   .settings-section,
-  .workflow-card > header > * {
+  .workflow-card__heading {
     min-inline-size: 0;
   }
 
@@ -668,15 +667,6 @@ html.drawer-open .page-wrap {
   .task-detail-v2 .inline-capture {
     inline-size: 100%;
     min-inline-size: 0;
-  }
-
-  .task-detail-v2-header .header-actions {
-    display: flex;
-    justify-content: space-between;
-  }
-
-  .task-detail-v2-header .header-actions > * {
-    inline-size: auto;
   }
 
   .task-detail-v2 .inline-capture,
@@ -733,19 +723,6 @@ html.drawer-open .page-wrap {
   .tree-page .tree-capture-form > .m3e-field--tree-inline,
   .tree-page .tree-capture-form > .m3e-button {
     grid-column: 2;
-  }
-
-  .workflows-page > .tree-capture-form {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .workflows-page > .tree-capture-form > .m3e-field--tree-inline {
-    grid-column: 1;
-  }
-
-  .workflows-page > .tree-capture-form > .m3e-button {
-    grid-column: 2;
-    inline-size: auto;
   }
 
   .tree-header-actions {

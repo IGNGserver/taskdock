@@ -723,8 +723,8 @@
   color: var(--m3-on-surface-variant);
 }
 
-.m3e-task-status-control.is-open {
-  z-index: 8;
+.m3e-task-status-control.is-busy {
+  opacity: 0.6;
 }
 
 .m3e-task-status-control__label {
@@ -739,27 +739,7 @@
   font-weight: 600;
 }
 
-.m3e-task-status-control__picker {
-  inline-size: 44px;
-  block-size: 44px;
-  min-inline-size: 44px;
-  padding: 0;
-}
-
-.m3e-task-status-control .m3e-menu--task-status {
-  inset-inline-start: 0;
-  min-inline-size: 180px;
-}
-
-.m3e-list--command-results:has(.m3e-task-status-control.is-open),
-.m3e-list--picker:has(.m3e-task-status-control.is-open),
-.m3e-list--tree-group:has(.m3e-task-status-control.is-open),
-.m3e-list--workflow-stage:has(.m3e-task-status-control.is-open) {
-  overflow: visible;
-}
-
-.m3e-list-item.is-task-done .m3e-list-item__headline,
-.m3e-list-item.is-task-done .m3e-button--workflow-task-primary {
+.m3e-list-item.is-task-done .m3e-list-item__headline {
   color: var(--m3-on-surface-variant);
   text-decoration: line-through;
   text-decoration-color: color-mix(in srgb, currentColor 46%, transparent);

@@ -692,14 +692,6 @@
   flex: none;
 }
 
-.m3e-button--workflow-task-primary {
-  min-inline-size: 0;
-  padding-inline: 4px;
-  color: var(--m3-on-surface);
-  text-align: start;
-  white-space: normal;
-}
-
 .m3e-button--danger-text {
   color: var(--m3-error);
 }

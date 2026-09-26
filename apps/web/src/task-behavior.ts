@@ -1,8 +1,14 @@
 import type { TaskStatus } from '@devtodo/contracts';
 
-/** A checkbox-style primary action completes any open task or reopens it. */
-export function toggleTaskCompletion(status: TaskStatus): TaskStatus {
-  return status === 'DONE' ? 'TODO' : 'DONE';
+/**
+ * The circle in a task row advances through the three states in order, so a
+ * single tap always moves a task forward instead of only flipping it open or
+ * closed.
+ */
+export function nextTaskStatus(status: TaskStatus): TaskStatus {
+  if (status === 'TODO') return 'IN_PROGRESS';
+  if (status === 'IN_PROGRESS') return 'DONE';
+  return 'TODO';
 }
 
 export function taskStatusLabel(status: TaskStatus): string {
@@ -12,7 +18,7 @@ export function taskStatusLabel(status: TaskStatus): string {
 }
 
 export function taskStatusActionLabel(status: TaskStatus): string {
-  return status === 'DONE' ? '重新打开任务' : '标记为已完成';
+  return `标记为${taskStatusLabel(nextTaskStatus(status))}`;
 }
 
 export function reorderIds(ids: string[], sourceId: string, targetId: string): string[] {

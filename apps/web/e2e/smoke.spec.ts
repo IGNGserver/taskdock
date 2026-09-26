@@ -222,10 +222,10 @@ test('opens the authenticated quick-capture dialog and exposes mobile navigation
     await expect(drawer).toBeHidden();
     await page
       .getByRole('navigation', { name: '移动导航' })
-      .getByRole('link', { name: '任务库' })
+      .getByRole('link', { name: '目录' })
       .click();
     await expect(page).toHaveURL(/\/tree$/);
-    await expect(page.getByRole('heading', { name: '任务库' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '目录' })).toBeVisible();
   }
 
   await quickEntry.click();

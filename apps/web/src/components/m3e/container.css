@@ -386,8 +386,10 @@
 
 .m3e-dialog {
   position: relative;
+  display: flex;
+  flex-direction: column;
   inline-size: min(560px, 100%);
-  max-block-size: min(80vh, 100%);
+  max-block-size: min(80dvh, 100%);
   overflow: hidden;
   border-radius: var(--m3-shape-xl);
   background-color: var(--m3-surface-container-high);
@@ -405,6 +407,7 @@
 
 .m3e-dialog__header {
   display: flex;
+  flex: none;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
@@ -416,10 +419,29 @@
   color: var(--m3-on-surface);
 }
 
+/*
+ * The body is the only scrolling region: everything a caller puts inside it
+ * (tabs, search, breadcrumbs, lists) scrolls together instead of the caller
+ * having to cap an inner pane, and a footer stays reachable below it.
+ */
 .m3e-dialog__body {
-  max-block-size: min(64vh, 100%);
+  flex: 1 1 auto;
+  min-block-size: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 8px 24px 24px;
+}
+
+.m3e-dialog__footer {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 24px calc(16px + var(--dt-safe-bottom, 0px));
+  border-block-start: 1px solid var(--m3-outline-variant);
+  background-color: var(--m3-surface-container-high);
 }
 
 @keyframes m3e-dialog-in {
@@ -748,8 +770,7 @@
   padding: 14px;
 }
 
-.m3e-card--workflow,
-.m3e-card--workflow-stage {
+.m3e-card--workflow {
   display: grid;
   gap: 16px;
   padding: 16px;

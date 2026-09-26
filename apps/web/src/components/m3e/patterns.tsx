@@ -5,25 +5,14 @@ import type {
   MouseEventHandler,
   ReactNode,
 } from 'react';
-import { useCallback, useId, useState } from 'react';
+import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 
-import {
-  Button,
-  IconButton,
-  Menu,
-  joinClasses,
-  type ButtonVariant,
-  type MenuOption,
-} from './button.js';
-import { haptic, useDismissibleMenu } from './behavior.js';
+import { Button, IconButton, joinClasses, type ButtonVariant } from './button.js';
+import { haptic } from './behavior.js';
 import { Card, LoadingIndicator } from './container.js';
-import { CheckGlyph, ChevronDown, TextField } from './field.js';
-import {
-  taskStatusActionLabel,
-  taskStatusLabel,
-  toggleTaskCompletion,
-} from '../../task-behavior.js';
+import { CheckGlyph, TextField } from './field.js';
+import { nextTaskStatus, taskStatusActionLabel, taskStatusLabel } from '../../task-behavior.js';
 
 /**
  * A date-aware field that keeps the native date picker, keyboard behaviour and
@@ -474,8 +463,9 @@ export function TaskStatusButton({
 }
 
 /**
- * Shared task state control: the circle completes/reopens, while the adjacent
- * status picker provides direct access to all three task states.
+ * Shared task state control. The circle is the single affordance and advances
+ * the task through 待开始 → 进行中 → 已完成, so it works with one tap on both
+ * desktop and touch screens without a secondary picker to hit.
  */
 export function TaskStatusControl({
   status,
@@ -488,22 +478,11 @@ export function TaskStatusControl({
   disabled?: boolean;
   className?: string;
 }) {
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const menuId = useId();
-  const closeMenu = useCallback(() => setOpen(false), []);
-  const containerRef = useDismissibleMenu(open, closeMenu);
   const isDisabled = disabled || busy;
-  const options: MenuOption[] = (['TODO', 'IN_PROGRESS', 'DONE'] as const).map((value) => ({
-    id: value,
-    label: taskStatusLabel(value),
-    icon: <TaskStatusIndicator status={value} />,
-    disabled: isDisabled || value === status,
-    hint: value === status ? '当前' : undefined,
-  }));
 
-  const changeStatus = async (nextStatus: TaskStatus) => {
-    setOpen(false);
+  const advance = async () => {
+    const nextStatus = nextTaskStatus(status);
     if (isDisabled || nextStatus === status) return;
     setBusy(true);
     try {
@@ -515,43 +494,18 @@ export function TaskStatusControl({
 
   return (
     <div
-      ref={containerRef}
-      className={joinClasses('m3e-task-status-control', open && 'is-open', className)}
+      className={joinClasses('m3e-task-status-control', busy && 'is-busy', className)}
       aria-busy={busy || undefined}
     >
       <TaskStatusButton
         status={status}
         label={taskStatusActionLabel(status)}
-        onClick={() => void changeStatus(toggleTaskCompletion(status))}
+        onClick={() => void advance()}
         disabled={isDisabled}
       />
       <span className={`m3e-task-status-control__label is-${status.toLowerCase()}`}>
         {taskStatusLabel(status)}
       </span>
-      <IconButton
-        label={`选择任务状态，当前${taskStatusLabel(status)}`}
-        variant="standard"
-        size="s"
-        disabled={isDisabled}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        className="m3e-task-status-control__picker"
-        onClick={() => setOpen((current) => !current)}
-      >
-        <ChevronDown size={16} />
-      </IconButton>
-      {open && (
-        <Menu
-          id={menuId}
-          label="设置任务状态"
-          options={options}
-          onSelect={(id) => void changeStatus(id as TaskStatus)}
-          onClose={closeMenu}
-          align="start"
-          className="m3e-menu--task-status"
-        />
-      )}
     </div>
   );
 }
