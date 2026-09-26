@@ -2846,8 +2846,7 @@ function AddTaskModal({
   const activeItems = useMemo(
     () =>
       items.filter(
-        (item) =>
-          item.kind === 'FOLDER' || (!item.task.deletedAt && item.task.status !== 'DONE'),
+        (item) => item.kind === 'FOLDER' || (!item.task.deletedAt && item.task.status !== 'DONE'),
       ),
     [items],
   );
@@ -3019,144 +3018,142 @@ function AddTaskModal({
       }
     >
       <SearchBar
-            label="搜索任务或目录"
-            variant="view"
-            autoFocus
-            value={query}
-            onChange={(value) => {
-              setSearchError('');
-              setQuery(value);
-            }}
-            placeholder="搜索标题、引用 ID 或目录"
-            leadingIcon={<Search size={20} />}
-          />
-          {error && (
-            <Alert tone="error" title="任务操作失败">
-              {error}
-            </Alert>
-          )}
-          {pickerError && (
-            <Alert
-              tone="error"
-              action={
-                <Button variant="text" size="s" onClick={() => void loadPicker()}>
-                  重试
-                </Button>
-              }
+        label="搜索任务或目录"
+        variant="view"
+        autoFocus
+        value={query}
+        onChange={(value) => {
+          setSearchError('');
+          setQuery(value);
+        }}
+        placeholder="搜索标题、引用 ID 或目录"
+        leadingIcon={<Search size={20} />}
+      />
+      {error && (
+        <Alert tone="error" title="任务操作失败">
+          {error}
+        </Alert>
+      )}
+      {pickerError && (
+        <Alert
+          tone="error"
+          action={
+            <Button variant="text" size="s" onClick={() => void loadPicker()}>
+              重试
+            </Button>
+          }
+        >
+          {pickerError}
+        </Alert>
+      )}
+      {searchError && query.trim() && (
+        <Alert
+          tone="error"
+          title="搜索目录失败"
+          action={
+            <Button
+              variant="text"
+              size="s"
+              onClick={() => {
+                setSearchError('');
+                setSearchRetry((count) => count + 1);
+              }}
             >
-              {pickerError}
-            </Alert>
-          )}
-          {searchError && query.trim() && (
-            <Alert
-              tone="error"
-              title="搜索目录失败"
-              action={
-                <Button
-                  variant="text"
-                  size="s"
-                  onClick={() => {
-                    setSearchError('');
-                    setSearchRetry((count) => count + 1);
-                  }}
-                >
-                  重试
-                </Button>
-              }
-            >
-              {searchError}
-            </Alert>
-          )}
-          {!query.trim() && (
-            <p className="field-help picker-hint">
-              点选任务可同时选择多项；选择会在切换目录时保留。
-            </p>
-          )}
-          {query.trim() ? (
-            <div className="task-picker-scroll" role="region" aria-label="任务搜索结果">
-              {searchLoading ? (
-                <LoadingState label="正在搜索任务目录" />
-              ) : searchError ? null : matchingTasks.length ? (
-                <List className="m3e-list--picker m3e-list--tree-group" gap>
-                  {matchingTasks.map((task) => renderTaskRow(task, true))}
-                </List>
-              ) : (
-                <M3EmptyState
-                  compact
-                  icon={<ListChecksIcon size={20} />}
-                  title="没有可选择的任务"
-                  description="换一个标题、引用 ID 或目录名称再试。"
-                />
-              )}
-            </div>
+              重试
+            </Button>
+          }
+        >
+          {searchError}
+        </Alert>
+      )}
+      {!query.trim() && (
+        <p className="field-help picker-hint">点选任务可同时选择多项；选择会在切换目录时保留。</p>
+      )}
+      {query.trim() ? (
+        <div className="task-picker-scroll" role="region" aria-label="任务搜索结果">
+          {searchLoading ? (
+            <LoadingState label="正在搜索任务目录" />
+          ) : searchError ? null : matchingTasks.length ? (
+            <List className="m3e-list--picker m3e-list--tree-group" gap>
+              {matchingTasks.map((task) => renderTaskRow(task, true))}
+            </List>
           ) : (
-            <>
-              <nav className="tree-breadcrumbs" aria-label="目录路径">
+            <M3EmptyState
+              compact
+              icon={<ListChecksIcon size={20} />}
+              title="没有可选择的任务"
+              description="换一个标题、引用 ID 或目录名称再试。"
+            />
+          )}
+        </div>
+      ) : (
+        <>
+          <nav className="tree-breadcrumbs" aria-label="目录路径">
+            <Button
+              variant={!folderId ? 'tonal' : 'text'}
+              size="s"
+              type="button"
+              aria-current={!folderId ? 'page' : undefined}
+              className="m3e-button--tree-breadcrumb"
+              onClick={() => openFolder(null)}
+            >
+              根目录
+            </Button>
+            {path.map((crumb) => (
+              <span key={crumb.id} className="tree-breadcrumbs__segment">
+                <ChevronRight size={16} aria-hidden="true" />
                 <Button
-                  variant={!folderId ? 'tonal' : 'text'}
+                  variant={crumb.id === folderId ? 'tonal' : 'text'}
                   size="s"
                   type="button"
-                  aria-current={!folderId ? 'page' : undefined}
+                  aria-current={crumb.id === folderId ? 'page' : undefined}
                   className="m3e-button--tree-breadcrumb"
-                  onClick={() => openFolder(null)}
+                  onClick={() => openFolder(crumb.id)}
                 >
-                  根目录
+                  {crumb.title}
                 </Button>
-                {path.map((crumb) => (
-                  <span key={crumb.id} className="tree-breadcrumbs__segment">
-                    <ChevronRight size={16} aria-hidden="true" />
-                    <Button
-                      variant={crumb.id === folderId ? 'tonal' : 'text'}
-                      size="s"
-                      type="button"
-                      aria-current={crumb.id === folderId ? 'page' : undefined}
-                      className="m3e-button--tree-breadcrumb"
-                      onClick={() => openFolder(crumb.id)}
-                    >
-                      {crumb.title}
-                    </Button>
-                  </span>
-                ))}
-              </nav>
-              <div
-                key={folderId ?? 'root'}
-                className="task-picker-scroll"
-                role="region"
-                aria-label="当前目录"
+              </span>
+            ))}
+          </nav>
+          <div
+            key={folderId ?? 'root'}
+            className="task-picker-scroll"
+            role="region"
+            aria-label="当前目录"
+          >
+            {pickerLoading ? (
+              <LoadingState label="正在加载目录" />
+            ) : pickerError && !activeItems.length ? null : (
+              <Card
+                as="section"
+                variant="outlined"
+                className="m3e-card--tree-group"
+                aria-labelledby="task-picker-current-folder"
               >
-                {pickerLoading ? (
-                  <LoadingState label="正在加载目录" />
-                ) : pickerError && !activeItems.length ? null : (
-                  <Card
-                    as="section"
-                    variant="outlined"
-                    className="m3e-card--tree-group"
-                    aria-labelledby="task-picker-current-folder"
-                  >
-                    <div className="tree-group-heading">
-                      <span id="task-picker-current-folder">当前目录</span>
-                      <span>{activeItems.length}</span>
-                    </div>
-                    {activeItems.length ? (
-                      <List className="m3e-list--picker m3e-list--tree-group" gap>
-                        {activeItems.map(renderTreeItem)}
-                      </List>
-                    ) : (
-                      <M3EmptyState
-                        compact
-                        icon={<ListChecksIcon size={20} />}
-                        title={folderId ? '此目录没有可安排的任务' : '没有未完成任务'}
-                        description={
-                          folderId
-                            ? '当前目录中没有未完成任务；可以返回上级目录。'
-                            : '根目录下没有未完成任务。'
-                        }
-                      />
-                    )}
-                  </Card>
+                <div className="tree-group-heading">
+                  <span id="task-picker-current-folder">当前目录</span>
+                  <span>{activeItems.length}</span>
+                </div>
+                {activeItems.length ? (
+                  <List className="m3e-list--picker m3e-list--tree-group" gap>
+                    {activeItems.map(renderTreeItem)}
+                  </List>
+                ) : (
+                  <M3EmptyState
+                    compact
+                    icon={<ListChecksIcon size={20} />}
+                    title={folderId ? '此目录没有可安排的任务' : '没有未完成任务'}
+                    description={
+                      folderId
+                        ? '当前目录中没有未完成任务；可以返回上级目录。'
+                        : '根目录下没有未完成任务。'
+                    }
+                  />
                 )}
-              </div>
-            </>
+              </Card>
+            )}
+          </div>
+        </>
       )}
     </Modal>
   );

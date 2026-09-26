@@ -1058,8 +1058,7 @@ export class MemoryTreeStore implements V2TreeStore {
     this.ensureOwner(ownerId);
     return [...this.timePoints.values()]
       .filter(
-        (point) =>
-          point.ownerId === ownerId && !point.deletedAt && (!type || point.type === type),
+        (point) => point.ownerId === ownerId && !point.deletedAt && (!type || point.type === type),
       )
       .sort((left, right) =>
         left.type === 'DATE' && right.type === 'DATE'
@@ -2468,16 +2467,7 @@ export class MemoryTreeStore implements V2TreeStore {
     return new Date().toISOString();
   }
   private folderDto(row: FolderRecord): FolderDto {
-    const {
-      id,
-      parentFolderId,
-      title,
-      rank,
-      version,
-      deletedAt,
-      createdAt,
-      updatedAt,
-    } = row;
+    const { id, parentFolderId, title, rank, version, deletedAt, createdAt, updatedAt } = row;
     return {
       id,
       parentFolderId,
