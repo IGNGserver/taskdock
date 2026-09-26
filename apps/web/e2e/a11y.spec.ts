@@ -183,6 +183,7 @@ test('login and authenticated shell have no axe violations', async ({ page }) =>
   await installMockApi(page);
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: '欢迎回来' })).toBeVisible();
+  await waitForSettled(page, 'body');
   let results = await analyzePage(page);
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 
@@ -193,6 +194,7 @@ test('login and authenticated shell have no axe violations', async ({ page }) =>
     page,
     test.info().project.name === 'mobile' ? '打开创建菜单' : '快速添加',
   );
+  await waitForSettled(page, 'body');
   results = await analyzePage(page);
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 });
@@ -243,15 +245,25 @@ for (const route of ROUTES) {
       page,
       test.info().project.name === 'mobile' ? '打开创建菜单' : '快速添加',
     );
+    await waitForSettled(page, 'body');
     const results = await analyzePage(page);
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
   });
 }
 
 /**
- * Overlay and field transitions can overlap after focus moves into a dialog.
- * Wait for the finite animations in the whole layer to finish instead of
- * guessing a duration, so axe measures the settled colours in every browser.
+ * Overlay and field transitions can overlap after focus moves into a dialog, and
+ * freshly mounted content is still fading in when a route is audited, so axe can
+ * measure a blended colour instead of the settled one — a mid-flight opacity
+ * turns `--m3-on-surface-variant` into something barely darker than its
+ * background. Wait for the finite animations in the audited layer to finish
+ * instead of guessing a duration, so axe measures the settled colours in every
+ * browser.
+ *
+ * Ambient loops are excluded because they never reach `finished`: the sync
+ * status pulse and the skeleton shimmer run forever and would only make this
+ * wait time out. They also paint at a constant opacity, so they cannot be
+ * measured mid-transition.
  */
 async function waitForSettled(page: Page, selector: string): Promise<void> {
   await page.waitForFunction(
@@ -262,6 +274,7 @@ async function waitForSettled(page: Page, selector: string): Promise<void> {
       const nodes = [layer, ...layer.querySelectorAll('*')];
       return nodes
         .flatMap((node) => node.getAnimations())
+        .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
         .every((animation) => animation.playState === 'finished' || animation.playState === 'idle');
     },
     selector,
