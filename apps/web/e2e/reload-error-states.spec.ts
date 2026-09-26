@@ -1,5 +1,13 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
+/*
+ * This suite fabricates API failures with `page.route`, so it belongs to the
+ * mocked gate. Under `E2E_REAL=1` the fixture answers for itself, the injected
+ * 409/503 never happens, and the assertions below would measure an error state
+ * the run never produced.
+ */
+test.skip(process.env['E2E_REAL'] === '1', 'drives failures through page.route mocks');
+
 const user = {
   id: '00000000-0000-7000-8000-000000000501',
   username: 'reload-e2e-user',

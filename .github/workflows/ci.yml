@@ -37,7 +37,10 @@ jobs:
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
       - run: pnpm test:e2e
-      - run: E2E_REAL=1 pnpm test:e2e
+      # 真实链路门禁必须跑生产构建：e2e-real-server.ts 只在 E2E_PWA=1 时用 vite preview
+      # 提供 dist 与 service worker，否则退化成 vite dev，mobile-pwa / real-smoke 这类
+      # 依赖已构建产物与 IndexedDB 真实链路的用例永远不可能通过。
+      - run: E2E_PWA=1 E2E_REAL=1 pnpm test:e2e
       - run: pnpm compose:smoke
       - run: pnpm openapi:check
       - run: pnpm desktop:test
