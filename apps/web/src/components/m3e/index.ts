@@ -90,6 +90,9 @@ export {
   type SpringSpeed,
 } from './behavior.js';
 
+export { useSwipeAction, calculateSwipeOffset } from './swipe-action.js';
+export { MobileQuickCaptureSheet } from './mobile-quick-capture.js';
+
 export {
   DateField,
   CaptureField,

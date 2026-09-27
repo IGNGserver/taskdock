@@ -1,0 +1,36 @@
+/*
+ * Tablet specific supporting-pane & touch adaptations
+ */
+
+.app-frame.is-tablet-frame {
+  /* Provide comfortable breathing room on tablets */
+  --m3-tablet-gutter: 24px;
+}
+
+.is-tablet-frame .page {
+  inline-size: min(100%, calc(100% - 48px));
+  max-inline-size: 1100px;
+  padding-block: 24px;
+}
+
+.is-tablet-frame .today-task-workspace {
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.9fr);
+  gap: var(--m3-space-6);
+}
+
+.is-tablet-frame .calendar-layout {
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: var(--m3-space-6);
+}
+
+.is-tablet-frame .task-row,
+.is-tablet-frame .tree-row {
+  min-block-size: 68px;
+  padding: 10px 14px;
+}
+
+.is-tablet-frame .m3e-navigation-rail {
+  inline-size: 80px;
+  background-color: var(--m3-surface-container);
+  border-inline-end: 1px solid var(--m3-outline-variant);
+}

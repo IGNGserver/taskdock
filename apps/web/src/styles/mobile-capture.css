@@ -1,0 +1,28 @@
+/*
+ * Mobile Quick Capture Sheet Styles
+ */
+
+.mobile-quick-capture-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-block: 8px 16px;
+}
+
+.mobile-quick-capture-helper {
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+  line-height: 1.4;
+}
+
+.mobile-quick-capture-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-block-start: 8px;
+}
+
+.mobile-quick-capture-actions .m3e-button {
+  min-inline-size: 88px;
+}

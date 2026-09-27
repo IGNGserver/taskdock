@@ -21,6 +21,7 @@ import {
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronRight, Folder, FolderPlus, MoreHorizontal, Plus } from 'lucide-react';
 import { ApiError, mutationV2, requestV2 } from './api.js';
+import { useDevice } from './device.js';
 import {
   Alert,
   BottomSheet,
@@ -919,8 +920,10 @@ function TaskDetailSurface({
   title: string;
   children: ReactNode;
 }) {
+  const { isPhone } = useDevice();
   const sizeClass = useWindowSizeClass();
-  if (sizeClass === 'compact' || sizeClass === 'medium')
+  // On phone screens use full bottom sheet; on tablet/expanded use side sheet for ergonomic supporting pane
+  if (isPhone || sizeClass === 'compact')
     return (
       <BottomSheet open={open} onClose={onClose} title={title} size="full">
         {children}

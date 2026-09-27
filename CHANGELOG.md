@@ -1,15 +1,14 @@
 # Changelog
 
-## 2.0.0-rc.27 · 2026-09-27
+## 2.0.0-rc.28 · 2026-09-27
 
 ### 新增与优化
 
-- **Android 端前端体验全面升级与 M3 Expressive (M3E) 动效重塑**：
-  - **首眼聚焦清晰化**：首页置顶聚合展示四大 M3E 智能快捷卡（今天安排进度、日程节点、流程看板、全部任务），核心信息与状态进度一目了然，彻底消除传统深层树状结构的理解认知负荷。
-  - **单手流动悬浮岛（Floating Action Island）**：彻底移除打断心流的模态弹窗，在屏幕底部拇指热区常驻 Expressive Pill 胶囊，点击自然展开并跟随键盘呼出，输入即完成创建，契合单手快速捕捉场景。
-  - **全链路 M3E 物理动效（Spring Motion Physics）**：全面接入 Compose 物理弹簧参数（Spatial Fast、Spatial Regular 与 Bouncy 回弹），配合复选框平滑 Shape Morphing 与触觉反馈，带来呼吸感的动态质感。
-  - **系统级预见式返回（Predictive Back）深度适配**：开启 `android:enableOnBackInvokedCallback` 并封装 `PredictiveBackContainer`，从子目录退出、任务详情或二级页面返回时，根据手势进度呈现连贯的缩放、大圆角形变与视差渐隐。
-- 目录页文件夹与任务卡片采用统一的层级容器与柔和 Tonal 配色，优化小屏下的边距与截断显示。
+- **Web 网页端移动/触屏体验全面升级与 M3 Expressive (M3E) 动效优化**：
+  - **首眼聚焦与单手快速创建**：优化手机端首屏布局，加入常驻悬浮创建按钮（FAB），轻触即弹出自适应软键盘高度的 `MobileQuickCaptureSheet`，支持快速创建今日任务并提供触觉震动反馈。
+  - **触屏手势交互（Swipe Gestures）**：手机触屏下任务列表支持顺滑手势——向右滑动越过阈值即完成任务并触发 Haptic 触觉反馈，向左滑动快速展开操作菜单，配合 M3E 阻尼弹簧动效。
+  - **平板端自适应双栏（Supporting Pane）**：检测平板触屏设备，自动切换至 NavigationRail 导航导轨与宽屏双栏母子布局，任务列表与详情/回顾支持面板同屏联动呈现。
+  - **多形态设备自适应**：增强设备感知模块，针对手机、平板、桌面自适应切换布局与交互组件。
 
 ### 使用注意
 
@@ -24,7 +23,9 @@
 - Windows：已提供
 - Linux：已提供
 - Android：已提供
-- Docker：`ghcr.io/igngserver/taskdock:2.0.0-rc.27`
+- Docker：`ghcr.io/igngserver/taskdock:2.0.0-rc.28`
+
+## 2.0.0-rc.27 · 2026-09-27
 
 ## 2.0.0-rc.26 · 2026-09-26
 
