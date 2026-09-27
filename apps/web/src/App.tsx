@@ -99,6 +99,7 @@ import {
   LoadingState,
   ListItem,
   Menu as M3eMenu,
+  MobileQuickCaptureSheet,
   NavigationBar,
   NavigationCard,
   NavigationDrawer,
@@ -115,9 +116,11 @@ import {
   Toolbar,
   SPRING_DURATION,
   isCompactShell,
+  useSwipeAction,
   useWindowSizeClass,
   type NavigationDestination,
 } from './components/m3e/index.js';
+import { useDevice } from './device.js';
 import { useDismissibleMenu } from './components/m3e/behavior.js';
 import { PwaLifecycleNotice } from './pwa.js';
 import { TaskDetailV2Overlay, TreePage } from './TreePage.js';
@@ -514,6 +517,7 @@ function AuthenticatedApp() {
   const auth = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const { isPhone, isTablet } = useDevice();
   const sizeClass = useWindowSizeClass();
   const pageWrapRef = useRef<HTMLDivElement | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -651,8 +655,10 @@ function AuthenticatedApp() {
   );
 
   return (
-    <div className="app-frame">
-      {sizeClass === 'medium' && (
+    <div
+      className={`app-frame${isTablet ? ' is-tablet-frame' : ''}${isPhone ? ' is-phone-frame' : ''}`}
+    >
+      {(sizeClass === 'medium' || (isTablet && sizeClass === 'expanded')) && (
         <NavigationRail
           label="主导航"
           destinations={navItems}
@@ -663,23 +669,25 @@ function AuthenticatedApp() {
           footer={<ConnectionStatus />}
         />
       )}
-      {!isCompactShell(sizeClass) && sizeClass !== 'medium' && (
-        /* Expanded and up: the drawer is persistent, so it is never modal. */
-        <NavigationDrawer
-          open
-          onClose={() => undefined}
-          modal={false}
-          side="start"
-          label="主导航"
-          destinations={navItems}
-          activeTo={activeForExpanded}
-          onNavigate={navigate}
-          linkAs={RouterLinkAdapter}
-          header={drawerHeader}
-          footer={drawerFooter}
-          className="m3e-drawer-layer--persistent"
-        />
-      )}
+      {!isCompactShell(sizeClass) &&
+        (!isTablet || sizeClass !== 'expanded') &&
+        sizeClass !== 'medium' && (
+          /* Expanded and up on desktop: the drawer is persistent, so it is never modal. */
+          <NavigationDrawer
+            open
+            onClose={() => undefined}
+            modal={false}
+            side="start"
+            label="主导航"
+            destinations={navItems}
+            activeTo={activeForExpanded}
+            onNavigate={navigate}
+            linkAs={RouterLinkAdapter}
+            header={drawerHeader}
+            footer={drawerFooter}
+            className="m3e-drawer-layer--persistent"
+          />
+        )}
       <main className="main-shell">
         <TopAppBar
           variant="small"
@@ -1439,8 +1447,10 @@ function CommandPalette({
 }
 
 function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
+  const { isPhone } = useDevice();
   const compact = useWindowSizeClass() === 'compact';
   const { settings } = useAuth();
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const localDate = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
   const loader = useCallback(async () => {
     const point = (await mutationV2('POST', '/time-points/date', { localDate })) as TimePointDto;
@@ -1676,6 +1686,39 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           }}
         />
       )}
+      {isPhone && (
+        <div className="app-float-layer">
+          <IconButton
+            variant="filled"
+            size="l"
+            label="快速创建任务"
+            onClick={() => setQuickCaptureOpen(true)}
+            className="m3e-button--fab-mobile"
+          >
+            <Plus size={26} />
+          </IconButton>
+        </div>
+      )}
+      <MobileQuickCaptureSheet
+        open={quickCaptureOpen}
+        onClose={() => setQuickCaptureOpen(false)}
+        title="添加今日任务"
+        placeholder="今天要做什么？"
+        onSubmit={async (title) => {
+          if (!data.point) return;
+          // Create task first
+          const createdTask = (await mutationV2('POST', '/tasks', {
+            title,
+          })) as TreeTaskDto;
+          // Place into today's timePoint
+          await mutationV2('POST', '/placements', {
+            taskId: createdTask.id,
+            timePointId: data.point.id,
+          });
+          await reload();
+          window.dispatchEvent(new Event('devtodo:data-changed'));
+        }}
+      />
     </div>
   );
 }
@@ -2277,7 +2320,19 @@ function PlacementRow({
     if (id === 'move') setTargetMode('move');
     if (id === 'copy') setTargetMode('copy');
   };
-  return (
+  const { isTouch } = useDevice();
+  const swipe = useSwipeAction({
+    disabled: readOnly || busy || !onToggleStatus || !isTouch,
+    onSwipeRight: () => {
+      const next = task.status === 'DONE' ? 'TODO' : 'DONE';
+      void updateStatus(next);
+    },
+    onSwipeLeft: () => {
+      setMenu(true);
+    },
+  });
+
+  const rowContent = (
     <div
       className={`task-row${dragging ? ' dragging' : ''}${
         task.status === 'IN_PROGRESS' ? ' is-progress' : ''
@@ -2285,10 +2340,23 @@ function PlacementRow({
       aria-busy={busy || undefined}
       aria-grabbed={dragging}
       draggable={!readOnly && !menu}
-      onPointerDown={startLongPress}
-      onPointerUp={cancelLongPress}
-      onPointerLeave={cancelLongPress}
-      onPointerCancel={cancelLongPress}
+      onPointerDown={(e) => {
+        startLongPress(e);
+        swipe.handlers.onPointerDown(e);
+      }}
+      onPointerMove={swipe.handlers.onPointerMove}
+      onPointerUp={(e) => {
+        cancelLongPress();
+        swipe.handlers.onPointerUp(e);
+      }}
+      onPointerLeave={(e) => {
+        cancelLongPress();
+        swipe.handlers.onPointerCancel(e);
+      }}
+      onPointerCancel={(e) => {
+        cancelLongPress();
+        swipe.handlers.onPointerCancel(e);
+      }}
       onDragStart={(event) => {
         if (readOnly) return;
         setDragging(true);
@@ -2376,6 +2444,31 @@ function PlacementRow({
           }}
         />
       )}
+    </div>
+  );
+
+  if (!isTouch) return rowContent;
+
+  return (
+    <div className={`task-swipe-shell${swipe.isSwiping ? ' is-swiping' : ''}`}>
+      {swipe.offset > 0 && (
+        <div className="task-swipe-background task-swipe-background--right">
+          <Check size={20} />
+        </div>
+      )}
+      {swipe.offset < 0 && (
+        <div className="task-swipe-background task-swipe-background--left">
+          <MoreHorizontal size={20} />
+        </div>
+      )}
+      <div
+        className="task-swipe-content"
+        style={{
+          transform: swipe.offset ? `translateX(${swipe.offset}px)` : undefined,
+        }}
+      >
+        {rowContent}
+      </div>
     </div>
   );
 }

@@ -1,0 +1,63 @@
+/*
+ * Touch & Mobile swipe gesture affordance styling
+ */
+
+.task-swipe-shell {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--m3-shape-lg);
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.task-swipe-background {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  border-radius: var(--m3-shape-lg);
+  padding: 0 20px;
+  pointer-events: none;
+}
+
+.task-swipe-background--right {
+  justify-content: flex-start;
+  background-color: var(--m3-success-container);
+  color: var(--m3-on-success-container);
+}
+
+.task-swipe-background--left {
+  justify-content: flex-end;
+  background-color: var(--m3-surface-container-highest);
+  color: var(--m3-on-surface);
+}
+
+.task-swipe-content {
+  position: relative;
+  z-index: 1;
+  transition: transform var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast);
+  will-change: transform;
+}
+
+.task-swipe-shell.is-swiping .task-swipe-content {
+  transition: none;
+}
+
+/* Mobile FAB Styling */
+.m3e-button--fab-mobile {
+  inline-size: 56px;
+  block-size: 56px;
+  border-radius: var(--m3-shape-lg);
+  background-color: var(--m3-primary);
+  color: var(--m3-on-primary);
+  box-shadow: var(--m3-elevation-3);
+  pointer-events: auto;
+  transition:
+    transform var(--m3-spring-spatial-duration) var(--m3-spring-expressive-spatial),
+    box-shadow var(--m3-motion-short2) var(--m3-easing-standard);
+}
+
+.m3e-button--fab-mobile:active {
+  transform: scale(0.92);
+  box-shadow: var(--m3-elevation-1);
+}
