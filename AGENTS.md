@@ -3,8 +3,8 @@
 > 只写本仓库与设备级规范的差异。Git 纪律、worktree、冲突处理见 `~/.qoder/coder-rules/global-rules.md`。
 
 Collaboration: solo
+Baseline: master
 Default branch: **master**（不是 main，新任务基线是 `origin/master`）
-Integration: direct-after-validation
 Release: tag + Actions（`.github/workflows/` 2 个）
 Worktree: `~/项目/.wt/todo-list工具/<slug>`
 
