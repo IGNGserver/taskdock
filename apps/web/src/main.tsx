@@ -19,6 +19,7 @@ import './styles/touch.css';
 import './styles/mobile-capture.css';
 import './styles/tablet.css';
 import './styles/responsive.css';
+import './styles/workspace.css';
 import { App } from './App.js';
 import { AuthProvider } from './auth.js';
 import { installTheme } from './theme.js';

@@ -78,6 +78,9 @@ import {
   setHubOrigin,
   testHubConnection,
 } from './api.js';
+import { DirectoryNavigation } from './components/directory-navigation.js';
+import { directoryEntries } from './directory-paths.js';
+import { readLastFolderId } from './folder-preference.js';
 import { useAuth } from './auth.js';
 import { BrandMark } from './components/brand-mark.js';
 import {
@@ -552,6 +555,7 @@ function AuthenticatedApp() {
     (taskId: string) => {
       const next = new URLSearchParams(selectedTask);
       next.set('task', taskId);
+      next.delete('editTitle');
       setSelectedTask(next);
     },
     [selectedTask, setSelectedTask],
@@ -559,9 +563,23 @@ function AuthenticatedApp() {
   const closeTask = useCallback(() => {
     const next = new URLSearchParams(selectedTask);
     next.delete('task');
+    next.delete('editTitle');
     setSelectedTask(next);
   }, [selectedTask, setSelectedTask]);
 
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => {
+      if (
+        event.key === 'Escape' &&
+        !event.defaultPrevented &&
+        selectedTask.get('task') &&
+        !document.querySelector('[aria-modal="true"]')
+      )
+        closeTask();
+    };
+    window.addEventListener('keydown', listener);
+    return () => window.removeEventListener('keydown', listener);
+  }, [closeTask, selectedTask]);
   useEffect(() => {
     const listener = (event: Event) => {
       if (commandOpen) setCommandOpen(false);
@@ -625,7 +643,7 @@ function AuthenticatedApp() {
   );
   const drawerFooter = (
     <>
-      <ConnectionStatus />
+      {isCompactShell(sizeClass) && <ConnectionStatus />}
       <div className="user-account-row">
         <NavigationCard
           variant="account"
@@ -666,7 +684,6 @@ function AuthenticatedApp() {
           onNavigate={navigate}
           linkAs={RouterLinkAdapter}
           header={<BrandMark size="sm" />}
-          footer={<ConnectionStatus />}
         />
       )}
       {!isCompactShell(sizeClass) &&
@@ -686,7 +703,9 @@ function AuthenticatedApp() {
             header={drawerHeader}
             footer={drawerFooter}
             className="m3e-drawer-layer--persistent"
-          />
+          >
+            <DirectoryNavigation />
+          </NavigationDrawer>
         )}
       <main className="main-shell">
         <TopAppBar
@@ -721,7 +740,7 @@ function AuthenticatedApp() {
                     <>
                       搜索任务、备注…
                       {!isNativeMobileClient() && (
-                        <kbd>{isWindowsDesktop() ? 'Ctrl K' : '⌘ K'}</kbd>
+                        <kbd>{/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}</kbd>
                       )}
                     </>
                   </Button>
@@ -735,35 +754,43 @@ function AuthenticatedApp() {
             </>
           }
         />
-        <div ref={pageWrapRef} className="page-wrap">
-          <div key={topRoute} className="route-transition">
-            <Routes>
-              <Route path="/" element={<Navigate to="/today" replace />} />
-              <Route path="/today" element={<TodayPage onOpenTask={openTask} />} />
-              <Route path="/tree" element={<TreePage />} />
-              <Route path="/tree/:folderId" element={<TreePage />} />
-              <Route path="/tasks" element={<Navigate to="/tree" replace />} />
-              <Route path="/workflows" element={<WorkflowsPage />} />
-              <Route path="/projects" element={<Navigate to="/tree" replace />} />
-              <Route path="/projects/:projectId" element={<Navigate to="/tree" replace />} />
-              <Route path="/inbox" element={<Navigate to="/tree" replace />} />
-              <Route path="/misc" element={<Navigate to="/tree" replace />} />
-              <Route path="/time" element={<TimeHubPage />} />
-              <Route path="/time/calendar" element={<CalendarPage onOpenTask={openTask} />} />
-              <Route
-                path="/time/calendar/:localDate"
-                element={<CalendarPage onOpenTask={openTask} />}
-              />
-              <Route path="/time/events" element={<EventsPage />} />
-              <Route path="/time/events/:eventId" element={<EventPage onOpenTask={openTask} />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route
-                path="/more"
-                element={<MorePage onOpenSearch={() => setCommandOpen(true)} />}
-              />
-              <Route path="*" element={<Navigate to="/today" replace />} />
-            </Routes>
+        <div className="workspace-body">
+          <div ref={pageWrapRef} className="page-wrap">
+            <div key={topRoute} className="route-transition">
+              <Routes>
+                <Route path="/" element={<WorkspaceEntry />} />
+                <Route path="/today" element={<TodayPage onOpenTask={openTask} />} />
+                <Route path="/tree" element={<TreePage />} />
+                <Route path="/tree/:folderId" element={<TreePage />} />
+                <Route path="/tasks" element={<Navigate to="/tree" replace />} />
+                <Route path="/workflows" element={<WorkflowsPage />} />
+                <Route path="/projects" element={<Navigate to="/tree" replace />} />
+                <Route path="/projects/:projectId" element={<Navigate to="/tree" replace />} />
+                <Route path="/inbox" element={<Navigate to="/tree" replace />} />
+                <Route path="/misc" element={<Navigate to="/tree" replace />} />
+                <Route path="/time" element={<TimeHubPage />} />
+                <Route path="/time/calendar" element={<CalendarPage onOpenTask={openTask} />} />
+                <Route
+                  path="/time/calendar/:localDate"
+                  element={<CalendarPage onOpenTask={openTask} />}
+                />
+                <Route path="/time/events" element={<EventsPage />} />
+                <Route path="/time/events/:eventId" element={<EventPage onOpenTask={openTask} />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route
+                  path="/more"
+                  element={<MorePage onOpenSearch={() => setCommandOpen(true)} />}
+                />
+                <Route path="*" element={<Navigate to="/today" replace />} />
+              </Routes>
+            </div>
           </div>
+          <TaskDetailV2Overlay
+            taskId={selectedTask.get('task')}
+            focusTitle={selectedTask.get('editTitle') === '1'}
+            onClose={closeTask}
+            onChanged={() => window.dispatchEvent(new Event('devtodo:data-changed'))}
+          />
         </div>
       </main>
       {isCompactShell(sizeClass) && (
@@ -780,7 +807,9 @@ function AuthenticatedApp() {
           linkAs={RouterLinkAdapter}
           header={drawerHeader}
           footer={drawerFooter}
-        />
+        >
+          <DirectoryNavigation onNavigate={() => setMobileSidebarOpen(false)} />
+        </NavigationDrawer>
       )}
       {sizeClass === 'compact' && (
         <NavigationBar
@@ -800,11 +829,7 @@ function AuthenticatedApp() {
           openTask(id);
         }}
       />
-      <TaskDetailV2Overlay
-        taskId={selectedTask.get('task')}
-        onClose={closeTask}
-        onChanged={() => window.dispatchEvent(new Event('devtodo:data-changed'))}
-      />
+
       {toast && <Snackbar message={toast} onDismiss={() => setToast('')} />}
       <ConfirmDialog
         open={logoutConfirmOpen}
@@ -817,6 +842,34 @@ function AuthenticatedApp() {
       />
     </div>
   );
+}
+
+function WorkspaceEntry() {
+  const [target, setTarget] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    const recent = readLastFolderId();
+    if (!recent) {
+      setTarget('/tree');
+      return;
+    }
+    void requestV2<{ items: FolderDto[] }>('/folders')
+      .then(({ items }) => {
+        if (active)
+          setTarget(
+            items.some((folder) => folder.id === recent && !folder.deletedAt)
+              ? `/tree/${recent}`
+              : '/tree',
+          );
+      })
+      .catch(() => {
+        if (active) setTarget('/tree');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  return target ? <Navigate to={target} replace /> : <LoadingScreen label="正在打开目录" />;
 }
 
 function LoginScreen({
@@ -1047,11 +1100,7 @@ function TimeHubPage() {
   const localDate = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
   return (
     <div className="page">
-      <PageHeader
-        eyebrow="TIME"
-        title="计划"
-        description="按日期或事件安排任务；安排只是任务的一个位置，不会复制任务本体。"
-      />
+      <PageHeader eyebrow="TIME" title="计划" />
       <div className="more-grid time-hub-grid">
         <NavigationCard variant="card" to={`/time/calendar/${localDate}`}>
           <span className="m3e-navigation-card__icon">
@@ -1090,11 +1139,7 @@ function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
   ];
   return (
     <div className="page">
-      <PageHeader
-        eyebrow="MORE"
-        title="更多"
-        description="次要入口集中在这里，底部导航保持专注于今天、目录和计划。"
-      />
+      <PageHeader eyebrow="MORE" title="更多" />
       <Button
         variant="tonal"
         className="m3e-button--more-search"
@@ -1150,7 +1195,6 @@ function LoadingScreen({ label }: { label: string }) {
 }
 
 function PageHeader({
-  eyebrow,
   title,
   description,
   action,
@@ -1162,7 +1206,6 @@ function PageHeader({
 }) {
   return (
     <div className="page-header">
-      {eyebrow && <div className="eyebrow">{eyebrow}</div>}
       <div className="page-header-line">
         <div>
           <h1>{title}</h1>
@@ -1312,6 +1355,10 @@ function CommandPalette({
   const [items, setItems] = useState<TreeTaskDto[]>([]);
   const [actionError, setActionError] = useState('');
   const [statusError, setStatusError] = useState('');
+  const [searchError, setSearchError] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchRetry, setSearchRetry] = useState(0);
+  const [folderLabels, setFolderLabels] = useState<Map<string, string>>(new Map());
   const inputRef = useRef<HTMLInputElement>(null);
   const presence = usePresence(open);
   useEffect(() => {
@@ -1321,20 +1368,51 @@ function CommandPalette({
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }, [open]);
   useEffect(() => {
+    if (!open) return;
     setStatusError('');
+    setSearchError('');
     if (!query.trim()) {
       setItems([]);
+      setSearchLoading(false);
       return;
     }
+    const controller = new AbortController();
+    setSearchLoading(true);
     const timer = window.setTimeout(() => {
-      void requestV2<{ items: TreeTaskDto[] }>(`/tasks?q=${encodeURIComponent(query.trim())}`)
+      void requestV2<{ items: TreeTaskDto[] }>(`/tasks?q=${encodeURIComponent(query.trim())}`, {
+        signal: controller.signal,
+      })
         .then((result) => {
-          setItems(result.items);
+          if (!controller.signal.aborted) setItems(result.items);
         })
-        .catch(() => setItems([]));
+        .catch((cause) => {
+          if (!controller.signal.aborted)
+            setSearchError(cause instanceof Error ? cause.message : '搜索失败');
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setSearchLoading(false);
+        });
     }, 180);
-    return () => window.clearTimeout(timer);
-  }, [query]);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [open, query, searchRetry]);
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    void requestV2<{ items: FolderDto[] }>('/folders', { signal: controller.signal })
+      .then((result) => {
+        if (!controller.signal.aborted)
+          setFolderLabels(
+            new Map(
+              directoryEntries(result.items ?? []).map((entry) => [entry.folder.id, entry.label]),
+            ),
+          );
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [open]);
   const arrangeToday = async (taskId: string) => {
     try {
       const point = (await mutationV2('POST', '/time-points/date', {
@@ -1384,7 +1462,14 @@ function CommandPalette({
                 {statusError}
               </Alert>
             )}
-            {items.length ? (
+            {searchError ? (
+              <ErrorState
+                error={searchError}
+                onRetry={() => setSearchRetry((current) => current + 1)}
+              />
+            ) : searchLoading ? (
+              <LoadingState label="正在搜索" />
+            ) : items.length ? (
               <List className="m3e-list--command-results" gap>
                 {items.map((task) => (
                   <ListItem
@@ -1398,9 +1483,16 @@ function CommandPalette({
                       />
                     }
                     headline={task.title}
-                    supporting={`${task.referenceId} · 目录任务`}
+                    supporting={
+                      task.parentFolderId
+                        ? (folderLabels.get(task.parentFolderId) ?? '目录')
+                        : '根目录'
+                    }
                     trailing={<ChevronRight size={16} />}
-                    onClick={() => onOpenTask(task.id)}
+                    onClick={() => {
+                      onClose();
+                      onOpenTask(task.id);
+                    }}
                     actions={
                       <Button variant="text" size="s" onClick={() => void arrangeToday(task.id)}>
                         安排今天
@@ -1424,7 +1516,7 @@ function CommandPalette({
             compact
             icon={<Command size={24} />}
             title="从搜索开始"
-            description="搜索任务标题、备注和引用 ID，或直接创建一条新任务。"
+            description="输入任务标题、备注或引用 ID。"
             action={
               <div className="command-actions">
                 <Button
@@ -1432,10 +1524,10 @@ function CommandPalette({
                   size="s"
                   onClick={() => {
                     onClose();
-                    navigate('/settings');
+                    navigate('/tree');
                   }}
                 >
-                  前往设置
+                  打开目录
                 </Button>
               </div>
             }
@@ -1448,7 +1540,6 @@ function CommandPalette({
 
 function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const { isPhone } = useDevice();
-  const compact = useWindowSizeClass() === 'compact';
   const { settings } = useAuth();
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const localDate = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
@@ -1517,8 +1608,6 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const active = data.items.filter(({ task }) => task.status !== 'DONE');
   const done = data.items.filter(({ task }) => task.status === 'DONE');
   const total = active.length + done.length;
-  const completionPercent = total ? Math.round((done.length / total) * 100) : 0;
-  const dayNumber = localDate.slice(-2);
   const movePlacement = async (placementId: string, direction: 'up' | 'down') => {
     if (!data.point) return;
     const activeIndexes = data.items
@@ -1542,9 +1631,6 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       <PageHeader
         eyebrow="今天"
         title={formatDate(localDate)}
-        description={
-          compact ? undefined : '把今天要处理的内容放在眼前，完成状态会同步到每一个安排位置。'
-        }
         action={
           <Toolbar variant="floating" ariaLabel="今日操作" className="m3e-toolbar--today">
             <Button
@@ -1566,38 +1652,13 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           </Toolbar>
         }
       />
-      {hasData && (
-        <section className="today-stage" aria-label="今日工作区">
-          <section className="today-overview" aria-label="今日进度">
-            <div className="today-overview-identity">
-              <span className="today-day-marker" aria-hidden="true">
-                {dayNumber}
-              </span>
-              <div className="today-overview-copy">
-                <span className="today-overview-label">今天的焦点</span>
-                <strong>{total ? `${done.length} / ${total} 已完成` : '还没有安排任务'}</strong>
-                <span className="today-overview-supporting">
-                  {total ? '完成一个任务，下一步会自然浮现' : '从目录安排第一个任务开始'}
-                </span>
-              </div>
-            </div>
-            <div className="today-overview-metric">
-              {total > 0 ? (
-                <>
-                  <LinearProgress
-                    value={done.length}
-                    max={total}
-                    label="今日任务完成度"
-                    className="m3e-progress--today"
-                  />
-                  <span className="today-overview-percent">{completionPercent}%</span>
-                </>
-              ) : (
-                <span className="today-overview-empty-metric">等待第一个安排</span>
-              )}
-            </div>
-          </section>
-        </section>
+      {hasData && total > 0 && (
+        <div className="today-progress-summary" aria-label="今日进度">
+          <span>
+            {active.length} 项待处理 · {done.length} 项已完成
+          </span>
+          <LinearProgress value={done.length} max={total} label="今日任务完成度" />
+        </div>
       )}
       {rollover && (
         <Snackbar
@@ -1623,7 +1684,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               onChanged={reload}
               onMove={movePlacement}
               emptyTitle="今天还没有安排"
-              emptyDescription="可以从目录中安排内容，或先捕获一个位于最近文件夹的任务。"
+              emptyDescription="从目录选择任务，安排到今天。"
               emptyAction={
                 data.point ? (
                   <Button
@@ -1818,7 +1879,6 @@ function EventsPage() {
       <PageHeader
         eyebrow="EVENTS"
         title="事件"
-        description="事件有自己的生命周期；任务完成状态与事件到达状态彼此独立。"
         action={
           <Button leadingIcon={<Plus size={16} />} onClick={() => setOpen(true)}>
             新建事件
@@ -1863,7 +1923,7 @@ function EventsPage() {
         <EmptyState
           icon={<Clock3 size={20} />}
           title="还没有自定义事件"
-          description="例如“Codex 额度重置后”或下一次发布窗口。"
+          description="创建事件，再从目录加入相关任务。"
           action={
             <Button leadingIcon={<Plus size={16} />} onClick={() => setOpen(true)}>
               创建事件
@@ -2299,6 +2359,12 @@ function PlacementRow({
     }
   };
   const menuOptions = [
+    ...(onMove
+      ? [
+          { id: 'move-up', label: '上移安排', disabled: busy || !canMoveUp },
+          { id: 'move-down', label: '下移安排', disabled: busy || !canMoveDown },
+        ]
+      : []),
     { id: 'show-in-tree', label: '在目录中显示', icon: <Folder size={16} /> },
     { id: 'remove', label: '从此处移除', icon: <Trash2 size={16} />, danger: true },
     { id: 'move', label: '移动到其他事件', icon: <Target size={16} /> },
@@ -2306,6 +2372,10 @@ function PlacementRow({
   ];
   const selectMenuAction = (id: string) => {
     setMenu(false);
+    if (id === 'move-up' || id === 'move-down') {
+      void move(id === 'move-up' ? 'up' : 'down');
+      return;
+    }
     if (id === 'show-in-tree') {
       navigate(
         task.parentFolderId
@@ -2382,35 +2452,12 @@ function PlacementRow({
         onStatusChange={updateStatus}
         disabled={busy || !onToggleStatus || readOnly}
       />
-      {onMove && !readOnly && (
-        <div className="task-reorder-actions" aria-label="调整安排顺序">
-          <IconButton
-            label="上移安排"
-            type="submit"
-            onClick={() => void move('up')}
-            disabled={busy || !canMoveUp}
-          >
-            <ChevronUp size={16} />
-          </IconButton>
-          <IconButton
-            label="下移安排"
-            type="submit"
-            onClick={() => void move('down')}
-            disabled={busy || !canMoveDown}
-          >
-            <ChevronDown size={16} />
-          </IconButton>
-        </div>
-      )}
       <TaskRowAction
         busy={busy}
         onClick={() => onOpen(task.id)}
         aria-label={`打开任务 ${task.title}`}
       >
         <span className="task-title">{task.title}</span>
-        <span className="task-meta">
-          <span className="reference-id">{task.referenceId}</span>
-        </span>
       </TaskRowAction>
       {!readOnly && (
         <div ref={menuRef} className="task-actions">
@@ -3031,13 +3078,8 @@ function AddTaskModal({
         headline={task.title}
         supporting={
           showLocation ? (
-            <>
-              <code>{task.referenceId}</code>
-              <span className="task-picker-location">{taskLocation(task)}</span>
-            </>
-          ) : (
-            task.referenceId
-          )
+            <span className="task-picker-location">{taskLocation(task)}</span>
+          ) : undefined
         }
         leading={
           <span
@@ -3372,7 +3414,6 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       <PageHeader
         eyebrow="计划"
         title="日历"
-        description="按本地日期安排任务，不把日期当成截止日期。"
         action={
           <Button
             variant="outlined"
@@ -3503,11 +3544,7 @@ function SettingsPage() {
   };
   return (
     <div className="page narrow-page">
-      <PageHeader
-        eyebrow="PREFERENCES"
-        title="设置"
-        description="偏好设置会随账号同步；本地数据与服务端数据保持同一份领域语义。"
-      />
+      <PageHeader eyebrow="PREFERENCES" title="设置" />
       {isNativeClient() && <HubSettingsSection />}
       <form className="settings-form" onSubmit={save}>
         <div className="settings-section">

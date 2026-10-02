@@ -191,6 +191,7 @@ export function NavigationDrawer({
   label,
   header,
   footer,
+  children,
   modal = true,
   side = 'start',
   className,
@@ -204,6 +205,7 @@ export function NavigationDrawer({
   label: string;
   header?: ReactNode;
   footer?: ReactNode;
+  children?: ReactNode;
   modal?: boolean;
   side?: 'start' | 'end';
   className?: string;
@@ -299,6 +301,7 @@ export function NavigationDrawer({
             })}
           </ul>
         </nav>
+        {children && <div className="m3e-drawer__content">{children}</div>}
         {footer && <div className="m3e-drawer__footer">{footer}</div>}
       </aside>
     </div>

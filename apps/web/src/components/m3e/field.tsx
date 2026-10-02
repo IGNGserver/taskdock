@@ -57,6 +57,7 @@ export function TextField({
         Boolean(error) && 'm3e-field--error',
         Boolean(props.disabled) && 'm3e-field--disabled',
         Boolean(hasValue) && 'has-value',
+        hideLabel && 'm3e-field--label-hidden',
         className,
       )}
     >
@@ -118,6 +119,7 @@ export function TextArea({
         Boolean(error) && 'm3e-field--error',
         Boolean(props.disabled) && 'm3e-field--disabled',
         Boolean(hasValue) && 'has-value',
+        hideLabel && 'm3e-field--label-hidden',
         className,
       )}
     >
