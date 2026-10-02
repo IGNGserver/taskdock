@@ -88,6 +88,14 @@
   color: transparent;
 }
 
+/* A hidden label needs a visible placeholder and no reserved label space. */
+.m3e-field--label-hidden .m3e-field__input {
+  padding-block: 12px;
+}
+.m3e-field--label-hidden .m3e-field__input::placeholder {
+  color: var(--m3-on-surface-variant);
+}
+
 .m3e-field--multiline .m3e-field__input--multiline {
   min-block-size: 120px;
   padding-block-start: 24px;

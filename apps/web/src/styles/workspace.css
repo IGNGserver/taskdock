@@ -1,0 +1,585 @@
+/* Directory workbench: shared spacing, quiet rows, and an independent editor. */
+.workspace-body {
+  display: flex;
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 0;
+  overflow: hidden;
+}
+.workspace-body > .page-wrap {
+  inline-size: auto;
+  min-inline-size: 0;
+  container-type: inline-size;
+}
+.m3e-drawer-layer--persistent {
+  flex-basis: 224px;
+  inline-size: 224px;
+}
+.m3e-drawer-layer--persistent .m3e-drawer {
+  inline-size: 224px;
+  border-radius: 0;
+  border-inline-end: 1px solid var(--m3-outline-variant);
+}
+.m3e-drawer__nav {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+.m3e-drawer__content {
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+  padding: 8px 12px 20px;
+}
+.m3e-drawer__item {
+  min-block-size: 42px;
+  border-radius: 8px;
+}
+.directory-navigation {
+  display: grid;
+  gap: 4px;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--m3-outline-variant);
+}
+.directory-navigation-heading {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--m3-on-surface-variant);
+}
+.directory-navigation ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.directory-navigation-row {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+}
+.directory-navigation-spacer {
+  flex: 0 0 24px;
+}
+.directory-navigation-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 36px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--m3-on-surface-variant);
+  font-size: 13px;
+  text-decoration: none;
+}
+.directory-navigation-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.directory-navigation-link svg {
+  flex: 0 0 auto;
+}
+.directory-navigation-link:hover {
+  background: var(--m3-surface-container-high);
+}
+.directory-navigation-link.active {
+  background: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+}
+.directory-navigation-root {
+  margin-inline-start: 24px;
+}
+.workspace-task-detail {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 360px;
+  inline-size: 360px;
+  min-block-size: 0;
+  background: var(--m3-surface);
+  border-inline-start: 1px solid var(--m3-outline-variant);
+}
+.workspace-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  min-block-size: 49px;
+  border-block-end: 1px solid var(--m3-outline-variant);
+  color: var(--m3-on-surface-variant);
+  font-size: 13px;
+}
+.workspace-detail-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px;
+  flex: 1;
+  min-block-size: 0;
+}
+.workspace-editor {
+  gap: 20px;
+}
+.workspace-editor .task-detail-v2-header {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 4px;
+}
+.workspace-editor .task-detail-v2-header > .m3e-field {
+  min-inline-size: 0;
+  flex: 1;
+}
+.workspace-editor .task-detail-v2-header > div:last-child {
+  inline-size: auto;
+  flex: 0 0 auto;
+  position: relative;
+}
+.workspace-editor .m3e-field--task-detail-title .m3e-field__input {
+  font-size: 20px;
+  font-weight: 650;
+  padding: 8px 0;
+}
+.task-save-state {
+  color: var(--m3-on-surface-variant);
+  font-size: 12px;
+  margin-block-start: -12px;
+}
+.task-save-state.has-error {
+  color: var(--m3-error);
+}
+.workspace-editor .m3e-button-group {
+  inline-size: 100%;
+}
+.workspace-editor .task-detail-v2-section h3 {
+  margin: 0;
+  font-size: 13px;
+  color: var(--m3-on-surface-variant);
+}
+.workspace-editor .task-detail-v2-section h3 span {
+  float: inline-end;
+  font-weight: 400;
+}
+.workspace-editor .m3e-disclosure {
+  border-radius: 0;
+  border: 0;
+  border-block-start: 1px solid var(--m3-outline-variant);
+  background: transparent;
+}
+.workspace-editor .m3e-disclosure__summary {
+  min-block-size: 44px;
+  padding: 12px 0;
+}
+.workspace-editor .m3e-disclosure__summary strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.workspace-editor .m3e-disclosure__body {
+  padding: 4px 0 12px;
+}
+.workspace-step {
+  padding-block: 4px;
+  border-block-end: 1px solid var(--m3-outline-variant);
+}
+.workspace-step-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.workspace-step-title {
+  flex: 1;
+  min-inline-size: 0;
+  text-align: start;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  padding: 10px 0;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.workspace-step-title small {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--m3-on-surface-variant);
+  font-size: 12px;
+  margin-block-start: 4px;
+}
+.workspace-step-editor {
+  display: grid;
+  gap: 10px;
+  padding: 8px 0 12px 38px;
+}
+.workspace-relation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.task-reference-id {
+  display: block;
+  margin-block-start: 8px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.folder-picker {
+  display: grid;
+  gap: 12px;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+.folder-picker .m3e-select {
+  min-inline-size: 0;
+  inline-size: 100%;
+}
+.tree-page {
+  inline-size: calc(100% - 48px);
+  max-inline-size: 1160px;
+  padding-block: 16px 40px;
+  gap: 16px;
+}
+.tree-page .tree-page-header {
+  margin: 0;
+  align-items: center;
+}
+.tree-page h1 {
+  font-size: 24px;
+  line-height: 1.3;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.tree-breadcrumbs {
+  gap: 0;
+  min-inline-size: 0;
+}
+.tree-breadcrumbs .m3e-button {
+  font-size: 12px;
+  min-block-size: 30px;
+  padding-inline: 6px;
+}
+.tree-breadcrumbs__segment {
+  min-inline-size: 0;
+}
+.tree-breadcrumbs__segment .m3e-button {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.tree-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.tree-capture-form {
+  background: var(--m3-surface);
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 8px;
+  padding: 6px 8px 6px 14px;
+  gap: 10px;
+  min-inline-size: 0;
+  box-shadow: none;
+}
+.tree-capture-form:focus-within {
+  border-color: var(--m3-primary);
+}
+.tree-capture-input {
+  flex: 1;
+  min-inline-size: 0;
+}
+.tree-capture-input input {
+  inline-size: 100%;
+  min-inline-size: 0;
+  border: 0;
+  background: transparent;
+  padding-block: 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--m3-on-surface);
+  outline-offset: 2px;
+}
+.tree-list-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.tree-list-toolbar > .m3e-field {
+  min-inline-size: 0;
+  flex: 1;
+  max-inline-size: 280px;
+}
+.tree-list-toolbar .m3e-field__box {
+  min-block-size: 38px;
+}
+.tree-list-toolbar .m3e-field__input {
+  padding-block: 8px;
+  font-size: 13px;
+}
+.tree-list-toolbar .m3e-select {
+  inline-size: 150px;
+}
+.tree-list-toolbar .m3e-select__native {
+  min-block-size: 38px;
+  font-size: 12px;
+}
+.tree-selection-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.tree-selection-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tree-selection-toolbar input,
+.tree-selection-checkbox {
+  accent-color: var(--m3-primary);
+  inline-size: 16px;
+  block-size: 16px;
+  cursor: pointer;
+}
+.tree-list-group {
+  min-inline-size: 0;
+}
+.tree-page .tree-group-heading {
+  padding: 8px 0;
+  background: transparent;
+  margin: 0;
+  font-size: 12px;
+  color: var(--m3-on-surface-variant);
+}
+.tree-page .m3e-list-item__wrapper {
+  border: 0;
+  border-block-end: 1px solid var(--m3-outline-variant);
+  background: transparent;
+  border-radius: 0;
+  padding-inline: 4px;
+  align-items: center;
+}
+.tree-page .m3e-list-item {
+  border: 0;
+  border-radius: 4px;
+  min-block-size: 48px;
+  padding: 8px 6px;
+  background: transparent;
+  box-shadow: none;
+}
+.tree-page .m3e-list-item__wrapper:hover {
+  background: var(--m3-surface-container-low);
+}
+.tree-page .m3e-list-item.is-selected {
+  background: var(--m3-secondary-container);
+}
+.tree-page .m3e-list-item__headline {
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.tree-page .m3e-list-item__leading-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tree-page .m3e-list-item__leading-control:empty {
+  display: none;
+}
+.tree-page .m3e-list-item__trailing {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.tree-page .tree-count {
+  font-size: 12px;
+  color: var(--m3-on-surface-variant);
+  white-space: nowrap;
+}
+.tree-page .tree-row-actions {
+  inline-size: auto;
+}
+.tree-completed-group {
+  background: transparent;
+  border-radius: 0;
+  border: 0;
+  border-block-start: 1px solid var(--m3-outline-variant);
+}
+.tree-completed-group .m3e-disclosure__summary {
+  padding: 12px 0;
+}
+.tree-completed-group .m3e-disclosure__body {
+  padding: 0;
+}
+.tree-move-sheet {
+  display: grid;
+  gap: 16px;
+}
+.today-progress-summary {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  color: var(--m3-on-surface-variant);
+  font-size: 13px;
+  padding-block: 4px 8px;
+}
+.today-progress-summary .m3e-progress {
+  inline-size: 100px;
+}
+.page-header .eyebrow {
+  display: none;
+}
+.page,
+.page-section {
+  padding-block-start: 24px;
+}
+.page-header h1 {
+  font-size: 26px;
+}
+.page-header p {
+  font-size: 13px;
+}
+.today-task-pane,
+.today-complete-pane {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding-inline: 0;
+  border-radius: 0;
+}
+.today-task-pane .task-row,
+.today-complete-pane .task-row,
+.m3e-list--workflow-stage .m3e-list-item {
+  box-shadow: none;
+  border-radius: 6px;
+}
+.today-task-pane .section-title,
+.today-complete-pane .section-title {
+  margin-block-start: 12px;
+}
+@container (max-width: 720px) {
+  .today-task-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .page-header-line,
+  .event-page-header,
+  .tree-page-header {
+    flex-wrap: wrap;
+  }
+  .calendar-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .calendar-detail {
+    min-inline-size: 0;
+  }
+  .tree-page {
+    inline-size: calc(100% - 32px);
+  }
+  .tree-list-toolbar {
+    gap: 8px;
+  }
+}
+@media (min-width: 600px) and (max-width: 1100px) {
+  .workspace-task-detail {
+    flex-basis: 320px;
+    inline-size: 320px;
+  }
+  .workspace-detail-scroll {
+    padding: 16px;
+  }
+}
+@media (max-width: 599px) {
+  .tree-page {
+    inline-size: calc(100% - 32px);
+    padding-block: 16px 112px;
+    gap: 12px;
+  }
+  .tree-page .tree-page-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .tree-page h1 {
+    font-size: 22px;
+  }
+  .tree-header-actions {
+    inline-size: auto;
+  }
+  .tree-capture-form {
+    flex-wrap: nowrap;
+  }
+  .tree-capture-form > .m3e-button {
+    inline-size: auto;
+  }
+  .tree-list-toolbar .m3e-select {
+    inline-size: 130px;
+  }
+  .workspace-editor {
+    gap: 20px;
+  }
+  .workspace-editor .m3e-button-group {
+    inline-size: 100%;
+  }
+  .tree-page .m3e-list-item {
+    min-block-size: 52px;
+  }
+  .page-header h1 {
+    font-size: 24px;
+  }
+}
+
+.tree-page .m3e-list--tree-group {
+  gap: 0;
+  overflow: visible;
+  background: transparent;
+}
+.tree-page .m3e-list-item__headline {
+  font-weight: 500;
+}
+.tree-page .m3e-task-status-control__label,
+.workspace-steps .m3e-task-status-control__label {
+  display: none;
+}
+.tree-page .m3e-task-status-button,
+.workspace-steps .m3e-task-status-button {
+  background: transparent;
+}
+.workspace-editor .m3e-field--task-detail-title .m3e-field__box {
+  border: 0;
+  border-block-end: 1px solid transparent;
+  border-radius: 0;
+  min-block-size: 44px;
+}
+.workspace-editor .m3e-field--task-detail-title .m3e-field__box:focus-within {
+  border-block-end-color: var(--m3-primary);
+  box-shadow: none;
+}
+.workspace-editor .task-detail-v2-section {
+  margin-block-start: 0;
+}
+.workspace-editor .m3e-field--task-detail-note .m3e-field__box {
+  border-color: var(--m3-outline-variant);
+  border-radius: 6px;
+}
+.workspace-editor .inline-capture {
+  flex-wrap: nowrap;
+}
+.workspace-editor .inline-capture .m3e-field {
+  min-inline-size: 0;
+}
+.m3e-list--workflow-stage {
+  overflow: visible;
+}
+.m3e-list--workflow-stage .m3e-list-item__wrapper {
+  border: 0;
+  border-block-end: 1px solid var(--m3-outline-variant);
+  border-radius: 0;
+  background: transparent;
+}

@@ -25,6 +25,10 @@ async function login(page: Page) {
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page.getByRole('navigation', { name: '移动导航' })).toBeVisible();
   await expect(page.locator('.inline-error')).toHaveCount(0);
+  await page
+    .getByRole('navigation', { name: '移动导航' })
+    .getByRole('link', { name: '今日', exact: true })
+    .click();
 }
 
 async function assertFits(page: Page) {
@@ -73,6 +77,16 @@ for (const width of [320, 390, 430]) {
     await login(page);
     await assertFits(page);
     await expect(page.getByRole('heading', { name: '今天要做' })).toBeInViewport();
+    const capturedTitle = `移动录入 ${width} ${Date.now()}`;
+    await page.getByRole('button', { name: '快速创建任务', exact: true }).click();
+    const captureSheet = page.getByRole('dialog', { name: '添加今日任务', exact: true });
+    await captureSheet
+      .getByRole('textbox', { name: '快速创建任务', exact: true })
+      .fill(capturedTitle);
+    await captureSheet.getByRole('button', { name: '创建任务', exact: true }).click();
+    await expect(captureSheet).toBeHidden();
+    await expect(page.getByText(capturedTitle, { exact: true })).toBeVisible();
+    await assertFits(page);
     await page.screenshot({ path: info.outputPath(`today-${width}.png`) });
 
     // The palette is the only app-bar overlay; open and dismiss it to verify
@@ -88,7 +102,7 @@ for (const width of [320, 390, 430]) {
       .getByRole('navigation', { name: '移动导航' })
       .getByRole('link', { name: '目录' })
       .click();
-    await expect(page.getByRole('heading', { name: '目录' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '根目录', exact: true })).toBeVisible();
     await assertFits(page);
 
     // All product routes retain the app shell and fit a narrow viewport. `/tasks`
@@ -171,9 +185,10 @@ test('production PWA caches assets and can reopen the workspace offline', async 
   await expect(page.getByRole('heading', { name: '今天要做' })).toBeVisible();
   const offlineTitle = `离线记录 ${Date.now()}`;
   await page.getByRole('button', { name: '快速创建任务', exact: true }).click();
-  const capture = page.getByRole('dialog', { name: '添加今日任务' });
+  const capture = page.getByRole('dialog', { name: '添加今日任务', exact: true });
   await capture.getByRole('textbox', { name: '快速创建任务', exact: true }).fill(offlineTitle);
   await capture.getByRole('button', { name: '创建任务', exact: true }).click();
+  await expect(capture).toBeHidden();
   await expect(page.getByText(offlineTitle, { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText(offlineTitle, { exact: true })).toBeVisible();

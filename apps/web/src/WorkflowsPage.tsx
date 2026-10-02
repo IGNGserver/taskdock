@@ -32,13 +32,15 @@ import {
   LoadingState,
   Menu,
   SearchBar,
+  Select,
   TaskStatusControl,
   TextField,
   useDismissibleMenu,
   type MenuOption,
 } from './components/m3e/index.js';
 import { resolveCaptureFolder } from './folder-preference.js';
-import { TaskDetailV2Overlay } from './TreePage.js';
+import { useSearchParams } from 'react-router-dom';
+import { directoryEntries } from './directory-paths.js';
 
 type WorkflowStage = NonNullable<WorkflowDto['stages']>[number];
 
@@ -363,7 +365,14 @@ export function WorkflowsPage() {
   const [folders, setFolders] = useState<FolderDto[]>([]);
   const [dialog, setDialog] = useState<WorkflowDialog | null>(null);
   const [confirmation, setConfirmation] = useState<WorkflowConfirm | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
+  const setSelectedTaskId = (id: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('task', id);
+    next.delete('editTitle');
+    setSearchParams(next);
+  };
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -490,17 +499,19 @@ export function WorkflowsPage() {
       }),
     );
 
-  const visibleWorkflows = workflows;
+  const activeWorkflowId = workflows.some((item) => item.id === selectedWorkflowId)
+    ? selectedWorkflowId
+    : (workflows[0]?.id ?? '');
+  const visibleWorkflows = workflows.filter((item) => item.id === activeWorkflowId);
+  const folderLabels = new Map(
+    directoryEntries(folders).map((entry) => [entry.folder.id, entry.label]),
+  );
 
   return (
     <section className="page-section workflows-page" aria-labelledby="workflows-title">
       <div className="page-header workflows-header">
         <div>
-          <p className="eyebrow">流程</p>
           <h1 id="workflows-title">流程</h1>
-          <p className="page-subtitle">
-            阶段只表示任务在流程中的位置；同一个任务可以出现在多个流程里。
-          </p>
         </div>
         <div className="workflows-header__actions">
           <Button
@@ -514,6 +525,14 @@ export function WorkflowsPage() {
           </Button>
         </div>
       </div>
+      {workflows.length > 1 && (
+        <Select
+          label="选择流程"
+          value={activeWorkflowId}
+          onChange={setSelectedWorkflowId}
+          options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))}
+        />
+      )}
       {loadError && (
         <Alert
           tone="error"
@@ -547,7 +566,7 @@ export function WorkflowsPage() {
           className="m3e-empty-state--workflow"
           icon={<WorkflowGlyph size={24} aria-hidden="true" />}
           title={workflows.length === 0 ? '还没有流程' : '没有进行中的流程'}
-          description="把重复的发布、插件或维护步骤拆成可复用的阶段。"
+          description="创建流程，按阶段整理任务。"
           action={
             <Button
               variant="filled"
@@ -699,8 +718,7 @@ export function WorkflowsPage() {
                               const prevMembership = membershipAt(stage, taskIndex - 1);
                               const nextMembership = membershipAt(stage, taskIndex + 1);
                               const folderTitle = task.parentFolderId
-                                ? (folders.find((folder) => folder.id === task.parentFolderId)
-                                    ?.title ?? '目录')
+                                ? (folderLabels.get(task.parentFolderId) ?? '目录')
                                 : '根目录';
                               return (
                                 <ListItem
@@ -725,7 +743,6 @@ export function WorkflowsPage() {
                                   }
                                   supporting={
                                     <span className="workflow-task__meta">
-                                      <code>{task.referenceId}</code>
                                       <span className="workflow-task__folder">
                                         <Folder size={14} aria-hidden="true" />
                                         {folderTitle}
@@ -842,7 +859,12 @@ export function WorkflowsPage() {
           error={actionError}
           onClose={() => setDialog(null)}
           onSubmit={(value) =>
-            void runDialog(() => mutationV2('POST', '/workflows', { name: value }))
+            void runDialog(async () => {
+              const created = (await mutationV2('POST', '/workflows', {
+                name: value,
+              })) as WorkflowDto;
+              setSelectedWorkflowId(created.id);
+            })
           }
         />
       )}
@@ -923,11 +945,6 @@ export function WorkflowsPage() {
           onConfirm={confirmation.onConfirm}
         />
       )}
-      <TaskDetailV2Overlay
-        taskId={selectedTaskId}
-        onClose={() => setSelectedTaskId(null)}
-        onChanged={load}
-      />
     </section>
   );
 }

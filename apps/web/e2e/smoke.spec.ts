@@ -218,7 +218,7 @@ test('opens the authenticated command palette and exposes mobile navigation', as
       .getByRole('link', { name: '目录' })
       .click();
     await expect(page).toHaveURL(/\/tree$/);
-    await expect(page.getByRole('heading', { name: '目录' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '根目录', exact: true })).toBeVisible();
   }
 
   // The command palette is the single overlay entry left in the app bar.
