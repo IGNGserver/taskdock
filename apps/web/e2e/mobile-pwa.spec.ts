@@ -170,8 +170,10 @@ test('production PWA caches assets and can reopen the workspace offline', async 
   await expect(page.getByRole('navigation', { name: '移动导航' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '今天要做' })).toBeVisible();
   const offlineTitle = `离线记录 ${Date.now()}`;
-  await page.getByLabel('快速创建任务').fill(offlineTitle);
-  await page.getByRole('button', { name: '创建任务', exact: true }).click();
+  await page.getByRole('button', { name: '快速创建任务', exact: true }).click();
+  const capture = page.getByRole('dialog', { name: '添加今日任务' });
+  await capture.getByRole('textbox', { name: '快速创建任务', exact: true }).fill(offlineTitle);
+  await capture.getByRole('button', { name: '创建任务', exact: true }).click();
   await expect(page.getByText(offlineTitle, { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText(offlineTitle, { exact: true })).toBeVisible();

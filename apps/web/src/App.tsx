@@ -1707,9 +1707,10 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         onSubmit={async (title) => {
           if (!data.point) return;
           // Create task first
-          const createdTask = (await mutationV2('POST', '/tasks', {
+          const { task: createdTask } = (await mutationV2('POST', '/tasks', {
+            parentFolderId: null,
             title,
-          })) as TreeTaskDto;
+          })) as { task: TreeTaskDto };
           // Place into today's timePoint
           await mutationV2('POST', '/placements', {
             taskId: createdTask.id,

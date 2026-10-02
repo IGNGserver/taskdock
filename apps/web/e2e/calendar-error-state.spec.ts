@@ -94,6 +94,7 @@ test('calendar distinguishes a failed load from an empty day and recovers on ret
       return json(route, { changes: [], nextCursor: '0', hasMore: false });
     }
     if (path.endsWith('/sync/push')) return json(route, { protocolVersion: 2, results: [] });
+    if (path.endsWith('/tree/children')) return json(route, { items: [] });
     if (path.endsWith('/time-points/placement-counts')) return json(route, { items: [] });
     if (path.endsWith('/time-points/date') && method === 'POST') return json(route, point, 201);
     if (path.endsWith(`/time-points/${point.id}/placements`)) {
