@@ -15,6 +15,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.devtodo.app.ui.theme.TaskDockShapes
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -72,7 +73,9 @@ fun EmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Icon(icon, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+        Surface(shape = TaskDockShapes.HeroShape, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
+            Icon(icon, null, Modifier.padding(20.dp).size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         Text(title, style = MaterialTheme.typography.titleLarge)
         Text(
             description,

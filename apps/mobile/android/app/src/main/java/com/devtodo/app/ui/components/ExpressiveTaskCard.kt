@@ -2,29 +2,25 @@ package com.devtodo.app.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,6 +29,7 @@ import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.ui.theme.TaskDockMotion
 import com.devtodo.app.ui.theme.TaskDockShapes
 
+/** The status, content and menu have separate touch targets, including in large text. */
 @Composable
 fun ExpressiveTaskCard(
     task: TaskEntity,
@@ -45,125 +42,74 @@ fun ExpressiveTaskCard(
     highlighted: Boolean = false,
     showStatus: Boolean = true,
     containerColorOverride: Color? = null,
+    rowShape: Shape = TaskDockShapes.TaskRowShape,
 ) {
-    val haptics = LocalHapticFeedback.current
     val isDone = task.status == TaskStatus.DONE
-    val isInProgress = task.status == TaskStatus.IN_PROGRESS
-
     val metadata = buildList {
-        if (showStatus) add(taskStatusLabel(task.status))
+        if (showStatus && task.status == TaskStatus.IN_PROGRESS) add("进行中")
         projectName?.takeIf(String::isNotBlank)?.let(::add)
         dateBadge?.takeIf(String::isNotBlank)?.let(::add)
     }
-
-    val targetContainerColor = when {
-        highlighted -> MaterialTheme.colorScheme.secondaryContainer
-        containerColorOverride != null -> containerColorOverride
-        isDone -> MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.6f)
-        isInProgress -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-        else -> MaterialTheme.colorScheme.surfaceContainerLow
-    }
-
     val containerColor by animateColorAsState(
-        targetValue = targetContainerColor,
-        animationSpec = TaskDockMotion.springSpatialFast(),
-        label = "expressiveTaskContainerColor",
+        targetValue = when {
+            highlighted -> MaterialTheme.colorScheme.secondaryContainer
+            containerColorOverride != null -> containerColorOverride
+            else -> MaterialTheme.colorScheme.surfaceContainerLow
+        },
+        animationSpec = TaskDockMotion.springEffectsFast(),
+        label = "taskSurface",
     )
-
-    val shape = if (highlighted) TaskDockShapes.TaskRowSelectedShape else TaskDockShapes.TaskRowShape
-
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(shape)
-            .clickable(onClickLabel = "查看任务详情", onClick = onClick),
-        shape = shape,
+        modifier = modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp),
+        shape = rowShape,
         color = containerColor,
-        tonalElevation = if (highlighted) 4.dp else if (isDone) 0.dp else 1.dp,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 8.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+            Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Expressive Spring Bounce Checkbox Control
             ExpressiveCheckbox(
                 checked = isDone,
-                onCheckedChange = { checked ->
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onStatusToggle(if (checked) TaskStatus.DONE else TaskStatus.TODO)
-                },
+                onCheckedChange = { onStatusToggle(if (it) TaskStatus.DONE else TaskStatus.TODO) },
                 taskTitle = task.title,
                 status = task.status,
             )
-
-            Spacer(Modifier.width(8.dp))
-
-            // Task Content
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(vertical = 2.dp),
-                verticalArrangement = Arrangement.Center,
+                Modifier.weight(1f).clip(TaskDockShapes.Small)
+                    .clickable(onClickLabel = "查看任务详情", onClick = onClick)
+                    .heightIn(min = 60.dp)
+                    .padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
             ) {
                 Text(
-                    text = task.title,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    task.title,
                     style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (isInProgress) FontWeight.SemiBold else FontWeight.Medium,
-                    color = if (isDone) {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
+                    color = if (isDone) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                     textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
                 )
-
                 if (metadata.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        if (isInProgress) {
-                            Surface(
-                                shape = TaskDockShapes.FullPill,
-                                color = MaterialTheme.colorScheme.primary,
-                            ) {
-                                Text(
-                                    text = "进行中",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
-                            }
-                        }
-
-                        Text(
-                            text = metadata.joinToString(" · "),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Text(
+                        metadata.joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
-
-            // Trailing Actions Menu
-            if (actions.isNotEmpty()) {
-                ActionMenu(label = "${task.title}，更多操作", actions = actions)
-            }
+            ActionMenu(
+                label = "${task.title}，更多操作",
+                actions = TaskStatus.entries.filter { it != task.status }.map { status ->
+                    RowAction("标记为${taskStatusLabel(status)}") { onStatusToggle(status) }
+                } + actions,
+            )
         }
     }
 }
 
-/**
- * Animated Checkbox button with M3 Expressive bouncy bounce feedback
- */
+/** A calm circle with a dot for in-progress and a check for done. */
 @Composable
 fun ExpressiveCheckbox(
     checked: Boolean,
@@ -172,32 +118,21 @@ fun ExpressiveCheckbox(
     status: TaskStatus,
     modifier: Modifier = Modifier,
 ) {
-    val checkScale by animateFloatAsState(
-        targetValue = if (checked) 1f else 0.85f,
-        animationSpec = TaskDockMotion.springBouncy(),
-        label = "checkboxScale",
+    val haptics = LocalHapticFeedback.current
+    val scale by animateFloatAsState(
+        if (checked) 1f else 0.92f,
+        animationSpec = TaskDockMotion.springBouncy(), label = "statusCircleScale",
     )
-
-    val boxColor by animateColorAsState(
-        targetValue = if (checked) MaterialTheme.colorScheme.primary else Color.Transparent,
-        animationSpec = TaskDockMotion.springSpatialFast(),
-        label = "checkboxBoxColor",
+    val color by animateColorAsState(
+        if (checked) MaterialTheme.colorScheme.primary else Color.Transparent,
+        animationSpec = TaskDockMotion.springEffectsFast(), label = "statusCircleColor",
     )
-
-    val borderColor by animateColorAsState(
-        targetValue = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-        animationSpec = TaskDockMotion.springSpatialFast(),
-        label = "checkboxBorderColor",
-    )
-
     Box(
-        modifier = modifier
-            .size(48.dp)
-            .toggleable(
-                value = checked,
-                role = Role.Checkbox,
-                onValueChange = onCheckedChange,
-            )
+        modifier.size(48.dp).clip(CircleShape)
+            .toggleable(value = checked, role = Role.Checkbox, onValueChange = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onCheckedChange(it)
+            })
             .semantics {
                 contentDescription = "$taskTitle，完成状态"
                 stateDescription = taskStatusLabel(status)
@@ -205,23 +140,18 @@ fun ExpressiveCheckbox(
         contentAlignment = Alignment.Center,
     ) {
         Surface(
-            modifier = Modifier
-                .size(24.dp)
-                .scale(checkScale),
-            shape = TaskDockShapes.Small,
-            color = boxColor,
-            border = if (!checked) androidx.compose.foundation.BorderStroke(2.dp, borderColor) else null,
+            Modifier.size(26.dp).scale(scale).clearAndSetSemantics {},
+            shape = CircleShape,
+            color = color,
+            border = if (checked) null else BorderStroke(2.dp,
+                if (status == TaskStatus.IN_PROGRESS) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.outline),
         ) {
-            if (checked) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier
-                            .size(16.dp)
-                            .clearAndSetSemantics {},
-                    )
+            Box(contentAlignment = Alignment.Center) {
+                if (checked) {
+                    Icon(Icons.Default.Check, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                } else if (status == TaskStatus.IN_PROGRESS) {
+                    Box(Modifier.size(8.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
                 }
             }
         }

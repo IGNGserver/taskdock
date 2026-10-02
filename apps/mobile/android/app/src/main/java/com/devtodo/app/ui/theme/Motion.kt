@@ -37,21 +37,25 @@ object TaskDockMotion {
     // Material 3 Expressive Spring Physics Specs
     // Spatial Fast: crisp UI feedback (toggles, chips, checkboxes)
     fun <T> springSpatialFast() = spring<T>(
-        dampingRatio = 0.85f,
-        stiffness = 1200f
+        dampingRatio = 0.9f,
+        stiffness = 1400f
     )
 
     // Spatial Regular: container transformations, sheet dismiss, navigation cards
     fun <T> springSpatial() = spring<T>(
-        dampingRatio = 0.82f,
-        stiffness = 650f
+        dampingRatio = 0.9f,
+        stiffness = 700f
     )
 
     // Spatial Expressive Bouncy: items appearing, playful FAB interactions (Immich / Breezy feel)
     fun <T> springBouncy() = spring<T>(
-        dampingRatio = Spring.DampingRatioLowBouncy,
-        stiffness = Spring.StiffnessMediumLow
+        dampingRatio = 0.6f,
+        stiffness = 800f
     )
+
+    // Effects never overshoot: color and alpha use the same M3 effects family.
+    fun <T> springEffectsFast() = spring<T>(dampingRatio = 1f, stiffness = 3800f)
+    fun <T> springEffects() = spring<T>(dampingRatio = 1f, stiffness = 1600f)
 
     // Gentle fluid morph: expanding/collapsing sheets and pills
     fun <T> springFluid() = spring<T>(

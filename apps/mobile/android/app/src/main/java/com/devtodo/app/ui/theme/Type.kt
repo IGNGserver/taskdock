@@ -9,8 +9,8 @@ private val BaseTypography = Typography()
 
 val DevTodoTypography =
     BaseTypography.copy(
-        headlineSmall = BaseTypography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-        titleLarge = BaseTypography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-        titleMedium = BaseTypography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-        titleSmall = BaseTypography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+        headlineSmall = BaseTypography.headlineSmall.copy(fontWeight = FontWeight.Medium),
+        titleLarge = BaseTypography.titleLarge.copy(fontWeight = FontWeight.Medium),
+        titleMedium = BaseTypography.titleMedium.copy(fontWeight = FontWeight.Medium),
+        titleSmall = BaseTypography.titleSmall.copy(fontWeight = FontWeight.Medium),
     )

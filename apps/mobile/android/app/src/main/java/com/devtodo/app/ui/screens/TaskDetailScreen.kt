@@ -3,6 +3,7 @@ package com.devtodo.app.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -152,7 +154,7 @@ fun TaskDetailScreen(
                         Text(
                             text = task?.referenceId ?: "任务详情",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Medium,
                         )
                     },
                     navigationIcon = {
@@ -168,7 +170,7 @@ fun TaskDetailScreen(
                                 shape = TaskDockShapes.FullPill,
                                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                             ) {
-                                Text(if (isSaving) "保存中…" else "保存更改")
+                                Text(if (isSaving) "保存中…" else "保存")
                             }
                         }
 
@@ -194,41 +196,13 @@ fun TaskDetailScreen(
                     )
                 )
 
-                // Segmented Tabs Pill Bar
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    shape = TaskDockShapes.FullPill,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                PrimaryScrollableTabRow(
+                    selectedTabIndex = tab,
+                    edgePadding = 16.dp,
+                    containerColor = MaterialTheme.colorScheme.surface,
                 ) {
-                    Row(
-                        modifier = Modifier.padding(4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        listOf("内容与备注", "子步骤 (${steps.size})", "日程位置 (${placements.size})").forEachIndexed { idx, label ->
-                            val selected = tab == idx
-                            Surface(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(TaskDockShapes.FullPill)
-                                    .clickable { tab = idx },
-                                shape = TaskDockShapes.FullPill,
-                                color = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            ) {
-                                Box(
-                                    modifier = Modifier.padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        text = label,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
+                    listOf("内容与备注", "子步骤 (${steps.size})", "日程位置 (${placements.size})").forEachIndexed { index, label ->
+                        Tab(selected = tab == index, onClick = { tab = index }, text = { Text(label) }, modifier = Modifier.testTag("detail-tab-$index"))
                     }
                 }
             }
@@ -259,14 +233,9 @@ fun TaskDetailScreen(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Text(
-                                    text = "任务标题",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
                                 OutlinedTextField(
                                     value = title,
+                                    label = { Text("任务标题") },
                                     onValueChange = { title = it },
                                     modifier = Modifier.fillMaxWidth(),
                                     enabled = !isSaving,
@@ -284,13 +253,13 @@ fun TaskDetailScreen(
                         ) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Text(
-                                    text = "任务状态流转",
+                                    text = "状态",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
                                     TaskStatus.entries.forEach { status ->
@@ -300,7 +269,7 @@ fun TaskDetailScreen(
                                             onClick = { viewModel.updateTaskStatus(current, status) },
                                             label = { Text(taskStatusLabel(status)) },
                                             shape = TaskDockShapes.FullPill,
-                                            modifier = Modifier.weight(1f),
+                                            modifier = Modifier.heightIn(min = 48.dp),
                                         )
                                     }
                                 }
@@ -320,13 +289,13 @@ fun TaskDetailScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
-                                        text = "开发备注 (Markdown)",
+                                        text = "备注",
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.primary,
                                         fontWeight = FontWeight.SemiBold,
                                     )
                                     Text(
-                                        text = "支持代码块与待办清单",
+                                        text = "支持 Markdown",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -359,11 +328,11 @@ fun TaskDetailScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Column {
+                                    Column(Modifier.weight(1f)) {
                                         Text(
                                             text = "子步骤清单",
                                             style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
+                                            fontWeight = FontWeight.Medium,
                                         )
                                         Text(
                                             text = "步骤独立管理，勾选实时保存",
@@ -455,7 +424,7 @@ fun TaskDetailScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Column {
+                                    Column(Modifier.weight(1f)) {
                                         Text(
                                             text = "所属目录",
                                             style = MaterialTheme.typography.labelMedium,
@@ -465,7 +434,7 @@ fun TaskDetailScreen(
                                         Text(
                                             text = folderPathLabel(current.parentFolderId, folders),
                                             style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
+                                            fontWeight = FontWeight.Medium,
                                         )
                                     }
 
@@ -482,7 +451,7 @@ fun TaskDetailScreen(
                                 Text(
                                     text = "日程与事件位置 (Placements)",
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.Medium,
                                 )
                                 Text(
                                     text = "任务本体全局唯一。同一个任务可以同时安排到多个日期或事件，状态全局同步保持一致。",
@@ -603,7 +572,7 @@ fun TaskDetailScreen(
                 Text(
                     text = "编辑步骤",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Medium,
                 )
                 OutlinedTextField(
                     value = stepTitle,
