@@ -269,6 +269,26 @@ async function main(): Promise<void> {
   await writeBinary(join(desktopIcons, 'icon.ico'), icoFromPng(resizedIcon(256, 256)));
 
   const androidRes = join(rootDir, 'apps', 'mobile', 'android', 'app', 'src', 'main', 'res');
+  const backgroundColor = `#${source.rgba.subarray(0, 3).toString('hex').toUpperCase()}`;
+  await writeBinary(
+    join(androidRes, 'values', 'ic_launcher_background.xml'),
+    Buffer.from(
+      `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">${backgroundColor}</color>\n</resources>\n`,
+    ),
+  );
+  for (const directory of ['values', 'values-night']) {
+    const colorsPath = join(androidRes, directory, 'colors.xml');
+    const colors = await readFile(colorsPath, 'utf8');
+    await writeBinary(
+      colorsPath,
+      Buffer.from(
+        colors.replace(
+          /(<color name="taskdock_brand_background">)[^<]+(<\/color>)/,
+          `$1${backgroundColor}$2`,
+        ),
+      ),
+    );
+  }
   await writeBinary(join(androidRes, 'drawable-nodpi', 'taskdock_icon.png'), resizedIcon(512, 512));
   const launcherSizes = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 } as const;
   for (const [density, size] of Object.entries(launcherSizes)) {
