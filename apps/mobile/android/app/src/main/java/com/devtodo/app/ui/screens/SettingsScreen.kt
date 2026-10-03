@@ -4,6 +4,7 @@ import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -72,7 +73,7 @@ fun SettingsScreen(
         WorkspaceScaffold(
         topBar = {
             TopAppBar(
-                title = { Text("设置", fontWeight = FontWeight.Bold) },
+                title = { Text("设置", fontWeight = FontWeight.Medium) },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -107,7 +108,7 @@ fun SettingsScreen(
 
             // Server Connection Group
             ExpressiveSettingsGroup(
-                title = "服务器中枢",
+                title = "连接",
                 description = serverSummary(viewModel.authManager.hubOrigin),
             ) {
                 SettingsActionRow(
@@ -193,7 +194,7 @@ fun SettingsScreen(
                 )
 
                 ExpressiveChoiceRow(
-                    title = "新任务默认捕获至",
+                    title = "新记录默认存入",
                     options = listOf("ROOT" to "根目录", "RECENT_FOLDER" to "最近文件夹"),
                     selected = settings?.defaultCaptureTarget ?: "ROOT",
                     onSelect = { viewModel.updateSettings(defaultCaptureTarget = it) },
@@ -427,7 +428,7 @@ private fun ExpressiveSyncSummaryCard(
                         Text(
                             text = username.take(1).uppercase(),
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Medium,
                             color = colors.onPrimary,
                         )
                     }
@@ -439,7 +440,7 @@ private fun ExpressiveSyncSummaryCard(
                     Text(
                         text = username,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Medium,
                         color = colors.onPrimaryContainer,
                     )
                     Text(
@@ -543,7 +544,7 @@ private fun ExpressiveSettingsGroup(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Medium,
                 )
                 if (description != null) {
                     Text(
@@ -622,7 +623,7 @@ private fun <T> ExpressiveChoiceRow(
             fontWeight = FontWeight.Medium,
         )
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             options.forEach { (value, label) ->
@@ -632,7 +633,7 @@ private fun <T> ExpressiveChoiceRow(
                     onClick = { onSelect(value) },
                     label = { Text(label) },
                     shape = TaskDockShapes.FullPill,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.heightIn(min = 48.dp),
                 )
             }
         }

@@ -84,7 +84,7 @@ class SecureAuthManager(context: Context) {
         set(value) = plainPrefs.edit { putString(KEY_THEME_MODE, value) }
 
     var dynamicColor: Boolean
-        get() = plainPrefs.getBoolean(KEY_DYNAMIC_COLOR, true)
+        get() = plainPrefs.getBoolean(KEY_DYNAMIC_COLOR, false)
         set(value) = plainPrefs.edit { putBoolean(KEY_DYNAMIC_COLOR, value) }
 
     var pureBlack: Boolean

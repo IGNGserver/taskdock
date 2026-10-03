@@ -17,6 +17,8 @@ import androidx.navigation.navArgument
 import com.devtodo.app.ui.navigation.Screen
 import com.devtodo.app.ui.screens.*
 import com.devtodo.app.ui.theme.TaskDockMotion
+import com.devtodo.app.ui.components.taskStatusLabel
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.collect
 
 @Composable
@@ -69,6 +71,18 @@ fun TaskDockApp(
 
     LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
 
+    LaunchedEffect(viewModel) {
+        viewModel.statusChanges.collectLatest { change ->
+            if (viewModel.authManager.ownerId != change.ownerId) return@collectLatest
+            snackbar.currentSnackbarData?.dismiss()
+            val result = snackbar.showSnackbar(
+                message = "${taskStatusLabel(change.after)} · ${change.title}",
+                actionLabel = "撤销", duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.undoTaskStatus(change)
+        }
+    }
+
     LaunchedEffect(loggedIn, currentRoute) {
         if (currentRoute == null) return@LaunchedEffect
         if (loggedIn && currentRoute == Screen.Login.route) {
@@ -104,20 +118,20 @@ fun TaskDockApp(
                 // Material 3 Expressive Spring Motion Physics transitions
                 enterTransition = {
                     fadeIn(
-                        animationSpec = TaskDockMotion.springSpatialFast()
+                        animationSpec = TaskDockMotion.springEffectsFast()
                     ) + slideInHorizontally(
                         animationSpec = TaskDockMotion.springSpatial(),
                         initialOffsetX = { fullWidth -> (fullWidth * 0.15f).toInt() }
                     )
                 },
                 exitTransition = {
-                    fadeOut(animationSpec = TaskDockMotion.springSpatialFast())
+                    fadeOut(animationSpec = TaskDockMotion.springEffectsFast())
                 },
                 popEnterTransition = {
-                    fadeIn(animationSpec = TaskDockMotion.springSpatialFast())
+                    fadeIn(animationSpec = TaskDockMotion.springEffectsFast())
                 },
                 popExitTransition = {
-                    fadeOut(animationSpec = TaskDockMotion.springSpatialFast()) +
+                    fadeOut(animationSpec = TaskDockMotion.springEffectsFast()) +
                         slideOutHorizontally(
                             animationSpec = TaskDockMotion.springSpatial(),
                             targetOffsetX = { fullWidth -> (fullWidth * 0.15f).toInt() }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -70,6 +71,7 @@ fun TimeScreen(
         groupTimePoints(points, taskCountByPoint, today)
     }
 
+    var captureRequest by rememberSaveable { mutableIntStateOf(0) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedDate by rememberSaveable { mutableStateOf<String?>(null) }
     var datePicker by rememberSaveable { mutableStateOf(false) }
@@ -84,7 +86,7 @@ fun TimeScreen(
         WorkspaceScaffold(
         topBar = {
             TopAppBar(
-                title = { Text("日程与安排", fontWeight = FontWeight.Bold) },
+                title = { Text("日程与安排") },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -107,18 +109,11 @@ fun TimeScreen(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
-                FloatingActionIsland(
-                    onQuickCreate = { title ->
-                        // Automatically schedule for today or picked date
-                        viewModel.createTreeTaskV2AtTimePoint(
-                            title,
-                            selectedDate ?: today,
-                            true,
-                        )
-                    },
-                    placeholder = "在选定日期/今天安排任务…",
-                    primaryLabel = "安排新任务",
-                )
+                TaskCaptureIsland(viewModel,
+                    initialDate = if (selectedId == null) selectedDate ?: today else null,
+                    primaryLabel = "安排一件事", eventId = selectedId,
+                    eventTitle = points.find { it.id == selectedId }?.title,
+                    openRequest = captureRequest, useCapturePreference = true)
             }
         },
     ) { padding ->
@@ -127,11 +122,11 @@ fun TimeScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .testTag("planner-timepoints"),
-            contentPadding = PaddingValues(bottom = 96.dp),
+            contentPadding = PaddingValues(bottom = 24.dp),
         ) {
             if (!hasTodayPoint) {
                 item(key = "today-prompt") {
-                    TodayPlanningPrompt(timezone, today) { selectedDate = today }
+                    TodayPlanningPrompt(timezone, today) { selectedDate = today; selectedId = null; captureRequest++ }
                 }
             }
 
@@ -144,7 +139,11 @@ fun TimeScreen(
                     tasksByPoint = tasksByPoint,
                     timezone = timezone,
                     today = today,
-                    onAdd = { selectedId = it.id },
+                    onAdd = {
+                        selectedId = if (it.type == TimePointType.EVENT) it.id else null
+                        selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
+                        captureRequest++
+                    },
                     onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
                     onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
                     onNavigateToTree = { task ->
@@ -162,7 +161,11 @@ fun TimeScreen(
                     tasksByPoint = tasksByPoint,
                     timezone = timezone,
                     today = today,
-                    onAdd = { selectedId = it.id },
+                    onAdd = {
+                        selectedId = if (it.type == TimePointType.EVENT) it.id else null
+                        selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
+                        captureRequest++
+                    },
                     onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
                     onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
                     onNavigateToTree = { task ->
@@ -185,7 +188,11 @@ fun TimeScreen(
                         tasksByPoint = tasksByPoint,
                         timezone = timezone,
                         today = today,
-                        onAdd = { selectedId = it.id },
+                        onAdd = {
+                        selectedId = if (it.type == TimePointType.EVENT) it.id else null
+                        selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
+                        captureRequest++
+                    },
                         onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
                         onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
                         onNavigateToTree = { task ->
@@ -202,7 +209,11 @@ fun TimeScreen(
                     tasksByPoint = tasksByPoint,
                     timezone = timezone,
                     today = today,
-                    onAdd = { selectedId = it.id },
+                    onAdd = {
+                        selectedId = if (it.type == TimePointType.EVENT) it.id else null
+                        selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
+                        captureRequest++
+                    },
                     onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
                     onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
                     onNavigateToTree = { task ->
@@ -218,7 +229,11 @@ fun TimeScreen(
                     tasksByPoint = tasksByPoint,
                     timezone = timezone,
                     today = today,
-                    onAdd = { selectedId = it.id },
+                    onAdd = {
+                        selectedId = if (it.type == TimePointType.EVENT) it.id else null
+                        selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
+                        captureRequest++
+                    },
                     onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
                     onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
                     onNavigateToTree = { task ->
@@ -259,6 +274,8 @@ fun TimeScreen(
                         selectedDate = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
                             timeZone = TimeZone.getTimeZone("UTC")
                         }.format(Date(dateState.selectedDateMillis!!))
+                        selectedId = null
+                        captureRequest++
                         datePicker = false
                     },
                 ) { Text("确认安排") }
@@ -267,21 +284,7 @@ fun TimeScreen(
         ) { DatePicker(dateState) }
     }
 
-    if (selectedId != null || selectedDate != null) {
-        CaptureSheet(
-            title = "在此日期添加任务",
-            onDismiss = {
-                selectedId = null
-                selectedDate = null
-            },
-        ) {
-            viewModel.createTreeTaskV2AtTimePoint(
-                it,
-                selectedDate ?: selectedId!!,
-                selectedDate != null,
-            )
-        }
-    }
+
     }
 }
 
@@ -303,6 +306,7 @@ private fun TodayPlanningPrompt(timezone: String, today: String, onAdd: () -> Un
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Row(
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
@@ -325,7 +329,7 @@ private fun TodayPlanningPrompt(timezone: String, today: String, onAdd: () -> Un
                     Text(
                         text = "今天尚未安排任务",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Medium,
                         color = colors.onPrimaryContainer,
                     )
                     Text(
@@ -385,12 +389,13 @@ private fun LazyListScope.timePointItems(
                 onAdd = { onAdd(point) },
             )
         }
-        items(tasks, key = { "${point.id}:task:${it.id}" }) { task ->
+        itemsIndexed(tasks, key = { _, task -> "${point.id}:task:${task.id}" }) { index, task ->
             ExpressiveTaskCard(
                 task = task,
                 onClick = { onNavigateToDetail(task) },
                 onStatusToggle = { onStatusToggle(task, it) },
                 actions = listOf(RowAction("在目录中定位") { onNavigateToTree(task) }),
+                rowShape = TaskDockShapes.groupedRow(index, tasks.size),
             )
         }
     }
@@ -464,7 +469,7 @@ private fun TimePointRow(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                 )
                 Text(
                     text = subtitle,

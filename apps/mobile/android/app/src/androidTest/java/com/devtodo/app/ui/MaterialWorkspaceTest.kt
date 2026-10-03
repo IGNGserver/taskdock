@@ -4,6 +4,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -80,14 +84,14 @@ class MaterialWorkspaceTest {
         }
         compose.onNodeWithText("创建").assertIsNotEnabled()
         compose.onNodeWithText("任务标题").performTextInput("  保留草稿  ")
-        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithText("取消").performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("放弃这条草稿？").assertExists()
         compose.runOnIdle {
             assertFalse(dismissed)
             assertNull(created)
         }
         compose.onNodeWithText("继续编辑").performClick()
-        compose.onNodeWithText("创建").performClick()
+        compose.onNodeWithText("创建").performScrollTo().assertIsDisplayed().performClick()
         compose.runOnIdle {
             assertEquals("保留草稿", created)
             assertTrue(dismissed)
@@ -112,4 +116,77 @@ class MaterialWorkspaceTest {
             .assertIsDisplayed()
             .assertWidthIsAtLeast(48.dp)
     }
+    @Test
+    fun quickCaptureFocusesKeepsFailureDraftAndWaitsForAcknowledgement() {
+        var savedTitle: String? = null
+        var acknowledge: ((String?) -> Unit)? = null
+        compose.setContent {
+            MaterialTheme {
+                FloatingActionIsland(onQuickCreate = { title, result -> savedTitle = title; acknowledge = result })
+            }
+        }
+        compose.onNodeWithTag("tree-create-action").performClick()
+        compose.onNodeWithTag("capture-title").assertIsFocused().performTextInput("  先写下来  ")
+        compose.onNodeWithTag("capture-save").performScrollTo().performClick()
+        compose.onNodeWithTag("capture-save").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("收起并保留草稿").assertIsNotEnabled()
+        compose.runOnIdle {
+            assertEquals("先写下来", savedTitle)
+            acknowledge!!("保存失败，请重试")
+        }
+        compose.onNodeWithTag("capture-title").assertTextContains("  先写下来  ")
+        compose.onNodeWithTag("capture-error").assertTextEquals("保存失败，请重试")
+        compose.onNodeWithContentDescription("收起并保留草稿").performScrollTo().performClick()
+        compose.onNodeWithTag("tree-create-action").performClick()
+        compose.onNodeWithTag("capture-title").assertTextContains("  先写下来  ")
+        compose.onNodeWithTag("capture-save").performScrollTo().performClick()
+        compose.runOnIdle { acknowledge!!(null) }
+        compose.onNodeWithTag("capture-title").assertDoesNotExist()
+        compose.onNodeWithTag("tree-create-action").performClick()
+        compose.onNodeWithTag("capture-title").assert(SemanticsMatcher.expectValue(
+            SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString(""),
+        ))
+        compose.onNodeWithTag("capture-save").assertIsNotEnabled()
+    }
+
+    @Test
+    fun continuousCaptureKeepsSheetAndClearsOnlySavedTitle() {
+        var acknowledge: ((String?) -> Unit)? = null
+        compose.setContent {
+            MaterialTheme { FloatingActionIsland(onQuickCreate = { _, result -> acknowledge = result }) }
+        }
+        compose.onNodeWithTag("tree-create-action").performClick()
+        compose.onNodeWithTag("capture-title").performTextInput("第一件事")
+        compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch)).performScrollTo().performClick()
+        compose.onNodeWithTag("capture-save").performScrollTo().performClick()
+        compose.runOnIdle { acknowledge!!(null) }
+        compose.onNodeWithTag("capture-title").assertExists().assertIsFocused().assertIsDisplayed()
+        compose.onNodeWithTag("capture-title").assert(SemanticsMatcher.expectValue(
+            SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString(""),
+        ))
+        compose.onNodeWithTag("capture-save").assertIsNotEnabled()
+        compose.onNodeWithText("已保存，继续记录下一件").assertExists()
+        compose.onNodeWithTag("capture-title").performTextInput("第二件事")
+        compose.onNodeWithTag("capture-save").assertIsEnabled()
+    }
+
+    @Test
+    fun largeTextPreservesIndependentTaskActions() {
+        var opens = 0
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 2f)) {
+                MaterialTheme {
+                    Box(Modifier.width(320.dp)) {
+                        M3TaskRow(task().copy(title = "大字体下也可以轻松阅读的待办事项"), { opens++ }, {})
+                    }
+                }
+            }
+        }
+        compose.onNode(hasContentDescription("完成状态", substring = true)).assertIsDisplayed().assertWidthIsAtLeast(48.dp)
+        compose.onNode(hasContentDescription("更多操作", substring = true)).assertIsDisplayed().assertWidthIsAtLeast(48.dp)
+        compose.onNode(hasContentDescription("完成状态", substring = true)).performClick()
+        compose.runOnIdle { assertEquals(0, opens) }
+    }
+
 }

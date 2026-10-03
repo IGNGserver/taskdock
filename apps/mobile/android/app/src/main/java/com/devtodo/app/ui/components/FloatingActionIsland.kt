@@ -1,21 +1,18 @@
 package com.devtodo.app.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.devtodo.app.ui.theme.TaskDockMotion
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
@@ -23,161 +20,152 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import com.devtodo.app.ui.theme.TaskDockMotion
 import com.devtodo.app.ui.theme.TaskDockShapes
 
-/**
- * Floating Action Island (inspired by Immich and Breezy Weather).
- * Sits near the bottom gesture bar with natural spring expansion.
- * When collapsed: an Expressive Pill / FAB.
- * When tapped or typing: seamlessly expands into an inline task capture bar with keyboard focus.
- */
+/** Local drafts survive dismissal; only an acknowledged save clears the input. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FloatingActionIsland(
-    onQuickCreate: (String) -> Unit,
+    onQuickCreate: (String, (String?) -> Unit) -> Unit,
     modifier: Modifier = Modifier,
-    placeholder: String = "随手记下一个新任务…",
-    primaryLabel: String = "新建任务",
+    placeholder: String = "想做的下一件事",
+    primaryLabel: String = "记一件事",
+    fieldLabel: String = "任务标题",
+    supportingText: String = "先记下来，稍后再整理",
+    openRequest: Int = 0,
+    onOpen: (Boolean) -> Unit = {},
+    onOpenRequestHandled: () -> Unit = {},
+    contextFields: @Composable (Boolean) -> Unit = {},
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    var taskTitle by rememberSaveable { mutableStateOf("") }
+    var title by rememberSaveable { mutableStateOf("") }
+    var continuous by rememberSaveable { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var saved by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = remember { FocusRequester() }
+    val inputVisibility = remember { BringIntoViewRequester() }
+    var focusRequest by remember { mutableIntStateOf(0) }
+    LaunchedEffect(openRequest) {
+        if (openRequest > 0) { onOpen(title.isNotBlank()); expanded = true; onOpenRequestHandled() }
+    }
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val corner by animateDpAsState(if (pressed) 16.dp else 28.dp,
+        animationSpec = TaskDockMotion.springBouncy(), label = "captureButtonShape")
 
     fun submit() {
-        val trimmed = taskTitle.trim()
-        if (trimmed.isNotEmpty()) {
-            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-            onQuickCreate(trimmed)
-            taskTitle = ""
-            expanded = false
+        if (title.isBlank() || saving) return
+        saving = true
+        error = null
+        saved = false
+        onQuickCreate(title.trim()) { failure ->
+            saving = false
+            error = failure
+            if (failure == null) {
+                title = ""
+                saved = true
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                if (!continuous) {
+                    keyboard?.hide()
+                    expanded = false
+                } else {
+                    focusRequest++
+                }
+            }
         }
     }
-
-    val containerColor by animateColorAsState(
-        targetValue = if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.primaryContainer,
-        animationSpec = TaskDockMotion.springSpatial(),
-        label = "floatingIslandBg",
-    )
-
-    val contentColor by animateColorAsState(
-        targetValue = if (expanded) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimaryContainer,
-        animationSpec = TaskDockMotion.springSpatial(),
-        label = "floatingIslandContent",
-    )
-
-    Surface(
-        modifier = modifier
-            .testTag("tree-create-action")
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .windowInsetsPadding(WindowInsets.ime),
-        shape = TaskDockShapes.FloatingBarShape,
-        color = containerColor,
-        shadowElevation = 6.dp,
-        tonalElevation = 6.dp,
-    ) {
-        Row(
-            modifier = Modifier
-                .animateContentSize()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
+    Box(modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(12.dp), contentAlignment = Alignment.Center) {
+        Button(
+            onClick = { onOpen(title.isNotBlank()); expanded = true },
+            shape = RoundedCornerShape(corner),
+            interactionSource = interaction,
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
+            modifier = Modifier.testTag("tree-create-action").heightIn(min = 56.dp),
         ) {
-            if (!expanded) {
-                // Collapsed State: Expressive Pill Button
-                Row(
-                    modifier = Modifier
-                        .clip(TaskDockShapes.FullPill)
-                        .clickable {
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            expanded = true
-                        }
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        tint = contentColor,
-                        modifier = Modifier.size(22.dp),
-                    )
-                    Text(
-                        text = primaryLabel,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = contentColor,
-                    )
+            Icon(Icons.Default.Add, null, Modifier.size(22.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(if (title.isBlank()) primaryLabel else "继续记录")
+        }
+    }
+    if (expanded) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,
+            confirmValueChange = { !saving || it != SheetValue.Hidden })
+        ModalBottomSheet(
+            onDismissRequest = { if (!saving) expanded = false },
+            sheetState = sheetState,
+            shape = TaskDockShapes.BottomSheetShape,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            LaunchedEffect(focusRequest) {
+                withFrameNanos { }
+                focus.requestFocus()
+                keyboard?.show()
+                inputVisibility.bringIntoView()
+            }
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(primaryLabel, style = MaterialTheme.typography.titleLarge)
+                        Text(supportingText, style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    IconButton(onClick = { expanded = false }, enabled = !saving, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.Close, "收起并保留草稿")
+                    }
                 }
-            } else {
-                // Expanded State: Inline Fast Capture Field
-                IconButton(
-                    onClick = {
-                        expanded = false
-                        taskTitle = ""
-                    },
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "取消",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                TextField(
-                    value = taskTitle,
-                    onValueChange = { taskTitle = it },
-                    placeholder = {
-                        Text(
-                            placeholder,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        )
-                    },
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it; error = null; saved = false },
+                    enabled = !saving,
+                    label = { Text(fieldLabel) },
+                    placeholder = { Text(placeholder) },
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus).bringIntoViewRequester(inputVisibility).testTag("capture-title"),
                     singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                    ),
-                    textStyle = MaterialTheme.typography.bodyLarge,
+                    isError = error != null,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { submit() }),
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 4.dp),
+                    shape = TaskDockShapes.Large,
                 )
-
-                IconButton(
-                    onClick = { submit() },
-                    enabled = taskTitle.isNotBlank(),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
-                    ),
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape),
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "提交任务",
-                        modifier = Modifier.size(18.dp),
-                    )
+                contextFields(saving)
+                if (error != null) {
+                    Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.testTag("capture-error"))
+                } else if (saved) {
+                    Text("已保存，继续记录下一件", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
                 }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("连续记录", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Switch(checked = continuous, onCheckedChange = { continuous = it }, enabled = !saving)
+                }
+                Button(
+                    onClick = ::submit,
+                    enabled = title.isNotBlank() && !saving,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("capture-save"),
+                    shape = TaskDockShapes.FullPill,
+                ) {
+                    if (saving) {
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(if (saving) "保存中…" else "保存")
+                }
+                Text("收起后会保留未保存的内容", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

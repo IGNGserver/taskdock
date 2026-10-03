@@ -46,12 +46,8 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 /**
- * Material 3 Expressive Home Hub & Directory Tree.
- * Completely redesigned to feature:
- * - Expressive Top Header with sync state & global action pills
- * - Grid of Expressive Smart Metric Cards (Today, Schedule, Workflows, All Tasks)
- * - Tonal Folder and Task Cards with fluid spring interactions
- * - Floating Action Island at bottom for effortless single-hand task capture
+ * Directory-first home with compact daily navigation, grouped rows and contextual capture.
+ * Each directory keeps its scroll position and draft when navigating back.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,7 +65,6 @@ fun TreeScreen(
     val allFolders by viewModel.foldersV2.collectAsStateWithLifecycle()
     val allTasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
     val todayTasks by viewModel.todayTasks.collectAsStateWithLifecycle()
-    val workflows by viewModel.workflowsV2.collectAsStateWithLifecycle()
 
     val folders = allFolders.filter {
         it.parentFolderId == currentFolderId && it.archivedAt == null && it.deletedAt == null
@@ -126,10 +121,12 @@ fun TreeScreen(
                     Text(
                         text = currentFolderId?.let { folderTitle(it, allFolders) } ?: "TaskDock",
                         style = if (currentFolderId == null) {
-                            MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
+                            MaterialTheme.typography.headlineSmall
                         } else {
-                            MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
+                            MaterialTheme.typography.titleLarge
                         },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 },
                 navigationIcon = {
@@ -139,7 +136,7 @@ fun TreeScreen(
                                 currentFolderId = allFolders.find { it.id == currentFolderId }?.parentFolderId
                             }
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回上级目录")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回上级目录", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 },
@@ -149,20 +146,20 @@ fun TreeScreen(
                             onClick = onOpenSearch,
                             modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
                         ) {
-                            Icon(Icons.Default.Search, "搜索全部任务")
+                            Icon(Icons.Default.Search, "搜索全部任务", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         IconButton(
                             onClick = onOpenSettings,
                             modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
                         ) {
-                            Icon(Icons.Default.Settings, "设置")
+                            Icon(Icons.Default.Settings, "设置", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
                         IconButton(
                             onClick = { showFolderDialog = true },
                             modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
                         ) {
-                            Icon(Icons.Default.CreateNewFolder, "新建子目录")
+                            Icon(Icons.Default.CreateNewFolder, "新建子目录", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 },
@@ -179,22 +176,23 @@ fun TreeScreen(
                     .testTag("tree-create-bar"),
                 contentAlignment = Alignment.Center,
             ) {
-                FloatingActionIsland(
-                    onQuickCreate = { title ->
-                        viewModel.createTreeTaskV2(currentFolderId, title)
-                    },
-                    placeholder = if (currentFolderId == null) "新建一条任务…" else "在此目录下添加任务…",
-                    primaryLabel = "新建任务",
-                )
+                TaskCaptureIsland(viewModel, initialFolderId = currentFolderId)
             }
         },
     ) { padding ->
         listStateHolder.SaveableStateProvider(currentFolderId ?: "root-directory") {
             val listState = rememberLazyListState()
+            var showCompleted by rememberSaveable { mutableStateOf(false) }
+            val visibleRows = rows.filter { it.folder != null || it.status != TaskStatus.DONE || showCompleted }
+            val completedCount = rows.count { it.task?.status == TaskStatus.DONE }
 
             LaunchedEffect(highlightedTaskId, rows, locateRequest) {
                 val index = rows.indexOfFirst { it.id == highlightedTaskId }
                 if (index >= 0) {
+                    if (rows[index].task?.status == TaskStatus.DONE) {
+                        showCompleted = true
+                        withFrameNanos { }
+                    }
                     listState.animateScrollToItem(index + if (currentFolderId == null) 2 else 1)
                 }
             }
@@ -205,7 +203,7 @@ fun TreeScreen(
                     .padding(padding)
                     .testTag("directory-tree-list"),
                 state = listState,
-                contentPadding = PaddingValues(bottom = 96.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
             ) {
                 if (currentFolderId == null) {
                     // Expressive Smart View Dashboard
@@ -213,8 +211,6 @@ fun TreeScreen(
                         ExpressiveSmartDashboard(
                             todayCount = todayTasks.count { it.first.status != TaskStatus.DONE },
                             todayTotal = todayTasks.size,
-                            workflowCount = workflows.size,
-                            totalTasks = allTasks.count { it.archivedAt == null && it.deletedAt == null },
                             onNavigate = onNavigateToShortcut,
                         )
                     }
@@ -247,40 +243,54 @@ fun TreeScreen(
                         RowAction("移动到目录") { pendingMoveRow = row },
                     )
 
-                    val startsStatusGroup = rowIndex == 0 || rows[rowIndex - 1].status != row.status
-                    if (currentFolderId != null && startsStatusGroup) {
-                        SectionHeading("${taskStatusLabel(row.status)} · ${siblings.size}")
-                    }
-
-                    if (row.folder != null) {
-                        val folder = row.folder
-                        val (badgeColor, badgeContent) = when (folder.title.hashCode().ushr(1) % 3) {
-                            0 -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-                            1 -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-                            else -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+                    AnimatedVisibility(
+                        visible = row.folder != null || row.status != TaskStatus.DONE || showCompleted,
+                        modifier = Modifier.animateItem(),
+                        enter = fadeIn(TaskDockMotion.springEffectsFast()) + expandVertically(TaskDockMotion.springSpatial()),
+                        exit = fadeOut(TaskDockMotion.springEffectsFast()) + shrinkVertically(TaskDockMotion.springSpatial()),
+                    ) {
+                    Column {
+                        val startsStatusGroup = rowIndex == 0 || rows[rowIndex - 1].status != row.status
+                        if (currentFolderId != null && startsStatusGroup) {
+                            SectionHeading("${taskStatusLabel(row.status)} · ${siblings.size}")
                         }
 
-                        ExpressiveFolderCard(
-                            folder = folder,
-                            itemCount = row.taskCount,
-                            onClick = { currentFolderId = folder.id },
-                            actions = actions + RowAction("归档或删除", destructive = true) {
-                                pendingDeleteFolder = folder
-                            },
-                            badgeColor = badgeColor,
-                            badgeContentColor = badgeContent,
-                            modifier = Modifier.testTag("tree-row-${row.id}"),
-                        )
-                    } else {
-                        val task = row.task!!
-                        ExpressiveTaskCard(
-                            task = task,
-                            onClick = { onNavigateToDetail(task.id) },
-                            onStatusToggle = { viewModel.updateTaskStatus(task, it) },
-                            actions = actions,
-                            highlighted = task.id == highlightedTaskId,
-                            modifier = Modifier.testTag("tree-row-${row.id}"),
-                        )
+                        if (row.folder != null) {
+                            val folder = row.folder
+
+                            ExpressiveFolderCard(
+                                folder = folder,
+                                itemCount = row.taskCount,
+                                onClick = { currentFolderId = folder.id },
+                                actions = actions + RowAction("归档或删除", destructive = true) {
+                                    pendingDeleteFolder = folder
+                                },
+                                rowShape = TaskDockShapes.groupedRow(visibleRows.indexOfFirst { it.id == row.id }.coerceAtLeast(0), visibleRows.size),
+                                modifier = Modifier.testTag("tree-row-${row.id}"),
+                            )
+                        } else {
+                            val task = row.task!!
+                            ExpressiveTaskCard(
+                                task = task,
+                                onClick = { onNavigateToDetail(task.id) },
+                                onStatusToggle = { viewModel.updateTaskStatus(task, it) },
+                                actions = actions,
+                                showStatus = currentFolderId == null,
+                                highlighted = task.id == highlightedTaskId,
+                                rowShape = TaskDockShapes.groupedRow(visibleRows.indexOfFirst { it.id == row.id }.coerceAtLeast(0), visibleRows.size),
+                                modifier = Modifier.testTag("tree-row-${row.id}"),
+                            )
+                        }
+                    }
+                    }
+                }
+                if (completedCount > 0) {
+                    item(key = "completed-toggle") {
+                        TextButton(onClick = { showCompleted = !showCompleted }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 48.dp)) {
+                            Text("已完成任务 · $completedCount", modifier = Modifier.weight(1f))
+                            Icon(if (showCompleted) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                if (showCompleted) "收起已完成任务" else "展开已完成任务")
+                        }
                     }
                 }
 
@@ -290,8 +300,8 @@ fun TreeScreen(
                             icon = Icons.Default.Folder,
                             title = if (currentFolderId == null) "目录为空" else "当前目录暂无任务",
                             description = if (currentFolderId == null)
-                                "通过下方快捷操作随手记下第一条任务，或新建文件夹归类工作。"
-                            else "通过底部输入栏新建任务，或创建下级子目录。",
+                                "点下方“记一件事”开始，或先建一个目录。"
+                            else "点下方“记一件事”，任务会保存在这个目录。",
                             action = {
                                 if (currentFolderId == null) {
                                     FilledTonalButton(
@@ -449,87 +459,69 @@ fun TreeScreen(
     }
 }
 
-/**
- * Expressive Smart Dashboard Cards Grid (Inspired by Breezy Weather).
- */
+/** Keep the daily summary compact so directories remain visible on small screens. */
 @Composable
 private fun ExpressiveSmartDashboard(
     todayCount: Int,
     todayTotal: Int,
-    workflowCount: Int,
-    totalTasks: Int,
     onNavigate: (String) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(
-            text = "快捷视图",
-            style = MaterialTheme.typography.labelLarge,
-            color = scheme.onSurfaceVariant,
-            modifier = Modifier
-                .padding(start = 4.dp)
-                .semantics { heading() },
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+    val largeText = LocalDensity.current.fontScale >= 1.4f
+    val completion = if (todayTotal == 0) "暂无安排" else "${todayTotal - todayCount} / $todayTotal 完成"
+    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("快捷视图", style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp).semantics { heading() })
+        Surface(
+            onClick = { onNavigate(Screen.Today.route) },
+            shape = TaskDockShapes.LargeIncreased, color = scheme.primaryContainer,
         ) {
-            // Today Card
-            ExpressiveSmartCard(
-                title = "今天",
-                countText = "$todayCount 待办",
-                icon = Icons.Default.Today,
-                onClick = { onNavigate(Screen.Today.route) },
-                progress = if (todayTotal > 0) (todayTotal - todayCount).toFloat() / todayTotal else null,
-                iconContainerColor = scheme.primaryContainer,
-                iconColor = scheme.onPrimaryContainer,
-                modifier = Modifier.weight(1f),
-            )
-
-            // Schedule Card
-            ExpressiveSmartCard(
-                title = "日程",
-                countText = "查看",
-                icon = Icons.Default.CalendarToday,
-                onClick = { onNavigate(Screen.Time.route) },
-                iconContainerColor = scheme.secondaryContainer,
-                iconColor = scheme.onSecondaryContainer,
-                modifier = Modifier.weight(1f),
-            )
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("今天", style = MaterialTheme.typography.titleMedium, color = scheme.onPrimaryContainer)
+                    Text("$todayCount 件待办", style = MaterialTheme.typography.titleLarge,
+                        color = scheme.onPrimaryContainer, modifier = Modifier.weight(1f))
+                    if (!largeText) Text(completion, style = MaterialTheme.typography.bodySmall, color = scheme.onPrimaryContainer)
+                }
+                if (largeText) Text(completion, style = MaterialTheme.typography.bodySmall, color = scheme.onPrimaryContainer)
+                if (todayTotal > 0) {
+                    LinearProgressIndicator(progress = { (todayTotal - todayCount).toFloat() / todayTotal },
+                        modifier = Modifier.fillMaxWidth().height(4.dp), color = scheme.primary,
+                        trackColor = scheme.onPrimaryContainer.copy(alpha = 0.12f))
+                }
+            }
         }
+        val shortcuts = listOf(
+            Triple("日程", Icons.Default.CalendarToday, Screen.Time.route),
+            Triple("流程", Icons.Default.AccountTree, Screen.Workflows.route),
+            Triple("全部任务", Icons.Default.Checklist, Screen.AllTasks.route),
+        )
+        Surface(shape = TaskDockShapes.Large, color = scheme.surfaceContainerLow) {
+            if (largeText) {
+                Column(Modifier.fillMaxWidth()) {
+                    shortcuts.forEach { (label, icon, route) ->
+                        QuietShortcut(label, icon, { onNavigate(route) }, Modifier.fillMaxWidth())
+                    }
+                }
+            } else {
+                Row(Modifier.fillMaxWidth()) {
+                    shortcuts.forEach { (label, icon, route) ->
+                        QuietShortcut(label, icon, { onNavigate(route) }, Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            // Workflows Card
-            ExpressiveSmartCard(
-                title = "流程",
-                countText = "$workflowCount 条",
-                icon = Icons.Default.AccountTree,
-                onClick = { onNavigate(Screen.Workflows.route) },
-                iconContainerColor = scheme.tertiaryContainer,
-                iconColor = scheme.onTertiaryContainer,
-                modifier = Modifier.weight(1f),
-            )
-
-            // All Tasks Card
-            ExpressiveSmartCard(
-                title = "全部任务",
-                countText = "$totalTasks 项",
-                icon = Icons.Default.Checklist,
-                onClick = { onNavigate(Screen.AllTasks.route) },
-                iconContainerColor = scheme.surfaceContainerHighest,
-                iconColor = scheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
+@Composable
+private fun QuietShortcut(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier) {
+    Surface(onClick = onClick, modifier = modifier, shape = TaskDockShapes.Large, color = Color.Transparent) {
+        Row(Modifier.heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Icon(icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.width(4.dp))
+            Text(label, style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -543,18 +535,18 @@ private fun DirectorySectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, top = 16.dp, end = 16.dp, bottom = 8.dp),
+            .padding(start = 18.dp, top = 8.dp, end = 14.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                text = "目录树",
+                text = "我的目录",
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.Medium,
             )
             Text(
-                text = "$folderCount 个目录 · $rootTaskCount 条根任务",
+                text = "$folderCount 个目录 · $rootTaskCount 条任务",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -734,8 +726,9 @@ fun AllTasksV2Screen(
     val tasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf<String?>(null) }
+    val activeTasks = tasks.filter { it.archivedAt == null && it.deletedAt == null }
     val normalizedQuery = query.trim()
-    val visible = tasks.filter {
+    val visible = activeTasks.filter {
         it.deletedAt == null &&
             it.archivedAt == null &&
             (filter == null || it.status.name == filter) &&
@@ -750,7 +743,7 @@ fun AllTasksV2Screen(
         WorkspaceScaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("全部任务", fontWeight = FontWeight.Bold) },
+                    title = { Text("全部任务", fontWeight = FontWeight.Medium) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
@@ -778,7 +771,8 @@ fun AllTasksV2Screen(
                         OutlinedTextField(
                             value = query,
                             onValueChange = { query = it },
-                            placeholder = { Text("搜索任务标题或引用编号…") },
+                            label = { Text("搜索任务") },
+                            placeholder = { Text("标题或引用编号") },
                             singleLine = true,
                             leadingIcon = { Icon(Icons.Default.Search, null) },
                             trailingIcon = {
@@ -789,7 +783,7 @@ fun AllTasksV2Screen(
                                 }
                             },
                             shape = TaskDockShapes.FullPill,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().testTag("all-task-search"),
                         )
 
                         Row(
@@ -801,11 +795,11 @@ fun AllTasksV2Screen(
                             FilterChip(
                                 selected = filter == null,
                                 onClick = { filter = null },
-                                label = { Text("全部 (${tasks.size})") },
+                                label = { Text("全部 (${activeTasks.size})") },
                                 shape = TaskDockShapes.FullPill,
                             )
                             TaskStatus.entries.forEach { status ->
-                                val count = tasks.count { it.status == status }
+                                val count = activeTasks.count { it.status == status }
                                 FilterChip(
                                     selected = filter == status.name,
                                     onClick = { filter = status.name },
@@ -849,12 +843,13 @@ fun AllTasksV2Screen(
                     state = listState,
                     contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
-                    items(visible, key = { it.id }) { task ->
+                    itemsIndexed(visible, key = { _, task -> task.id }) { index, task ->
                         ExpressiveTaskCard(
                             task = task,
                             onClick = { onNavigateToDetail(task.id) },
                             onStatusToggle = { viewModel.updateTaskStatus(task, it) },
                             showStatus = filter == null,
+                            rowShape = TaskDockShapes.groupedRow(index, visible.size),
                             modifier = Modifier.testTag("all-task-${task.id}"),
                         )
                     }

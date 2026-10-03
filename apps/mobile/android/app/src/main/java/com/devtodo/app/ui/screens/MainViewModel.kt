@@ -2,6 +2,8 @@ package com.devtodo.app.ui.screens
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import androidx.room.withTransaction
+import kotlinx.coroutines.CancellationException
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.devtodo.app.data.local.*
@@ -22,6 +24,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
+
+data class TaskStatusChange(
+    val taskId: String,
+    val ownerId: String,
+    val title: String,
+    val before: TaskStatus,
+    val after: TaskStatus,
+    val appliedVersion: Long,
+)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(
@@ -123,6 +134,8 @@ class MainViewModel(
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 16)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
+    private val _statusChanges = MutableSharedFlow<TaskStatusChange>(extraBufferCapacity = 16)
+    val statusChanges = _statusChanges.asSharedFlow()
 
     private val _themeMode = MutableStateFlow(readThemeMode())
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
@@ -251,23 +264,55 @@ class MainViewModel(
     fun updateTaskStatus(task: TaskEntity, nextStatus: TaskStatus) {
         viewModelScope.launch {
             try {
-                require(task.ownerId == authManager.ownerId) { "任务不属于当前账户" }
-                val updated = task.copy(
-                    status = nextStatus,
-                    version = task.version + 1,
-                    updatedAt = nowIso(),
-                    pendingSync = true
-                )
-                db.taskDao().upsertTask(updated)
-                syncEngine.recordLocalMutation(
-                    command = "task.update",
-                    entityId = task.id,
-                    baseVersion = task.version,
-                    payload = mapOf("status" to nextStatus.name)
-                )
+                val change = db.withTransaction {
+                    val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
+                    require(task.ownerId == ownerId) { "任务不属于当前账户" }
+                    val current = db.taskDao().getTaskById(task.id, ownerId) ?: error("任务已不存在")
+                    if (current.status == nextStatus) return@withTransaction null
+                    val now = nowIso()
+                    val updated = current.copy(status = nextStatus, version = current.version + 1,
+                        completedAt = if (nextStatus == TaskStatus.DONE) now else null,
+                        updatedAt = now, pendingSync = true)
+                    db.taskDao().upsertTask(updated)
+                    syncEngine.recordLocalMutation("task.update", current.id, current.version,
+                        mapOf("status" to nextStatus.name))
+                    require(authManager.ownerId == ownerId) { "当前账户已变化" }
+                    TaskStatusChange(current.id, ownerId, current.title, current.status, nextStatus, updated.version)
+                }
                 loadTodayData()
+                change?.let { _statusChanges.emit(it) }
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
                 _messages.tryEmit(error.userMessage("更新任务状态失败"))
+            }
+        }
+    }
+
+    fun undoTaskStatus(change: TaskStatusChange) {
+        viewModelScope.launch {
+            try {
+                db.withTransaction {
+                    require(authManager.ownerId == change.ownerId) { "当前账户已变化" }
+                    val current = db.taskDao().getTaskById(change.taskId, change.ownerId)
+                        ?: error("任务已不存在")
+                    require(current.status == change.after && current.version == change.appliedVersion) {
+                        "任务已有新变化，无法撤销这次操作"
+                    }
+                    val now = nowIso()
+                    db.taskDao().upsertTask(current.copy(status = change.before,
+                        completedAt = if (change.before == TaskStatus.DONE) now else null,
+                        version = current.version + 1, updatedAt = now, pendingSync = true))
+                    syncEngine.recordLocalMutation("task.update", current.id, current.version,
+                        mapOf("status" to change.before.name))
+                    require(authManager.ownerId == change.ownerId) { "当前账户已变化" }
+                }
+                loadTodayData()
+                _messages.tryEmit("已撤销状态修改")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _messages.tryEmit(error.userMessage("撤销失败"))
             }
         }
     }
@@ -317,57 +362,75 @@ class MainViewModel(
         }
     }
 
-    fun createTreeTaskV2(parentFolderId: String?, title: String) {
-        viewModelScope.launch {
-            try {
-                val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
-                val normalized = title.trim()
-                require(normalized.isNotEmpty()) { "任务标题不能为空" }
-                val id = UUID.randomUUID().toString()
-                val noteId = UUID.randomUUID().toString()
-                val now = nowIso()
-                db.taskDao().upsertTask(TaskEntity(id, ownerId, null, null, normalized, TaskStatus.TODO, TaskCategory.MISC, TaskPriority.NONE, "1024", 1, null, now, now, parentFolderId, null, null, null, true))
-                db.noteDao().upsertNote(NoteEntity(noteId, ownerId, id, "", 1, now, now, null, true))
-                syncEngine.recordLocalMutation("task.create", id, null, mapOf("parentFolderId" to parentFolderId, "title" to normalized))
-                _messages.tryEmit("任务已创建")
-            } catch (error: Exception) {
-                _messages.tryEmit(error.userMessage("创建任务失败"))
-            }
-        }
+    fun createTreeTaskV2(parentFolderId: String?, title: String, onComplete: (String?) -> Unit = {}) {
+        captureTaskV2(parentFolderId, title, null, onComplete)
     }
 
-    fun createTreeTaskV2AtToday(title: String) {
-        createTreeTaskV2AtTimePoint(title, todayStr, true)
+    fun createTreeTaskV2AtToday(title: String, onComplete: (String?) -> Unit = {}) {
+        captureTaskV2(null, title, todayStr, onComplete)
     }
 
-    fun createTreeTaskV2AtTimePoint(title: String, target: String, isDate: Boolean) {
+    fun createTreeTaskV2AtTimePoint(title: String, target: String, isDate: Boolean,
+        onComplete: (String?) -> Unit = {}) {
+        captureTaskV2(null, title, if (isDate) target else null, onComplete,
+            eventId = if (isDate) null else target)
+    }
+
+    /** A capture is acknowledged only after its task, note, placement and outbox are durable. */
+    fun captureTaskV2(parentFolderId: String?, title: String, localDate: String?,
+        onComplete: (String?) -> Unit = {}, eventId: String? = null) {
         viewModelScope.launch {
             try {
-                val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
-                val normalized = title.trim()
-                require(normalized.isNotEmpty()) { "任务标题不能为空" }
-                val parentFolderId = db.folderDao().getAll(ownerId)
-                    .filter { it.archivedAt == null && it.deletedAt == null }
-                    .maxByOrNull { it.updatedAt }
-                    ?.id
-                val taskId = UUID.randomUUID().toString()
-                val noteId = UUID.randomUUID().toString()
-                val now = nowIso()
-                db.taskDao().upsertTask(TaskEntity(taskId, ownerId, null, null, normalized, TaskStatus.TODO, TaskCategory.MISC, TaskPriority.NONE, "1024", 1, null, now, now, parentFolderId, null, null, null, true))
-                db.noteDao().upsertNote(NoteEntity(noteId, ownerId, taskId, "", 1, now, now, null, true))
-                syncEngine.recordLocalMutation("task.create", taskId, null, mapOf("parentFolderId" to parentFolderId, "title" to normalized))
-                val timePoint = if (isDate) {
-                    getOrCreateDatePoint(ownerId, target)
-                } else {
-                    db.timePointDao().getTimePointById(target, ownerId) ?: error("事件节点不存在")
+                db.withTransaction {
+                    val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
+                    val normalized = title.trim()
+                    require(normalized.isNotEmpty()) { "任务标题不能为空" }
+                    if (parentFolderId != null) {
+                        val folder = db.folderDao().getById(parentFolderId, ownerId)
+                        require(folder != null && folder.archivedAt == null && folder.deletedAt == null) {
+                            "目录已不存在，请重新选择保存位置"
+                        }
+                    }
+                    if (localDate != null) {
+                        val format = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+                        require(format.format(format.parse(localDate) ?: error("日期无效")) == localDate) { "日期无效" }
+                    }
+                    val taskId = UUID.randomUUID().toString()
+                    val noteId = UUID.randomUUID().toString()
+                    val now = nowIso()
+                    val rank = ((db.taskDao().getAllTreeTasks(ownerId).filter {
+                        it.parentFolderId == parentFolderId && it.status == TaskStatus.TODO &&
+                            it.archivedAt == null && it.deletedAt == null
+                    }.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L) + 1024L).toString()
+                    db.taskDao().upsertTask(TaskEntity(taskId, ownerId, null, null, normalized,
+                        TaskStatus.TODO, TaskCategory.MISC, TaskPriority.NONE, rank, 1,
+                        null, now, now, parentFolderId, null, null, null, true))
+                    db.noteDao().upsertNote(NoteEntity(noteId, ownerId, taskId, "", 1, now, now, null, true))
+                    syncEngine.recordLocalMutation("task.create", taskId, null,
+                        mapOf("parentFolderId" to parentFolderId, "title" to normalized))
+                    val point = when {
+                        localDate != null -> getOrCreateDatePoint(ownerId, localDate)
+                        eventId != null -> db.timePointDao().getTimePointById(eventId, ownerId)
+                            ?.takeIf { it.deletedAt == null && it.archivedAt == null && it.type == TimePointType.EVENT }
+                            ?: error("事件节点不存在")
+                        else -> null
+                    }
+                    if (point != null) {
+                        val placementId = UUID.randomUUID().toString()
+                        db.placementDao().upsertPlacement(PlacementEntity(placementId, ownerId,
+                            taskId, point.id, "1024", 1, now, now, null, true))
+                        syncEngine.recordLocalMutation("placement.create", placementId, null,
+                            mapOf("taskId" to taskId, "timePointId" to point.id, "__localId" to placementId))
+                    }
+                    require(authManager.ownerId == ownerId) { "当前账户已变化" }
                 }
-                val placementId = UUID.randomUUID().toString()
-                db.placementDao().upsertPlacement(PlacementEntity(placementId, ownerId, taskId, timePoint.id, "1024", 1, now, now, null, true))
-                syncEngine.recordLocalMutation("placement.create", placementId, null, mapOf("taskId" to taskId, "timePointId" to timePoint.id, "__localId" to placementId))
                 loadTodayData()
-                _messages.tryEmit("任务及安排已创建")
+                onComplete(null)
+                _messages.tryEmit("已保存到本地")
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
-                _messages.tryEmit(error.userMessage("创建任务及安排失败"))
+                onComplete(error.userMessage("保存失败，草稿已保留"))
             }
         }
     }
@@ -523,21 +586,29 @@ class MainViewModel(
         return result
     }
 
-    fun createWorkflowV2(name: String) {
+    fun createWorkflowV2(name: String, onComplete: (String?) -> Unit = {}) {
         viewModelScope.launch {
             try {
-                val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
-                val normalized = name.trim()
-                require(normalized.isNotEmpty()) { "流程名称不能为空" }
-                val id = UUID.randomUUID().toString()
-                val now = nowIso()
-                val stageId = UUID.randomUUID().toString()
-                db.workflowDao().upsertWorkflow(WorkflowEntity(id, ownerId, normalized, "1024", 1, null, now, now, null, true))
-                db.workflowDao().upsertStages(listOf(WorkflowStageEntity(stageId, ownerId, id, "阶段 1", "1024", 1, now, now, null, true)))
-                syncEngine.recordLocalMutation("workflow.create", id, null, mapOf("name" to normalized, "defaultStageId" to stageId))
+                db.withTransaction {
+                    val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
+                    val normalized = name.trim()
+                    require(normalized.isNotEmpty()) { "流程名称不能为空" }
+                    val id = UUID.randomUUID().toString()
+                    val now = nowIso()
+                    val stageId = UUID.randomUUID().toString()
+                    db.workflowDao().upsertWorkflow(WorkflowEntity(id, ownerId, normalized, "1024", 1, null, now, now, null, true))
+                    db.workflowDao().upsertStages(listOf(WorkflowStageEntity(stageId, ownerId, id, "阶段 1", "1024", 1, now, now, null, true)))
+                    syncEngine.recordLocalMutation("workflow.create", id, null, mapOf("name" to normalized, "defaultStageId" to stageId))
+                    require(authManager.ownerId == ownerId) { "当前账户已变化" }
+                }
+                onComplete(null)
                 _messages.tryEmit("流程已创建")
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
-                _messages.tryEmit(error.userMessage("创建流程失败"))
+                val message = error.userMessage("创建流程失败")
+                onComplete(message)
+                _messages.tryEmit(message)
             }
         }
     }
@@ -1143,65 +1214,43 @@ class MainViewModel(
         task: TaskEntity,
         localDate: String,
         copy: Boolean,
-        onSuccess: () -> Unit = {}
+        onSuccess: () -> Unit = {},
+        onComplete: ((String?) -> Unit)? = null,
     ) {
         viewModelScope.launch {
             try {
-                val ownerId = authManager.ownerId
-                    ?: throw IllegalStateException("登录状态已失效，请重新登录")
-                require(task.ownerId == ownerId) { "任务不属于当前账户" }
-                require(localDate.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
-                    "日期格式无效"
-                }
-                val datePoint = getOrCreateDatePoint(ownerId, localDate)
-                val placements = db.placementDao().getPlacementsByTaskIdForOwner(ownerId, task.id)
-                val targetPlacement = placements.firstOrNull { it.timePointId == datePoint.id }
-                if (targetPlacement == null) {
-                    val now = nowIso()
-                    val placementId = UUID.randomUUID().toString()
-                    db.placementDao().upsertPlacement(
-                        PlacementEntity(
-                            id = placementId,
-                            ownerId = ownerId,
-                            taskId = task.id,
-                            timePointId = datePoint.id,
-                            rank = "1000",
-                            version = 1,
-                            createdAt = now,
-                            updatedAt = now,
-                            pendingSync = true
-                        )
-                    )
-                    syncEngine.recordLocalMutation(
-                        command = "placement.create",
-                        entityId = placementId,
-                        baseVersion = null,
-                        payload = mapOf(
-                            "taskId" to task.id,
-                            "timePointId" to datePoint.id,
-                            "__localId" to placementId
-                        )
-                    )
-                }
-
-                if (!copy) {
-                    placements
-                        .filter { it.timePointId != datePoint.id }
-                        .forEach { placement ->
-                            db.placementDao().deletePlacementForOwner(ownerId, placement.id)
-                            syncEngine.recordLocalMutation(
-                                command = "placement.remove",
-                                entityId = placement.id,
-                                baseVersion = placement.version,
-                                payload = emptyMap()
-                            )
-                        }
+                db.withTransaction {
+                    val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
+                    require(task.ownerId == ownerId) { "任务不属于当前账户" }
+                    val current = db.taskDao().getTaskById(task.id, ownerId) ?: error("任务已不存在")
+                    require(current.archivedAt == null && current.deletedAt == null) { "任务已不可用" }
+                    val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+                    require(parser.format(parser.parse(localDate) ?: error("日期无效")) == localDate) { "日期无效" }
+                    val datePoint = getOrCreateDatePoint(ownerId, localDate)
+                    val placements = db.placementDao().getPlacementsByTaskIdForOwner(ownerId, task.id)
+                    if (placements.none { it.timePointId == datePoint.id }) {
+                        val now = nowIso()
+                        val id = UUID.randomUUID().toString()
+                        db.placementDao().upsertPlacement(PlacementEntity(id, ownerId, task.id, datePoint.id,
+                            "1024", 1, now, now, null, true))
+                        syncEngine.recordLocalMutation("placement.create", id, null,
+                            mapOf("taskId" to task.id, "timePointId" to datePoint.id, "__localId" to id))
+                    }
+                    if (!copy) placements.filter { it.timePointId != datePoint.id }.forEach { placement ->
+                        db.placementDao().deletePlacementForOwner(ownerId, placement.id)
+                        syncEngine.recordLocalMutation("placement.remove", placement.id, placement.version, emptyMap())
+                    }
+                    require(authManager.ownerId == ownerId) { "当前账户已变化" }
                 }
                 loadTodayData()
-                _messages.tryEmit(if (copy) "任务已复制到 $localDate" else "任务已安排到 $localDate")
+                onComplete?.invoke(null)
                 onSuccess()
+                _messages.tryEmit("已安排到 $localDate")
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
-                _messages.tryEmit(error.userMessage("安排任务失败"))
+                val message = error.userMessage("安排任务失败")
+                if (onComplete != null) onComplete(message) else _messages.tryEmit(message)
             }
         }
     }

@@ -35,8 +35,16 @@ object TaskDockShapes {
         RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp, topEnd = 8.dp, bottomEnd = 8.dp)
     val AsymmetricEndPill: CornerBasedShape =
         RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = 20.dp, bottomEnd = 20.dp)
+    val HeroShape: CornerBasedShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomEnd = 12.dp, bottomStart = 28.dp)
     val SmartCardShape: CornerBasedShape = RoundedCornerShape(22.dp)
-    val TaskRowShape: CornerBasedShape = RoundedCornerShape(16.dp)
+
+    fun groupedRow(index: Int, count: Int): CornerBasedShape = RoundedCornerShape(
+        topStart = if (index == 0) 18.dp else 6.dp,
+        topEnd = if (index == 0) 18.dp else 6.dp,
+        bottomStart = if (index == count - 1) 18.dp else 6.dp,
+        bottomEnd = if (index == count - 1) 18.dp else 6.dp,
+    )
+    val TaskRowShape: CornerBasedShape = RoundedCornerShape(12.dp)
     val TaskRowSelectedShape: CornerBasedShape = RoundedCornerShape(20.dp)
     val FloatingBarShape: CornerBasedShape = RoundedCornerShape(28.dp)
     val BottomSheetShape: CornerBasedShape =

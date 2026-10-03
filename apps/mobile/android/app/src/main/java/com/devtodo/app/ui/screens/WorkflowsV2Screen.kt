@@ -76,7 +76,7 @@ fun WorkflowsV2Screen(
                 title = {
                     Text(
                         text = selected?.name ?: "流程看板",
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Medium,
                     )
                 },
                 navigationIcon = {
@@ -101,11 +101,13 @@ fun WorkflowsV2Screen(
                     contentAlignment = Alignment.Center,
                 ) {
                     FloatingActionIsland(
-                        onQuickCreate = { title ->
-                            viewModel.createWorkflowV2(title)
+                        onQuickCreate = { title, result ->
+                            viewModel.createWorkflowV2(title, result)
                         },
                         placeholder = "输入新流程名称…",
                         primaryLabel = "新建流程",
+                        fieldLabel = "流程名称",
+                        supportingText = "把相关任务放进同一个流程",
                     )
                 }
             }
@@ -113,7 +115,7 @@ fun WorkflowsV2Screen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(bottom = 96.dp),
+            contentPadding = PaddingValues(bottom = 24.dp),
         ) {
             if (selected == null) {
                 // Workflow List Overview
@@ -223,7 +225,7 @@ fun WorkflowsV2Screen(
                                 Text(
                                     text = workflow.name,
                                     style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.Medium,
                                 )
                                 Text(
                                     text = "${stages.size} 个阶段 · ${memberships.size} 项任务流转中",
@@ -558,7 +560,7 @@ private fun ExpressiveStageBlock(
                             Text(
                                 text = "${stageIndex + 1}",
                                 style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
                         }
@@ -568,7 +570,7 @@ private fun ExpressiveStageBlock(
                         Text(
                             text = stage.name,
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Medium,
                         )
                         Text(
                             text = "${visibleMemberships.size} 项任务",
