@@ -27,7 +27,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.devtodo.app.data.local.OutboxEntity
 import com.devtodo.app.data.sync.SyncState
 import com.devtodo.app.ui.components.ActionMenu
-import com.devtodo.app.ui.components.PredictiveBackContainer
 import com.devtodo.app.ui.components.RowAction
 import com.devtodo.app.ui.components.WorkspaceScaffold
 import com.devtodo.app.ui.theme.TaskDockShapes
@@ -66,328 +65,323 @@ fun SettingsScreen(
     var queue by rememberSaveable { mutableStateOf(false) }
     var showTimezone by rememberSaveable { mutableStateOf(false) }
 
-    PredictiveBackContainer(
-        enabled = onBack != null,
-        onBack = { onBack?.invoke() },
-    ) {
-        WorkspaceScaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("设置", fontWeight = FontWeight.Medium) },
-                navigationIcon = {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
-                        }
+    WorkspaceScaffold(
+    topBar = {
+        TopAppBar(
+            title = { Text("设置", fontWeight = FontWeight.Medium) },
+            navigationIcon = {
+                if (onBack != null) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                )
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface,
             )
-        }
+        )
+    }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 48.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            // Expressive Sync & Account Card
-            ExpressiveSyncSummaryCard(
-                username = viewModel.authManager.username ?: "当前账户",
-                state = sync,
-                pendingCount = pending.size,
-                conflictCount = conflicts.size,
-                error = error,
-                onSync = viewModel::syncNow,
-                onReauthenticate = { logout = true },
-            )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 48.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        // Expressive Sync & Account Card
+        ExpressiveSyncSummaryCard(
+            username = viewModel.authManager.username ?: "当前账户",
+            state = sync,
+            pendingCount = pending.size,
+            conflictCount = conflicts.size,
+            error = error,
+            onSync = viewModel::syncNow,
+            onReauthenticate = { logout = true },
+        )
 
-            // Server Connection Group
-            ExpressiveSettingsGroup(
-                title = "连接",
-                description = serverSummary(viewModel.authManager.hubOrigin),
+        // Server Connection Group
+        ExpressiveSettingsGroup(
+            title = "连接",
+            description = serverSummary(viewModel.authManager.hubOrigin),
+        ) {
+            SettingsActionRow(
+                title = "中枢服务地址",
+                subtitle = "完整地址只在编辑时显示",
+                actionLabel = "更改",
             ) {
-                SettingsActionRow(
-                    title = "中枢服务地址",
-                    subtitle = "完整地址只在编辑时显示",
-                    actionLabel = "更改",
-                ) {
-                    hub = viewModel.authManager.hubOrigin
-                    showHub = true
-                }
+                hub = viewModel.authManager.hubOrigin
+                showHub = true
+            }
+        }
+
+        // Sync Queue Group
+        ExpressiveSettingsGroup(
+            title = "离线同步队列",
+            description = "${pending.size} 项本地待提交 · ${conflicts.size} 项冲突",
+        ) {
+            SettingsActionRow(
+                title = "本地待处理队列",
+                subtitle = if (pending.isEmpty() && conflicts.isEmpty()) "队列畅通，无积压操作" else "查看、重试或丢弃离线队列",
+                actionLabel = if (queue) "收起" else "查看",
+            ) {
+                queue = !queue
             }
 
-            // Sync Queue Group
-            ExpressiveSettingsGroup(
-                title = "离线同步队列",
-                description = "${pending.size} 项本地待提交 · ${conflicts.size} 项冲突",
-            ) {
-                SettingsActionRow(
-                    title = "本地待处理队列",
-                    subtitle = if (pending.isEmpty() && conflicts.isEmpty()) "队列畅通，无积压操作" else "查看、重试或丢弃离线队列",
-                    actionLabel = if (queue) "收起" else "查看",
-                ) {
-                    queue = !queue
-                }
-
-                AnimatedVisibility(queue) {
-                    Column(Modifier.padding(bottom = 8.dp)) {
-                        if (conflicts.isNotEmpty()) {
-                            Text(
-                                text = "存在版本冲突。请在 Web 端“设置 → 高级同步”中检视并解决冲突。",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        conflicts.forEach { conflict ->
-                            ListItem(
-                                headlineContent = { Text(conflict.command ?: conflict.entityType) },
-                                supportingContent = { Text("记录 ID: ${conflict.entityId.take(8)}") },
-                                colors = transparentListItemColors(),
-                            )
-                        }
-                        pending.forEach { item ->
-                            ListItem(
-                                headlineContent = { Text(item.command) },
-                                supportingContent = { Text(item.lastError ?: "等待同步") },
-                                trailingContent = {
-                                    ActionMenu(
-                                        "待提交操作",
-                                        listOf(
-                                            RowAction("立即重试") { viewModel.retryOutboxItem(item) },
-                                            RowAction("丢弃操作", destructive = true) { discard = item },
-                                        ),
-                                    )
-                                },
-                                colors = transparentListItemColors(),
-                            )
-                        }
+            AnimatedVisibility(queue) {
+                Column(Modifier.padding(bottom = 8.dp)) {
+                    if (conflicts.isNotEmpty()) {
+                        Text(
+                            text = "存在版本冲突。请在 Web 端“设置 → 高级同步”中检视并解决冲突。",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    conflicts.forEach { conflict ->
+                        ListItem(
+                            headlineContent = { Text(conflict.command ?: conflict.entityType) },
+                            supportingContent = { Text("记录 ID: ${conflict.entityId.take(8)}") },
+                            colors = transparentListItemColors(),
+                        )
+                    }
+                    pending.forEach { item ->
+                        ListItem(
+                            headlineContent = { Text(item.command) },
+                            supportingContent = { Text(item.lastError ?: "等待同步") },
+                            trailingContent = {
+                                ActionMenu(
+                                    "待提交操作",
+                                    listOf(
+                                        RowAction("立即重试") { viewModel.retryOutboxItem(item) },
+                                        RowAction("丢弃操作", destructive = true) { discard = item },
+                                    ),
+                                )
+                            },
+                            colors = transparentListItemColors(),
+                        )
                     }
                 }
             }
+        }
 
-            // Date & Regional Group
-            ExpressiveSettingsGroup(
-                title = "日期与安排设置",
-                description = "日期规划与今日视图的时间准则。",
+        // Date & Regional Group
+        ExpressiveSettingsGroup(
+            title = "日期与安排设置",
+            description = "日期规划与今日视图的时间准则。",
+        ) {
+            SettingsActionRow(
+                title = "工作区时区",
+                subtitle = timezoneLabel(settings?.timezone ?: "Asia/Shanghai"),
+                actionLabel = "更改",
             ) {
-                SettingsActionRow(
-                    title = "工作区时区",
-                    subtitle = timezoneLabel(settings?.timezone ?: "Asia/Shanghai"),
-                    actionLabel = "更改",
-                ) {
-                    showTimezone = true
-                }
-
-                ExpressiveChoiceRow(
-                    title = "每周起始日",
-                    options = listOf(1 to "周一", 0 to "周日"),
-                    selected = settings?.weekStartsOn ?: 1,
-                    onSelect = { viewModel.updateSettings(weekStartsOn = it) },
-                )
-
-                ExpressiveChoiceRow(
-                    title = "新记录默认存入",
-                    options = listOf("ROOT" to "根目录", "RECENT_FOLDER" to "最近文件夹"),
-                    selected = settings?.defaultCaptureTarget ?: "ROOT",
-                    onSelect = { viewModel.updateSettings(defaultCaptureTarget = it) },
-                )
+                showTimezone = true
             }
 
-            // Appearance & Themes Group
-            ExpressiveSettingsGroup(
-                title = "外观与主题",
-                description = "采用 Material 3 Expressive 色阶与动效。",
+            ExpressiveChoiceRow(
+                title = "每周起始日",
+                options = listOf(1 to "周一", 0 to "周日"),
+                selected = settings?.weekStartsOn ?: 1,
+                onSelect = { viewModel.updateSettings(weekStartsOn = it) },
+            )
+
+            ExpressiveChoiceRow(
+                title = "新记录默认存入",
+                options = listOf("ROOT" to "根目录", "RECENT_FOLDER" to "最近文件夹"),
+                selected = settings?.defaultCaptureTarget ?: "ROOT",
+                onSelect = { viewModel.updateSettings(defaultCaptureTarget = it) },
+            )
+        }
+
+        // Appearance & Themes Group
+        ExpressiveSettingsGroup(
+            title = "外观与主题",
+            description = "采用 Material 3 Expressive 色阶与动效。",
+        ) {
+            ExpressiveChoiceRow(
+                title = "色彩模式",
+                options = listOf(
+                    ThemeMode.SYSTEM to "跟随系统",
+                    ThemeMode.LIGHT to "浅色",
+                    ThemeMode.DARK to "深色",
+                ),
+                selected = theme,
+                onSelect = onThemeModeChange,
+            )
+
+            ExpressiveSwitchRow(
+                title = "Material You 动态配色",
+                subtitle = if (Build.VERSION.SDK_INT >= 31) "提取系统壁纸颜色呈现" else "需要 Android 12 或更新版本",
+                checked = dynamic,
+                onCheckedChange = onDynamicColorChange,
+                enabled = Build.VERSION.SDK_INT >= 31,
+            )
+
+            ExpressiveSwitchRow(
+                title = "AMOLED 纯黑底色",
+                subtitle = "在深色模式下使用纯黑背景降低能耗",
+                checked = black,
+                onCheckedChange = onPureBlackChange,
+            )
+        }
+
+        // Data & Actions Group
+        ExpressiveSettingsGroup(title = "数据与账户") {
+            SettingsActionRow(
+                title = "归档中心",
+                subtitle = "检视并恢复已归档的任务与目录",
+                actionLabel = "打开",
+                onClick = onNavigateToArchived,
+            )
+
+            SettingsActionRow(
+                title = "退出当前账户",
+                subtitle = "本地任务将安全保留；未提交操作需重新登录原账户同步。",
+                actionLabel = "退出",
+                destructive = true,
             ) {
-                ExpressiveChoiceRow(
-                    title = "色彩模式",
-                    options = listOf(
-                        ThemeMode.SYSTEM to "跟随系统",
-                        ThemeMode.LIGHT to "浅色",
-                        ThemeMode.DARK to "深色",
-                    ),
-                    selected = theme,
-                    onSelect = onThemeModeChange,
-                )
-
-                ExpressiveSwitchRow(
-                    title = "Material You 动态配色",
-                    subtitle = if (Build.VERSION.SDK_INT >= 31) "提取系统壁纸颜色呈现" else "需要 Android 12 或更新版本",
-                    checked = dynamic,
-                    onCheckedChange = onDynamicColorChange,
-                    enabled = Build.VERSION.SDK_INT >= 31,
-                )
-
-                ExpressiveSwitchRow(
-                    title = "AMOLED 纯黑底色",
-                    subtitle = "在深色模式下使用纯黑背景降低能耗",
-                    checked = black,
-                    onCheckedChange = onPureBlackChange,
-                )
-            }
-
-            // Data & Actions Group
-            ExpressiveSettingsGroup(title = "数据与账户") {
-                SettingsActionRow(
-                    title = "归档中心",
-                    subtitle = "检视并恢复已归档的任务与目录",
-                    actionLabel = "打开",
-                    onClick = onNavigateToArchived,
-                )
-
-                SettingsActionRow(
-                    title = "退出当前账户",
-                    subtitle = "本地任务将安全保留；未提交操作需重新登录原账户同步。",
-                    actionLabel = "退出",
-                    destructive = true,
-                ) {
-                    logout = true
-                }
+                logout = true
             }
         }
+    }
     }
 
     if (showTimezone) {
-        AlertDialog(
-            onDismissRequest = { showTimezone = false },
-            title = { Text("选择工作区时区") },
-            text = {
-                Column(Modifier.selectableGroup()) {
-                    listOf(
-                        "Asia/Shanghai" to "中国标准时间 (UTC+08:00)",
-                        "Asia/Tokyo" to "日本标准时间 (UTC+09:00)",
-                        "UTC" to "协调世界时 (UTC)",
-                        "America/Los_Angeles" to "太平洋时间 (US/Pacific)",
-                    ).forEach { (value, label) ->
-                        val selected = settings?.timezone == value
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(TaskDockShapes.Medium)
-                                .selectable(
-                                    selected = selected,
-                                    role = Role.RadioButton,
-                                    onClick = {
-                                        viewModel.updateSettings(timezone = value)
-                                        showTimezone = false
-                                    },
-                                )
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(selected = selected, onClick = null)
-                            Spacer(Modifier.width(12.dp))
-                            Text(label, style = MaterialTheme.typography.bodyMedium)
-                        }
+    AlertDialog(
+        onDismissRequest = { showTimezone = false },
+        title = { Text("选择工作区时区") },
+        text = {
+            Column(Modifier.selectableGroup()) {
+                listOf(
+                    "Asia/Shanghai" to "中国标准时间 (UTC+08:00)",
+                    "Asia/Tokyo" to "日本标准时间 (UTC+09:00)",
+                    "UTC" to "协调世界时 (UTC)",
+                    "America/Los_Angeles" to "太平洋时间 (US/Pacific)",
+                ).forEach { (value, label) ->
+                    val selected = settings?.timezone == value
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(TaskDockShapes.Medium)
+                            .selectable(
+                                selected = selected,
+                                role = Role.RadioButton,
+                                onClick = {
+                                    viewModel.updateSettings(timezone = value)
+                                    showTimezone = false
+                                },
+                            )
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = selected, onClick = null)
+                        Spacer(Modifier.width(12.dp))
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-            },
-            confirmButton = { TextButton(onClick = { showTimezone = false }) { Text("取消") } },
-        )
+            }
+        },
+        confirmButton = { TextButton(onClick = { showTimezone = false }) { Text("取消") } },
+    )
     }
 
     if (showHub) {
-        AlertDialog(
-            onDismissRequest = { showHub = false },
-            title = { Text("配置服务器中枢地址") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = hub,
-                        onValueChange = { hub = it },
-                        label = { Text("中枢服务地址") },
-                        singleLine = true,
-                        shape = TaskDockShapes.Medium,
-                        isError = hub.isNotBlank() && normalizedHubOrigin(hub) == null,
-                        supportingText = {
-                            Text(
-                                if (hub.startsWith("http://")) "HTTP 明文传输仅建议在家庭内网或受信任局域网使用。"
-                                else "请输入 HTTP 或 HTTPS 完整地址（例如 https://todo.example.com）。"
-                            )
-                        },
-                    )
-                    if (pending.isNotEmpty()) {
-                        Text("当前有未同步操作，请等待同步完毕后再切换服务器。", color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = normalizedHubOrigin(hub) != null && pending.isEmpty(),
-                    onClick = {
-                        val origin = normalizedHubOrigin(hub)!!
-                        showHub = false
-                        if (origin != viewModel.authManager.hubOrigin) confirmOrigin = origin
-                        else viewModel.showMessage("服务器地址未改变")
+    AlertDialog(
+        onDismissRequest = { showHub = false },
+        title = { Text("配置服务器中枢地址") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = hub,
+                    onValueChange = { hub = it },
+                    label = { Text("中枢服务地址") },
+                    singleLine = true,
+                    shape = TaskDockShapes.Medium,
+                    isError = hub.isNotBlank() && normalizedHubOrigin(hub) == null,
+                    supportingText = {
+                        Text(
+                            if (hub.startsWith("http://")) "HTTP 明文传输仅建议在家庭内网或受信任局域网使用。"
+                            else "请输入 HTTP 或 HTTPS 完整地址（例如 https://todo.example.com）。"
+                        )
                     },
-                ) {
-                    Text("保存")
+                )
+                if (pending.isNotEmpty()) {
+                    Text("当前有未同步操作，请等待同步完毕后再切换服务器。", color = MaterialTheme.colorScheme.error)
                 }
-            },
-            dismissButton = { TextButton(onClick = { showHub = false }) { Text("取消") } },
-        )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = normalizedHubOrigin(hub) != null && pending.isEmpty(),
+                onClick = {
+                    val origin = normalizedHubOrigin(hub)!!
+                    showHub = false
+                    if (origin != viewModel.authManager.hubOrigin) confirmOrigin = origin
+                    else viewModel.showMessage("服务器地址未改变")
+                },
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = { TextButton(onClick = { showHub = false }) { Text("取消") } },
+    )
     }
 
     confirmOrigin?.let { origin ->
-        AlertDialog(
-            onDismissRequest = { confirmOrigin = null },
-            title = { Text("切换服务器并重新登录？") },
-            text = { Text("将切换连接至 $origin。当前本地已缓存任务仍会保留。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onLogout()
-                        viewModel.authManager.hubOrigin = origin
-                        confirmOrigin = null
-                    }
-                ) {
-                    Text("切换并登录")
+    AlertDialog(
+        onDismissRequest = { confirmOrigin = null },
+        title = { Text("切换服务器并重新登录？") },
+        text = { Text("将切换连接至 $origin。当前本地已缓存任务仍会保留。") },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onLogout()
+                    viewModel.authManager.hubOrigin = origin
+                    confirmOrigin = null
                 }
-            },
-            dismissButton = { TextButton(onClick = { confirmOrigin = null }) { Text("取消") } },
-        )
+            ) {
+                Text("切换并登录")
+            }
+        },
+        dismissButton = { TextButton(onClick = { confirmOrigin = null }) { Text("取消") } },
+    )
     }
 
     if (logout) {
-        AlertDialog(
-            onDismissRequest = { logout = false },
-            title = { Text("退出登录？") },
-            text = {
-                Text(
-                    if (pending.isEmpty()) "退出后本地任务仍然保留，再次登录即可恢复云端同步。"
-                    else "注意：还有 ${pending.size} 项操作未提交至中枢。退出后须重新登录当前账户才能继续上传。"
-                )
-            },
-            confirmButton = { TextButton(onClick = onLogout) { Text("确认退出") } },
-            dismissButton = { TextButton(onClick = { logout = false }) { Text("取消") } },
-        )
+    AlertDialog(
+        onDismissRequest = { logout = false },
+        title = { Text("退出登录？") },
+        text = {
+            Text(
+                if (pending.isEmpty()) "退出后本地任务仍然保留，再次登录即可恢复云端同步。"
+                else "注意：还有 ${pending.size} 项操作未提交至中枢。退出后须重新登录当前账户才能继续上传。"
+            )
+        },
+        confirmButton = { TextButton(onClick = onLogout) { Text("确认退出") } },
+        dismissButton = { TextButton(onClick = { logout = false }) { Text("取消") } },
+    )
     }
 
     discard?.let { item ->
-        AlertDialog(
-            onDismissRequest = { discard = null },
-            title = { Text("丢弃离线待提交操作？") },
-            text = { Text("该操作将从离线队列彻底移除，可能造成多端数据不一致。确定丢弃？") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.discardOutboxItem(item)
-                        discard = null
-                    }
-                ) {
-                    Text("丢弃", color = MaterialTheme.colorScheme.error)
+    AlertDialog(
+        onDismissRequest = { discard = null },
+        title = { Text("丢弃离线待提交操作？") },
+        text = { Text("该操作将从离线队列彻底移除，可能造成多端数据不一致。确定丢弃？") },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    viewModel.discardOutboxItem(item)
+                    discard = null
                 }
-            },
-            dismissButton = { TextButton(onClick = { discard = null }) { Text("取消") } },
-        )
-    }
+            ) {
+                Text("丢弃", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = { TextButton(onClick = { discard = null }) { Text("取消") } },
+    )
     }
 }
 

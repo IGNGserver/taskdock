@@ -9,6 +9,7 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.os.SystemClock
 import android.util.Base64
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -231,7 +232,7 @@ class WorkspaceScreenTest {
         compose.onNodeWithTag("all-tasks-list")
             .performScrollToNode(hasText(task.title))
         waitForText(task.title)
-        compose.onNodeWithContentDescription("${task.title}，完成状态").assertIsDisplayed()
+        compose.onNodeWithContentDescription("${task.title}，状态").assertIsDisplayed()
         compose.onNodeWithContentDescription("${task.title}，更多操作").assertIsDisplayed()
         screenshot("all-tasks")
         compose.onNodeWithText(task.title).performClick()
@@ -246,6 +247,7 @@ class WorkspaceScreenTest {
         var shortcut: String? = null
         var settingsOpened = false
         val showAllTasks = mutableStateOf(false)
+        val openFolder = mutableStateOf<String?>(null)
         compose.setContent {
             DevTodoTheme(themeMode = ThemeMode.DARK, dynamicColor = false) {
                 if (showAllTasks.value) {
@@ -254,6 +256,9 @@ class WorkspaceScreenTest {
                     TreeScreen(
                         vm,
                         { opened = it },
+                        folderId = openFolder.value,
+                        onOpenFolder = { openFolder.value = it },
+                        onBack = { openFolder.value = null },
                         onNavigateToShortcut = { shortcut = it },
                         onOpenSettings = { settingsOpened = true },
                         onOpenSearch = { shortcut = Screen.AllTasks.route },
@@ -273,7 +278,7 @@ class WorkspaceScreenTest {
         compose.onNodeWithTag("directory-tree-list")
             .performScrollToNode(hasText(task.title))
         waitForText(task.title)
-        compose.onNodeWithContentDescription("${task.title}，完成状态").assertIsDisplayed()
+        compose.onNodeWithContentDescription("${task.title}，状态").assertIsDisplayed()
         compose.onNodeWithContentDescription("${task.title}，更多操作").assertIsDisplayed()
         compose.onNodeWithTag("tree-create-action").assertIsDisplayed()
         val lastRootRowBounds =
@@ -309,7 +314,7 @@ class WorkspaceScreenTest {
             .performScrollToNode(hasText("IGNG站点 待办 16"))
         waitForText("IGNG站点 待办 16")
         compose.onNodeWithText("IGNG站点 待办 16").assertIsDisplayed()
-        compose.onNodeWithContentDescription("IGNG站点 待办 16，完成状态").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "待办"))
+        compose.onNodeWithContentDescription("IGNG站点 待办 16，状态").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "待开始"))
         compose.onNodeWithContentDescription("IGNG站点 待办 16，更多操作").assertIsDisplayed()
         compose.onNodeWithTag("tree-create-action").assertIsDisplayed()
         val lastTaskBounds =
@@ -343,6 +348,51 @@ class WorkspaceScreenTest {
         compose.onNodeWithTag("all-tasks-list")
             .performScrollToNode(hasText("站点发布检查"))
         waitForText("站点发布检查")
+    }
+
+    @Test
+    fun statusEditStaysInPlaceUntilTheDirectoryIsReopened() {
+        val openFolder = mutableStateOf<String?>(folderIds[0])
+        compose.setContent {
+            DevTodoTheme(themeMode = ThemeMode.LIGHT, dynamicColor = false) {
+                key(openFolder.value) {
+                    TreeScreen(
+                        vm,
+                        onNavigateToDetail = {},
+                        folderId = openFolder.value,
+                        onOpenFolder = { openFolder.value = it },
+                        onBack = { openFolder.value = null },
+                    )
+                }
+            }
+        }
+        waitForText("当前目录")
+        val rowTag = "tree-row-${folderIds[0]}-task-0"
+        compose.waitUntil(10_000) {
+            runCatching { compose.onNodeWithTag(rowTag).assertIsDisplayed(); true }.getOrDefault(false)
+        }
+        val before = compose.onNodeWithTag(rowTag).fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithContentDescription("站点发布检查，状态").performClick()
+        compose.waitUntil(10_000) {
+            runCatching {
+                compose.onNodeWithContentDescription("站点发布检查，状态")
+                    .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "进行中"))
+                true
+            }.getOrDefault(false)
+        }
+        // The circle answers immediately, but the row keeps its group and slot
+        // until the directory is opened again.
+        val after = compose.onNodeWithTag(rowTag).fetchSemanticsNode().boundsInRoot
+        assertEquals(before, after)
+        compose.onNodeWithText("待开始 · 16").assertExists()
+        compose.onNodeWithText("进行中 · 1").assertDoesNotExist()
+        screenshot("status-pinned")
+        compose.runOnIdle { openFolder.value = null }
+        waitForText("快捷视图")
+        compose.runOnIdle { openFolder.value = folderIds[0] }
+        waitForText("当前目录")
+        waitForText("进行中 · 1")
+        waitForText("待开始 · 15")
     }
 
     @Test
@@ -735,9 +785,16 @@ class WorkspaceScreenTest {
     @Test
     fun directoryCaptureKeepsContextDraftAndSavesToRoom() {
         val capturedTitle = "整理发布资料"
+        val openFolder = mutableStateOf<String?>(null)
         compose.setContent {
             DevTodoTheme(themeMode = ThemeMode.LIGHT, dynamicColor = false) {
-                TreeScreen(vm, onNavigateToDetail = {})
+                TreeScreen(
+                    vm,
+                    onNavigateToDetail = {},
+                    folderId = openFolder.value,
+                    onOpenFolder = { openFolder.value = it },
+                    onBack = { openFolder.value = null },
+                )
             }
         }
         waitForText("快捷视图")

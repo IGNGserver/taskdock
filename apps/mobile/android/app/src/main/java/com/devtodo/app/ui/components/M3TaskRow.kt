@@ -7,10 +7,24 @@ import com.devtodo.app.data.local.TaskEntity
 import com.devtodo.app.data.model.TaskStatus
 
 fun taskStatusLabel(status: TaskStatus): String = when (status) {
-    TaskStatus.TODO -> "待办"
+    TaskStatus.TODO -> "待开始"
     TaskStatus.IN_PROGRESS -> "进行中"
     TaskStatus.DONE -> "已完成"
 }
+
+/**
+ * The circle advances through the three states in order, so a single tap always
+ * moves a task forward instead of only flipping it open or closed. This mirrors
+ * the web contract in `apps/web/src/task-behavior.ts`.
+ */
+fun nextTaskStatus(status: TaskStatus): TaskStatus = when (status) {
+    TaskStatus.TODO -> TaskStatus.IN_PROGRESS
+    TaskStatus.IN_PROGRESS -> TaskStatus.DONE
+    TaskStatus.DONE -> TaskStatus.TODO
+}
+
+fun taskStatusActionLabel(status: TaskStatus): String =
+    "标记为${taskStatusLabel(nextTaskStatus(status))}"
 
 /** Legacy call sites use the same controls and hierarchy as directory tasks. */
 @Composable

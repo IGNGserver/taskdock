@@ -12,6 +12,11 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
 
     data object Tree : Screen("tree", "任务", Icons.Default.Folder)
 
+    /** A single directory page; folders are real destinations so back follows the tree. */
+    data object TreeFolder : Screen("tree/folder/{folderId}", "目录") {
+        fun createRoute(folderId: String) = "tree/folder/$folderId"
+    }
+
     data object Time : Screen("time", "日程", Icons.Default.DateRange)
 
     data object Workflows : Screen("workflows", "流程")

@@ -101,6 +101,11 @@ fun TaskDetailScreen(
         }
     }
 
+    // Unsaved edits keep the back gesture in the page (the discard dialog is not
+    // a predictive-back destination); a clean page lets Navigation Compose pop
+    // it with the normal predictive back preview.
+    BackHandler(enabled = dirty || isSaving) { back() }
+
     LaunchedEffect(task?.id) {
         if (originalTitle == null && task != null) {
             title = task!!.title
@@ -142,386 +147,381 @@ fun TaskDetailScreen(
         }
     }
 
-    PredictiveBackContainer(
-        enabled = !isSaving,
-        onBack = ::back,
-    ) {
-        WorkspaceScaffold(
-            topBar = {
-            Column {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = task?.referenceId ?: "任务详情",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = ::back, enabled = !isSaving) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
-                        }
-                    },
-                    actions = {
-                        if (dirty) {
-                            FilledTonalButton(
-                                onClick = ::save,
-                                enabled = title.isNotBlank() && !isSaving,
-                                shape = TaskDockShapes.FullPill,
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                            ) {
-                                Text(if (isSaving) "保存中…" else "保存")
-                            }
-                        }
-
-                        task?.let { current ->
-                            ActionMenu(
-                                "任务操作",
-                                listOf(
-                                    RowAction("复制任务", !isSaving && !dirty && current.archivedAt == null) {
-                                        viewModel.duplicateTaskV2(current)
-                                    },
-                                    RowAction(if (current.archivedAt == null) "归档任务" else "恢复任务", !isSaving && !dirty) {
-                                        showArchiveDialog = true
-                                    },
-                                    RowAction("删除任务", !isSaving && !dirty, true) {
-                                        showDeleteDialog = true
-                                    },
-                                ),
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
+    WorkspaceScaffold(
+        topBar = {
+        Column {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = task?.referenceId ?: "任务详情",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
                     )
-                )
-
-                PrimaryScrollableTabRow(
-                    selectedTabIndex = tab,
-                    edgePadding = 16.dp,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ) {
-                    listOf("内容与备注", "子步骤 (${steps.size})", "日程位置 (${placements.size})").forEachIndexed { index, label ->
-                        Tab(selected = tab == index, onClick = { tab = index }, text = { Text(label) }, modifier = Modifier.testTag("detail-tab-$index"))
+                },
+                navigationIcon = {
+                    IconButton(onClick = ::back, enabled = !isSaving) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
                     }
+                },
+                actions = {
+                    if (dirty) {
+                        FilledTonalButton(
+                            onClick = ::save,
+                            enabled = title.isNotBlank() && !isSaving,
+                            shape = TaskDockShapes.FullPill,
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                        ) {
+                            Text(if (isSaving) "保存中…" else "保存")
+                        }
+                    }
+
+                    task?.let { current ->
+                        ActionMenu(
+                            "任务操作",
+                            listOf(
+                                RowAction("复制任务", !isSaving && !dirty && current.archivedAt == null) {
+                                    viewModel.duplicateTaskV2(current)
+                                },
+                                RowAction(if (current.archivedAt == null) "归档任务" else "恢复任务", !isSaving && !dirty) {
+                                    showArchiveDialog = true
+                                },
+                                RowAction("删除任务", !isSaving && !dirty, true) {
+                                    showDeleteDialog = true
+                                },
+                            ),
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                )
+            )
+
+            PrimaryScrollableTabRow(
+                selectedTabIndex = tab,
+                edgePadding = 16.dp,
+                containerColor = MaterialTheme.colorScheme.surface,
+            ) {
+                listOf("内容与备注", "子步骤 (${steps.size})", "日程位置 (${placements.size})").forEachIndexed { index, label ->
+                    Tab(selected = tab == index, onClick = { tab = index }, text = { Text(label) }, modifier = Modifier.testTag("detail-tab-$index"))
                 }
             }
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        }
+    },
+    snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        val current = task
-        if (current == null) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                if (!ready || detail == null) CircularProgressIndicator() else Text("找不到任务，可能已被删除")
-            }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .imePadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                when (tab) {
-                    0 -> {
-                        // Title card
-                        Surface(
-                            shape = TaskDockShapes.LargeIncreased,
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                OutlinedTextField(
-                                    value = title,
-                                    label = { Text("任务标题") },
-                                    onValueChange = { title = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    enabled = !isSaving,
-                                    isError = title.isBlank(),
-                                    shape = TaskDockShapes.Medium,
-                                )
+    val current = task
+    if (current == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (!ready || detail == null) CircularProgressIndicator() else Text("找不到任务，可能已被删除")
+        }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            when (tab) {
+                0 -> {
+                    // Title card
+                    Surface(
+                        shape = TaskDockShapes.LargeIncreased,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            OutlinedTextField(
+                                value = title,
+                                label = { Text("任务标题") },
+                                onValueChange = { title = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !isSaving,
+                                isError = title.isBlank(),
+                                shape = TaskDockShapes.Medium,
+                            )
+                        }
+                    }
+
+                    // Status Flow Section
+                    Surface(
+                        shape = TaskDockShapes.LargeIncreased,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                text = "状态",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                TaskStatus.entries.forEach { status ->
+                                    val isCurrent = current.status == status
+                                    FilterChip(
+                                        selected = isCurrent,
+                                        onClick = { viewModel.updateTaskStatus(current, status) },
+                                        label = { Text(taskStatusLabel(status)) },
+                                        shape = TaskDockShapes.FullPill,
+                                        modifier = Modifier.heightIn(min = 48.dp),
+                                    )
+                                }
                             }
                         }
+                    }
 
-                        // Status Flow Section
-                        Surface(
-                            shape = TaskDockShapes.LargeIncreased,
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Markdown Note card
+                    Surface(
+                        shape = TaskDockShapes.LargeIncreased,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
                                 Text(
-                                    text = "状态",
+                                    text = "备注",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold,
                                 )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                Text(
+                                    text = "支持 Markdown",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = markdownContent,
+                                onValueChange = {
+                                    markdownContent = it
+                                    noteEdited = true
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 8,
+                                enabled = !isSaving,
+                                shape = TaskDockShapes.Medium,
+                            )
+                        }
+                    }
+                }
+                1 -> {
+                    // Steps Tab
+                    Surface(
+                        shape = TaskDockShapes.LargeIncreased,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = "子步骤清单",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                    Text(
+                                        text = "步骤独立管理，勾选实时保存",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+
+                                FilledTonalButton(
+                                    onClick = { createStep = true },
+                                    shape = TaskDockShapes.FullPill,
                                 ) {
-                                    TaskStatus.entries.forEach { status ->
-                                        val isCurrent = current.status == status
-                                        FilterChip(
-                                            selected = isCurrent,
-                                            onClick = { viewModel.updateTaskStatus(current, status) },
-                                            label = { Text(taskStatusLabel(status)) },
-                                            shape = TaskDockShapes.FullPill,
-                                            modifier = Modifier.heightIn(min = 48.dp),
+                                    Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("添加步骤")
+                                }
+                            }
+
+                            steps.forEachIndexed { index, step ->
+                                Surface(
+                                    shape = TaskDockShapes.Medium,
+                                    color = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        ExpressiveCheckbox(
+                                            checked = step.status == TaskStatus.DONE,
+                                            onCheckedChange = { checked ->
+                                                viewModel.updateStepStatusV2(
+                                                    step,
+                                                    if (checked) TaskStatus.DONE else TaskStatus.TODO,
+                                                )
+                                            },
+                                            taskTitle = step.title,
+                                            status = step.status,
+                                        )
+
+                                        Spacer(Modifier.width(8.dp))
+
+                                        Text(
+                                            text = step.title,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier.weight(1f),
+                                        )
+
+                                        ActionMenu(
+                                            "${step.title}，步骤操作",
+                                            listOf(
+                                                RowAction("编辑内容") {
+                                                    stepId = step.id
+                                                    stepTitle = step.title
+                                                    stepNote = step.noteMarkdown
+                                                },
+                                                RowAction("上移", index > 0) { viewModel.moveStepV2(step, -1) },
+                                                RowAction("下移", index < steps.lastIndex) { viewModel.moveStepV2(step, 1) },
+                                                RowAction("删除步骤", destructive = true) { deleteStepId = step.id },
+                                            ),
                                         )
                                     }
                                 }
                             }
-                        }
 
-                        // Markdown Note card
-                        Surface(
-                            shape = TaskDockShapes.LargeIncreased,
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
+                            if (steps.isEmpty()) {
+                                Text(
+                                    text = "暂无步骤，点击上方“添加步骤”拆分任务",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(vertical = 12.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+                2 -> {
+                    // Placements Tab
+                    Surface(
+                        shape = TaskDockShapes.LargeIncreased,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
                                     Text(
-                                        text = "备注",
+                                        text = "所属目录",
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.primary,
                                         fontWeight = FontWeight.SemiBold,
                                     )
                                     Text(
-                                        text = "支持 Markdown",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        text = folderPathLabel(current.parentFolderId, folders),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Medium,
                                     )
                                 }
 
-                                OutlinedTextField(
-                                    value = markdownContent,
-                                    onValueChange = {
-                                        markdownContent = it
-                                        noteEdited = true
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    minLines = 8,
-                                    enabled = !isSaving,
+                                OutlinedButton(
+                                    onClick = { showMoveFolder = true },
+                                    shape = TaskDockShapes.FullPill,
+                                ) {
+                                    Text("移动目录")
+                                }
+                            }
+
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                            Text(
+                                text = "日程与事件位置 (Placements)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                text = "任务本体全局唯一。同一个任务可以同时安排到多个日期或事件，状态全局同步保持一致。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+
+                            placements.forEach { placement ->
+                                val point = timePoints.firstOrNull { it.id == placement.timePointId }
+                                Surface(
                                     shape = TaskDockShapes.Medium,
-                                )
-                            }
-                        }
-                    }
-                    1 -> {
-                        // Steps Tab
-                        Surface(
-                            shape = TaskDockShapes.LargeIncreased,
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Row(
+                                    color = MaterialTheme.colorScheme.surface,
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            text = "子步骤清单",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Medium,
-                                        )
-                                        Text(
-                                            text = "步骤独立管理，勾选实时保存",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-
-                                    FilledTonalButton(
-                                        onClick = { createStep = true },
-                                        shape = TaskDockShapes.FullPill,
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
                                     ) {
-                                        Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("添加步骤")
-                                    }
-                                }
-
-                                steps.forEachIndexed { index, step ->
-                                    Surface(
-                                        shape = TaskDockShapes.Medium,
-                                        color = MaterialTheme.colorScheme.surface,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            ExpressiveCheckbox(
-                                                checked = step.status == TaskStatus.DONE,
-                                                onCheckedChange = { checked ->
-                                                    viewModel.updateStepStatusV2(
-                                                        step,
-                                                        if (checked) TaskStatus.DONE else TaskStatus.TODO,
-                                                    )
-                                                },
-                                                taskTitle = step.title,
-                                                status = step.status,
-                                            )
-
-                                            Spacer(Modifier.width(8.dp))
-
+                                        Column {
                                             Text(
-                                                text = step.title,
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                modifier = Modifier.weight(1f),
+                                                text = when {
+                                                    point?.title?.isNotBlank() == true -> point.title!!
+                                                    point?.localDate?.isNotBlank() == true -> point.localDate!!
+                                                    else -> "安排的位置"
+                                                },
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.SemiBold,
                                             )
-
-                                            ActionMenu(
-                                                "${step.title}，步骤操作",
-                                                listOf(
-                                                    RowAction("编辑内容") {
-                                                        stepId = step.id
-                                                        stepTitle = step.title
-                                                        stepNote = step.noteMarkdown
-                                                    },
-                                                    RowAction("上移", index > 0) { viewModel.moveStepV2(step, -1) },
-                                                    RowAction("下移", index < steps.lastIndex) { viewModel.moveStepV2(step, 1) },
-                                                    RowAction("删除步骤", destructive = true) { deleteStepId = step.id },
-                                                ),
+                                            Text(
+                                                text = if (point?.localDate != null) "日期安排" else "里程碑事件",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
-                                    }
-                                }
 
-                                if (steps.isEmpty()) {
-                                    Text(
-                                        text = "暂无步骤，点击上方“添加步骤”拆分任务",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(vertical = 12.dp),
-                                    )
+                                        TextButton(onClick = { viewModel.removePlacement(placement) }) {
+                                            Text("移除安排", color = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
-                    2 -> {
-                        // Placements Tab
-                        Surface(
-                            shape = TaskDockShapes.LargeIncreased,
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            text = "所属目录",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.SemiBold,
-                                        )
-                                        Text(
-                                            text = folderPathLabel(current.parentFolderId, folders),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Medium,
-                                        )
-                                    }
 
-                                    OutlinedButton(
-                                        onClick = { showMoveFolder = true },
-                                        shape = TaskDockShapes.FullPill,
-                                    ) {
-                                        Text("移动目录")
-                                    }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                FilledTonalButton(
+                                    onClick = {
+                                        scheduleCopy = false
+                                        showDatePicker = true
+                                    },
+                                    shape = TaskDockShapes.FullPill,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text("移动到日期")
                                 }
 
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                                Text(
-                                    text = "日程与事件位置 (Placements)",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                                Text(
-                                    text = "任务本体全局唯一。同一个任务可以同时安排到多个日期或事件，状态全局同步保持一致。",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-
-                                placements.forEach { placement ->
-                                    val point = timePoints.firstOrNull { it.id == placement.timePointId }
-                                    Surface(
-                                        shape = TaskDockShapes.Medium,
-                                        color = MaterialTheme.colorScheme.surface,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                        ) {
-                                            Column {
-                                                Text(
-                                                    text = when {
-                                                        point?.title?.isNotBlank() == true -> point.title!!
-                                                        point?.localDate?.isNotBlank() == true -> point.localDate!!
-                                                        else -> "安排的位置"
-                                                    },
-                                                    style = MaterialTheme.typography.titleSmall,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                )
-                                                Text(
-                                                    text = if (point?.localDate != null) "日期安排" else "里程碑事件",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                            }
-
-                                            TextButton(onClick = { viewModel.removePlacement(placement) }) {
-                                                Text("移除安排", color = MaterialTheme.colorScheme.error)
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                OutlinedButton(
+                                    onClick = {
+                                        scheduleCopy = true
+                                        showDatePicker = true
+                                    },
+                                    shape = TaskDockShapes.FullPill,
+                                    modifier = Modifier.weight(1f),
                                 ) {
-                                    FilledTonalButton(
-                                        onClick = {
-                                            scheduleCopy = false
-                                            showDatePicker = true
-                                        },
-                                        shape = TaskDockShapes.FullPill,
-                                        modifier = Modifier.weight(1f),
-                                    ) {
-                                        Text("移动到日期")
-                                    }
-
-                                    OutlinedButton(
-                                        onClick = {
-                                            scheduleCopy = true
-                                            showDatePicker = true
-                                        },
-                                        shape = TaskDockShapes.FullPill,
-                                        modifier = Modifier.weight(1f),
-                                    ) {
-                                        Text("添加另一个日期")
-                                    }
+                                    Text("添加另一个日期")
                                 }
                             }
                         }
@@ -530,133 +530,151 @@ fun TaskDetailScreen(
             }
         }
     }
+    }
 
     if (discard) {
-        AlertDialog(
-            onDismissRequest = { discard = false },
-            title = { Text("放弃未保存的更改？") },
-            text = { Text("任务标题或备注尚未保存。") },
-            confirmButton = { TextButton(onClick = onBack) { Text("放弃更改") } },
-            dismissButton = { TextButton(onClick = { discard = false }) { Text("继续编辑") } },
-        )
+    AlertDialog(
+        onDismissRequest = { discard = false },
+        title = { Text("放弃未保存的更改？") },
+        text = { Text("任务标题或备注尚未保存。") },
+        confirmButton = { TextButton(onClick = onBack) { Text("放弃更改") } },
+        dismissButton = { TextButton(onClick = { discard = false }) { Text("继续编辑") } },
+    )
     }
 
     if (createStep) {
-        CaptureSheet("添加步骤", "步骤标题", onDismiss = { createStep = false }) {
-            viewModel.createStepV2(taskId, it)
-        }
+    CaptureSheet("添加步骤", "步骤标题", onDismiss = { createStep = false }) {
+        viewModel.createStepV2(taskId, it)
+    }
     }
 
     val editingStep = steps.find { it.id == stepId }
     if (editingStep != null) {
-        fun closeStep() {
-            if (stepTitle != editingStep.title || stepNote != editingStep.noteMarkdown) {
-                stepDiscard = true
-            } else {
-                stepId = null
-            }
+    fun closeStep() {
+        if (stepTitle != editingStep.title || stepNote != editingStep.noteMarkdown) {
+            stepDiscard = true
+        } else {
+            stepId = null
         }
+    }
 
-        ModalBottomSheet(
-            onDismissRequest = ::closeStep,
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            shape = TaskDockShapes.BottomSheetShape,
+    ModalBottomSheet(
+        onDismissRequest = ::closeStep,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = TaskDockShapes.BottomSheetShape,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp)
+                .imePadding(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp)
-                    .imePadding(),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+            Text(
+                text = "编辑步骤",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Medium,
+            )
+            OutlinedTextField(
+                value = stepTitle,
+                onValueChange = { stepTitle = it },
+                label = { Text("步骤标题") },
+                singleLine = true,
+                shape = TaskDockShapes.Medium,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = stepNote,
+                onValueChange = { stepNote = it },
+                label = { Text("步骤备注 (Markdown)") },
+                minLines = 4,
+                shape = TaskDockShapes.Medium,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "编辑步骤",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Medium,
-                )
-                OutlinedTextField(
-                    value = stepTitle,
-                    onValueChange = { stepTitle = it },
-                    label = { Text("步骤标题") },
-                    singleLine = true,
-                    shape = TaskDockShapes.Medium,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = stepNote,
-                    onValueChange = { stepNote = it },
-                    label = { Text("步骤备注 (Markdown)") },
-                    minLines = 4,
-                    shape = TaskDockShapes.Medium,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
+                TextButton(onClick = ::closeStep) { Text("取消") }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        viewModel.updateStepV2(editingStep, stepTitle, stepNote)
+                        stepId = null
+                    },
+                    shape = TaskDockShapes.FullPill,
                 ) {
-                    TextButton(onClick = ::closeStep) { Text("取消") }
-                    Spacer(Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            viewModel.updateStepV2(editingStep, stepTitle, stepNote)
-                            stepId = null
-                        },
-                        shape = TaskDockShapes.FullPill,
-                    ) {
-                        Text("保存步骤")
-                    }
+                    Text("保存步骤")
                 }
             }
         }
+    }
     }
 
     if (showDatePicker && task != null) {
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    enabled = datePickerState.selectedDateMillis != null,
-                    onClick = {
-                        val localDate = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
-                            timeZone = TimeZone.getTimeZone("UTC")
-                        }.format(Date(datePickerState.selectedDateMillis!!))
+    DatePickerDialog(
+        onDismissRequest = { showDatePicker = false },
+        confirmButton = {
+            TextButton(
+                enabled = datePickerState.selectedDateMillis != null,
+                onClick = {
+                    val localDate = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+                        timeZone = TimeZone.getTimeZone("UTC")
+                    }.format(Date(datePickerState.selectedDateMillis!!))
 
-                        viewModel.scheduleTask(
-                            task = task!!,
-                            localDate = localDate,
-                            copy = scheduleCopy,
-                        ) {
-                            showDatePicker = false
-                        }
-                    },
-                ) {
-                    Text("确定")
-                }
-            },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("取消") } },
-        ) {
-            DatePicker(datePickerState)
-        }
+                    viewModel.scheduleTask(
+                        task = task!!,
+                        localDate = localDate,
+                        copy = scheduleCopy,
+                    ) {
+                        showDatePicker = false
+                    }
+                },
+            ) {
+                Text("确定")
+            }
+        },
+        dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("取消") } },
+    ) {
+        DatePicker(datePickerState)
+    }
     }
 
     if (showMoveFolder && task != null) {
-        AlertDialog(
-            onDismissRequest = { showMoveFolder = false },
-            title = { Text("移动到目录") },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .heightIn(max = 420.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+    AlertDialog(
+        onDismissRequest = { showMoveFolder = false },
+        title = { Text("移动到目录") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                TextButton(
+                    onClick = {
+                        viewModel.moveTreeV2(
+                            kind = "TASK",
+                            id = task!!.id,
+                            parentFolderId = null,
+                            expectedStatus = task!!.status,
+                            baseVersion = task!!.version,
+                        )
+                        showMoveFolder = false
+                    },
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
+                    Text("根目录")
+                }
+
+                folders.filter { it.archivedAt == null && it.deletedAt == null }.forEach { folder ->
                     TextButton(
                         onClick = {
                             viewModel.moveTreeV2(
                                 kind = "TASK",
                                 id = task!!.id,
-                                parentFolderId = null,
+                                parentFolderId = folder.id,
                                 expectedStatus = task!!.status,
                                 baseVersion = task!!.version,
                             )
@@ -664,97 +682,79 @@ fun TaskDetailScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("根目录")
-                    }
-
-                    folders.filter { it.archivedAt == null && it.deletedAt == null }.forEach { folder ->
-                        TextButton(
-                            onClick = {
-                                viewModel.moveTreeV2(
-                                    kind = "TASK",
-                                    id = task!!.id,
-                                    parentFolderId = folder.id,
-                                    expectedStatus = task!!.status,
-                                    baseVersion = task!!.version,
-                                )
-                                showMoveFolder = false
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(folder.title)
-                        }
+                        Text(folder.title)
                     }
                 }
-            },
-            confirmButton = { TextButton(onClick = { showMoveFolder = false }) { Text("取消") } },
-        )
+            }
+        },
+        confirmButton = { TextButton(onClick = { showMoveFolder = false }) { Text("取消") } },
+    )
     }
 
     deleteStepId?.let { sId ->
-        val step = steps.find { it.id == sId }
-        if (step != null) {
-            AlertDialog(
-                onDismissRequest = { deleteStepId = null },
-                title = { Text("删除步骤？") },
-                text = { Text("确定要删除步骤“${step.title}”吗？此操作无法恢复。") },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            viewModel.deleteStepV2(step)
-                            deleteStepId = null
-                        }
-                    ) {
-                        Text("删除", color = MaterialTheme.colorScheme.error)
+    val step = steps.find { it.id == sId }
+    if (step != null) {
+        AlertDialog(
+            onDismissRequest = { deleteStepId = null },
+            title = { Text("删除步骤？") },
+            text = { Text("确定要删除步骤“${step.title}”吗？此操作无法恢复。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteStepV2(step)
+                        deleteStepId = null
                     }
-                },
-                dismissButton = { TextButton(onClick = { deleteStepId = null }) { Text("取消") } },
-            )
-        }
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { deleteStepId = null }) { Text("取消") } },
+        )
+    }
     }
 
     if (showArchiveDialog && task != null) {
-        val isArchived = task!!.archivedAt != null
-        AlertDialog(
-            onDismissRequest = { showArchiveDialog = false },
-            title = { Text(if (isArchived) "恢复任务？" else "归档任务？") },
-            text = { Text(if (isArchived) "任务将重新回到原目录树与工作区。" else "任务将从活跃视图归档，您随时可以在归档中心恢复。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showArchiveDialog = false
-                        if (isArchived) {
-                            viewModel.restoreTask(task!!)
-                        } else {
-                            viewModel.archiveTask(task!!) { onBack() }
-                        }
+    val isArchived = task!!.archivedAt != null
+    AlertDialog(
+        onDismissRequest = { showArchiveDialog = false },
+        title = { Text(if (isArchived) "恢复任务？" else "归档任务？") },
+        text = { Text(if (isArchived) "任务将重新回到原目录树与工作区。" else "任务将从活跃视图归档，您随时可以在归档中心恢复。") },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    showArchiveDialog = false
+                    if (isArchived) {
+                        viewModel.restoreTask(task!!)
+                    } else {
+                        viewModel.archiveTask(task!!) { onBack() }
                     }
-                ) {
-                    Text(if (isArchived) "恢复" else "归档")
                 }
-            },
-            dismissButton = { TextButton(onClick = { showArchiveDialog = false }) { Text("取消") } },
-        )
+            ) {
+                Text(if (isArchived) "恢复" else "归档")
+            }
+        },
+        dismissButton = { TextButton(onClick = { showArchiveDialog = false }) { Text("取消") } },
+    )
     }
 
     if (showDeleteDialog && task != null) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text("删除任务？") },
-            text = { Text("将彻底删除该任务及其备注、子步骤与安排。此操作不可恢复。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteTaskV2(task!!)
-                        showDeleteDialog = false
-                        onBack()
-                    }
-                ) {
-                    Text("永久删除", color = MaterialTheme.colorScheme.error)
+    AlertDialog(
+        onDismissRequest = { showDeleteDialog = false },
+        title = { Text("删除任务？") },
+        text = { Text("将彻底删除该任务及其备注、子步骤与安排。此操作不可恢复。") },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    viewModel.deleteTaskV2(task!!)
+                    showDeleteDialog = false
+                    onBack()
                 }
-            },
-            dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("取消") } },
-        )
-    }
+            ) {
+                Text("永久删除", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("取消") } },
+    )
     }
 }
 
