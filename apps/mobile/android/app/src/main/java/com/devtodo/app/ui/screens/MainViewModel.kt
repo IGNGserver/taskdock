@@ -126,8 +126,8 @@ class MainViewModel(
     private val _dataReady = MutableStateFlow(!authManager.isLoggedIn)
     val dataReady: StateFlow<Boolean> = _dataReady.asStateFlow()
 
-    private val _todayRefreshing = MutableStateFlow(false)
-    val todayRefreshing: StateFlow<Boolean> = _todayRefreshing.asStateFlow()
+    private val _pullRefreshing = MutableStateFlow(false)
+    val pullRefreshing: StateFlow<Boolean> = _pullRefreshing.asStateFlow()
 
     private val _authenticated = MutableStateFlow(authManager.isLoggedIn)
     val authenticated: StateFlow<Boolean> = _authenticated.asStateFlow()
@@ -1311,22 +1311,25 @@ class MainViewModel(
 
     fun showMessage(message: String) { _messages.tryEmit(message) }
 
-    fun refreshToday() {
-        if (_todayRefreshing.value) return
-        _todayRefreshing.value = true
+    /**
+     * Pull-to-refresh entry point for every list screen. Runs a full sync
+     * (push the outbox, then pull changes) and keeps the M3 indicator spinning
+     * until the hub answers; failures surface as a message, success is silent.
+     */
+    fun pullRefresh() {
+        if (_pullRefreshing.value) return
+        if (!authManager.isLoggedIn) return
+        _pullRefreshing.value = true
         viewModelScope.launch {
             try {
                 when (val outcome = syncEngine.triggerSync()) {
-                    SyncOutcome.Success -> {
-                        loadTodayData()
-                        _messages.tryEmit("获取成功")
-                    }
-                    is SyncOutcome.Failure -> _messages.tryEmit("获取失败：${outcome.message}")
+                    SyncOutcome.Success -> loadTodayData()
+                    is SyncOutcome.Failure -> _messages.tryEmit("同步失败：${outcome.message}")
                 }
             } catch (error: Exception) {
-                _messages.tryEmit(error.userMessage("获取失败"))
+                _messages.tryEmit(error.userMessage("同步失败"))
             } finally {
-                _todayRefreshing.value = false
+                _pullRefreshing.value = false
             }
         }
     }

@@ -68,11 +68,10 @@ fun ExpressiveTaskCard(
             Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ExpressiveCheckbox(
-                checked = isDone,
-                onCheckedChange = { onStatusToggle(if (it) TaskStatus.DONE else TaskStatus.TODO) },
-                taskTitle = task.title,
+            TaskStatusCircle(
                 status = task.status,
+                onStatusToggle = onStatusToggle,
+                taskTitle = task.title,
             )
             Column(
                 Modifier.weight(1f).clip(TaskDockShapes.Small)
@@ -109,7 +108,90 @@ fun ExpressiveTaskCard(
     }
 }
 
-/** A calm circle with a dot for in-progress and a check for done. */
+/**
+ * The circle is the single affordance for task state. One tap advances
+ * 待开始 → 进行中 → 已完成 → 待开始 (the same contract as the web
+ * `nextTaskStatus`), and each state morphs with M3 Expressive springs.
+ */
+@Composable
+fun TaskStatusCircle(
+    status: TaskStatus,
+    onStatusToggle: (TaskStatus) -> Unit,
+    taskTitle: String,
+    modifier: Modifier = Modifier,
+) {
+    val haptics = LocalHapticFeedback.current
+    val isDone = status == TaskStatus.DONE
+    val isInProgress = status == TaskStatus.IN_PROGRESS
+    val scale by animateFloatAsState(
+        targetValue = if (isDone) 1f else 0.92f,
+        animationSpec = TaskDockMotion.springBouncy(), label = "statusCircleScale",
+    )
+    val fillColor by animateColorAsState(
+        targetValue = if (isDone) MaterialTheme.colorScheme.primary else Color.Transparent,
+        animationSpec = TaskDockMotion.springEffectsFast(), label = "statusCircleFill",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = when {
+            isDone || isInProgress -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.outline
+        },
+        animationSpec = TaskDockMotion.springEffectsFast(), label = "statusCircleBorder",
+    )
+    val dotScale by animateFloatAsState(
+        targetValue = if (isInProgress) 1f else 0f,
+        animationSpec = TaskDockMotion.springSpatialFast(), label = "statusCircleDot",
+    )
+    val checkScale by animateFloatAsState(
+        targetValue = if (isDone) 1f else 0f,
+        animationSpec = TaskDockMotion.springBouncy(), label = "statusCircleCheck",
+    )
+    Box(
+        modifier = modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = taskStatusActionLabel(status),
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onStatusToggle(nextTaskStatus(status))
+                },
+            )
+            .semantics {
+                contentDescription = "$taskTitle，状态"
+                stateDescription = taskStatusLabel(status)
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            Modifier.size(26.dp).scale(scale).clearAndSetSemantics {},
+            shape = CircleShape,
+            color = fillColor,
+            border = if (isDone) null else BorderStroke(2.dp, borderColor),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                if (isDone) {
+                    Icon(
+                        Icons.Default.Check,
+                        null,
+                        Modifier.size(18.dp).scale(checkScale),
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                    )
+                } else {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .scale(dotScale)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Binary control used by task steps: a calm circle with a check when done. */
 @Composable
 fun ExpressiveCheckbox(
     checked: Boolean,

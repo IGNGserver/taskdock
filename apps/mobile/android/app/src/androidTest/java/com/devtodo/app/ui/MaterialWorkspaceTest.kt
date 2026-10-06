@@ -42,7 +42,7 @@ class MaterialWorkspaceTest {
         )
 
     @Test
-    fun checkboxCompletesWithoutOpeningDetailAndMenuSelectsInProgress() {
+    fun statusCircleCyclesThreeStatesWithoutOpeningDetailAndMenuSelectsDirectly() {
         var selected: TaskStatus? = null
         var opens = 0
         compose.setContent {
@@ -58,9 +58,19 @@ class MaterialWorkspaceTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("检查任务，完成状态").performClick()
+        compose.onNodeWithContentDescription("检查任务，状态").performClick()
+        compose.runOnIdle {
+            assertEquals(TaskStatus.IN_PROGRESS, selected)
+            assertEquals(0, opens)
+        }
+        compose.onNodeWithContentDescription("检查任务，状态").performClick()
         compose.runOnIdle {
             assertEquals(TaskStatus.DONE, selected)
+            assertEquals(0, opens)
+        }
+        compose.onNodeWithContentDescription("检查任务，状态").performClick()
+        compose.runOnIdle {
+            assertEquals(TaskStatus.TODO, selected)
             assertEquals(0, opens)
         }
         compose.onNodeWithContentDescription("检查任务，更多操作").performClick()
@@ -183,9 +193,9 @@ class MaterialWorkspaceTest {
                 }
             }
         }
-        compose.onNode(hasContentDescription("完成状态", substring = true)).assertIsDisplayed().assertWidthIsAtLeast(48.dp)
+        compose.onNode(hasContentDescription("状态", substring = true)).assertIsDisplayed().assertWidthIsAtLeast(48.dp)
         compose.onNode(hasContentDescription("更多操作", substring = true)).assertIsDisplayed().assertWidthIsAtLeast(48.dp)
-        compose.onNode(hasContentDescription("完成状态", substring = true)).performClick()
+        compose.onNode(hasContentDescription("状态", substring = true)).performClick()
         compose.runOnIdle { assertEquals(0, opens) }
     }
 

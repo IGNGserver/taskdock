@@ -7,9 +7,11 @@ import com.devtodo.app.data.remote.ApiClientException
 import com.devtodo.app.data.remote.ApiFailureCategory
 import com.devtodo.app.data.security.SecureAuthManager
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
@@ -52,8 +54,15 @@ class SyncEngine(
     private var reconnectAttempt = 0
     private var reconnectJob: Job? = null
 
+    // Outbox mutations are recorded inside Room transactions; a sync fired from
+    // inside the transaction can read the pre-commit snapshot and find nothing
+    // to push. Observing the outbox table fires after commit, so every write is
+    // pushed immediately no matter where it was recorded.
+    private val outboxRequests = Channel<Unit>(Channel.CONFLATED)
+
     companion object {
         private const val SYNC_CURSOR_KEY = "sync_cursor"
+        private const val OUTBOX_DEBOUNCE_MS = 80L
     }
 
     private fun syncCursorKey(ownerId: String): String = "$SYNC_CURSOR_KEY:$ownerId"
@@ -78,8 +87,29 @@ class SyncEngine(
             return
         }
         connectWebSocket()
+        scope.launch { outboxSyncLoop() }
+        scope.launch { observeOutbox() }
         scope.launch {
             triggerSync()
+        }
+    }
+
+    private suspend fun outboxSyncLoop() {
+        for (request in outboxRequests) {
+            // Coalesce bursts (a capture writes task + note + placement) into a
+            // single push instead of one request per mutation.
+            delay(OUTBOX_DEBOUNCE_MS)
+            triggerSync()
+        }
+    }
+
+    private suspend fun observeOutbox() {
+        val ownerId = authManager.ownerId ?: return
+        var seen = emptySet<String>()
+        db.outboxDao().getPendingItemsFlow(ownerId).collect { pending ->
+            val ids = pending.map { it.mutationId }.toSet()
+            if ((ids - seen).isNotEmpty()) outboxRequests.trySend(Unit)
+            seen = ids
         }
     }
 
@@ -842,7 +872,8 @@ class SyncEngine(
             payloadJson = jsonPayload
         )
         db.outboxDao().insert(item)
-        scope.launch { triggerSync() }
+        // The outbox observer picks this up after the surrounding transaction
+        // commits, so callers may record mutations from inside `withTransaction`.
     }
 
     private fun jsonElement(value: Any?): JsonElement = when (value) {

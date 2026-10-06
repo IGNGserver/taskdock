@@ -40,7 +40,7 @@ fun TodayV2Screen(
     val folders by viewModel.foldersV2.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val ready by viewModel.dataReady.collectAsStateWithLifecycle()
-    val refreshing by viewModel.todayRefreshing.collectAsStateWithLifecycle()
+    val refreshing by viewModel.pullRefreshing.collectAsStateWithLifecycle()
     val timezone = settings?.timezone ?: "Asia/Shanghai"
     val today = currentLocalDate(timezone)
     val todayLabel = SimpleDateFormat("M月d日 EEEE", Locale.CHINESE).apply {
@@ -52,84 +52,82 @@ fun TodayV2Screen(
     val total = scheduled.size
     val pending = total - done
 
-    PredictiveBackContainer(enabled = onBack != null, onBack = { onBack?.invoke() }) {
-        WorkspaceScaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("今天") },
-                    navigationIcon = {
-                        if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回目录") }
-                    },
-                    actions = {
-                        IconButton(onClick = { chooseExisting = true }) { Icon(Icons.Default.Add, "从已有任务安排到今天") }
-                    },
-                )
-            },
-            bottomBar = { TaskCaptureIsland(viewModel, initialDate = today, primaryLabel = "记一件事", useCapturePreference = true) },
-        ) { padding ->
-            PullToRefreshBox(
-                isRefreshing = refreshing, onRefresh = viewModel::refreshToday,
-                modifier = Modifier.fillMaxSize().padding(padding),
-            ) {
-                LazyColumn(Modifier.fillMaxSize().testTag("today-task-list"), contentPadding = PaddingValues(bottom = 24.dp)) {
-                    item(key = "today-summary") {
-                        Surface(Modifier.fillMaxWidth().padding(16.dp), shape = TaskDockShapes.HeroShape,
-                            color = MaterialTheme.colorScheme.primaryContainer) {
-                            Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text(todayLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                Text(when {
-                                    total == 0 -> "从一件小事开始"
-                                    pending == 0 -> "今天的安排已完成"
-                                    else -> "还有 $pending 件待办"
-                                }, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                if (total > 0) {
-                                    LinearProgressIndicator(progress = { done.toFloat() / total }, modifier = Modifier.fillMaxWidth().height(6.dp),
-                                        color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f))
-                                    Text("已完成 $done / $total", style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                }
-                                TextButton(onClick = { chooseExisting = true }, contentPadding = PaddingValues(horizontal = 0.dp)) {
-                                    Text("从已有任务中挑选")
-                                }
+    WorkspaceScaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("今天") },
+                navigationIcon = {
+                    if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回目录") }
+                },
+                actions = {
+                    IconButton(onClick = { chooseExisting = true }) { Icon(Icons.Default.Add, "从已有任务安排到今天") }
+                },
+            )
+        },
+        bottomBar = { TaskCaptureIsland(viewModel, initialDate = today, primaryLabel = "记一件事", useCapturePreference = true) },
+    ) { padding ->
+        PullToRefreshBox(
+            isRefreshing = refreshing, onRefresh = viewModel::pullRefresh,
+            modifier = Modifier.fillMaxSize().padding(padding),
+        ) {
+            LazyColumn(Modifier.fillMaxSize().testTag("today-task-list"), contentPadding = PaddingValues(bottom = 24.dp)) {
+                item(key = "today-summary") {
+                    Surface(Modifier.fillMaxWidth().padding(16.dp), shape = TaskDockShapes.HeroShape,
+                        color = MaterialTheme.colorScheme.primaryContainer) {
+                        Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(todayLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text(when {
+                                total == 0 -> "从一件小事开始"
+                                pending == 0 -> "今天的安排已完成"
+                                else -> "还有 $pending 件待办"
+                            }, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            if (total > 0) {
+                                LinearProgressIndicator(progress = { done.toFloat() / total }, modifier = Modifier.fillMaxWidth().height(6.dp),
+                                    color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f))
+                                Text("已完成 $done / $total", style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                            TextButton(onClick = { chooseExisting = true }, contentPadding = PaddingValues(horizontal = 0.dp)) {
+                                Text("从已有任务中挑选")
                             }
                         }
                     }
-                    if (!ready) {
-                        item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-                    } else if (scheduled.isEmpty()) {
-                        item {
-                            EmptyState(Icons.Default.Today, "今天还没有安排", "记一件事，或从已有任务中挑选。")
-                        }
+                }
+                if (!ready) {
+                    item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                } else if (scheduled.isEmpty()) {
+                    item {
+                        EmptyState(Icons.Default.Today, "今天还没有安排", "记一件事，或从已有任务中挑选。")
                     }
-                    listOf(TaskStatus.IN_PROGRESS, TaskStatus.TODO).forEach { status ->
-                        val group = scheduled.filter { it.first.status == status }
-                        if (group.isNotEmpty()) {
-                            item(key = "heading-$status") { SectionHeading("${taskStatusLabel(status)} · ${group.size}") }
-                            itemsIndexed(group, key = { _, pair -> pair.first.id }) { index, (task, placement) ->
-                                ExpressiveTaskCard(
-                                    task, { onNavigateToDetail(task.id) }, { viewModel.updateTaskStatus(task, it) },
-                                    projectName = folderPath(task.parentFolderId, folders), showStatus = false,
-                                    actions = listOf(RowAction("从今日移除") { viewModel.removePlacement(placement) }),
-                                    rowShape = TaskDockShapes.groupedRow(index, group.size),
-                                )
-                            }
-                        }
-                    }
-                    val completed = scheduled.filter { it.first.status == TaskStatus.DONE }
-                    if (completed.isNotEmpty()) {
-                        item(key = "completed-heading") {
-                            TextButton(onClick = { showDone = !showDone }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 48.dp)) {
-                                Text("已完成 · ${completed.size}", modifier = Modifier.weight(1f))
-                                Icon(if (showDone) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    if (showDone) "收起已完成任务" else "展开已完成任务")
-                            }
-                        }
-                        if (showDone) itemsIndexed(completed, key = { _, pair -> pair.first.id }) { index, (task, placement) ->
-                            ExpressiveTaskCard(task, { onNavigateToDetail(task.id) }, { viewModel.updateTaskStatus(task, it) },
-                                showStatus = false,
+                }
+                listOf(TaskStatus.IN_PROGRESS, TaskStatus.TODO).forEach { status ->
+                    val group = scheduled.filter { it.first.status == status }
+                    if (group.isNotEmpty()) {
+                        item(key = "heading-$status") { SectionHeading("${taskStatusLabel(status)} · ${group.size}") }
+                        itemsIndexed(group, key = { _, pair -> pair.first.id }) { index, (task, placement) ->
+                            ExpressiveTaskCard(
+                                task, { onNavigateToDetail(task.id) }, { viewModel.updateTaskStatus(task, it) },
+                                projectName = folderPath(task.parentFolderId, folders), showStatus = false,
                                 actions = listOf(RowAction("从今日移除") { viewModel.removePlacement(placement) }),
-                                rowShape = TaskDockShapes.groupedRow(index, completed.size))
+                                rowShape = TaskDockShapes.groupedRow(index, group.size),
+                            )
                         }
+                    }
+                }
+                val completed = scheduled.filter { it.first.status == TaskStatus.DONE }
+                if (completed.isNotEmpty()) {
+                    item(key = "completed-heading") {
+                        TextButton(onClick = { showDone = !showDone }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 48.dp)) {
+                            Text("已完成 · ${completed.size}", modifier = Modifier.weight(1f))
+                            Icon(if (showDone) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                if (showDone) "收起已完成任务" else "展开已完成任务")
+                        }
+                    }
+                    if (showDone) itemsIndexed(completed, key = { _, pair -> pair.first.id }) { index, (task, placement) ->
+                        ExpressiveTaskCard(task, { onNavigateToDetail(task.id) }, { viewModel.updateTaskStatus(task, it) },
+                            showStatus = false,
+                            actions = listOf(RowAction("从今日移除") { viewModel.removePlacement(placement) }),
+                            rowShape = TaskDockShapes.groupedRow(index, completed.size))
                     }
                 }
             }

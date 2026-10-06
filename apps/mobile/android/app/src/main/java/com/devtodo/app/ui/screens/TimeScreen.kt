@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -51,6 +52,7 @@ fun TimeScreen(
     val placements by viewModel.activeTimePointPlacements.collectAsStateWithLifecycle()
     val tasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val refreshing by viewModel.pullRefreshing.collectAsStateWithLifecycle()
     val timezone = settings?.timezone ?: "Asia/Shanghai"
 
     val today = currentLocalDate(timezone)
@@ -79,71 +81,122 @@ fun TimeScreen(
     val dateState = rememberDatePickerState()
     val hasTodayPoint = groups.todayAndUpcoming.any { it.localDate == today }
 
-    PredictiveBackContainer(
-        enabled = onBack != null,
-        onBack = { onBack?.invoke() },
-    ) {
-        WorkspaceScaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("日程与安排") },
-                navigationIcon = {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回目录")
-                        }
+    WorkspaceScaffold(
+    topBar = {
+        TopAppBar(
+            title = { Text("日程与安排") },
+            navigationIcon = {
+                if (onBack != null) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回目录")
                     }
-                },
-                actions = {
-                    IconButton(onClick = { datePicker = true }) {
-                        Icon(Icons.Default.DateRange, "选择日期")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                )
+                }
+            },
+            actions = {
+                IconButton(onClick = { datePicker = true }) {
+                    Icon(Icons.Default.DateRange, "选择日期")
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface,
             )
-        },
-        bottomBar = {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                TaskCaptureIsland(viewModel,
-                    initialDate = if (selectedId == null) selectedDate ?: today else null,
-                    primaryLabel = "安排一件事", eventId = selectedId,
-                    eventTitle = points.find { it.id == selectedId }?.title,
-                    openRequest = captureRequest, useCapturePreference = true)
-            }
-        },
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .testTag("planner-timepoints"),
-            contentPadding = PaddingValues(bottom = 24.dp),
+        )
+    },
+    bottomBar = {
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center,
         ) {
-            if (!hasTodayPoint) {
-                item(key = "today-prompt") {
-                    TodayPlanningPrompt(timezone, today) { selectedDate = today; selectedId = null; captureRequest++ }
-                }
+            TaskCaptureIsland(viewModel,
+                initialDate = if (selectedId == null) selectedDate ?: today else null,
+                primaryLabel = "安排一件事", eventId = selectedId,
+                eventTitle = points.find { it.id == selectedId }?.title,
+                openRequest = captureRequest, useCapturePreference = true)
+        }
+    },
+    ) { padding ->
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = viewModel::pullRefresh,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding),
+    ) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("planner-timepoints"),
+        contentPadding = PaddingValues(bottom = 24.dp),
+    ) {
+        if (!hasTodayPoint) {
+            item(key = "today-prompt") {
+                TodayPlanningPrompt(timezone, today) { selectedDate = today; selectedId = null; captureRequest++ }
             }
+        }
 
-            if (groups.todayAndUpcoming.isNotEmpty()) {
-                item(key = "upcoming-heading") {
-                    SectionHeading("今天与接下来")
-                }
+        if (groups.todayAndUpcoming.isNotEmpty()) {
+            item(key = "upcoming-heading") {
+                SectionHeading("今天与接下来")
+            }
+            timePointItems(
+                points = groups.todayAndUpcoming,
+                tasksByPoint = tasksByPoint,
+                timezone = timezone,
+                today = today,
+                onAdd = {
+                    selectedId = if (it.type == TimePointType.EVENT) it.id else null
+                    selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
+                    captureRequest++
+                },
+                onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
+                onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
+                onNavigateToTree = { task ->
+                    onNavigateToTree?.invoke(task.parentFolderId, task.id)
+                },
+            )
+        }
+
+        if (groups.pastWithTasks.isNotEmpty()) {
+            item(key = "past-active-heading") {
+                SectionHeading("有任务的过往日期")
+            }
+            timePointItems(
+                points = groups.pastWithTasks,
+                tasksByPoint = tasksByPoint,
+                timezone = timezone,
+                today = today,
+                onAdd = {
+                    selectedId = if (it.type == TimePointType.EVENT) it.id else null
+                    selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
+                    captureRequest++
+                },
+                onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
+                onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
+                onNavigateToTree = { task ->
+                    onNavigateToTree?.invoke(task.parentFolderId, task.id)
+                },
+            )
+        }
+
+        if (groups.olderEmptyDates.isNotEmpty()) {
+            item(key = "older-dates-heading") {
+                OlderDatesHeader(
+                    count = groups.olderEmptyDates.size,
+                    expanded = showOlderDates,
+                    onToggle = { showOlderDates = !showOlderDates },
+                )
+            }
+            if (showOlderDates) {
                 timePointItems(
-                    points = groups.todayAndUpcoming,
+                    points = groups.olderEmptyDates,
                     tasksByPoint = tasksByPoint,
                     timezone = timezone,
                     today = today,
                     onAdd = {
-                        selectedId = if (it.type == TimePointType.EVENT) it.id else null
-                        selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
-                        captureRequest++
-                    },
+                    selectedId = if (it.type == TimePointType.EVENT) it.id else null
+                    selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
+                    captureRequest++
+                },
                     onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
                     onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
                     onNavigateToTree = { task ->
@@ -151,141 +204,92 @@ fun TimeScreen(
                     },
                 )
             }
+        }
 
-            if (groups.pastWithTasks.isNotEmpty()) {
-                item(key = "past-active-heading") {
-                    SectionHeading("有任务的过往日期")
-                }
-                timePointItems(
-                    points = groups.pastWithTasks,
-                    tasksByPoint = tasksByPoint,
-                    timezone = timezone,
-                    today = today,
-                    onAdd = {
-                        selectedId = if (it.type == TimePointType.EVENT) it.id else null
-                        selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
-                        captureRequest++
-                    },
-                    onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
-                    onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
-                    onNavigateToTree = { task ->
-                        onNavigateToTree?.invoke(task.parentFolderId, task.id)
-                    },
-                )
-            }
+        if (groups.otherDates.isNotEmpty()) {
+            item(key = "other-dates-heading") { SectionHeading("其他日期") }
+            timePointItems(
+                points = groups.otherDates,
+                tasksByPoint = tasksByPoint,
+                timezone = timezone,
+                today = today,
+                onAdd = {
+                    selectedId = if (it.type == TimePointType.EVENT) it.id else null
+                    selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
+                    captureRequest++
+                },
+                onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
+                onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
+                onNavigateToTree = { task ->
+                    onNavigateToTree?.invoke(task.parentFolderId, task.id)
+                },
+            )
+        }
 
-            if (groups.olderEmptyDates.isNotEmpty()) {
-                item(key = "older-dates-heading") {
-                    OlderDatesHeader(
-                        count = groups.olderEmptyDates.size,
-                        expanded = showOlderDates,
-                        onToggle = { showOlderDates = !showOlderDates },
-                    )
-                }
-                if (showOlderDates) {
-                    timePointItems(
-                        points = groups.olderEmptyDates,
-                        tasksByPoint = tasksByPoint,
-                        timezone = timezone,
-                        today = today,
-                        onAdd = {
-                        selectedId = if (it.type == TimePointType.EVENT) it.id else null
-                        selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
-                        captureRequest++
-                    },
-                        onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
-                        onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
-                        onNavigateToTree = { task ->
-                            onNavigateToTree?.invoke(task.parentFolderId, task.id)
-                        },
-                    )
-                }
-            }
+        if (groups.events.isNotEmpty()) {
+            item(key = "events-heading") { SectionHeading("事件里程碑") }
+            timePointItems(
+                points = groups.events,
+                tasksByPoint = tasksByPoint,
+                timezone = timezone,
+                today = today,
+                onAdd = {
+                    selectedId = if (it.type == TimePointType.EVENT) it.id else null
+                    selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
+                    captureRequest++
+                },
+                onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
+                onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
+                onNavigateToTree = { task ->
+                    onNavigateToTree?.invoke(task.parentFolderId, task.id)
+                },
+            )
+        }
 
-            if (groups.otherDates.isNotEmpty()) {
-                item(key = "other-dates-heading") { SectionHeading("其他日期") }
-                timePointItems(
-                    points = groups.otherDates,
-                    tasksByPoint = tasksByPoint,
-                    timezone = timezone,
-                    today = today,
-                    onAdd = {
-                        selectedId = if (it.type == TimePointType.EVENT) it.id else null
-                        selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
-                        captureRequest++
-                    },
-                    onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
-                    onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
-                    onNavigateToTree = { task ->
-                        onNavigateToTree?.invoke(task.parentFolderId, task.id)
-                    },
-                )
-            }
-
-            if (groups.events.isNotEmpty()) {
-                item(key = "events-heading") { SectionHeading("事件里程碑") }
-                timePointItems(
-                    points = groups.events,
-                    tasksByPoint = tasksByPoint,
-                    timezone = timezone,
-                    today = today,
-                    onAdd = {
-                        selectedId = if (it.type == TimePointType.EVENT) it.id else null
-                        selectedDate = if (it.type == TimePointType.DATE) it.localDate else null
-                        captureRequest++
-                    },
-                    onStatusToggle = { task, status -> viewModel.updateTaskStatus(task, status) },
-                    onNavigateToDetail = { onNavigateToDetail?.invoke(it.id) },
-                    onNavigateToTree = { task ->
-                        onNavigateToTree?.invoke(task.parentFolderId, task.id)
-                    },
-                )
-            }
-
-            if (points.isEmpty()) {
-                item(key = "time-empty-state") {
-                    EmptyState(
-                        icon = Icons.Default.CalendarToday,
-                        title = "日程安排空空如也",
-                        description = "选择右上角日期或通过底部操作安排任务。",
-                        action = {
-                            FilledTonalButton(
-                                onClick = { datePicker = true },
-                                shape = TaskDockShapes.FullPill,
-                            ) {
-                                Icon(Icons.Default.DateRange, null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("选择日期")
-                            }
+        if (points.isEmpty()) {
+            item(key = "time-empty-state") {
+                EmptyState(
+                    icon = Icons.Default.CalendarToday,
+                    title = "日程安排空空如也",
+                    description = "选择右上角日期或通过底部操作安排任务。",
+                    action = {
+                        FilledTonalButton(
+                            onClick = { datePicker = true },
+                            shape = TaskDockShapes.FullPill,
+                        ) {
+                            Icon(Icons.Default.DateRange, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("选择日期")
                         }
-                    )
-                }
+                    }
+                )
             }
         }
     }
+    }
+    }
 
     if (datePicker) {
-        DatePickerDialog(
-            onDismissRequest = { datePicker = false },
-            confirmButton = {
-                TextButton(
-                    enabled = dateState.selectedDateMillis != null,
-                    onClick = {
-                        selectedDate = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
-                            timeZone = TimeZone.getTimeZone("UTC")
-                        }.format(Date(dateState.selectedDateMillis!!))
-                        selectedId = null
-                        captureRequest++
-                        datePicker = false
-                    },
-                ) { Text("确认安排") }
-            },
-            dismissButton = { TextButton(onClick = { datePicker = false }) { Text("取消") } },
-        ) { DatePicker(dateState) }
+    DatePickerDialog(
+        onDismissRequest = { datePicker = false },
+        confirmButton = {
+            TextButton(
+                enabled = dateState.selectedDateMillis != null,
+                onClick = {
+                    selectedDate = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+                        timeZone = TimeZone.getTimeZone("UTC")
+                    }.format(Date(dateState.selectedDateMillis!!))
+                    selectedId = null
+                    captureRequest++
+                    datePicker = false
+                },
+            ) { Text("确认安排") }
+        },
+        dismissButton = { TextButton(onClick = { datePicker = false }) { Text("取消") } },
+    ) { DatePicker(dateState) }
     }
 
 
-    }
 }
 
 @Composable

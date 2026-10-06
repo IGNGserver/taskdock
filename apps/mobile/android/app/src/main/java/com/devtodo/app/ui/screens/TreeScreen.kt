@@ -1,14 +1,11 @@
 package com.devtodo.app.ui.screens
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -17,15 +14,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
@@ -42,85 +37,110 @@ import com.devtodo.app.ui.components.*
 import com.devtodo.app.ui.navigation.Screen
 import com.devtodo.app.ui.theme.TaskDockMotion
 import com.devtodo.app.ui.theme.TaskDockShapes
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 /**
- * Directory-first home with compact daily navigation, grouped rows and contextual capture.
- * Each directory keeps its scroll position and draft when navigating back.
+ * A single directory page. Every folder is a navigation destination, so opening
+ * a folder and swiping back run through Navigation Compose's predictive back
+ * with the same M3 Expressive transitions as the rest of the app.
+ *
+ * Status edits paint the row in place: the circle answers the tap immediately,
+ * but the row keeps the group and order it had when the directory was opened.
+ * The pins are released when the user re-enters the directory (a new route
+ * entry) or performs a structural edit such as moving or deleting a row.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TreeScreen(
     viewModel: MainViewModel,
     onNavigateToDetail: (String) -> Unit,
-    initialFolderId: String? = null,
+    folderId: String? = null,
+    onOpenFolder: (String) -> Unit = {},
+    onBack: (() -> Unit)? = null,
     highlightedTaskId: String? = null,
     locateRequest: Int = 0,
     onNavigateToShortcut: (String) -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onOpenSearch: () -> Unit = {},
 ) {
-    var currentFolderId by rememberSaveable { mutableStateOf<String?>(initialFolderId) }
     val allFolders by viewModel.foldersV2.collectAsStateWithLifecycle()
     val allTasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
     val todayTasks by viewModel.todayTasks.collectAsStateWithLifecycle()
+    val refreshing by viewModel.pullRefreshing.collectAsStateWithLifecycle()
 
     val folders = allFolders.filter {
-        it.parentFolderId == currentFolderId && it.archivedAt == null && it.deletedAt == null
+        it.parentFolderId == folderId && it.archivedAt == null && it.deletedAt == null
     }
     val tasks = allTasks.filter {
-        it.parentFolderId == currentFolderId && it.archivedAt == null && it.deletedAt == null
+        it.parentFolderId == folderId && it.archivedAt == null && it.deletedAt == null
     }
 
-    val listStateHolder = rememberSaveableStateHolder()
-    var handledLocateRequest by rememberSaveable { mutableStateOf(0) }
+    // `groupPins` remembers the status a row was loaded with so it stays in its
+    // group; `statusOverrides` is what the circle paints right now. Both mirror
+    // the web directory (`groupPins` / `statusOverrides` in TreePage.tsx).
+    val statusOverrides = remember { mutableStateMapOf<String, TaskStatus>() }
+    val groupPins = remember { mutableStateMapOf<String, TaskStatus>() }
+    var orderLock by remember { mutableStateOf<List<String>?>(null) }
 
-    LaunchedEffect(locateRequest) {
-        if (locateRequest > handledLocateRequest) {
-            currentFolderId = initialFolderId
-            handledLocateRequest = locateRequest
-        }
+    fun groupingStatus(row: TreeRow): TaskStatus = treeGroupingStatus(row, groupPins)
+
+    fun displayTask(row: TreeRow): TaskEntity? =
+        row.task?.let { task -> statusOverrides[task.id]?.let { task.copy(status = it) } ?: task }
+
+    fun releasePins() {
+        statusOverrides.clear()
+        groupPins.clear()
+        orderLock = null
     }
 
-    PredictiveBackContainer(
-        enabled = currentFolderId != null,
-        onBack = {
-            currentFolderId = allFolders.find { it.id == currentFolderId }?.parentFolderId
-        },
-    ) {
-        var showFolderDialog by rememberSaveable { mutableStateOf(false) }
-        var pendingPreview by remember { mutableStateOf<DeletePreviewDto?>(null) }
-        var pendingDeleteFolder by remember { mutableStateOf<FolderEntity?>(null) }
-        var pendingMoveRow by remember { mutableStateOf<TreeRow?>(null) }
-        val scope = rememberCoroutineScope()
+    val baseRows = remember(folders, tasks, allFolders, allTasks) {
+        buildTreeRows(folders, tasks, allFolders, allTasks)
+    }
+    // While a status edit is pending the locked order wins, so a background sync
+    // that follows the edit cannot slide the row to a new position. Rows that
+    // appeared after the lock was taken are appended rather than dropped.
+    val rows = remember(baseRows, orderLock, statusOverrides.toMap(), groupPins.toMap()) {
+        resolveTreeRows(baseRows, groupPins, orderLock)
+    }
 
-        val rows = remember(folders, tasks, allFolders, allTasks) {
-            buildTreeRows(folders, tasks, allFolders, allTasks)
-        }
+    fun changeStatus(row: TreeRow, nextStatus: TaskStatus) {
+        val task = row.task ?: return
+        if (orderLock == null) orderLock = rows.map { "${it.kind}:${it.id}" }
+        statusOverrides[task.id] = nextStatus
+        if (task.id !in groupPins) groupPins[task.id] = row.status
+        viewModel.updateTaskStatus(task, nextStatus)
+    }
 
-        fun moveAdjacent(row: TreeRow, direction: Int) {
-            val siblings = rows.filter { it.status == row.status }
-            val index = siblings.indexOfFirst { it.id == row.id }
-            val target = siblings.getOrNull(index + direction) ?: return
-            viewModel.moveTreeV2(
-                kind = row.kind,
-                id = row.id,
-                parentFolderId = currentFolderId,
-                expectedStatus = row.status,
-                beforeId = if (direction < 0) target.id else null,
-                afterId = if (direction > 0) target.id else null,
-                baseVersion = row.version,
-            )
-        }
+    fun moveAdjacent(row: TreeRow, direction: Int) {
+        val status = groupingStatus(row)
+        val siblings = rows.filter { groupingStatus(it) == status }
+        val index = siblings.indexOfFirst { it.id == row.id }
+        val target = siblings.getOrNull(index + direction) ?: return
+        releasePins()
+        viewModel.moveTreeV2(
+            kind = row.kind,
+            id = row.id,
+            parentFolderId = folderId,
+            expectedStatus = row.status,
+            beforeId = if (direction < 0) target.id else null,
+            afterId = if (direction > 0) target.id else null,
+            baseVersion = row.version,
+        )
+    }
 
-        WorkspaceScaffold(
-            topBar = {
+    var showFolderDialog by rememberSaveable { mutableStateOf(false) }
+    var pendingPreview by remember { mutableStateOf<DeletePreviewDto?>(null) }
+    var pendingDeleteFolder by remember { mutableStateOf<FolderEntity?>(null) }
+    var pendingMoveRow by remember { mutableStateOf<TreeRow?>(null) }
+    val scope = rememberCoroutineScope()
+
+    WorkspaceScaffold(
+        topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = currentFolderId?.let { folderTitle(it, allFolders) } ?: "TaskDock",
-                        style = if (currentFolderId == null) {
+                        text = folderId?.let { folderTitle(it, allFolders) } ?: "TaskDock",
+                        style = if (folderId == null) {
                             MaterialTheme.typography.headlineSmall
                         } else {
                             MaterialTheme.typography.titleLarge
@@ -130,18 +150,18 @@ fun TreeScreen(
                     )
                 },
                 navigationIcon = {
-                    if (currentFolderId != null) {
-                        IconButton(
-                            onClick = {
-                                currentFolderId = allFolders.find { it.id == currentFolderId }?.parentFolderId
-                            }
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回上级目录", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                "返回上级目录",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 },
                 actions = {
-                    if (currentFolderId == null) {
+                    if (folderId == null) {
                         IconButton(
                             onClick = onOpenSearch,
                             modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
@@ -176,36 +196,45 @@ fun TreeScreen(
                     .testTag("tree-create-bar"),
                 contentAlignment = Alignment.Center,
             ) {
-                TaskCaptureIsland(viewModel, initialFolderId = currentFolderId)
+                TaskCaptureIsland(viewModel, initialFolderId = folderId)
             }
         },
     ) { padding ->
-        listStateHolder.SaveableStateProvider(currentFolderId ?: "root-directory") {
-            val listState = rememberLazyListState()
-            var showCompleted by rememberSaveable { mutableStateOf(false) }
-            val visibleRows = rows.filter { it.folder != null || it.status != TaskStatus.DONE || showCompleted }
-            val completedCount = rows.count { it.task?.status == TaskStatus.DONE }
+        val listState = rememberLazyListState()
+        var showCompleted by rememberSaveable { mutableStateOf(false) }
+        val visibleRows = rows.filter {
+            it.folder != null || groupingStatus(it) != TaskStatus.DONE || showCompleted
+        }
+        val completedCount = rows.count {
+            it.task != null && groupingStatus(it) == TaskStatus.DONE
+        }
 
-            LaunchedEffect(highlightedTaskId, rows, locateRequest) {
-                val index = rows.indexOfFirst { it.id == highlightedTaskId }
-                if (index >= 0) {
-                    if (rows[index].task?.status == TaskStatus.DONE) {
-                        showCompleted = true
-                        withFrameNanos { }
-                    }
-                    listState.animateScrollToItem(index + if (currentFolderId == null) 2 else 1)
+        LaunchedEffect(highlightedTaskId, rows, locateRequest) {
+            val index = rows.indexOfFirst { it.id == highlightedTaskId }
+            if (index >= 0) {
+                if (rows[index].task != null && groupingStatus(rows[index]) == TaskStatus.DONE) {
+                    showCompleted = true
+                    withFrameNanos { }
                 }
+                listState.animateScrollToItem(index + if (folderId == null) 2 else 1)
             }
+        }
 
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = viewModel::pullRefresh,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+        ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
                     .testTag("directory-tree-list"),
                 state = listState,
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
-                if (currentFolderId == null) {
+                if (folderId == null) {
                     // Expressive Smart View Dashboard
                     item(key = "expressive-smart-dashboard") {
                         ExpressiveSmartDashboard(
@@ -235,7 +264,8 @@ fun TreeScreen(
 
                 // Directory rows
                 itemsIndexed(rows, key = { _, row -> "${row.kind}:${row.id}" }) { rowIndex, row ->
-                    val siblings = rows.filter { it.status == row.status }
+                    val status = groupingStatus(row)
+                    val siblings = rows.filter { groupingStatus(it) == status }
                     val index = siblings.indexOfFirst { it.id == row.id }
                     val actions = listOf(
                         RowAction("上移", enabled = index > 0) { moveAdjacent(row, -1) },
@@ -244,44 +274,50 @@ fun TreeScreen(
                     )
 
                     AnimatedVisibility(
-                        visible = row.folder != null || row.status != TaskStatus.DONE || showCompleted,
+                        visible = row.folder != null || status != TaskStatus.DONE || showCompleted,
                         modifier = Modifier.animateItem(),
                         enter = fadeIn(TaskDockMotion.springEffectsFast()) + expandVertically(TaskDockMotion.springSpatial()),
                         exit = fadeOut(TaskDockMotion.springEffectsFast()) + shrinkVertically(TaskDockMotion.springSpatial()),
                     ) {
-                    Column {
-                        val startsStatusGroup = rowIndex == 0 || rows[rowIndex - 1].status != row.status
-                        if (currentFolderId != null && startsStatusGroup) {
-                            SectionHeading("${taskStatusLabel(row.status)} · ${siblings.size}")
-                        }
+                        Column {
+                            val startsStatusGroup = rowIndex == 0 || groupingStatus(rows[rowIndex - 1]) != status
+                            if (folderId != null && startsStatusGroup) {
+                                SectionHeading("${taskStatusLabel(status)} · ${siblings.size}")
+                            }
 
-                        if (row.folder != null) {
-                            val folder = row.folder
+                            if (row.folder != null) {
+                                val folder = row.folder
 
-                            ExpressiveFolderCard(
-                                folder = folder,
-                                itemCount = row.taskCount,
-                                onClick = { currentFolderId = folder.id },
-                                actions = actions + RowAction("归档或删除", destructive = true) {
-                                    pendingDeleteFolder = folder
-                                },
-                                rowShape = TaskDockShapes.groupedRow(visibleRows.indexOfFirst { it.id == row.id }.coerceAtLeast(0), visibleRows.size),
-                                modifier = Modifier.testTag("tree-row-${row.id}"),
-                            )
-                        } else {
-                            val task = row.task!!
-                            ExpressiveTaskCard(
-                                task = task,
-                                onClick = { onNavigateToDetail(task.id) },
-                                onStatusToggle = { viewModel.updateTaskStatus(task, it) },
-                                actions = actions,
-                                showStatus = currentFolderId == null,
-                                highlighted = task.id == highlightedTaskId,
-                                rowShape = TaskDockShapes.groupedRow(visibleRows.indexOfFirst { it.id == row.id }.coerceAtLeast(0), visibleRows.size),
-                                modifier = Modifier.testTag("tree-row-${row.id}"),
-                            )
+                                ExpressiveFolderCard(
+                                    folder = folder,
+                                    itemCount = row.taskCount,
+                                    onClick = { onOpenFolder(folder.id) },
+                                    actions = actions + RowAction("归档或删除", destructive = true) {
+                                        pendingDeleteFolder = folder
+                                    },
+                                    rowShape = TaskDockShapes.groupedRow(
+                                        visibleRows.indexOfFirst { it.id == row.id }.coerceAtLeast(0),
+                                        visibleRows.size,
+                                    ),
+                                    modifier = Modifier.testTag("tree-row-${row.id}"),
+                                )
+                            } else {
+                                val task = displayTask(row)!!
+                                ExpressiveTaskCard(
+                                    task = task,
+                                    onClick = { onNavigateToDetail(task.id) },
+                                    onStatusToggle = { changeStatus(row, it) },
+                                    actions = actions,
+                                    showStatus = folderId == null,
+                                    highlighted = task.id == highlightedTaskId,
+                                    rowShape = TaskDockShapes.groupedRow(
+                                        visibleRows.indexOfFirst { it.id == row.id }.coerceAtLeast(0),
+                                        visibleRows.size,
+                                    ),
+                                    modifier = Modifier.testTag("tree-row-${row.id}"),
+                                )
+                            }
                         }
-                    }
                     }
                 }
                 if (completedCount > 0) {
@@ -298,12 +334,12 @@ fun TreeScreen(
                     item {
                         EmptyState(
                             icon = Icons.Default.Folder,
-                            title = if (currentFolderId == null) "目录为空" else "当前目录暂无任务",
-                            description = if (currentFolderId == null)
+                            title = if (folderId == null) "目录为空" else "当前目录暂无任务",
+                            description = if (folderId == null)
                                 "点下方“记一件事”开始，或先建一个目录。"
                             else "点下方“记一件事”，任务会保存在这个目录。",
                             action = {
-                                if (currentFolderId == null) {
+                                if (folderId == null) {
                                     FilledTonalButton(
                                         onClick = { showFolderDialog = true },
                                         shape = TaskDockShapes.FullPill,
@@ -323,7 +359,8 @@ fun TreeScreen(
 
     if (showFolderDialog) {
         CaptureSheet("新建文件夹", "文件夹名称", onDismiss = { showFolderDialog = false }) {
-            viewModel.createFolderV2(currentFolderId, it)
+            releasePins()
+            viewModel.createFolderV2(folderId, it)
         }
     }
 
@@ -336,6 +373,7 @@ fun TreeScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(
                         onClick = {
+                            releasePins()
                             viewModel.archiveFolderV2(folder)
                             pendingDeleteFolder = null
                         }
@@ -421,6 +459,7 @@ fun TreeScreen(
                 ) {
                     TextButton(
                         onClick = {
+                            releasePins()
                             viewModel.moveTreeV2(
                                 row.kind,
                                 row.id,
@@ -437,6 +476,7 @@ fun TreeScreen(
                     targets.forEach { target ->
                         TextButton(
                             onClick = {
+                                releasePins()
                                 viewModel.moveTreeV2(
                                     row.kind,
                                     row.id,
@@ -455,7 +495,6 @@ fun TreeScreen(
             },
             confirmButton = { TextButton(onClick = { pendingMoveRow = null }) { Text("取消") } },
         )
-    }
     }
 }
 
@@ -616,7 +655,7 @@ private fun DirectoryOverview(
 private fun folderTitle(id: String, folders: List<FolderEntity>): String =
     folders.find { it.id == id }?.title ?: "目录"
 
-private data class TreeRow(
+internal data class TreeRow(
     val kind: String,
     val id: String,
     val folder: FolderEntity? = null,
@@ -626,6 +665,42 @@ private data class TreeRow(
     val rank: String,
     val taskCount: Int = 0,
 )
+
+/**
+ * The group a row is drawn in. A task the user just re-statused keeps the
+ * status the directory was loaded with, so it only changes group on the next
+ * visit (the web directory pins rows the same way).
+ */
+internal fun treeGroupingStatus(row: TreeRow, groupPins: Map<String, TaskStatus>): TaskStatus =
+    if (row.kind == "FOLDER") row.status else groupPins[row.id] ?: row.status
+
+/**
+ * Rows in draw order: default grouping by status then rank, unless an order
+ * lock taken before a status edit is still holding the previous slots. Rows
+ * that appeared after the lock are appended rather than dropped.
+ */
+internal fun resolveTreeRows(
+    baseRows: List<TreeRow>,
+    groupPins: Map<String, TaskStatus>,
+    orderLock: List<String>?,
+): List<TreeRow> {
+    fun rowKey(row: TreeRow) = "${row.kind}:${row.id}"
+    val defaultRows = baseRows.sortedWith(
+        compareBy<TreeRow>(
+            { statusOrder(treeGroupingStatus(it, groupPins)) },
+            { it.rank.toLongOrNull() ?: 0L },
+            { if (it.kind == "FOLDER") 0 else 1 },
+            { it.id },
+        )
+    )
+    if (orderLock == null) return defaultRows
+    val lockIndex = orderLock.withIndex().associate { (index, key) -> key to index }
+    val held = baseRows
+        .filter { rowKey(it) in lockIndex }
+        .sortedBy { lockIndex[rowKey(it)] ?: Int.MAX_VALUE }
+    val added = defaultRows.filter { rowKey(it) !in lockIndex }
+    return held + added
+}
 
 private fun buildTreeRows(
     folders: List<FolderEntity>,
@@ -657,14 +732,7 @@ private fun buildTreeRows(
                 rank = task.rank,
             )
         }
-    return (folderRows + taskRows).sortedWith(
-        compareBy<TreeRow>(
-            { statusOrder(it.status) },
-            { it.rank.toLongOrNull() ?: 0L },
-            { if (it.kind == "FOLDER") 0 else 1 },
-            { it.id },
-        )
-    )
+    return folderRows + taskRows
 }
 
 private fun aggregateFor(
@@ -724,6 +792,7 @@ fun AllTasksV2Screen(
     onBack: () -> Unit = {},
 ) {
     val tasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
+    val refreshing by viewModel.pullRefreshing.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf<String?>(null) }
     val activeTasks = tasks.filter { it.archivedAt == null && it.deletedAt == null }
@@ -736,109 +805,111 @@ fun AllTasksV2Screen(
                 it.referenceId?.contains(normalizedQuery, ignoreCase = true) == true)
     }
 
-    PredictiveBackContainer(
-        enabled = true,
-        onBack = onBack,
-    ) {
-        WorkspaceScaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("全部任务", fontWeight = FontWeight.Medium) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    )
+    WorkspaceScaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("全部任务", fontWeight = FontWeight.Medium) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
                 )
-            },
-        ) { padding ->
-            Column(Modifier.fillMaxSize().padding(padding)) {
-                // Expressive Search & Filter Header
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = TaskDockShapes.LargeIncreased,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+            )
+        },
+    ) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            // Expressive Search & Filter Header
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                shape = TaskDockShapes.LargeIncreased,
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        OutlinedTextField(
-                            value = query,
-                            onValueChange = { query = it },
-                            label = { Text("搜索任务") },
-                            placeholder = { Text("标题或引用编号") },
-                            singleLine = true,
-                            leadingIcon = { Icon(Icons.Default.Search, null) },
-                            trailingIcon = {
-                                if (query.isNotEmpty()) {
-                                    IconButton(onClick = { query = "" }) {
-                                        Icon(Icons.Default.Close, "清除搜索")
-                                    }
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        label = { Text("搜索任务") },
+                        placeholder = { Text("标题或引用编号") },
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Default.Search, null) },
+                        trailingIcon = {
+                            if (query.isNotEmpty()) {
+                                IconButton(onClick = { query = "" }) {
+                                    Icon(Icons.Default.Close, "清除搜索")
                                 }
-                            },
-                            shape = TaskDockShapes.FullPill,
-                            modifier = Modifier.fillMaxWidth().testTag("all-task-search"),
-                        )
+                            }
+                        },
+                        shape = TaskDockShapes.FullPill,
+                        modifier = Modifier.fillMaxWidth().testTag("all-task-search"),
+                    )
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilterChip(
+                            selected = filter == null,
+                            onClick = { filter = null },
+                            label = { Text("全部 (${activeTasks.size})") },
+                            shape = TaskDockShapes.FullPill,
+                        )
+                        TaskStatus.entries.forEach { status ->
+                            val count = activeTasks.count { it.status == status }
                             FilterChip(
-                                selected = filter == null,
-                                onClick = { filter = null },
-                                label = { Text("全部 (${activeTasks.size})") },
+                                selected = filter == status.name,
+                                onClick = { filter = status.name },
+                                label = { Text("${taskStatusLabel(status)} ($count)") },
                                 shape = TaskDockShapes.FullPill,
                             )
-                            TaskStatus.entries.forEach { status ->
-                                val count = activeTasks.count { it.status == status }
-                                FilterChip(
-                                    selected = filter == status.name,
-                                    onClick = { filter = status.name },
-                                    label = { Text("${taskStatusLabel(status)} ($count)") },
-                                    shape = TaskDockShapes.FullPill,
-                                )
-                            }
                         }
                     }
                 }
+            }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = when {
-                            normalizedQuery.isNotEmpty() -> "搜索结果"
-                            filter != null -> "${taskStatusLabel(TaskStatus.valueOf(filter!!))}任务"
-                            else -> "任务列表"
-                        },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = "${visible.size} 项",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = when {
+                        normalizedQuery.isNotEmpty() -> "搜索结果"
+                        filter != null -> "${taskStatusLabel(TaskStatus.valueOf(filter!!))}任务"
+                        else -> "任务列表"
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "${visible.size} 项",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = viewModel::pullRefresh,
+                modifier = Modifier
+                    .weight(1f)
+                    .imePadding(),
+            ) {
                 LazyColumn(
                     modifier = Modifier
-                        .weight(1f)
-                        .imePadding()
+                        .fillMaxSize()
                         .testTag("all-tasks-list"),
                     state = listState,
                     contentPadding = PaddingValues(bottom = 24.dp),

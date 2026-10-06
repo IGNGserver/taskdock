@@ -1,25 +1,24 @@
 package com.devtodo.app.ui
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import com.devtodo.app.ui.components.taskStatusLabel
 import com.devtodo.app.ui.navigation.Screen
 import com.devtodo.app.ui.screens.*
 import com.devtodo.app.ui.theme.TaskDockMotion
-import com.devtodo.app.ui.components.taskStatusLabel
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun TaskDockApp(
@@ -30,7 +29,6 @@ fun TaskDockApp(
     val currentRoute = backStack?.destination?.route
     val loggedIn by viewModel.authenticated.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    var locateFolder by rememberSaveable { mutableStateOf<String?>(null) }
     var locateTask by rememberSaveable { mutableStateOf<String?>(null) }
     var locateRequest by rememberSaveable { mutableIntStateOf(0) }
 
@@ -52,20 +50,31 @@ fun TaskDockApp(
         }
     }
 
+    /** Root-first ancestor chain of a folder, so locate rebuilds the real hierarchy. */
+    fun folderChain(folderId: String): List<String> {
+        val folders = viewModel.foldersV2.value
+        val chain = ArrayDeque<String>()
+        var current = folders.find { it.id == folderId }
+        while (current != null) {
+            chain.addFirst(current.id)
+            current = current.parentFolderId?.let { parent -> folders.find { it.id == parent } }
+        }
+        return chain.toList()
+    }
+
     fun locate(folder: String?, task: String?) {
-        locateFolder = folder
         locateTask = task
         locateRequest++
         if (!navController.popBackStack(Screen.Tree.route, inclusive = false)) {
-            val routeToReplace = currentRoute
-            if (routeToReplace == null) {
-                navController.navigate(Screen.Tree.route) { launchSingleTop = true }
-            } else {
-                navController.navigate(Screen.Tree.route) {
-                    popUpTo(routeToReplace) { inclusive = true }
-                    launchSingleTop = true
-                }
-            }
+            navController.navigate(Screen.Tree.route) { launchSingleTop = true }
+        }
+        // Push every ancestor so swiping back walks the hierarchy folder by
+        // folder instead of dropping the user at the root.
+        val chain = folder?.let { folderChain(it) }.orEmpty().ifEmpty {
+            listOfNotNull(folder)
+        }
+        chain.forEach { id ->
+            navController.navigate(Screen.TreeFolder.createRoute(id)) { launchSingleTop = true }
         }
     }
 
@@ -115,27 +124,36 @@ fun TaskDockApp(
                     .fillMaxSize()
                     .padding(padding)
                     .consumeWindowInsets(padding),
-                // Material 3 Expressive Spring Motion Physics transitions
+                // Material 3 Expressive motion. Forward navigation is a shared
+                // axis slide + fade; the back stack uses the M3 full-screen
+                // surface spec (exit 100% -> 90%, enter 110% -> 100%), which
+                // Navigation Compose 2.8 also drives directly from the
+                // predictive back gesture.
                 enterTransition = {
-                    fadeIn(
-                        animationSpec = TaskDockMotion.springEffectsFast()
-                    ) + slideInHorizontally(
+                    slideInHorizontally(
                         animationSpec = TaskDockMotion.springSpatial(),
-                        initialOffsetX = { fullWidth -> (fullWidth * 0.15f).toInt() }
-                    )
+                        initialOffsetX = { fullWidth -> (fullWidth * 0.3f).toInt() },
+                    ) + fadeIn(animationSpec = TaskDockMotion.springEffects())
                 },
                 exitTransition = {
-                    fadeOut(animationSpec = TaskDockMotion.springEffectsFast())
+                    slideOutHorizontally(
+                        animationSpec = TaskDockMotion.springSpatial(),
+                        targetOffsetX = { fullWidth -> -(fullWidth * 0.3f).toInt() },
+                    ) + fadeOut(animationSpec = TaskDockMotion.springEffects())
                 },
                 popEnterTransition = {
-                    fadeIn(animationSpec = TaskDockMotion.springEffectsFast())
+                    scaleIn(
+                        animationSpec = TaskDockMotion.springSpatial(),
+                        initialScale = 1.1f,
+                        transformOrigin = TransformOrigin.Center,
+                    ) + fadeIn(animationSpec = TaskDockMotion.springEffects())
                 },
                 popExitTransition = {
-                    fadeOut(animationSpec = TaskDockMotion.springEffectsFast()) +
-                        slideOutHorizontally(
-                            animationSpec = TaskDockMotion.springSpatial(),
-                            targetOffsetX = { fullWidth -> (fullWidth * 0.15f).toInt() }
-                        )
+                    scaleOut(
+                        animationSpec = TaskDockMotion.springSpatial(),
+                        targetScale = 0.9f,
+                        transformOrigin = TransformOrigin.Center,
+                    ) + fadeOut(animationSpec = TaskDockMotion.springEffects())
                 },
             ) {
                 composable(Screen.Login.route) {
@@ -151,12 +169,36 @@ fun TaskDockApp(
                         onNavigateToDetail = { taskId ->
                             navController.navigate(Screen.TaskDetail.createRoute(taskId))
                         },
-                        initialFolderId = locateFolder,
+                        folderId = null,
+                        onOpenFolder = { folderId ->
+                            navController.navigate(Screen.TreeFolder.createRoute(folderId))
+                        },
+                        onBack = null,
                         highlightedTaskId = locateTask,
                         locateRequest = locateRequest,
                         onNavigateToShortcut = ::navigateShortcut,
                         onOpenSettings = { navigateShortcut(Screen.More.route) },
                         onOpenSearch = { navigateShortcut(Screen.AllTasks.route) },
+                    )
+                }
+
+                composable(
+                    route = Screen.TreeFolder.route,
+                    arguments = listOf(navArgument("folderId") { type = NavType.StringType }),
+                ) { backStackEntry ->
+                    val folderId = backStackEntry.arguments?.getString("folderId") ?: return@composable
+                    TreeScreen(
+                        viewModel = viewModel,
+                        onNavigateToDetail = { taskId ->
+                            navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                        },
+                        folderId = folderId,
+                        onOpenFolder = { childId ->
+                            navController.navigate(Screen.TreeFolder.createRoute(childId))
+                        },
+                        onBack = { navController.popBackStack() },
+                        highlightedTaskId = locateTask,
+                        locateRequest = locateRequest,
                     )
                 }
 
