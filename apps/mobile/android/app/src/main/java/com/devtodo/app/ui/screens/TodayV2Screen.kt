@@ -1,5 +1,7 @@
 package com.devtodo.app.ui.screens
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.devtodo.app.data.local.TaskEntity
 import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.ui.components.*
+import com.devtodo.app.ui.theme.TaskDockMotion
 import com.devtodo.app.ui.theme.TaskDockShapes
 import java.text.SimpleDateFormat
 import java.util.*
@@ -51,6 +54,11 @@ fun TodayV2Screen(
     val done = scheduled.count { it.first.status == TaskStatus.DONE }
     val total = scheduled.size
     val pending = total - done
+    val progress by animateFloatAsState(
+        targetValue = if (total == 0) 0f else done.toFloat() / total,
+        animationSpec = TaskDockMotion.springEffects(),
+        label = "todayProgress",
+    )
 
     WorkspaceScaffold(
         topBar = {
@@ -72,7 +80,10 @@ fun TodayV2Screen(
         ) {
             LazyColumn(Modifier.fillMaxSize().testTag("today-task-list"), contentPadding = PaddingValues(bottom = 24.dp)) {
                 item(key = "today-summary") {
-                    Surface(Modifier.fillMaxWidth().padding(16.dp), shape = TaskDockShapes.HeroShape,
+                    Surface(
+                        Modifier.fillMaxWidth().padding(16.dp)
+                            .animateContentSize(animationSpec = TaskDockMotion.springSpatial()),
+                        shape = TaskDockShapes.HeroShape,
                         color = MaterialTheme.colorScheme.primaryContainer) {
                         Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(todayLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
@@ -82,7 +93,7 @@ fun TodayV2Screen(
                                 else -> "还有 $pending 件待办"
                             }, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                             if (total > 0) {
-                                LinearProgressIndicator(progress = { done.toFloat() / total }, modifier = Modifier.fillMaxWidth().height(6.dp),
+                                LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(6.dp),
                                     color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f))
                                 Text("已完成 $done / $total", style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer)
@@ -110,6 +121,7 @@ fun TodayV2Screen(
                                 projectName = folderPath(task.parentFolderId, folders), showStatus = false,
                                 actions = listOf(RowAction("从今日移除") { viewModel.removePlacement(placement) }),
                                 rowShape = TaskDockShapes.groupedRow(index, group.size),
+                                modifier = Modifier.animateItem(),
                             )
                         }
                     }
@@ -123,11 +135,27 @@ fun TodayV2Screen(
                                 if (showDone) "收起已完成任务" else "展开已完成任务")
                         }
                     }
-                    if (showDone) itemsIndexed(completed, key = { _, pair -> pair.first.id }) { index, (task, placement) ->
-                        ExpressiveTaskCard(task, { onNavigateToDetail(task.id) }, { viewModel.updateTaskStatus(task, it) },
-                            showStatus = false,
-                            actions = listOf(RowAction("从今日移除") { viewModel.removePlacement(placement) }),
-                            rowShape = TaskDockShapes.groupedRow(index, completed.size))
+                    item(key = "completed-content") {
+                        AnimatedVisibility(
+                            visible = showDone,
+                            enter = fadeIn(TaskDockMotion.springEffectsFast()) +
+                                expandVertically(TaskDockMotion.springSpatial()),
+                            exit = fadeOut(TaskDockMotion.springEffectsFast()) +
+                                shrinkVertically(TaskDockMotion.springSpatial()),
+                        ) {
+                            Column {
+                                completed.forEachIndexed { index, (task, placement) ->
+                                    ExpressiveTaskCard(
+                                        task,
+                                        { onNavigateToDetail(task.id) },
+                                        { viewModel.updateTaskStatus(task, it) },
+                                        showStatus = false,
+                                        actions = listOf(RowAction("从今日移除") { viewModel.removePlacement(placement) }),
+                                        rowShape = TaskDockShapes.groupedRow(index, completed.size),
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -169,7 +197,7 @@ private fun ExistingTaskPicker(
                     TextButton(enabled = !saving, onClick = {
                         saving = true; error = null
                         onChoose(task) { saving = false; error = it }
-                    }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                    }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).animateItem()) {
                         Text(task.title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                         Icon(Icons.Default.Add, null, Modifier.size(20.dp))
                     }

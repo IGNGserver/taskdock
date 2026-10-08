@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="taskdock_background">#F5F2F9</color>
+    <color name="taskdock_background">#F5F6F0</color>
     <color name="taskdock_brand_background">#1E2F48</color>
+    <color name="taskdock_launch_mark">#48613C</color>
 </resources>

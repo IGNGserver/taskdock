@@ -25,7 +25,18 @@ class MainActivity : ComponentActivity() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
+        splashScreen.setOnExitAnimationListener { splashScreenView ->
+            // Android owns the launch surface; only soften the hand-off to the
+            // first Compose frame. The full brand artwork is intentionally not
+            // part of this transition.
+            splashScreenView.view
+                .animate()
+                .alpha(0f)
+                .setDuration(160L)
+                .withEndAction { splashScreenView.remove() }
+                .start()
+        }
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         registerNetworkCallback()

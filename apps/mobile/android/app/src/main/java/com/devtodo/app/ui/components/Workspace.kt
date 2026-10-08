@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.devtodo.app.ui.theme.TaskDockShapes
+import com.devtodo.app.ui.theme.TaskDockSpacing
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -54,7 +55,12 @@ fun WorkspaceScaffold(
 fun SectionHeading(title: String, modifier: Modifier = Modifier) {
     Text(
         title,
-        modifier.padding(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 8.dp)
+        modifier.padding(
+                start = TaskDockSpacing.Page,
+                top = TaskDockSpacing.Section,
+                end = TaskDockSpacing.Page,
+                bottom = TaskDockSpacing.Compact,
+            )
             .semantics { heading() },
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.onSurface,

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="@color/taskdock_launch_mark"
+        android:pathData="M39,40 C36,40 34,42 34,45 L34,66 C34,69 36,71 39,71 L70,71 C73,71 75,69 75,66 L75,48 C75,45 73,44 70,44 L52,44 C50,44 50,43 49,42 C48,40 47,40 45,40 Z" />
+    <path
+        android:fillColor="@color/taskdock_launch_mark"
+        android:pathData="M35,47 C32,47 31,50 33,52 L43,66 C47,70 50,70 53,66 L79,40 C82,37 81,33 78,33 C76,33 75,34 74,35 L49,60 Q48,61 47,60 L39,49 Q37,47 35,47 Z" />
+</vector>

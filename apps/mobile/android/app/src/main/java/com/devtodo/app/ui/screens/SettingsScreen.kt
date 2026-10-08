@@ -1,7 +1,7 @@
 package com.devtodo.app.ui.screens
 
 import android.os.Build
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -129,7 +129,13 @@ fun SettingsScreen(
                 queue = !queue
             }
 
-            AnimatedVisibility(queue) {
+            AnimatedVisibility(
+                visible = queue,
+                enter = fadeIn(com.devtodo.app.ui.theme.TaskDockMotion.springEffectsFast()) +
+                    expandVertically(com.devtodo.app.ui.theme.TaskDockMotion.springSpatial()),
+                exit = fadeOut(com.devtodo.app.ui.theme.TaskDockMotion.springEffectsFast()) +
+                    shrinkVertically(com.devtodo.app.ui.theme.TaskDockMotion.springSpatial()),
+            ) {
                 Column(Modifier.padding(bottom = 8.dp)) {
                     if (conflicts.isNotEmpty()) {
                         Text(
@@ -397,12 +403,24 @@ private fun ExpressiveSyncSummaryCard(
     onReauthenticate: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val containerColor = when (state) {
+        SyncState.AUTH_REQUIRED -> colors.errorContainer
+        SyncState.ERROR, SyncState.SERVER_UNAVAILABLE, SyncState.INCOMPATIBLE -> colors.secondaryContainer
+        SyncState.OFFLINE -> colors.surfaceContainerHigh
+        SyncState.SYNCING, SyncState.IDLE -> colors.primaryContainer
+    }
+    val containerContentColor = when (state) {
+        SyncState.AUTH_REQUIRED -> colors.onErrorContainer
+        SyncState.ERROR, SyncState.SERVER_UNAVAILABLE, SyncState.INCOMPATIBLE -> colors.onSecondaryContainer
+        SyncState.OFFLINE -> colors.onSurface
+        SyncState.SYNCING, SyncState.IDLE -> colors.onPrimaryContainer
+    }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
         shape = TaskDockShapes.LargeIncreased,
-        color = colors.primaryContainer.copy(alpha = 0.6f),
+            color = containerColor,
         tonalElevation = 2.dp,
     ) {
         Column(
@@ -435,13 +453,18 @@ private fun ExpressiveSyncSummaryCard(
                         text = username,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,
-                        color = colors.onPrimaryContainer,
+                        color = containerContentColor,
                     )
-                    Text(
-                        text = "同步状态: ${syncStateLabel(state)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.onPrimaryContainer.copy(alpha = 0.8f),
-                    )
+                    AnimatedContent(
+                        targetState = syncStateLabel(state),
+                        label = "syncStateLabel",
+                    ) { label ->
+                        Text(
+                            text = "同步状态: $label",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = containerContentColor.copy(alpha = 0.8f),
+                        )
+                    }
                 }
 
                 if (state == SyncState.SYNCING) {
@@ -496,22 +519,26 @@ private fun ExpressiveSyncSummaryCard(
                 shape = TaskDockShapes.FullPill,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Icon(
-                    imageVector = if (state == SyncState.AUTH_REQUIRED) Icons.Default.AccountCircle else Icons.Default.CloudSync,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    when (state) {
-                        SyncState.AUTH_REQUIRED -> "重新验证账户"
-                        SyncState.SYNCING -> "正在双向同步…"
-                        SyncState.OFFLINE -> "检查网络并重连"
-                        SyncState.ERROR, SyncState.SERVER_UNAVAILABLE -> "重试同步"
-                        SyncState.INCOMPATIBLE -> "检查版本协议"
-                        SyncState.IDLE -> "立即同步"
+                AnimatedContent(targetState = state, label = "syncAction") { currentState ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (currentState == SyncState.AUTH_REQUIRED) Icons.Default.AccountCircle else Icons.Default.CloudSync,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            when (currentState) {
+                                SyncState.AUTH_REQUIRED -> "重新验证账户"
+                                SyncState.SYNCING -> "正在双向同步…"
+                                SyncState.OFFLINE -> "检查网络并重连"
+                                SyncState.ERROR, SyncState.SERVER_UNAVAILABLE -> "重试同步"
+                                SyncState.INCOMPATIBLE -> "检查版本协议"
+                                SyncState.IDLE -> "立即同步"
+                            }
+                        )
                     }
-                )
+                }
             }
         }
     }
@@ -564,7 +591,8 @@ private fun SettingsActionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 4.dp)
+            .animateContentSize(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -686,13 +714,16 @@ private fun syncStateLabel(state: SyncState): String =
     }
 
 private fun serverSummary(origin: String): String =
-    when {
-        origin.startsWith("http://10.") ||
-            origin.startsWith("http://192.168.") ||
-            origin.startsWith("http://172.") -> "局域网中枢 ($origin)"
-        origin.startsWith("https://") -> "安全中枢 ($origin)"
-        origin.startsWith("http://") -> "公开 HTTP 中枢 ($origin)"
-        else -> origin
+    run {
+        val host = origin.substringAfter("://", origin).substringBefore('/').substringBefore('?')
+        when {
+            origin.startsWith("http://10.") ||
+                origin.startsWith("http://192.168.") ||
+                origin.startsWith("http://172.") -> "局域网中枢 · $host"
+            origin.startsWith("https://") -> "安全中枢 · $host"
+            origin.startsWith("http://") -> "HTTP 中枢 · $host"
+            else -> "已配置的中枢"
+        }
     }
 
 private fun timezoneLabel(tz: String): String =

@@ -119,10 +119,10 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.taskdock_icon),
+                        painter = painterResource(id = R.drawable.taskdock_launch_mark),
                         contentDescription = "TaskDock",
                         modifier = Modifier
-                            .size(52.dp)
+                            .size(40.dp)
                             .clip(TaskDockShapes.Medium),
                     )
                     Column {

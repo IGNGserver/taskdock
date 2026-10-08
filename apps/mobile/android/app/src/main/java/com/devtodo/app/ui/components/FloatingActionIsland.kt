@@ -1,7 +1,10 @@
 package com.devtodo.app.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -29,6 +33,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.devtodo.app.ui.theme.TaskDockShapes
+import com.devtodo.app.ui.theme.TaskDockSpacing
 
 /** Local drafts survive dismissal; only an acknowledged save clears the input. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,6 +68,11 @@ fun FloatingActionIsland(
     val pressed by interaction.collectIsPressedAsState()
     val corner by animateDpAsState(if (pressed) 16.dp else 28.dp,
         animationSpec = TaskDockMotion.springBouncy(), label = "captureButtonShape")
+    val buttonScale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = TaskDockMotion.springSpatialFast(),
+        label = "captureButtonScale",
+    )
 
     fun submit() {
         if (title.isBlank() || saving) return
@@ -85,18 +95,32 @@ fun FloatingActionIsland(
             }
         }
     }
-    Box(modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(12.dp), contentAlignment = Alignment.Center) {
+    Box(
+        modifier.fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(TaskDockSpacing.BottomAction),
+        contentAlignment = Alignment.Center,
+    ) {
         Button(
             onClick = { onOpen(title.isNotBlank()); expanded = true },
             shape = RoundedCornerShape(corner),
             interactionSource = interaction,
             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
             elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
-            modifier = Modifier.testTag("tree-create-action").heightIn(min = 56.dp),
+            modifier = Modifier
+                .scale(buttonScale)
+                .animateContentSize(animationSpec = TaskDockMotion.springSpatial())
+                .testTag("tree-create-action")
+                .heightIn(min = 56.dp),
         ) {
             Icon(Icons.Default.Add, null, Modifier.size(22.dp))
             Spacer(Modifier.width(10.dp))
-            Text(if (title.isBlank()) primaryLabel else "继续记录")
+            AnimatedContent(
+                targetState = title.isBlank(),
+                label = "captureButtonLabel",
+            ) { isEmpty ->
+                Text(if (isEmpty) primaryLabel else "继续记录")
+            }
         }
     }
     if (expanded) {

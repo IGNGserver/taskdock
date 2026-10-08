@@ -9,7 +9,9 @@
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/taskdock_brand_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/taskdock_icon</item>
+        <!-- Keep the system splash quiet: the full photographic brand asset is
+             for the launcher, never for the first application frame. -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/taskdock_launch_mark</item>
         <item name="postSplashScreenTheme">@style/AppTheme</item>
     </style>
 </resources>

@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.devtodo.app.ui.components.*
+import com.devtodo.app.ui.theme.TaskDockMotion
 import com.devtodo.app.ui.theme.TaskDockShapes
 
 /**
@@ -75,7 +76,9 @@ fun ArchiveCenterV2Screen(viewModel: MainViewModel, onBack: () -> Unit) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .animateItem()
+                        .animateContentSize(animationSpec = TaskDockMotion.springSpatial()),
                     shape = TaskDockShapes.Large,
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
                 ) {
@@ -124,6 +127,7 @@ fun ArchiveCenterV2Screen(viewModel: MainViewModel, onBack: () -> Unit) {
                             FilledTonalButton(
                                 onClick = { viewModel.restoreFolderTreeV2(operation) },
                                 shape = TaskDockShapes.FullPill,
+                                modifier = Modifier.heightIn(min = 48.dp),
                             ) {
                                 Icon(Icons.Default.Restore, null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
@@ -141,7 +145,9 @@ fun ArchiveCenterV2Screen(viewModel: MainViewModel, onBack: () -> Unit) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .animateItem()
+                        .animateContentSize(animationSpec = TaskDockMotion.springSpatial()),
                     shape = TaskDockShapes.Large,
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
                 ) {
@@ -162,6 +168,7 @@ fun ArchiveCenterV2Screen(viewModel: MainViewModel, onBack: () -> Unit) {
                         FilledTonalButton(
                             onClick = { viewModel.restoreTask(task) },
                             shape = TaskDockShapes.FullPill,
+                            modifier = Modifier.heightIn(min = 48.dp),
                         ) {
                             Icon(Icons.Default.Restore, null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))

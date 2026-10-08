@@ -1,6 +1,7 @@
 package com.devtodo.app.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
@@ -16,6 +17,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devtodo.app.data.local.FolderEntity
 import com.devtodo.app.ui.theme.TaskDockShapes
+import com.devtodo.app.ui.theme.TaskDockSpacing
 
 @Composable
 fun ExpressiveFolderCard(
@@ -29,13 +31,14 @@ fun ExpressiveFolderCard(
     rowShape: Shape = TaskDockShapes.TaskRowShape,
 ) {
     Surface(
-        modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp),
+        modifier.fillMaxWidth().padding(horizontal = TaskDockSpacing.Page, vertical = 2.dp),
         shape = rowShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(
                 Modifier.weight(1f).clip(rowShape).clickable(onClickLabel = "打开目录", onClick = onClick)
                     .heightIn(min = 60.dp)
+                    .animateContentSize()
                     .padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
