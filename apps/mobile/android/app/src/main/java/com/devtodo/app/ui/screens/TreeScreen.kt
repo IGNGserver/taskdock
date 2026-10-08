@@ -535,7 +535,11 @@ private fun ExpressiveSmartDashboard(
             Triple("流程", Icons.Default.AccountTree, Screen.Workflows.route),
             Triple("全部任务", Icons.Default.Checklist, Screen.AllTasks.route),
         )
-        Surface(shape = TaskDockShapes.Large, color = scheme.surfaceContainerLow) {
+        Surface(
+            modifier = Modifier.animateContentSize(animationSpec = TaskDockMotion.springSpatial()),
+            shape = TaskDockShapes.Large,
+            color = scheme.surfaceContainerLow,
+        ) {
             if (largeText) {
                 Column(Modifier.fillMaxWidth()) {
                     shortcuts.forEach { (label, icon, route) ->
@@ -595,6 +599,7 @@ private fun DirectorySectionHeader(
             onClick = onCreateFolder,
             shape = TaskDockShapes.FullPill,
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+            modifier = Modifier.heightIn(min = 48.dp),
         ) {
             Icon(Icons.Default.CreateNewFolder, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
@@ -825,6 +830,7 @@ fun AllTasksV2Screen(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .animateContentSize(animationSpec = TaskDockMotion.springSpatial())
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 shape = TaskDockShapes.LargeIncreased,
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -921,7 +927,9 @@ fun AllTasksV2Screen(
                             onStatusToggle = { viewModel.updateTaskStatus(task, it) },
                             showStatus = filter == null,
                             rowShape = TaskDockShapes.groupedRow(index, visible.size),
-                            modifier = Modifier.testTag("all-task-${task.id}"),
+                            modifier = Modifier
+                                .animateItem()
+                                .testTag("all-task-${task.id}"),
                         )
                     }
 

@@ -1,6 +1,8 @@
 package com.devtodo.app.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -28,6 +30,7 @@ import com.devtodo.app.data.local.TaskEntity
 import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.ui.theme.TaskDockMotion
 import com.devtodo.app.ui.theme.TaskDockShapes
+import com.devtodo.app.ui.theme.TaskDockSpacing
 
 /** The status, content and menu have separate touch targets, including in large text. */
 @Composable
@@ -60,7 +63,7 @@ fun ExpressiveTaskCard(
         label = "taskSurface",
     )
     Surface(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = TaskDockSpacing.Page, vertical = 2.dp),
         shape = rowShape,
         color = containerColor,
     ) {
@@ -77,6 +80,7 @@ fun ExpressiveTaskCard(
                 Modifier.weight(1f).clip(TaskDockShapes.Small)
                     .clickable(onClickLabel = "查看任务详情", onClick = onClick)
                     .heightIn(min = 60.dp)
+                    .animateContentSize(animationSpec = TaskDockMotion.springSpatial())
                     .padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
             ) {
@@ -88,14 +92,19 @@ fun ExpressiveTaskCard(
                     maxLines = 4,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (metadata.isNotEmpty()) {
-                    Text(
-                        metadata.joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                AnimatedContent(
+                    targetState = metadata.joinToString(" · "),
+                    label = "taskMetadata",
+                ) { metadataText ->
+                    if (metadataText.isNotEmpty()) {
+                        Text(
+                            metadataText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
             ActionMenu(

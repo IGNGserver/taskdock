@@ -225,7 +225,23 @@ fun TaskDetailScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            when (tab) {
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    (fadeIn(TaskDockMotion.springEffectsFast()) +
+                        slideInHorizontally(
+                            animationSpec = TaskDockMotion.springSpatial(),
+                            initialOffsetX = { it / 10 },
+                        )) togetherWith
+                        (fadeOut(TaskDockMotion.springEffectsFast()) +
+                            slideOutHorizontally(
+                                animationSpec = TaskDockMotion.springSpatial(),
+                                targetOffsetX = { -it / 10 },
+                            ))
+                },
+                label = "detailTabContent",
+            ) { selectedTab ->
+            when (selectedTab) {
                 0 -> {
                     // Title card
                     Surface(
@@ -356,7 +372,9 @@ fun TaskDetailScreen(
                                 Surface(
                                     shape = TaskDockShapes.Medium,
                                     color = MaterialTheme.colorScheme.surface,
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .animateContentSize(animationSpec = TaskDockMotion.springSpatial()),
                                 ) {
                                     Row(
                                         modifier = Modifier
@@ -527,6 +545,7 @@ fun TaskDetailScreen(
                         }
                     }
                 }
+            }
             }
         }
     }

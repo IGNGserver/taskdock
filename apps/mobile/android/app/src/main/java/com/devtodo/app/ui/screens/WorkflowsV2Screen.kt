@@ -129,6 +129,7 @@ fun WorkflowsV2Screen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .animateItem()
                         .clip(TaskDockShapes.Large)
                         .clickable { selectedId = workflow.id },
                     shape = TaskDockShapes.Large,
@@ -540,7 +541,8 @@ private fun ExpressiveStageBlock(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .animateContentSize(animationSpec = TaskDockMotion.springSpatial()),
         shape = TaskDockShapes.LargeIncreased,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
@@ -616,6 +618,7 @@ private fun ExpressiveStageBlock(
                             onMoveTask(member, target, null, null)
                         }
                     } + RowAction("从流程移除", enabled) { onRemoveTask(member) },
+                    modifier = Modifier.animateContentSize(animationSpec = TaskDockMotion.springSpatial()),
                 )
             }
 

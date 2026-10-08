@@ -31,6 +31,7 @@ import com.devtodo.app.data.local.TimePointEntity
 import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.data.model.TimePointType
 import com.devtodo.app.ui.components.*
+import com.devtodo.app.ui.theme.TaskDockMotion
 import com.devtodo.app.ui.theme.TaskDockShapes
 import java.text.SimpleDateFormat
 import java.util.*
@@ -356,6 +357,7 @@ private fun OlderDatesHeader(count: Int, expanded: Boolean, onToggle: () -> Unit
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .animateContentSize(animationSpec = TaskDockMotion.springSpatial())
             .padding(start = 20.dp, top = 16.dp, end = 16.dp, bottom = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -367,7 +369,9 @@ private fun OlderDatesHeader(count: Int, expanded: Boolean, onToggle: () -> Unit
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         TextButton(onClick = onToggle) {
-            Text(if (expanded) "收起" else "查看全部")
+            AnimatedContent(targetState = expanded, label = "olderDatesAction") { isExpanded ->
+                Text(if (isExpanded) "收起" else "查看全部")
+            }
         }
     }
 }
@@ -391,6 +395,7 @@ private fun LazyListScope.timePointItems(
                 timezone = timezone,
                 today = today,
                 onAdd = { onAdd(point) },
+                modifier = Modifier.animateItem(),
             )
         }
         itemsIndexed(tasks, key = { _, task -> "${point.id}:task:${task.id}" }) { index, task ->
@@ -400,6 +405,7 @@ private fun LazyListScope.timePointItems(
                 onStatusToggle = { onStatusToggle(task, it) },
                 actions = listOf(RowAction("在目录中定位") { onNavigateToTree(task) }),
                 rowShape = TaskDockShapes.groupedRow(index, tasks.size),
+                modifier = Modifier.animateItem(),
             )
         }
     }
@@ -412,6 +418,7 @@ private fun TimePointRow(
     timezone: String,
     today: String,
     onAdd: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val isDate = point.type == TimePointType.DATE
     val isToday = isDate && point.localDate == today
@@ -437,7 +444,7 @@ private fun TimePointRow(
     }
 
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = TaskDockShapes.Large,
