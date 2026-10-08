@@ -619,7 +619,6 @@ class WorkspaceScreenTest {
                     onThemeModeChange = { selectedTheme = it },
                     onDynamicColorChange = {},
                     onPureBlackChange = {},
-                    onNavigateToArchived = {},
                     onLogout = {},
                     onBack = {},
                 )
@@ -641,7 +640,6 @@ class WorkspaceScreenTest {
                     onThemeModeChange = {},
                     onDynamicColorChange = {},
                     onPureBlackChange = {},
-                    onNavigateToArchived = {},
                     onLogout = {},
                     onBack = {},
                 )

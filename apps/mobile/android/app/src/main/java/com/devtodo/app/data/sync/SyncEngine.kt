@@ -1,5 +1,6 @@
 package com.devtodo.app.data.sync
 
+import androidx.room.withTransaction
 import com.devtodo.app.data.local.*
 import com.devtodo.app.data.model.*
 import com.devtodo.app.data.remote.ApiClient
@@ -63,6 +64,8 @@ class SyncEngine(
     companion object {
         private const val SYNC_CURSOR_KEY = "sync_cursor"
         private const val OUTBOX_DEBOUNCE_MS = 80L
+        private const val MAX_PUSH_MUTATIONS = 500
+        private const val MAX_PUSH_BYTES = 900_000
     }
 
     private fun syncCursorKey(ownerId: String): String = "$SYNC_CURSOR_KEY:$ownerId"
@@ -358,47 +361,15 @@ class SyncEngine(
                     db.syncMetaDao().set(SyncMetaEntity(cursorKey, cursor))
                 }
 
-                val pending = db.outboxDao().getPendingItems(ownerId)
-                val converted = buildList {
-                    for (item in pending) {
-                        if (item.lastError?.startsWith("CLIENT_UPGRADE_REQUIRED") == true) continue
-                        val archiveOperationId = pending
-                            .firstOrNull { it.command == "project.archive" && it.entityId == item.entityId }
-                            ?.mutationId
-                        convertV1Outbox(item, archiveOperationId)?.let(::add)
-                    }
-                }
-                if (converted.isNotEmpty()) {
-                    val push = api.pushSyncV2(converted.map { it.mutation }).getOrThrow()
-                    for (result in push.results) {
-                        val original = converted.firstOrNull { it.mutation.mutationId == result.mutationId }?.source
-                        if (original == null) continue
-                        if (result.status == "applied") {
-                            db.outboxDao().deleteByMutationId(result.mutationId, ownerId)
-                            // The optimistic row is now authoritative on the server,
-                            // so drop its pending flag. Without this the row stays
-                            // pendingSync=1 forever and clearNonPending can never
-                            // reconcile it away during a snapshot resync.
-                            markEntitySynced(ownerId, original)
-                        } else if (result.status == "conflict") {
-                            db.outboxDao().recordAttempt(original.id, ownerId, Long.MAX_VALUE, result.error?.toString() ?: result.message ?: "VERSION_CONFLICT")
-                            db.conflictDao().insert(
-                                ConflictEntity(
-                                    mutationId = original.mutationId,
-                                    ownerId = ownerId,
-                                    command = original.command,
-                                    entityType = original.command.substringBefore('.'),
-                                    entityId = original.entityId,
-                                    localJson = original.payloadJson,
-                                    serverJson = result.error?.toString() ?: "{}",
-                                    createdAt = isoFormat.format(Date()),
-                                ),
-                            )
-                        } else {
-                            val error = result.error?.toString() ?: result.message ?: "v2 mutation 未应用"
-                            db.outboxDao().recordAttempt(original.id, ownerId, Long.MAX_VALUE, error)
-                        }
-                    }
+                val blockedMutation = pushPendingV2(ownerId)
+                if (blockedMutation != null) {
+                    // Rejected/unsupported mutations have just been released
+                    // from their pending guards. Reconcile against the
+                    // authoritative snapshot now so a locally-created ghost
+                    // is not left behind until cursor retention expires.
+                    val snapshot = api.getSnapshotV2().getOrThrow()
+                    applyV2Snapshot(snapshot, ownerId)
+                    db.syncMetaDao().set(SyncMetaEntity(cursorKey, snapshot.cursor))
                 }
 
                 var currentCursor = db.syncMetaDao().get(cursorKey) ?: "0"
@@ -424,8 +395,14 @@ class SyncEngine(
                     db.syncMetaDao().set(SyncMetaEntity(cursorKey, currentCursor))
                     hasMore = result.hasMore
                 }
-                _syncState.value = SyncState.IDLE
-                SyncOutcome.Success
+                if (blockedMutation != null) {
+                    _syncState.value = SyncState.ERROR
+                    _lastSyncError.value = blockedMutation
+                    SyncOutcome.Failure(blockedMutation)
+                } else {
+                    _syncState.value = SyncState.IDLE
+                    SyncOutcome.Success
+                }
             } catch (error: Exception) {
                 _syncState.value = classifyError(error)
                 val message = error.message?.takeIf { it.isNotBlank() } ?: "同步失败，请稍后重试"
@@ -438,32 +415,83 @@ class SyncEngine(
     /**
      * Clear the optimistic `pendingSync` flag for the entity an applied mutation
      * targeted, so a later snapshot resync can reconcile it like any server row.
-     * Commands that only produce derived state (reorder, membership moves and
-     * deletes) are intentionally skipped: their affected rows are covered by the
-     * following pull changes.
+     * Cascading deletes also clear the child tombstones that the server mutation
+     * owns; otherwise the pull guard would intentionally preserve them forever.
      */
     private suspend fun markEntitySynced(ownerId: String, item: OutboxEntity) {
         val entityId = item.entityId
         when (item.command) {
+            "project.create", "project.update", "project.archive", "project.restore" ->
+                db.projectDao().markSynced(ownerId, entityId)
             "folder.create", "folder.update", "folder.archiveTree", "folder.restoreTree" ->
                 db.folderDao().markSynced(ownerId, entityId)
-            "task.create", "task.update", "task.archive", "task.restore", "task.duplicate" ->
+            "task.update", "task.archive", "task.restore" ->
                 db.taskDao().markSynced(ownerId, entityId)
-            "note.update" -> db.noteDao().markSynced(ownerId, entityId)
-            "taskStep.create", "taskStep.update", "taskStep.move" ->
+            "task.create" -> {
+                db.taskDao().markSynced(ownerId, entityId)
+                db.noteDao().markSyncedForTask(ownerId, entityId)
+            }
+            "task.delete" -> {
+                db.taskDao().markSynced(ownerId, entityId)
+                db.noteDao().markDeletedSyncedForTask(ownerId, entityId)
+                db.taskStepDao().markSyncedForTask(ownerId, entityId)
+                db.placementDao().markSyncedForTask(ownerId, entityId)
+                db.workflowDao().markMembershipsSyncedForTask(ownerId, entityId)
+            }
+            "task.duplicate" -> {
+                val payload = api.json.decodeFromString<Map<String, JsonElement>>(item.payloadJson)
+                payload["taskId"]?.jsonPrimitive?.contentOrNull?.let { db.taskDao().markSynced(ownerId, it) }
+                payload["noteId"]?.jsonPrimitive?.contentOrNull?.let { db.noteDao().markSynced(ownerId, it) }
+                payload["stepIds"]?.jsonArray?.forEach { step ->
+                    step.jsonPrimitive.contentOrNull?.let { db.taskStepDao().markSynced(ownerId, it) }
+                }
+            }
+            "note.update" -> db.noteDao().markSyncedForTask(ownerId, entityId)
+            "taskStep.create", "taskStep.update", "taskStep.move", "taskStep.delete" ->
                 db.taskStepDao().markSynced(ownerId, entityId)
             "timePoint.date.create", "timePoint.event.create", "timePoint.update",
-            "timePoint.reach", "timePoint.archive", "timePoint.restore" ->
+            "timePoint.reach", "timePoint.archive", "timePoint.restore", "timePoint.delete" ->
                 db.timePointDao().markSynced(ownerId, entityId)
-            "placement.create", "placement.move", "placement.copy" ->
+            "placement.create", "placement.remove", "placement.move", "placement.copy" ->
                 db.placementDao().markSynced(ownerId, entityId)
-            "workflow.create", "workflow.update", "workflow.archive", "workflow.restore" ->
+            "workflow.update", "workflow.archive", "workflow.restore" ->
                 db.workflowDao().markSynced(ownerId, entityId)
-            "workflowStage.create", "workflowStage.update", "workflowStage.move" ->
+            "workflow.create" -> {
+                db.workflowDao().markSynced(ownerId, entityId)
+                val payload = api.json.decodeFromString<Map<String, JsonElement>>(item.payloadJson)
+                payload["defaultStageId"]?.jsonPrimitive?.contentOrNull?.let {
+                    db.workflowDao().markStageSynced(ownerId, it)
+                }
+            }
+            "workflow.delete" -> {
+                val workflow = db.workflowDao().getWorkflowById(entityId, ownerId)
+                db.workflowDao().markSynced(ownerId, entityId)
+                workflow?.let {
+                    db.workflowDao().markStagesSyncedForWorkflow(ownerId, it.id)
+                    db.workflowDao().markMembershipsSyncedForWorkflow(ownerId, it.id)
+                }
+            }
+            "workflowStage.create", "workflowStage.update", "workflowStage.move", "workflowStage.delete" ->
                 db.workflowDao().markStageSynced(ownerId, entityId)
-            "workflowTask.add", "workflowTask.move" ->
+            "workflowTask.add", "workflowTask.move", "workflowTask.remove" ->
                 db.workflowDao().markMembershipSynced(ownerId, entityId)
             else -> Unit
+        }
+    }
+
+    /**
+     * Drops a local mutation without leaving its optimistic rows permanently
+     * protected from future snapshots. The caller uses this for an explicit
+     * user discard; rejected oversized/unsupported mutations use the same
+     * cleanup path internally.
+     */
+    suspend fun discardLocalMutation(item: OutboxEntity) {
+        val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
+        require(item.ownerId == ownerId) { "操作不属于当前账户" }
+        db.withTransaction {
+            markEntitySynced(ownerId, item)
+            db.outboxDao().deleteByMutationId(item.mutationId, ownerId)
+            db.conflictDao().markResolvedByMutationId(item.mutationId, ownerId, isoFormat.format(Date()))
         }
     }
 
@@ -487,6 +515,148 @@ class SyncEngine(
 
     private data class ConvertedOutbox(val source: OutboxEntity, val mutation: Mutation)
 
+    private data class PendingEntityIds(
+        val folders: Set<String>,
+        val tasks: Set<String>,
+        val notes: Set<String>,
+        val taskSteps: Set<String>,
+        val timePoints: Set<String>,
+        val placements: Set<String>,
+        val workflows: Set<String>,
+        val workflowStages: Set<String>,
+        val memberships: Set<String>,
+        val settings: Boolean,
+    )
+
+    private suspend fun pendingEntityIds(ownerId: String): PendingEntityIds = PendingEntityIds(
+        folders = db.folderDao().getPendingIds(ownerId).toSet(),
+        tasks = db.taskDao().getPendingIds(ownerId).toSet(),
+        notes = db.noteDao().getPendingIds(ownerId).toSet(),
+        taskSteps = db.taskStepDao().getPendingIds(ownerId).toSet(),
+        timePoints = db.timePointDao().getPendingIds(ownerId).toSet(),
+        placements = db.placementDao().getPendingIds(ownerId).toSet(),
+        workflows = db.workflowDao().getPendingWorkflowIds(ownerId).toSet(),
+        workflowStages = db.workflowDao().getPendingStageIds(ownerId).toSet(),
+        memberships = db.workflowDao().getPendingMembershipIds(ownerId).toSet(),
+        settings = db.outboxDao().getPendingItems(ownerId).any { it.command == "settings.update" },
+    )
+
+    /**
+     * Pushes only due, non-terminal mutations in bounded requests. A single
+     * oversized request used to poison the entire queue because the API rejects
+     * more than 500 mutations (and also has a body-size limit).
+     *
+     * @return a user-actionable message when the server permanently rejected or
+     * conflicted with at least one mutation.
+     */
+    private suspend fun pushPendingV2(ownerId: String): String? {
+        val pending = db.outboxDao().getDueItems(ownerId, System.currentTimeMillis())
+        if (pending.isEmpty()) return null
+
+        var blockedMessage: String? = null
+        val converted = mutableListOf<ConvertedOutbox>()
+        for (item in pending) {
+            if (item.lastError?.startsWith("CLIENT_UPGRADE_REQUIRED") == true ||
+                item.lastError?.startsWith("TERMINAL:CLIENT_UPGRADE_REQUIRED") == true
+            ) continue
+            val archiveOperationId = pending
+                .firstOrNull { it.command == "project.archive" && it.entityId == item.entityId }
+                ?.mutationId
+            val convertedItem = convertV1Outbox(item, archiveOperationId)
+            if (convertedItem != null) {
+                converted += convertedItem
+            } else {
+                blockedMessage = blockedMessage ?: "有本地操作需要升级后才能同步"
+            }
+        }
+        if (converted.isEmpty()) return blockedMessage
+
+        for (batch in splitPushBatches(converted)) {
+            if (batch.size == 1 && encodedPushSize(batch) > MAX_PUSH_BYTES) {
+                val source = batch.single().source
+                val message = "TERMINAL:mutation payload exceeds the sync request limit"
+                db.withTransaction {
+                    db.outboxDao().recordAttempt(source.id, ownerId, Long.MAX_VALUE, message)
+                    markEntitySynced(ownerId, source)
+                }
+                blockedMessage = blockedMessage ?: message.removePrefix("TERMINAL:")
+                continue
+            }
+
+            val push = api.pushSyncV2(batch.map { it.mutation }).getOrThrow()
+            for (result in push.results) {
+                val original = batch.firstOrNull { it.mutation.mutationId == result.mutationId }?.source
+                    ?: continue
+                when (result.status) {
+                    "applied" -> {
+                        db.withTransaction {
+                            db.outboxDao().deleteByMutationId(result.mutationId, ownerId)
+                            // The optimistic row is now authoritative on the server,
+                            // so drop its pending flag before the next pull.
+                            markEntitySynced(ownerId, original)
+                        }
+                    }
+                    "conflict" -> {
+                        val detail = result.error?.toString() ?: result.message ?: "VERSION_CONFLICT"
+                        val message = "CONFLICT:$detail"
+                        db.withTransaction {
+                            db.outboxDao().recordAttempt(original.id, ownerId, Long.MAX_VALUE, message)
+                            db.conflictDao().insert(
+                                ConflictEntity(
+                                    mutationId = original.mutationId,
+                                    ownerId = ownerId,
+                                    command = original.command,
+                                    entityType = original.command.substringBefore('.'),
+                                    entityId = original.entityId,
+                                    localJson = original.payloadJson,
+                                    serverJson = result.error?.toString() ?: "{}",
+                                    createdAt = isoFormat.format(Date()),
+                                ),
+                            )
+                        }
+                        blockedMessage = blockedMessage ?: "有同步冲突需要处理"
+                    }
+                    else -> {
+                        val detail = result.error?.toString() ?: result.message ?: "v2 mutation 未应用"
+                        val message = "TERMINAL:$detail"
+                        db.withTransaction {
+                            db.outboxDao().recordAttempt(original.id, ownerId, Long.MAX_VALUE, message)
+                            markEntitySynced(ownerId, original)
+                        }
+                        blockedMessage = blockedMessage ?: "有同步操作被中枢拒绝"
+                    }
+                }
+            }
+        }
+        return blockedMessage
+    }
+
+    private fun splitPushBatches(items: List<ConvertedOutbox>): List<List<ConvertedOutbox>> {
+        val batches = mutableListOf<List<ConvertedOutbox>>()
+        var current = mutableListOf<ConvertedOutbox>()
+        for (item in items) {
+            val candidate = current + item
+            if (current.isNotEmpty() &&
+                (candidate.size > MAX_PUSH_MUTATIONS || encodedPushSize(candidate) > MAX_PUSH_BYTES)
+            ) {
+                batches += current
+                current = mutableListOf(item)
+            } else {
+                current += item
+            }
+        }
+        if (current.isNotEmpty()) batches += current
+        return batches
+    }
+
+    private fun encodedPushSize(batch: List<ConvertedOutbox>): Int =
+        api.json.encodeToString(
+            V2PushRequest(
+                clientId = authManager.clientId,
+                mutations = batch.map { it.mutation },
+            ),
+        ).toByteArray(Charsets.UTF_8).size
+
     private suspend fun convertV1Outbox(item: OutboxEntity, archiveOperationId: String?): ConvertedOutbox? {
         val payload = api.json.decodeFromString<Map<String, JsonElement>>(item.payloadJson)
         val converted = when (item.command) {
@@ -500,8 +670,13 @@ class SyncEngine(
                 mapOf("operationId" to (payload["operationId"] ?: JsonPrimitive(archiveOperationId ?: item.entityId))))
             "task.create" -> {
                 val parent = payload["projectId"] ?: payload["parentFolderId"] ?: JsonNull
+                val title = payload["title"] ?: return markUpgradeRequired(item)
                 Mutation(item.mutationId, "task.create", item.entityId, null, item.occurredAt,
-                    mapOf("parentFolderId" to parent, "title" to (payload["title"] ?: return markUpgradeRequired(item))))
+                    buildMap {
+                        put("parentFolderId", parent)
+                        put("title", title)
+                        payload["noteId"]?.let { put("noteId", it) }
+                    })
             }
             "task.update" -> {
                 if (payload.keys.any { it in setOf("projectId", "category", "priority", "rank") }) return markUpgradeRequired(item)
@@ -529,7 +704,10 @@ class SyncEngine(
     }
 
     private suspend fun markUpgradeRequired(item: OutboxEntity): ConvertedOutbox? {
-        db.outboxDao().recordAttempt(item.id, item.ownerId, Long.MAX_VALUE, "CLIENT_UPGRADE_REQUIRED: ${item.command} 需要确认后转换")
+        db.withTransaction {
+            db.outboxDao().recordAttempt(item.id, item.ownerId, Long.MAX_VALUE, "TERMINAL:CLIENT_UPGRADE_REQUIRED: ${item.command} 需要确认后转换")
+            markEntitySynced(item.ownerId, item)
+        }
         return null
     }
 
@@ -537,6 +715,7 @@ class SyncEngine(
         val now = isoFormat.format(Date())
         db.runInTransaction {
             runBlocking {
+                val pending = pendingEntityIds(ownerId)
                 // Clear non-pending entities to avoid stale local ghosts, but protect local pending outbox
                 db.folderDao().clearNonPending(ownerId)
                 db.taskDao().clearNonPending(ownerId)
@@ -549,18 +728,36 @@ class SyncEngine(
                 db.timePointDao().clearNonPending(ownerId)
                 db.placementDao().clearNonPending(ownerId)
 
-                db.folderDao().upsertAll(snapshot.folders.filter { it.ownerId == null || it.ownerId == ownerId }.map { folderEntity(it, ownerId, now) })
-                val tasks = snapshot.tasks.filter { it.ownerId == null || it.ownerId == ownerId }.map { treeTaskEntity(it, ownerId, now) }
+                db.folderDao().upsertAll(snapshot.folders
+                    .filter { (it.ownerId == null || it.ownerId == ownerId) && it.id !in pending.folders }
+                    .map { folderEntity(it, ownerId, now) })
+                val tasks = snapshot.tasks
+                    .filter { (it.ownerId == null || it.ownerId == ownerId) && it.id !in pending.tasks }
+                    .map { treeTaskEntity(it, ownerId, now) }
                 db.taskDao().upsertTasks(tasks)
-                db.noteDao().upsertNotes(snapshot.notes.filter { it.ownerId == null || it.ownerId == ownerId }.map { noteEntity(it, ownerId, now) })
-                db.taskStepDao().upsertAll(snapshot.taskSteps.filter { it.ownerId == null || it.ownerId == ownerId }.map { stepEntity(it, ownerId, now) })
-                db.timePointDao().upsertTimePoints(snapshot.timePoints.filter { it.ownerId == null || it.ownerId == ownerId }.map { timePointEntity(it, ownerId, now) })
-                db.placementDao().upsertPlacements(snapshot.placements.filter { it.ownerId == null || it.ownerId == ownerId }.map { placementEntity(it, ownerId, now) })
-                db.workflowDao().upsertWorkflows(snapshot.workflows.filter { it.ownerId == null || it.ownerId == ownerId }.map { workflowEntity(it, ownerId, now) })
-                db.workflowDao().upsertStages(snapshot.workflowStages.filter { it.ownerId == null || it.ownerId == ownerId }.map { stageEntity(it, ownerId, now) })
-                db.workflowDao().upsertMemberships(snapshot.workflowTaskMemberships.filter { it.ownerId == null || it.ownerId == ownerId }.map { membershipEntity(it, ownerId, now) })
+                db.noteDao().upsertNotes(snapshot.notes
+                    .filter { (it.ownerId == null || it.ownerId == ownerId) && it.id !in pending.notes }
+                    .map { noteEntity(it, ownerId, now) })
+                db.taskStepDao().upsertAll(snapshot.taskSteps
+                    .filter { (it.ownerId == null || it.ownerId == ownerId) && it.id !in pending.taskSteps }
+                    .map { stepEntity(it, ownerId, now) })
+                db.timePointDao().upsertTimePoints(snapshot.timePoints
+                    .filter { (it.ownerId == null || it.ownerId == ownerId) && it.id !in pending.timePoints }
+                    .map { timePointEntity(it, ownerId, now) })
+                db.placementDao().upsertPlacements(snapshot.placements
+                    .filter { (it.ownerId == null || it.ownerId == ownerId) && it.id !in pending.placements }
+                    .map { placementEntity(it, ownerId, now) })
+                db.workflowDao().upsertWorkflows(snapshot.workflows
+                    .filter { (it.ownerId == null || it.ownerId == ownerId) && it.id !in pending.workflows }
+                    .map { workflowEntity(it, ownerId, now) })
+                db.workflowDao().upsertStages(snapshot.workflowStages
+                    .filter { (it.ownerId == null || it.ownerId == ownerId) && it.id !in pending.workflowStages }
+                    .map { stageEntity(it, ownerId, now) })
+                db.workflowDao().upsertMemberships(snapshot.workflowTaskMemberships
+                    .filter { (it.ownerId == null || it.ownerId == ownerId) && it.id !in pending.memberships }
+                    .map { membershipEntity(it, ownerId, now) })
                 db.archiveOperationDao().upsertAll(snapshot.archiveOperations.filter { it.ownerId == null || it.ownerId == ownerId }.map { archiveEntity(it, ownerId, now) })
-                snapshot.settings?.takeIf { it.ownerId == ownerId }?.let { settings ->
+                snapshot.settings?.takeIf { it.ownerId == ownerId && !pending.settings }?.let { settings ->
                     db.settingsDao().upsertSettings(
                         SettingsEntity(
                             ownerId = ownerId,
@@ -583,37 +780,76 @@ class SyncEngine(
         val now = isoFormat.format(Date())
         db.runInTransaction {
             runBlocking {
+                val pending = pendingEntityIds(ownerId)
                 for (change in changes) {
+                    val isPending = when (change.entityType) {
+                        "folder" -> change.entityId in pending.folders
+                        "task" -> change.entityId in pending.tasks
+                        "note" -> change.entityId in pending.notes
+                        "taskStep" -> change.entityId in pending.taskSteps
+                        "timePoint" -> change.entityId in pending.timePoints
+                        "placement" -> change.entityId in pending.placements
+                        "workflow" -> change.entityId in pending.workflows
+                        "workflowStage" -> change.entityId in pending.workflowStages
+                        "workflowTaskMembership" -> change.entityId in pending.memberships
+                        "settings" -> pending.settings
+                        else -> false
+                    }
+                    // A remote pull must never overwrite an optimistic local
+                    // row whose outbox mutation has not reached a terminal
+                    // server result yet. The next pull will reconcile it after
+                    // the mutation is applied or explicitly blocked.
+                    if (isPending) continue
                     val snapshot = change.snapshot
                     if (snapshot == null || change.operation == "delete") {
                         when (change.entityType) {
                             "folder" -> db.folderDao().getById(change.entityId, ownerId)?.let {
-                                db.folderDao().upsert(it.copy(deletedAt = now, version = change.entityVersion.toLong()))
+                                if (it.version <= change.entityVersion) {
+                                    db.folderDao().upsert(it.copy(deletedAt = now, version = change.entityVersion.toLong(), pendingSync = false))
+                                }
                             }
-                            "task" -> db.taskDao().getTaskById(change.entityId, ownerId)?.let {
-                                db.taskDao().upsertTask(it.copy(deletedAt = now, version = change.entityVersion.toLong()))
+                            "task" -> db.taskDao().getTaskByIdIncludingDeleted(change.entityId, ownerId)?.let {
+                                if (it.version <= change.entityVersion) {
+                                    db.taskDao().upsertTask(it.copy(deletedAt = now, version = change.entityVersion.toLong(), pendingSync = false))
+                                }
                             }
-                            "note" -> db.noteDao().getNoteByTaskId(change.entityId, ownerId)?.let {
-                                db.noteDao().upsertNote(it.copy(deletedAt = now, version = change.entityVersion.toLong()))
+                            "note" -> db.noteDao().getById(change.entityId, ownerId)?.let {
+                                if (it.version <= change.entityVersion) {
+                                    db.noteDao().upsertNote(it.copy(deletedAt = now, version = change.entityVersion.toLong(), pendingSync = false))
+                                }
                             }
                             "taskStep" -> db.taskStepDao().getById(change.entityId, ownerId)?.let {
-                                db.taskStepDao().upsert(it.copy(deletedAt = now, version = change.entityVersion.toLong()))
+                                if (it.version <= change.entityVersion) {
+                                    db.taskStepDao().upsert(it.copy(deletedAt = now, version = change.entityVersion.toLong(), pendingSync = false))
+                                }
                             }
-                            "timePoint" -> db.timePointDao().getTimePointById(change.entityId, ownerId)?.let {
-                                db.timePointDao().upsertTimePoint(it.copy(deletedAt = now, version = change.entityVersion.toLong()))
+                            "timePoint" -> db.timePointDao().getTimePointByIdIncludingDeleted(change.entityId, ownerId)?.let {
+                                if (it.version <= change.entityVersion) {
+                                    db.timePointDao().upsertTimePoint(it.copy(deletedAt = now, version = change.entityVersion.toLong(), pendingSync = false))
+                                }
                             }
-                            "placement" -> db.placementDao().deletePlacementForOwner(ownerId, change.entityId)
+                            "placement" -> db.placementDao().getById(change.entityId, ownerId)?.let {
+                                if (it.version <= change.entityVersion) {
+                                    db.placementDao().upsertPlacement(it.copy(deletedAt = now, version = change.entityVersion.toLong(), pendingSync = false))
+                                }
+                            }
                             // Tombstone the existing row instead of fabricating an
                             // empty "deleted" stub, which used to show up in the
                             // workflow list as a nameless entry.
                             "workflow" -> db.workflowDao().getWorkflowById(change.entityId, ownerId)?.let {
-                                db.workflowDao().upsertWorkflow(it.copy(deletedAt = now, version = change.entityVersion.toLong()))
+                                if (it.version <= change.entityVersion) {
+                                    db.workflowDao().upsertWorkflow(it.copy(deletedAt = now, version = change.entityVersion.toLong(), pendingSync = false))
+                                }
                             }
                             "workflowStage" -> db.workflowDao().getStageById(change.entityId, ownerId)?.let {
-                                db.workflowDao().upsertStages(listOf(it.copy(deletedAt = now, version = change.entityVersion.toLong())))
+                                if (it.version <= change.entityVersion) {
+                                    db.workflowDao().upsertStages(listOf(it.copy(deletedAt = now, version = change.entityVersion.toLong(), pendingSync = false)))
+                                }
                             }
                             "workflowTaskMembership" -> db.workflowDao().getMembershipById(change.entityId, ownerId)?.let {
-                                db.workflowDao().upsertMemberships(listOf(it.copy(deletedAt = now, version = change.entityVersion.toLong())))
+                                if (it.version <= change.entityVersion) {
+                                    db.workflowDao().upsertMemberships(listOf(it.copy(deletedAt = now, version = change.entityVersion.toLong(), pendingSync = false)))
+                                }
                             }
                             "archiveOperation" -> db.archiveOperationDao().getById(change.entityId, ownerId)?.let {
                                 db.archiveOperationDao().upsertAll(listOf(it.copy(restoredAt = now)))
@@ -622,18 +858,71 @@ class SyncEngine(
                         continue
                     }
                     when (change.entityType) {
-                        "folder" -> db.folderDao().upsert(folderEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now))
+                        "folder" -> {
+                            val folder = folderEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
+                            val local = db.folderDao().getById(folder.id, ownerId)
+                            if (local == null || local.version <= folder.version) db.folderDao().upsert(folder)
+                        }
                         "task" -> {
                             val task = treeTaskEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
-                            db.taskDao().upsertTask(task)
+                            val local = db.taskDao().getTaskByIdIncludingDeleted(task.id, ownerId)
+                            if (local == null || local.version <= task.version) db.taskDao().upsertTask(task)
                         }
-                        "note" -> db.noteDao().upsertNote(noteEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now))
-                        "taskStep" -> db.taskStepDao().upsert(stepEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now))
-                        "timePoint" -> db.timePointDao().upsertTimePoint(timePointEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now))
-                        "placement" -> db.placementDao().upsertPlacement(placementEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now))
-                        "workflow" -> db.workflowDao().upsertWorkflow(workflowEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now))
-                        "workflowStage" -> db.workflowDao().upsertStages(listOf(stageEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)))
-                        "workflowTaskMembership" -> db.workflowDao().upsertMemberships(listOf(membershipEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)))
+                        "note" -> {
+                            val note = noteEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
+                            val local = db.noteDao().getById(note.id, ownerId)
+                            if (local == null || local.version <= note.version) db.noteDao().upsertNote(note)
+                        }
+                        "taskStep" -> {
+                            val step = stepEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
+                            val local = db.taskStepDao().getById(step.id, ownerId)
+                            if (local == null || local.version <= step.version) db.taskStepDao().upsert(step)
+                        }
+                        "timePoint" -> {
+                            val timePoint = timePointEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
+                            val local = db.timePointDao().getTimePointByIdIncludingDeleted(timePoint.id, ownerId)
+                            if (local == null || local.version <= timePoint.version) db.timePointDao().upsertTimePoint(timePoint)
+                        }
+                        "placement" -> {
+                            val placement = placementEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
+                            val local = db.placementDao().getById(placement.id, ownerId)
+                            if (local == null || local.version <= placement.version) db.placementDao().upsertPlacement(placement)
+                        }
+                        "workflow" -> {
+                            val workflow = workflowEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
+                            val local = db.workflowDao().getWorkflowById(workflow.id, ownerId)
+                            if (local == null || local.version <= workflow.version) db.workflowDao().upsertWorkflow(workflow)
+                        }
+                        "workflowStage" -> {
+                            val stage = stageEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
+                            val local = db.workflowDao().getStageById(stage.id, ownerId)
+                            if (local == null || local.version <= stage.version) db.workflowDao().upsertStages(listOf(stage))
+                        }
+                        "workflowTaskMembership" -> {
+                            val membership = membershipEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
+                            val local = db.workflowDao().getMembershipById(membership.id, ownerId)
+                            if (local == null || local.version <= membership.version) db.workflowDao().upsertMemberships(listOf(membership))
+                        }
+                        "settings" -> {
+                            val settings = api.json.decodeFromJsonElement<V2SettingsDto>(snapshot)
+                            if (settings.ownerId == ownerId) {
+                                val local = db.settingsDao().getSettings(ownerId)
+                                if (local == null || local.version <= settings.version) {
+                                    db.settingsDao().upsertSettings(
+                                        SettingsEntity(
+                                            ownerId = ownerId,
+                                            timezone = settings.timezone,
+                                            defaultCaptureTarget = settings.defaultCaptureTarget,
+                                            recentProjectId = null,
+                                            weekStartsOn = settings.weekStartsOn,
+                                            createdAt = settings.updatedAt ?: now,
+                                            updatedAt = settings.updatedAt ?: now,
+                                            version = settings.version,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
                         "archiveOperation" -> db.archiveOperationDao().upsertAll(listOf(archiveEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)))
                     }
                 }
@@ -857,14 +1146,16 @@ class SyncEngine(
         command: String,
         entityId: String,
         baseVersion: Long?,
-        payload: Map<String, Any?>
+        payload: Map<String, Any?>,
+        ownerId: String = authManager.ownerId
+            ?: throw IllegalStateException("登录状态已失效，请重新登录"),
     ) {
+        require(authManager.ownerId == ownerId) { "当前账户已变化" }
         val jsonPayload = api.json.encodeToString(payload.mapValues { (_, value) -> jsonElement(value) })
         val item = OutboxEntity(
             mutationId = UUID.randomUUID().toString(),
             clientId = authManager.clientId,
-            ownerId = authManager.ownerId
-                ?: throw IllegalStateException("登录状态已失效，请重新登录"),
+            ownerId = ownerId,
             command = command,
             entityId = entityId,
             baseVersion = baseVersion,

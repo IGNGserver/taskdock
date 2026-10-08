@@ -44,7 +44,6 @@ fun SettingsScreen(
     onThemeModeChange: (ThemeMode) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onPureBlackChange: (Boolean) -> Unit,
-    onNavigateToArchived: () -> Unit,
     onLogout: () -> Unit,
     onBack: (() -> Unit)? = null,
 ) {
@@ -236,13 +235,6 @@ fun SettingsScreen(
 
         // Data & Actions Group
         ExpressiveSettingsGroup(title = "数据与账户") {
-            SettingsActionRow(
-                title = "归档中心",
-                subtitle = "检视并恢复已归档的任务与目录",
-                actionLabel = "打开",
-                onClick = onNavigateToArchived,
-            )
-
             SettingsActionRow(
                 title = "退出当前账户",
                 subtitle = "本地任务将安全保留；未提交操作需重新登录原账户同步。",

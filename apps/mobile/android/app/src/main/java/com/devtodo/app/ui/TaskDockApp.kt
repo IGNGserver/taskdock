@@ -253,9 +253,6 @@ fun TaskDockApp(
                         onThemeModeChange = viewModel::setThemeMode,
                         onDynamicColorChange = viewModel::setDynamicColor,
                         onPureBlackChange = viewModel::setPureBlack,
-                        onNavigateToArchived = {
-                            navController.navigate(Screen.ArchivedTasks.route)
-                        },
                         onLogout = {
                             viewModel.onLoggedOut()
                             viewModel.authManager.clearSession()
@@ -263,13 +260,6 @@ fun TaskDockApp(
                                 popUpTo(0) { inclusive = true }
                             }
                         },
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-
-                composable(Screen.ArchivedTasks.route) {
-                    ArchiveCenterV2Screen(
-                        viewModel = viewModel,
                         onBack = { navController.popBackStack() },
                     )
                 }

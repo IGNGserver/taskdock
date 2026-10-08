@@ -18,6 +18,9 @@ interface ProjectDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertProject(project: ProjectEntity)
 
+    @Query("UPDATE projects SET pendingSync = 0 WHERE ownerId = :ownerId AND id = :id")
+    suspend fun markSynced(ownerId: String, id: String)
+
     @Query("DELETE FROM projects WHERE id = :id AND ownerId = :ownerId")
     suspend fun deleteProject(id: String, ownerId: String)
 }
@@ -35,6 +38,9 @@ interface FolderDao {
 
     @Query("SELECT * FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL")
     suspend fun getAll(ownerId: String): List<FolderEntity>
+
+    @Query("SELECT id FROM folders WHERE ownerId = :ownerId AND pendingSync = 1")
+    suspend fun getPendingIds(ownerId: String): List<String>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(folder: FolderEntity)
@@ -63,6 +69,9 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE id = :id AND ownerId = :ownerId AND deletedAt IS NULL")
     suspend fun getTaskById(id: String, ownerId: String): TaskEntity?
 
+    @Query("SELECT * FROM tasks WHERE id = :id AND ownerId = :ownerId LIMIT 1")
+    suspend fun getTaskByIdIncludingDeleted(id: String, ownerId: String): TaskEntity?
+
     @Query("SELECT * FROM tasks WHERE id = :id AND ownerId = :ownerId AND deletedAt IS NULL")
     fun getTaskByIdFlow(id: String, ownerId: String): Flow<TaskEntity?>
 
@@ -87,6 +96,9 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND deletedAt IS NULL")
     suspend fun getAllTreeTasks(ownerId: String): List<TaskEntity>
 
+    @Query("SELECT id FROM tasks WHERE ownerId = :ownerId AND pendingSync = 1")
+    suspend fun getPendingIds(ownerId: String): List<String>
+
     @Query("UPDATE tasks SET pendingSync = 0 WHERE ownerId = :ownerId AND id = :id")
     suspend fun markSynced(ownerId: String, id: String)
 
@@ -108,8 +120,14 @@ interface TaskStepDao {
     @Query("SELECT * FROM task_steps WHERE id = :id AND ownerId = :ownerId LIMIT 1")
     suspend fun getById(id: String, ownerId: String): TaskStepEntity?
 
+    @Query("SELECT id FROM task_steps WHERE ownerId = :ownerId AND pendingSync = 1")
+    suspend fun getPendingIds(ownerId: String): List<String>
+
     @Query("UPDATE task_steps SET pendingSync = 0 WHERE ownerId = :ownerId AND id = :id")
     suspend fun markSynced(ownerId: String, id: String)
+
+    @Query("UPDATE task_steps SET pendingSync = 0 WHERE ownerId = :ownerId AND taskId = :taskId AND deletedAt IS NOT NULL")
+    suspend fun markSyncedForTask(ownerId: String, taskId: String)
 
     @Query("DELETE FROM task_steps WHERE ownerId = :ownerId AND pendingSync = 0")
     suspend fun clearNonPending(ownerId: String)
@@ -140,6 +158,15 @@ interface WorkflowDao {
     @Query("SELECT * FROM workflow_task_memberships WHERE id = :id AND ownerId = :ownerId LIMIT 1")
     suspend fun getMembershipById(id: String, ownerId: String): WorkflowTaskMembershipEntity?
 
+    @Query("SELECT id FROM workflows WHERE ownerId = :ownerId AND pendingSync = 1")
+    suspend fun getPendingWorkflowIds(ownerId: String): List<String>
+
+    @Query("SELECT id FROM workflow_stages WHERE ownerId = :ownerId AND pendingSync = 1")
+    suspend fun getPendingStageIds(ownerId: String): List<String>
+
+    @Query("SELECT id FROM workflow_task_memberships WHERE ownerId = :ownerId AND pendingSync = 1")
+    suspend fun getPendingMembershipIds(ownerId: String): List<String>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertWorkflow(workflow: WorkflowEntity)
 
@@ -154,6 +181,15 @@ interface WorkflowDao {
 
     @Query("UPDATE workflows SET pendingSync = 0 WHERE ownerId = :ownerId AND id = :id")
     suspend fun markSynced(ownerId: String, id: String)
+
+    @Query("UPDATE workflow_stages SET pendingSync = 0 WHERE ownerId = :ownerId AND workflowId = :workflowId AND deletedAt IS NOT NULL")
+    suspend fun markStagesSyncedForWorkflow(ownerId: String, workflowId: String)
+
+    @Query("UPDATE workflow_task_memberships SET pendingSync = 0 WHERE ownerId = :ownerId AND workflowId = :workflowId AND deletedAt IS NOT NULL")
+    suspend fun markMembershipsSyncedForWorkflow(ownerId: String, workflowId: String)
+
+    @Query("UPDATE workflow_task_memberships SET pendingSync = 0 WHERE ownerId = :ownerId AND taskId = :taskId AND deletedAt IS NOT NULL")
+    suspend fun markMembershipsSyncedForTask(ownerId: String, taskId: String)
 
     @Query("DELETE FROM workflows WHERE ownerId = :ownerId AND pendingSync = 0")
     suspend fun clearNonPendingWorkflows(ownerId: String)
@@ -191,6 +227,12 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE taskId = :taskId AND ownerId = :ownerId AND deletedAt IS NULL LIMIT 1")
     suspend fun getNoteByTaskId(taskId: String, ownerId: String): NoteEntity?
 
+    @Query("SELECT * FROM notes WHERE id = :id AND ownerId = :ownerId LIMIT 1")
+    suspend fun getById(id: String, ownerId: String): NoteEntity?
+
+    @Query("SELECT id FROM notes WHERE ownerId = :ownerId AND pendingSync = 1")
+    suspend fun getPendingIds(ownerId: String): List<String>
+
     @Query("SELECT * FROM notes WHERE taskId = :taskId AND ownerId = :ownerId AND deletedAt IS NULL LIMIT 1")
     fun getNoteByTaskIdFlow(taskId: String, ownerId: String): Flow<NoteEntity?>
 
@@ -205,6 +247,12 @@ interface NoteDao {
 
     @Query("UPDATE notes SET pendingSync = 0 WHERE ownerId = :ownerId AND id = :id")
     suspend fun markSynced(ownerId: String, id: String)
+
+    @Query("UPDATE notes SET pendingSync = 0 WHERE ownerId = :ownerId AND taskId = :taskId")
+    suspend fun markSyncedForTask(ownerId: String, taskId: String)
+
+    @Query("UPDATE notes SET pendingSync = 0 WHERE ownerId = :ownerId AND taskId = :taskId AND deletedAt IS NOT NULL")
+    suspend fun markDeletedSyncedForTask(ownerId: String, taskId: String)
 
     @Query("DELETE FROM notes WHERE ownerId = :ownerId AND pendingSync = 0")
     suspend fun clearNonPending(ownerId: String)
@@ -223,6 +271,12 @@ interface TimePointDao {
 
     @Query("SELECT * FROM time_points WHERE id = :id AND ownerId = :ownerId AND deletedAt IS NULL")
     suspend fun getTimePointById(id: String, ownerId: String): TimePointEntity?
+
+    @Query("SELECT * FROM time_points WHERE id = :id AND ownerId = :ownerId LIMIT 1")
+    suspend fun getTimePointByIdIncludingDeleted(id: String, ownerId: String): TimePointEntity?
+
+    @Query("SELECT id FROM time_points WHERE ownerId = :ownerId AND pendingSync = 1")
+    suspend fun getPendingIds(ownerId: String): List<String>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTimePoints(timePoints: List<TimePointEntity>)
@@ -257,6 +311,12 @@ interface PlacementDao {
     @Query("SELECT * FROM placements WHERE ownerId = :ownerId AND taskId = :taskId AND deletedAt IS NULL")
     suspend fun getPlacementsByTaskIdForOwner(ownerId: String, taskId: String): List<PlacementEntity>
 
+    @Query("SELECT * FROM placements WHERE id = :id AND ownerId = :ownerId LIMIT 1")
+    suspend fun getById(id: String, ownerId: String): PlacementEntity?
+
+    @Query("SELECT id FROM placements WHERE ownerId = :ownerId AND pendingSync = 1")
+    suspend fun getPendingIds(ownerId: String): List<String>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertPlacements(placements: List<PlacementEntity>)
 
@@ -271,6 +331,9 @@ interface PlacementDao {
 
     @Query("UPDATE placements SET pendingSync = 0 WHERE ownerId = :ownerId AND id = :id")
     suspend fun markSynced(ownerId: String, id: String)
+
+    @Query("UPDATE placements SET pendingSync = 0 WHERE ownerId = :ownerId AND taskId = :taskId AND deletedAt IS NOT NULL")
+    suspend fun markSyncedForTask(ownerId: String, taskId: String)
 
     @Query("DELETE FROM placements WHERE ownerId = :ownerId AND pendingSync = 0")
     suspend fun clearNonPending(ownerId: String)
@@ -292,6 +355,9 @@ interface SettingsDao {
 interface OutboxDao {
     @Query("SELECT * FROM outbox WHERE ownerId = :ownerId ORDER BY id ASC")
     suspend fun getPendingItems(ownerId: String): List<OutboxEntity>
+
+    @Query("SELECT * FROM outbox WHERE ownerId = :ownerId AND nextAttemptAt <= :now AND (lastError IS NULL OR (lastError NOT LIKE 'TERMINAL:%' AND lastError NOT LIKE 'CONFLICT:%')) ORDER BY id ASC")
+    suspend fun getDueItems(ownerId: String, now: Long): List<OutboxEntity>
 
     @Query("SELECT * FROM outbox WHERE ownerId = :ownerId ORDER BY id ASC")
     fun getPendingItemsFlow(ownerId: String): Flow<List<OutboxEntity>>
@@ -316,6 +382,9 @@ interface ConflictDao {
 
     @Query("UPDATE conflicts SET resolvedAt = :resolvedAt WHERE id = :id AND ownerId = :ownerId")
     suspend fun markResolved(id: Long, ownerId: String, resolvedAt: String)
+
+    @Query("UPDATE conflicts SET resolvedAt = :resolvedAt WHERE mutationId = :mutationId AND ownerId = :ownerId AND resolvedAt IS NULL")
+    suspend fun markResolvedByMutationId(mutationId: String, ownerId: String, resolvedAt: String)
 }
 
 @Dao

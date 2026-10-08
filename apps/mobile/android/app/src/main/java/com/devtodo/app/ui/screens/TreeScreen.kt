@@ -292,7 +292,7 @@ fun TreeScreen(
                                     folder = folder,
                                     itemCount = row.taskCount,
                                     onClick = { onOpenFolder(folder.id) },
-                                    actions = actions + RowAction("归档或删除", destructive = true) {
+                                    actions = actions + RowAction("删除目录树", destructive = true) {
                                         pendingDeleteFolder = folder
                                     },
                                     rowShape = TaskDockShapes.groupedRow(
@@ -367,34 +367,23 @@ fun TreeScreen(
     pendingDeleteFolder?.let { folder ->
         AlertDialog(
             onDismissRequest = { pendingDeleteFolder = null },
-            title = { Text("处理目录树") },
-            text = { Text("选择归档整棵目录，或在线预览后永久删除。删除不会删除流程和事件，但会删除其中的任务及其依赖。") },
+            title = { Text("删除目录树") },
+            text = { Text("删除不会删除流程和事件，但会删除其中的任务及其依赖。请先在线预览并确认删除范围。") },
             confirmButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(
-                        onClick = {
-                            releasePins()
-                            viewModel.archiveFolderV2(folder)
-                            pendingDeleteFolder = null
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            val result = viewModel.api.getV2DeletePreview(folder.id)
+                            result
+                                .onSuccess { pendingPreview = it }
+                                .onFailure {
+                                    viewModel.showMessage(it.message ?: "无法获取删除预览，请检查连接")
+                                }
                         }
-                    ) {
-                        Text("递归归档")
+                        pendingDeleteFolder = null
                     }
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                val result = viewModel.api.getV2DeletePreview(folder.id)
-                                result
-                                    .onSuccess { pendingPreview = it }
-                                    .onFailure {
-                                        viewModel.showMessage(it.message ?: "无法获取删除预览，请检查连接")
-                                    }
-                            }
-                            pendingDeleteFolder = null
-                        }
-                    ) {
-                        Text("在线预览删除")
-                    }
+                ) {
+                    Text("在线预览删除")
                 }
             },
             dismissButton = { TextButton(onClick = { pendingDeleteFolder = null }) { Text("取消") } },
