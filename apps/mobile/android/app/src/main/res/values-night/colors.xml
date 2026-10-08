@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="taskdock_background">#161D17</color>
+    <!-- Canonical shared canvas token; kept in sync by theme-tokens.ts. -->
+    <color name="taskdock_background">#1A1B20</color>
+    <!-- Native Compose uses its own approved calm-green surface palette. -->
+    <color name="taskdock_window_surface">#161D17</color>
     <color name="taskdock_brand_background">#1E2F48</color>
     <color name="taskdock_launch_mark">#B3CDA3</color>
 </resources>
