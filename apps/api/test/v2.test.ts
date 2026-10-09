@@ -424,6 +424,50 @@ describe('TaskDock v2 API and sync protocol', () => {
     await app.close();
   });
 
+  it('preserves client-provided task and note ids from an offline mutation', async () => {
+    const { app, accessToken } = await boot();
+    const taskId = uuidv7();
+    const noteId = uuidv7();
+    const mutationId = uuidv7();
+    const pushed = await app.inject({
+      method: 'POST',
+      url: '/api/v2/sync/push',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'x-client-id': uuidv7(),
+      },
+      payload: {
+        protocolVersion: 2,
+        clientId: uuidv7(),
+        mutations: [
+          {
+            mutationId,
+            command: 'task.create',
+            entityId: taskId,
+            baseVersion: null,
+            occurredAt: new Date().toISOString(),
+            payload: { parentFolderId: null, title: '离线任务', noteId },
+          },
+        ],
+      },
+    });
+
+    expect(pushed.statusCode).toBe(200);
+    expect(pushed.json().results).toMatchObject([{ mutationId, status: 'applied' }]);
+    const snapshot = await app.inject({
+      method: 'GET',
+      url: '/api/v2/sync/snapshot',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(snapshot.json().tasks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: taskId })]),
+    );
+    expect(snapshot.json().notes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: noteId, taskId })]),
+    );
+    await app.close();
+  });
+
   it('rolls an active date forward through v2 and undoes it', async () => {
     const { app, accessToken } = await boot();
     const headers = () => ({

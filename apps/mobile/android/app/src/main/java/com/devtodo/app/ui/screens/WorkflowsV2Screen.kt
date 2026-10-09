@@ -250,9 +250,6 @@ fun WorkflowsV2Screen(
                                 RowAction("新增阶段", enabled = workflow.archivedAt == null) {
                                     stageWorkflow = workflow
                                 },
-                                RowAction(if (workflow.archivedAt == null) "归档流程" else "恢复流程") {
-                                    viewModel.setWorkflowArchivedV2(workflow)
-                                },
                                 RowAction("删除流程", destructive = true) {
                                     deleteWorkflow = workflow
                                 },

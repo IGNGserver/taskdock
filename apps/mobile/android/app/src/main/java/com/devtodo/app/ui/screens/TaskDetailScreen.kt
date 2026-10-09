@@ -76,7 +76,6 @@ fun TaskDetailScreen(
     var tab by rememberSaveable(taskId) { mutableIntStateOf(0) }
     var isSaving by remember { mutableStateOf(false) }
     var discard by remember { mutableStateOf(false) }
-    var showArchiveDialog by rememberSaveable(taskId) { mutableStateOf(false) }
     var showDeleteDialog by rememberSaveable(taskId) { mutableStateOf(false) }
     var showMoveFolder by rememberSaveable(taskId) { mutableStateOf(false) }
     var showDatePicker by rememberSaveable(taskId) { mutableStateOf(false) }
@@ -181,9 +180,6 @@ fun TaskDetailScreen(
                             listOf(
                                 RowAction("复制任务", !isSaving && !dirty && current.archivedAt == null) {
                                     viewModel.duplicateTaskV2(current)
-                                },
-                                RowAction(if (current.archivedAt == null) "归档任务" else "恢复任务", !isSaving && !dirty) {
-                                    showArchiveDialog = true
                                 },
                                 RowAction("删除任务", !isSaving && !dirty, true) {
                                     showDeleteDialog = true
@@ -730,30 +726,6 @@ fun TaskDetailScreen(
             dismissButton = { TextButton(onClick = { deleteStepId = null }) { Text("取消") } },
         )
     }
-    }
-
-    if (showArchiveDialog && task != null) {
-    val isArchived = task!!.archivedAt != null
-    AlertDialog(
-        onDismissRequest = { showArchiveDialog = false },
-        title = { Text(if (isArchived) "恢复任务？" else "归档任务？") },
-        text = { Text(if (isArchived) "任务将重新回到原目录树与工作区。" else "任务将从活跃视图归档，您随时可以在归档中心恢复。") },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    showArchiveDialog = false
-                    if (isArchived) {
-                        viewModel.restoreTask(task!!)
-                    } else {
-                        viewModel.archiveTask(task!!) { onBack() }
-                    }
-                }
-            ) {
-                Text(if (isArchived) "恢复" else "归档")
-            }
-        },
-        dismissButton = { TextButton(onClick = { showArchiveDialog = false }) { Text("取消") } },
-    )
     }
 
     if (showDeleteDialog && task != null) {

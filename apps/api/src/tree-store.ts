@@ -171,7 +171,7 @@ export interface V2TreeStore {
   ): { folderCount: number; taskCount: number };
   createTask(
     ownerId: string,
-    input: { id?: string; parentFolderId: string | null; title: string },
+    input: { id?: string; parentFolderId: string | null; title: string; noteId?: string },
   ): { task: TreeTaskDto; note: NoteDto };
   listTasks(ownerId: string, query?: string): TreeTaskDto[];
   getTask(ownerId: string, id: string): TreeTaskDto;
@@ -719,7 +719,7 @@ export class MemoryTreeStore implements V2TreeStore {
 
   createTask(
     ownerId: string,
-    input: { id?: string; parentFolderId: string | null; title: string },
+    input: { id?: string; parentFolderId: string | null; title: string; noteId?: string },
   ): { task: TreeTaskDto; note: NoteDto } {
     this.ensureOwner(ownerId);
     assertTreeParentIsActiveFolder(input.parentFolderId, this.ownerFolders(ownerId));
@@ -746,7 +746,7 @@ export class MemoryTreeStore implements V2TreeStore {
       deletedAt: null,
     };
     const note: NoteRecord = {
-      id: uuidv7(),
+      id: this.entityId(input.noteId),
       ownerId,
       taskId: id,
       contentMarkdown: '',
@@ -755,6 +755,7 @@ export class MemoryTreeStore implements V2TreeStore {
       updatedAt: now,
       deletedAt: null,
     };
+    if (this.notes.has(note.id)) throw new DomainError('MUTATION_REJECTED', '备注 ID 已存在');
     this.tasks.set(id, task);
     this.notes.set(note.id, note);
     this.record(ownerId, 'task', id, task.version, 'upsert', this.taskDto(task));
@@ -874,15 +875,11 @@ export class MemoryTreeStore implements V2TreeStore {
       id: requestedIds.taskId,
       parentFolderId: source.parentFolderId,
       title: source.title,
+      noteId: requestedIds.noteId,
     });
     const task = this.tasks.get(created.task.id)!;
     task.rank = this.nextSiblingRank(ownerId, source.parentFolderId, 'TASK');
     const note = this.notes.get(created.note.id)!;
-    if (requestedIds.noteId) {
-      this.notes.delete(note.id);
-      note.id = requestedIds.noteId;
-      this.notes.set(note.id, note);
-    }
     note.contentMarkdown = sourceNote.contentMarkdown;
     note.version += 1;
     note.updatedAt = this.now();
@@ -1765,6 +1762,7 @@ export class MemoryTreeStore implements V2TreeStore {
           id: mutation.entityId,
           parentFolderId: nullableUuid(p.parentFolderId),
           title: stringValue(p.title),
+          noteId: optionalString(p.noteId),
         });
       case 'task.update':
         return this.updateTask(
