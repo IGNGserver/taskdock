@@ -755,8 +755,7 @@ export class MemoryTreeStore implements V2TreeStore {
       updatedAt: now,
       deletedAt: null,
     };
-    if (this.notes.has(note.id))
-      throw new DomainError('MUTATION_REJECTED', '备注 ID 已存在');
+    if (this.notes.has(note.id)) throw new DomainError('MUTATION_REJECTED', '备注 ID 已存在');
     this.tasks.set(id, task);
     this.notes.set(note.id, note);
     this.record(ownerId, 'task', id, task.version, 'upsert', this.taskDto(task));

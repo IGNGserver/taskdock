@@ -453,9 +453,7 @@ describe('TaskDock v2 API and sync protocol', () => {
     });
 
     expect(pushed.statusCode).toBe(200);
-    expect(pushed.json().results).toMatchObject([
-      { mutationId, status: 'applied' },
-    ]);
+    expect(pushed.json().results).toMatchObject([{ mutationId, status: 'applied' }]);
     const snapshot = await app.inject({
       method: 'GET',
       url: '/api/v2/sync/snapshot',
