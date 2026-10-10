@@ -88,10 +88,10 @@
   --m3e-button-radius: var(--m3-shape-md);
 }
 
-/* Expressive squish: the corner radius morphs on press. */
+/* Expressive squish: subtle tactile press feedback without excessive shape distortion. */
 .m3e-button:active:not(:disabled) {
   border-radius: var(--m3e-button-radius);
-  scale: 0.97;
+  scale: 0.99;
 }
 .m3e-button--round:active:not(:disabled) {
   border-radius: var(--m3-shape-lg);
@@ -402,7 +402,7 @@
 @keyframes m3e-menu-in {
   from {
     opacity: 0;
-    transform: scale(0.92) translateY(-6px);
+    transform: scale(0.98) translateY(-4px);
   }
   to {
     opacity: 1;

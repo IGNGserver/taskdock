@@ -447,7 +447,7 @@
 @keyframes m3e-dialog-in {
   from {
     opacity: 0;
-    transform: scale(0.86) translateY(12px);
+    transform: scale(0.97) translateY(4px);
   }
   to {
     opacity: 1;

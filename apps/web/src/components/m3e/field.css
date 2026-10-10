@@ -226,7 +226,10 @@
   position: absolute;
   z-index: 8;
   inset-block-start: calc(100% + 6px);
-  inset-inline: 0;
+  inset-inline-start: 0;
+  min-inline-size: 100%;
+  inline-size: max-content;
+  max-inline-size: min(360px, 90vw);
   max-block-size: min(320px, 50vh);
   margin: 0;
   padding-block: 8px;
@@ -242,10 +245,11 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-block-size: 48px;
+  min-block-size: 40px;
   padding-inline: 12px;
   color: var(--m3-on-surface);
   font-size: var(--m3-type-body-large-size);
+  white-space: nowrap;
   cursor: pointer;
 }
 .m3e-select__option:hover {
