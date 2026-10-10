@@ -1,7 +1,7 @@
 import type { FolderDto } from '@devtodo/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { ChevronDown, ChevronRight, Folder, FolderOpen } from 'lucide-react';
+import { ChevronRight, Folder, FolderOpen } from 'lucide-react';
 import { requestV2 } from '../api.js';
 import { directoryEntries } from '../directory-paths.js';
 import { Button, IconButton } from './m3e/index.js';
@@ -77,13 +77,13 @@ export function DirectoryNavigation({ onNavigate }: { onNavigate?: () => void })
             <li key={folder.id}>
               <div
                 className="directory-navigation-row"
-                style={{ paddingInlineStart: `${Math.min(depth, 8) * 12}px` }}
               >
                 {hasChildren ? (
                   <IconButton
                     size="xs"
                     label={`${open ? '收起' : '展开'} ${folder.title}`}
                     aria-expanded={open}
+                    className="directory-navigation-toggle"
                     onClick={() => {
                       setExpanded((current) => {
                         const next = new Set(current);
@@ -99,7 +99,10 @@ export function DirectoryNavigation({ onNavigate }: { onNavigate?: () => void })
                       });
                     }}
                   >
-                    {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    <ChevronRight
+                      size={14}
+                      className={`directory-navigation-chevron${open ? ' is-open' : ''}`}
+                    />
                   </IconButton>
                 ) : (
                   <span className="directory-navigation-spacer" />
@@ -109,6 +112,7 @@ export function DirectoryNavigation({ onNavigate }: { onNavigate?: () => void })
                   end
                   onClick={onNavigate}
                   className="directory-navigation-link"
+                  title={folder.title}
                 >
                   {activeId === folder.id ? <FolderOpen size={16} /> : <Folder size={16} />}
                   <span>{folder.title}</span>

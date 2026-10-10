@@ -39,6 +39,7 @@
   gap: 4px;
   padding-block-start: 12px;
   border-block-start: 1px solid var(--m3-outline-variant);
+  overflow-x: hidden;
 }
 .directory-navigation-heading {
   padding: 4px 10px;
@@ -55,6 +56,18 @@
   align-items: center;
   min-inline-size: 0;
 }
+.directory-navigation-toggle {
+  flex: 0 0 24px;
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+}
+.directory-navigation-chevron {
+  transition: transform 180ms var(--m3-easing-standard);
+}
+.directory-navigation-chevron.is-open {
+  transform: rotate(90deg);
+}
 .directory-navigation-spacer {
   flex: 0 0 24px;
 }
@@ -70,11 +83,19 @@
   color: var(--m3-on-surface-variant);
   font-size: 13px;
   text-decoration: none;
+  transition:
+    background-color 150ms var(--m3-easing-standard),
+    color 150ms var(--m3-easing-standard);
 }
 .directory-navigation-link span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-all;
+  white-space: normal;
+  line-height: 1.35;
 }
 .directory-navigation-link svg {
   flex: 0 0 auto;
@@ -318,7 +339,8 @@
   font-size: 13px;
 }
 .tree-list-toolbar .m3e-select {
-  inline-size: 150px;
+  inline-size: auto;
+  min-inline-size: 136px;
 }
 .tree-list-toolbar .m3e-select__native {
   min-block-size: 38px;
@@ -519,7 +541,8 @@
     inline-size: auto;
   }
   .tree-list-toolbar .m3e-select {
-    inline-size: 130px;
+    inline-size: auto;
+    min-inline-size: 130px;
   }
   .workspace-editor {
     gap: 20px;
