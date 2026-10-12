@@ -3,6 +3,7 @@ package com.devtodo.app.ui.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -17,11 +18,20 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
         fun createRoute(folderId: String) = "tree/folder/$folderId"
     }
 
-    data object Time : Screen("time", "日程", Icons.Default.DateRange)
+    /** Kept as `time` for existing internal links; the screen is now the calendar. */
+    data object Time : Screen("time", "日历", Icons.Default.DateRange)
+
+    data object DaySchedule : Screen("time/day/{localDate}", "当天日程") {
+        fun createRoute(localDate: String) = "time/day/$localDate"
+    }
+
+    data object Events : Screen("events", "事件", Icons.Default.Event)
+
+    data object EventDetail : Screen("event/{eventId}", "事件详情") {
+        fun createRoute(eventId: String) = "event/$eventId"
+    }
 
     data object Workflows : Screen("workflows", "流程")
-
-    data object AllTasks : Screen("all_tasks", "全部任务")
 
     data object More : Screen("more", "设置", Icons.Default.Settings)
 

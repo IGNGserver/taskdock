@@ -57,9 +57,6 @@ interface FolderDao {
 
 @Dao
 interface TaskDao {
-    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC")
-    fun getAllTasksFlow(ownerId: String): Flow<List<TaskEntity>>
-
     @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND projectId IS NULL AND category = 'MISC' AND archivedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC")
     fun getInboxTasksFlow(ownerId: String): Flow<List<TaskEntity>>
 
@@ -334,6 +331,9 @@ interface PlacementDao {
 
     @Query("UPDATE placements SET pendingSync = 0 WHERE ownerId = :ownerId AND taskId = :taskId AND deletedAt IS NOT NULL")
     suspend fun markSyncedForTask(ownerId: String, taskId: String)
+
+    @Query("UPDATE placements SET pendingSync = 0 WHERE ownerId = :ownerId AND timePointId = :timePointId AND deletedAt IS NOT NULL")
+    suspend fun markDeletedSyncedForTimePoint(ownerId: String, timePointId: String)
 
     @Query("DELETE FROM placements WHERE ownerId = :ownerId AND pendingSync = 0")
     suspend fun clearNonPending(ownerId: String)

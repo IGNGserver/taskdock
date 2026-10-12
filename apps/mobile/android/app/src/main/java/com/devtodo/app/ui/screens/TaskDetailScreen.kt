@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.devtodo.app.data.local.FolderEntity
+import com.devtodo.app.data.local.PlacementEntity
 import com.devtodo.app.data.local.TaskStepEntity
 import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.ui.components.*
@@ -80,6 +81,7 @@ fun TaskDetailScreen(
     var showMoveFolder by rememberSaveable(taskId) { mutableStateOf(false) }
     var showDatePicker by rememberSaveable(taskId) { mutableStateOf(false) }
     var scheduleCopy by rememberSaveable(taskId) { mutableStateOf(false) }
+    var schedulingPlacement by remember(taskId) { mutableStateOf<PlacementEntity?>(null) }
     var createStep by rememberSaveable(taskId) { mutableStateOf(false) }
     var stepId by rememberSaveable(taskId) { mutableStateOf<String?>(null) }
     var stepTitle by rememberSaveable(taskId) { mutableStateOf("") }
@@ -505,38 +507,47 @@ fun TaskDetailScreen(
                                             )
                                         }
 
-                                        TextButton(onClick = { viewModel.removePlacement(placement) }) {
-                                            Text("移除安排", color = MaterialTheme.colorScheme.error)
+                                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            TextButton(onClick = {
+                                                schedulingPlacement = placement
+                                                scheduleCopy = false
+                                                showDatePicker = true
+                                            }) {
+                                                Text("移动")
+                                            }
+                                            TextButton(onClick = {
+                                                schedulingPlacement = placement
+                                                scheduleCopy = true
+                                                showDatePicker = true
+                                            }) {
+                                                Text("复制")
+                                            }
+                                            TextButton(onClick = { viewModel.removePlacement(placement) }) {
+                                                Text("移除", color = MaterialTheme.colorScheme.error)
+                                            }
                                         }
                                     }
                                 }
                             }
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
+                            if (placements.isEmpty()) {
                                 FilledTonalButton(
                                     onClick = {
+                                        schedulingPlacement = null
                                         scheduleCopy = false
                                         showDatePicker = true
                                     },
                                     shape = TaskDockShapes.FullPill,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.fillMaxWidth(),
                                 ) {
-                                    Text("移动到日期")
+                                    Text("安排到日期")
                                 }
-
-                                OutlinedButton(
-                                    onClick = {
-                                        scheduleCopy = true
-                                        showDatePicker = true
-                                    },
-                                    shape = TaskDockShapes.FullPill,
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Text("添加另一个日期")
-                                }
+                            } else {
+                                Text(
+                                    "每个安排都可以单独移动、复制或移除；任务本体不会被复制。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }
@@ -638,12 +649,22 @@ fun TaskDetailScreen(
                         timeZone = TimeZone.getTimeZone("UTC")
                     }.format(Date(datePickerState.selectedDateMillis!!))
 
-                    viewModel.scheduleTask(
-                        task = task!!,
-                        localDate = localDate,
-                        copy = scheduleCopy,
-                    ) {
-                        showDatePicker = false
+                    val placement = schedulingPlacement
+                    if (placement == null) {
+                        viewModel.scheduleTask(
+                            task = task!!,
+                            localDate = localDate,
+                            copy = false,
+                        ) { failure ->
+                            if (failure == null) showDatePicker = false
+                        }
+                    } else {
+                        viewModel.movePlacementToDate(placement, localDate, scheduleCopy) { success ->
+                            if (success) {
+                                schedulingPlacement = null
+                                showDatePicker = false
+                            }
+                        }
                     }
                 },
             ) {

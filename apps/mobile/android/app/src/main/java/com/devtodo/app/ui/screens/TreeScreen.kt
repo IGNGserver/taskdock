@@ -61,7 +61,6 @@ fun TreeScreen(
     locateRequest: Int = 0,
     onNavigateToShortcut: (String) -> Unit = {},
     onOpenSettings: () -> Unit = {},
-    onOpenSearch: () -> Unit = {},
 ) {
     val allFolders by viewModel.foldersV2.collectAsStateWithLifecycle()
     val allTasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
@@ -162,12 +161,6 @@ fun TreeScreen(
                 },
                 actions = {
                     if (folderId == null) {
-                        IconButton(
-                            onClick = onOpenSearch,
-                            modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
-                        ) {
-                            Icon(Icons.Default.Search, "搜索全部任务", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                         IconButton(
                             onClick = onOpenSettings,
                             modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
@@ -520,9 +513,9 @@ private fun ExpressiveSmartDashboard(
             }
         }
         val shortcuts = listOf(
-            Triple("日程", Icons.Default.CalendarToday, Screen.Time.route),
+            Triple("日历", Icons.Default.CalendarToday, Screen.Time.route),
             Triple("流程", Icons.Default.AccountTree, Screen.Workflows.route),
-            Triple("全部任务", Icons.Default.Checklist, Screen.AllTasks.route),
+            Triple("事件", Icons.Default.Event, Screen.Events.route),
         )
         Surface(
             modifier = Modifier.animateContentSize(animationSpec = TaskDockMotion.springSpatial()),
@@ -772,167 +765,4 @@ private fun descendantFolderIds(rootId: String, folders: List<FolderEntity>): Se
             .forEach { if (ids.add(it.id)) changed = true }
     }
     return ids
-}
-
-/**
- * AllTasks Search & Filter View (Redesigned with M3 Expressive)
- */
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
-fun AllTasksV2Screen(
-    viewModel: MainViewModel,
-    onNavigateToDetail: (String) -> Unit,
-    listState: LazyListState = rememberLazyListState(),
-    onBack: () -> Unit = {},
-) {
-    val tasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
-    val refreshing by viewModel.pullRefreshing.collectAsStateWithLifecycle()
-    var query by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableStateOf<String?>(null) }
-    val activeTasks = tasks.filter { it.archivedAt == null && it.deletedAt == null }
-    val normalizedQuery = query.trim()
-    val visible = activeTasks.filter {
-        it.deletedAt == null &&
-            it.archivedAt == null &&
-            (filter == null || it.status.name == filter) &&
-            (it.title.contains(normalizedQuery, ignoreCase = true) ||
-                it.referenceId?.contains(normalizedQuery, ignoreCase = true) == true)
-    }
-
-    WorkspaceScaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("全部任务", fontWeight = FontWeight.Medium) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                )
-            )
-        },
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            // Expressive Search & Filter Header
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .animateContentSize(animationSpec = TaskDockMotion.springSpatial())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                shape = TaskDockShapes.LargeIncreased,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        label = { Text("搜索任务") },
-                        placeholder = { Text("标题或引用编号") },
-                        singleLine = true,
-                        leadingIcon = { Icon(Icons.Default.Search, null) },
-                        trailingIcon = {
-                            if (query.isNotEmpty()) {
-                                IconButton(onClick = { query = "" }) {
-                                    Icon(Icons.Default.Close, "清除搜索")
-                                }
-                            }
-                        },
-                        shape = TaskDockShapes.FullPill,
-                        modifier = Modifier.fillMaxWidth().testTag("all-task-search"),
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        FilterChip(
-                            selected = filter == null,
-                            onClick = { filter = null },
-                            label = { Text("全部 (${activeTasks.size})") },
-                            shape = TaskDockShapes.FullPill,
-                        )
-                        TaskStatus.entries.forEach { status ->
-                            val count = activeTasks.count { it.status == status }
-                            FilterChip(
-                                selected = filter == status.name,
-                                onClick = { filter = status.name },
-                                label = { Text("${taskStatusLabel(status)} ($count)") },
-                                shape = TaskDockShapes.FullPill,
-                            )
-                        }
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = when {
-                        normalizedQuery.isNotEmpty() -> "搜索结果"
-                        filter != null -> "${taskStatusLabel(TaskStatus.valueOf(filter!!))}任务"
-                        else -> "任务列表"
-                    },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = "${visible.size} 项",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            PullToRefreshBox(
-                isRefreshing = refreshing,
-                onRefresh = viewModel::pullRefresh,
-                modifier = Modifier
-                    .weight(1f)
-                    .imePadding(),
-            ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .testTag("all-tasks-list"),
-                    state = listState,
-                    contentPadding = PaddingValues(bottom = 24.dp),
-                ) {
-                    itemsIndexed(visible, key = { _, task -> task.id }) { index, task ->
-                        ExpressiveTaskCard(
-                            task = task,
-                            onClick = { onNavigateToDetail(task.id) },
-                            onStatusToggle = { viewModel.updateTaskStatus(task, it) },
-                            showStatus = filter == null,
-                            rowShape = TaskDockShapes.groupedRow(index, visible.size),
-                            modifier = Modifier
-                                .animateItem()
-                                .testTag("all-task-${task.id}"),
-                        )
-                    }
-
-                    if (visible.isEmpty()) {
-                        item {
-                            EmptyState(
-                                icon = Icons.Default.Search,
-                                title = if (normalizedQuery.isNotEmpty()) "没有匹配的任务" else "暂无该状态任务",
-                                description = "尝试更换关键词或筛选条件。",
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
 }

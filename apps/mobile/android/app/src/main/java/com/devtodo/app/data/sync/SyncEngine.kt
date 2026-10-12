@@ -450,10 +450,37 @@ class SyncEngine(
             "taskStep.create", "taskStep.update", "taskStep.move", "taskStep.delete" ->
                 db.taskStepDao().markSynced(ownerId, entityId)
             "timePoint.date.create", "timePoint.event.create", "timePoint.update",
-            "timePoint.reach", "timePoint.archive", "timePoint.restore", "timePoint.delete" ->
+            "timePoint.reach", "timePoint.archive", "timePoint.restore", "timePoint.delete" -> {
                 db.timePointDao().markSynced(ownerId, entityId)
-            "placement.create", "placement.remove", "placement.move", "placement.copy" ->
+                if (item.command == "timePoint.delete") {
+                    db.placementDao().markDeletedSyncedForTimePoint(ownerId, entityId)
+                }
+            }
+            "timePoint.reorder" -> {
+                val payload = api.json.decodeFromString<Map<String, JsonElement>>(item.payloadJson)
+                payload["ids"]?.jsonArray?.forEach { id ->
+                    id.jsonPrimitive.contentOrNull?.let { pointId ->
+                        db.timePointDao().markSynced(ownerId, pointId)
+                    }
+                }
+            }
+            "placement.create", "placement.remove" ->
                 db.placementDao().markSynced(ownerId, entityId)
+            "placement.move", "placement.copy" -> {
+                db.placementDao().markSynced(ownerId, entityId)
+                val payload = api.json.decodeFromString<Map<String, JsonElement>>(item.payloadJson)
+                payload["targetPlacementId"]?.jsonPrimitive?.contentOrNull?.let {
+                    db.placementDao().markSynced(ownerId, it)
+                }
+            }
+            "placement.reorder" -> {
+                val payload = api.json.decodeFromString<Map<String, JsonElement>>(item.payloadJson)
+                payload["ids"]?.jsonArray?.forEach { id ->
+                    id.jsonPrimitive.contentOrNull?.let { placementId ->
+                        db.placementDao().markSynced(ownerId, placementId)
+                    }
+                }
+            }
             "workflow.update", "workflow.archive", "workflow.restore" ->
                 db.workflowDao().markSynced(ownerId, entityId)
             "workflow.create" -> {
@@ -687,7 +714,8 @@ class SyncEngine(
             "note.update" -> Mutation(item.mutationId, "note.update", item.entityId, item.baseVersion, item.occurredAt,
                 mapOf("taskId" to JsonPrimitive(item.entityId), "contentMarkdown" to (payload["contentMarkdown"] ?: JsonPrimitive(""))))
             "timePoint.date.create", "timePoint.event.create", "timePoint.update",
-            "timePoint.reach", "timePoint.archive", "timePoint.restore", "timePoint.reorder",
+            "timePoint.reach", "timePoint.archive", "timePoint.restore", "timePoint.delete",
+            "timePoint.reorder",
             "placement.create", "placement.remove", "placement.move", "placement.copy", "placement.reorder" ->
                 Mutation(item.mutationId, item.command, item.entityId, item.baseVersion, item.occurredAt, payload)
             "folder.create", "folder.update", "folder.archiveTree", "folder.restoreTree", "folder.deleteTree",
