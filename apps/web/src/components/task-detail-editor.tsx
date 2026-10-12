@@ -73,7 +73,7 @@ export function TaskDetailEditor({
       frame = window.requestAnimationFrame(() =>
         editorRef.current
           ?.querySelector<HTMLInputElement>('.m3e-field--task-detail-title input')
-          ?.focus(),
+          ?.focus({ preventScroll: true }),
       );
     };
     window.addEventListener('devtodo:focus-task-title', focus);

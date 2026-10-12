@@ -297,10 +297,12 @@ export function TreePage() {
     },
     [navigate],
   );
+  const hasFocusedTask = useRef<string | null>(null);
   useEffect(() => {
-    if (focusTaskId) {
+    if (focusTaskId && hasFocusedTask.current !== focusTaskId) {
       const element = document.getElementById(`task-${focusTaskId}`);
       if (element) {
+        hasFocusedTask.current = focusTaskId;
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
@@ -430,7 +432,7 @@ export function TreePage() {
         (document.activeElement === document.body ||
           document.activeElement === captureInput.current)
       )
-        captureInput.current?.focus();
+        captureInput.current?.focus({ preventScroll: true });
     }
   };
   const createFolder = async (event: FormEvent) => {

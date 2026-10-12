@@ -151,7 +151,7 @@ export function useRovingFocus<T extends string>(
         const index = (from + offset * direction + values.length) % values.length;
         const candidate = values[index]!;
         if (!isDisabled(candidate)) {
-          refs.current[index]?.focus();
+          refs.current[index]?.focus({ preventScroll: true });
           onSelect(candidate);
           return;
         }
@@ -178,14 +178,14 @@ export function useRovingFocus<T extends string>(
         event.preventDefault();
         const first = values.findIndex((value) => !isDisabled(value));
         if (first >= 0) {
-          refs.current[first]?.focus();
+          refs.current[first]?.focus({ preventScroll: true });
           onSelect(values[first]!);
         }
       } else if (event.key === 'End') {
         event.preventDefault();
         const last = lastEnabled();
         if (last >= 0) {
-          refs.current[last]?.focus();
+          refs.current[last]?.focus({ preventScroll: true });
           onSelect(values[last]!);
         }
       }
@@ -232,7 +232,7 @@ export function useFocusTrap(
     const first =
       container.querySelector<HTMLElement>('[data-autofocus], [data-modal-autofocus]') ??
       focusable()[0];
-    first?.focus();
+    first?.focus({ preventScroll: true });
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || focusTrapStack.at(-1) !== container) return;
@@ -249,10 +249,10 @@ export function useFocusTrap(
       const lastElement = elements[elements.length - 1]!;
       if (event.shiftKey && document.activeElement === firstElement) {
         event.preventDefault();
-        lastElement.focus();
+        lastElement.focus({ preventScroll: true });
       } else if (!event.shiftKey && document.activeElement === lastElement) {
         event.preventDefault();
-        firstElement.focus();
+        firstElement.focus({ preventScroll: true });
       }
     };
     document.addEventListener('keydown', onKeyDown);
@@ -272,6 +272,7 @@ export function useFocusTrap(
  */
 const scrollLocks = new Map<string, number>();
 let unlockedOverflow = '';
+let lockedPageWrapScrollTop = 0;
 
 export function useScrollLock(active: boolean, className = 'modal-open') {
   useEffect(() => {
@@ -279,6 +280,10 @@ export function useScrollLock(active: boolean, className = 'modal-open') {
     if (scrollLocks.size === 0) {
       unlockedOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
+      const pageWrap = document.querySelector<HTMLElement>('.page-wrap');
+      if (pageWrap) {
+        lockedPageWrapScrollTop = pageWrap.scrollTop;
+      }
     }
     scrollLocks.set(className, (scrollLocks.get(className) ?? 0) + 1);
     document.documentElement.classList.add(className);
@@ -291,7 +296,13 @@ export function useScrollLock(active: boolean, className = 'modal-open') {
         scrollLocks.delete(className);
         document.documentElement.classList.remove(className);
       }
-      if (scrollLocks.size === 0) document.body.style.overflow = unlockedOverflow;
+      if (scrollLocks.size === 0) {
+        document.body.style.overflow = unlockedOverflow;
+        const pageWrap = document.querySelector<HTMLElement>('.page-wrap');
+        if (pageWrap && lockedPageWrapScrollTop > 0) {
+          pageWrap.scrollTop = lockedPageWrapScrollTop;
+        }
+      }
     };
   }, [active, className]);
 }
