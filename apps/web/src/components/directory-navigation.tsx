@@ -75,9 +75,7 @@ export function DirectoryNavigation({ onNavigate }: { onNavigate?: () => void })
           const hasChildren = Boolean(children.get(folder.id)?.length);
           return (
             <li key={folder.id}>
-              <div
-                className="directory-navigation-row"
-              >
+              <div className="directory-navigation-row">
                 {hasChildren ? (
                   <IconButton
                     size="xs"
