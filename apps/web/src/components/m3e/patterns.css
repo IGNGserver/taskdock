@@ -862,32 +862,33 @@
 }
 
 .m3e-stagger > * {
-  animation: m3e-rise-in var(--m3-spring-spatial-duration) var(--m3-spring-spatial) both;
+  animation: m3e-fade-in var(--m3-spring-effects-duration) var(--m3-spring-effects) both;
 }
 .m3e-stagger > *:nth-child(1) {
   animation-delay: 0ms;
 }
 .m3e-stagger > *:nth-child(2) {
-  animation-delay: 40ms;
+  animation-delay: 20ms;
 }
 .m3e-stagger > *:nth-child(3) {
-  animation-delay: 80ms;
+  animation-delay: 40ms;
 }
 .m3e-stagger > *:nth-child(4) {
-  animation-delay: 120ms;
+  animation-delay: 60ms;
 }
 .m3e-stagger > *:nth-child(5) {
-  animation-delay: 160ms;
+  animation-delay: 80ms;
 }
 .m3e-stagger > *:nth-child(6) {
-  animation-delay: 200ms;
+  animation-delay: 100ms;
 }
 .m3e-stagger > *:nth-child(n + 7) {
-  animation-delay: 240ms;
+  animation-delay: 120ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .m3e-stagger > * {
     animation-name: m3e-fade-in;
+    animation-delay: 0ms !important;
   }
 }

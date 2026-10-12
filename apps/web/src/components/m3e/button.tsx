@@ -227,7 +227,7 @@ export function Menu({
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const first = ref.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])');
-    first?.focus();
+    first?.focus({ preventScroll: true });
   }, []);
   return (
     <div
@@ -253,7 +253,7 @@ export function Menu({
           event.key === 'ArrowDown'
             ? items[(index + 1) % items.length]
             : items[(index - 1 + items.length) % items.length];
-        next?.focus();
+        next?.focus({ preventScroll: true });
       }}
     >
       {options.map((option) => (

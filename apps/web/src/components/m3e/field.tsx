@@ -197,7 +197,9 @@ export function Select({
     const list = containerRef.current?.querySelector<HTMLElement>(
       '[role="option"][aria-selected="true"]',
     );
-    (list ?? containerRef.current?.querySelector<HTMLElement>('[role="option"]'))?.focus();
+    (list ?? containerRef.current?.querySelector<HTMLElement>('[role="option"]'))?.focus({
+      preventScroll: true,
+    });
   }, [containerRef, open]);
 
   return (
@@ -264,7 +266,7 @@ export function Select({
             if (event.key === 'Escape') {
               event.preventDefault();
               setOpen(false);
-              buttonRef.current?.focus();
+              buttonRef.current?.focus({ preventScroll: true });
               return;
             }
             if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
@@ -280,7 +282,7 @@ export function Select({
               event.key === 'ArrowDown'
                 ? items[(index + 1) % items.length]
                 : items[(index - 1 + items.length) % items.length];
-            next?.focus();
+            next?.focus({ preventScroll: true });
           }}
         >
           {options.map((option) => (
@@ -295,7 +297,7 @@ export function Select({
                 if (option.disabled) return;
                 onChange(option.value);
                 setOpen(false);
-                buttonRef.current?.focus();
+                buttonRef.current?.focus({ preventScroll: true });
               }}
             >
               <span className="m3e-select__check" aria-hidden="true">

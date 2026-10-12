@@ -1365,7 +1365,7 @@ function CommandPalette({
     if (!open) return;
     setQuery('');
     setActionError('');
-    window.setTimeout(() => inputRef.current?.focus(), 0);
+    window.setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 0);
   }, [open]);
   useEffect(() => {
     if (!open) return;

@@ -73,6 +73,7 @@ body {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   scrollbar-color: color-mix(in srgb, var(--m3-primary) 54%, transparent) transparent;
   scrollbar-width: thin;
   background: var(--m3-canvas);
