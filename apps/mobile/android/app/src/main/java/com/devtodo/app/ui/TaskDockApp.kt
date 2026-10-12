@@ -181,7 +181,6 @@ fun TaskDockApp(
                         locateRequest = locateRequest,
                         onNavigateToShortcut = ::navigateShortcut,
                         onOpenSettings = { navigateShortcut(Screen.More.route) },
-                        onOpenSearch = { navigateShortcut(Screen.AllTasks.route) },
                     )
                 }
 
@@ -217,13 +216,60 @@ fun TaskDockApp(
                 }
 
                 composable(Screen.Time.route) {
-                    TimeScreen(
+                    CalendarScreen(
+                        viewModel = viewModel,
+                        onNavigateToDay = { localDate ->
+                            navController.navigate(Screen.DaySchedule.createRoute(localDate))
+                        },
+                        onNavigateToEvents = {
+                            navController.navigate(Screen.Events.route) { launchSingleTop = true }
+                        },
+                        onBack = ::returnToDirectory,
+                    )
+                }
+
+                composable(
+                    route = Screen.DaySchedule.route,
+                    arguments = listOf(navArgument("localDate") { type = NavType.StringType }),
+                ) { backStackEntry ->
+                    val localDate = backStackEntry.arguments?.getString("localDate") ?: return@composable
+                    DayScheduleScreen(
+                        localDate = localDate,
                         viewModel = viewModel,
                         onNavigateToDetail = { taskId ->
                             navController.navigate(Screen.TaskDetail.createRoute(taskId))
                         },
                         onNavigateToTree = ::locate,
-                        onBack = ::returnToDirectory,
+                        onNavigateToEvents = {
+                            navController.navigate(Screen.Events.route) { launchSingleTop = true }
+                        },
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+
+                composable(Screen.Events.route) {
+                    EventsScreen(
+                        viewModel = viewModel,
+                        onNavigateToEvent = { eventId ->
+                            navController.navigate(Screen.EventDetail.createRoute(eventId))
+                        },
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+
+                composable(
+                    route = Screen.EventDetail.route,
+                    arguments = listOf(navArgument("eventId") { type = NavType.StringType }),
+                ) { backStackEntry ->
+                    val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
+                    EventDetailScreen(
+                        eventId = eventId,
+                        viewModel = viewModel,
+                        onNavigateToDetail = { taskId ->
+                            navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                        },
+                        onNavigateToTree = ::locate,
+                        onBack = { navController.popBackStack() },
                     )
                 }
 
@@ -234,16 +280,6 @@ fun TaskDockApp(
                             navController.navigate(Screen.TaskDetail.createRoute(taskId))
                         },
                         onBack = ::returnToDirectory,
-                    )
-                }
-
-                composable(Screen.AllTasks.route) {
-                    AllTasksV2Screen(
-                        viewModel = viewModel,
-                        onNavigateToDetail = { taskId ->
-                            navController.navigate(Screen.TaskDetail.createRoute(taskId))
-                        },
-                        onBack = { navController.popBackStack() },
                     )
                 }
 

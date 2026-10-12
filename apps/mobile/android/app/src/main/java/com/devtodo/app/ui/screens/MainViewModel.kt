@@ -68,12 +68,6 @@ class MainViewModel(
         .flatMapLatest { ownerId -> ownerId?.let { db.archiveOperationDao().getAllFlow(it) } ?: flowOf(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val allTasks: StateFlow<List<TaskEntity>> = currentOwnerId
-        .flatMapLatest { ownerId ->
-            ownerId?.let { db.taskDao().getAllTasksFlow(it) } ?: flowOf(emptyList())
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
     val inboxTasks: StateFlow<List<TaskEntity>> = currentOwnerId
         .flatMapLatest { ownerId ->
             ownerId?.let { db.taskDao().getInboxTasksFlow(it) } ?: flowOf(emptyList())
@@ -1310,6 +1304,13 @@ class MainViewModel(
         }
     }
 
+    /**
+     * Adds a task placement to a date. A task-level call cannot identify which
+     * existing placement should move, so it must never remove the task's other
+     * placements. Use [movePlacementToDate] for the web-compatible move
+     * operation on one concrete placement.
+     */
+    @Suppress("UNUSED_PARAMETER")
     fun scheduleTask(
         task: TaskEntity,
         localDate: String,
@@ -1336,18 +1337,6 @@ class MainViewModel(
                         syncEngine.recordLocalMutation("placement.create", id, null,
                             mapOf("taskId" to task.id, "timePointId" to datePoint.id, "__localId" to id), ownerId = ownerId)
                     }
-                    if (!copy) placements.filter { it.timePointId != datePoint.id }.forEach { placement ->
-                        val now = nowIso()
-                        db.placementDao().upsertPlacement(
-                            placement.copy(
-                                version = placement.version + 1,
-                                updatedAt = now,
-                                deletedAt = now,
-                                pendingSync = true,
-                            ),
-                        )
-                        syncEngine.recordLocalMutation("placement.remove", placement.id, placement.version, emptyMap(), ownerId = ownerId)
-                    }
                     require(authManager.ownerId == ownerId) { "当前账户已变化" }
                 }
                 loadTodayData()
@@ -1361,6 +1350,446 @@ class MainViewModel(
                 if (onComplete != null) onComplete(message) else _messages.tryEmit(message)
             }
         }
+    }
+
+    fun ensureDatePoint(localDate: String, onComplete: (String?) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                val pointId = db.withOwnerTransaction { ownerId ->
+                    requireValidLocalDate(localDate)
+                    getOrCreateDatePoint(ownerId, localDate).id
+                }
+                onComplete(pointId)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                onComplete(null)
+                _messages.tryEmit(error.userMessage("打开日期失败"))
+            }
+        }
+    }
+
+    fun createEvent(title: String, onComplete: (String?) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                val point = db.withOwnerTransaction { ownerId ->
+                    val normalized = title.trim()
+                    require(normalized.isNotEmpty()) { "事件名称不能为空" }
+                    require(normalized.length <= 200) { "事件名称不能超过 200 个字符" }
+                    val events = db.timePointDao().getActiveEventsFlow(ownerId).first()
+                    val rank = ((events.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L) + 1024L).toString()
+                    val now = nowIso()
+                    val event = TimePointEntity(
+                        id = UUID.randomUUID().toString(),
+                        ownerId = ownerId,
+                        type = TimePointType.EVENT,
+                        localDate = null,
+                        title = normalized,
+                        rank = rank,
+                        version = 1,
+                        reachedAt = null,
+                        archivedAt = null,
+                        createdAt = now,
+                        updatedAt = now,
+                        pendingSync = true,
+                    )
+                    db.timePointDao().upsertTimePoint(event)
+                    syncEngine.recordLocalMutation(
+                        command = "timePoint.event.create",
+                        entityId = event.id,
+                        baseVersion = null,
+                        payload = mapOf("title" to normalized),
+                        ownerId = ownerId,
+                    )
+                    event
+                }
+                onComplete(point.id)
+                _messages.tryEmit("事件已创建")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                onComplete(null)
+                _messages.tryEmit(error.userMessage("创建事件失败"))
+            }
+        }
+    }
+
+    fun updateEvent(event: TimePointEntity, title: String, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                db.withOwnerTransaction { ownerId ->
+                    require(event.ownerId == ownerId) { "事件不属于当前账户" }
+                    val current = db.timePointDao().getTimePointById(event.id, ownerId)
+                        ?: error("事件已不存在")
+                    require(current.type == TimePointType.EVENT) { "日期不能改名" }
+                    val normalized = title.trim()
+                    require(normalized.isNotEmpty()) { "事件名称不能为空" }
+                    require(normalized.length <= 200) { "事件名称不能超过 200 个字符" }
+                    val now = nowIso()
+                    db.timePointDao().upsertTimePoint(
+                        current.copy(
+                            title = normalized,
+                            version = current.version + 1,
+                            updatedAt = now,
+                            pendingSync = true,
+                        ),
+                    )
+                    syncEngine.recordLocalMutation(
+                        command = "timePoint.update",
+                        entityId = current.id,
+                        baseVersion = current.version,
+                        payload = mapOf("title" to normalized),
+                        ownerId = ownerId,
+                    )
+                }
+                onComplete(true)
+                _messages.tryEmit("事件已保存")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                onComplete(false)
+                _messages.tryEmit(error.userMessage("保存事件失败"))
+            }
+        }
+    }
+
+    fun reachEvent(event: TimePointEntity, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                db.withOwnerTransaction { ownerId ->
+                    require(event.ownerId == ownerId) { "事件不属于当前账户" }
+                    val current = db.timePointDao().getTimePointById(event.id, ownerId)
+                        ?: error("事件已不存在")
+                    require(current.type == TimePointType.EVENT) { "日期没有到达状态" }
+                    if (current.reachedAt == null) {
+                        val now = nowIso()
+                        db.timePointDao().upsertTimePoint(
+                            current.copy(
+                                reachedAt = now,
+                                version = current.version + 1,
+                                updatedAt = now,
+                                pendingSync = true,
+                            ),
+                        )
+                        syncEngine.recordLocalMutation(
+                            command = "timePoint.reach",
+                            entityId = current.id,
+                            baseVersion = current.version,
+                            payload = emptyMap(),
+                            ownerId = ownerId,
+                        )
+                    }
+                }
+                onComplete(true)
+                _messages.tryEmit("事件已标记为到达")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                onComplete(false)
+                _messages.tryEmit(error.userMessage("标记事件失败"))
+            }
+        }
+    }
+
+    fun deleteEvent(event: TimePointEntity, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                db.withOwnerTransaction { ownerId ->
+                    require(event.ownerId == ownerId) { "事件不属于当前账户" }
+                    val current = db.timePointDao().getTimePointById(event.id, ownerId)
+                        ?: error("事件已不存在")
+                    require(current.type == TimePointType.EVENT) { "日期不能删除" }
+                    val now = nowIso()
+                    val placements = db.placementDao().getPlacementsByTimePoint(current.id, ownerId)
+                    db.placementDao().upsertPlacements(
+                        placements.map { placement ->
+                            placement.copy(
+                                version = placement.version + 1,
+                                updatedAt = now,
+                                deletedAt = now,
+                                pendingSync = true,
+                            )
+                        },
+                    )
+                    db.timePointDao().upsertTimePoint(
+                        current.copy(
+                            version = current.version + 1,
+                            updatedAt = now,
+                            deletedAt = now,
+                            pendingSync = true,
+                        ),
+                    )
+                    syncEngine.recordLocalMutation(
+                        command = "timePoint.delete",
+                        entityId = current.id,
+                        baseVersion = current.version,
+                        payload = emptyMap(),
+                        ownerId = ownerId,
+                    )
+                }
+                onComplete(true)
+                _messages.tryEmit("事件已删除，任务本体仍保留")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                onComplete(false)
+                _messages.tryEmit(error.userMessage("删除事件失败"))
+            }
+        }
+    }
+
+    fun reorderEvents(eventIds: List<String>, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                db.withOwnerTransaction { ownerId ->
+                    val current = db.timePointDao().getActiveEventsFlow(ownerId).first()
+                    require(current.map { it.id }.toSet() == eventIds.toSet() && current.size == eventIds.size) {
+                        "事件列表已变化，请刷新后重试"
+                    }
+                    val byId = current.associateBy { it.id }
+                    val now = nowIso()
+                    db.timePointDao().upsertTimePoints(
+                        eventIds.mapIndexed { index, id ->
+                            byId.getValue(id).copy(
+                                rank = ((index + 1) * 1024L).toString(),
+                                version = byId.getValue(id).version + 1,
+                                updatedAt = now,
+                                pendingSync = true,
+                            )
+                        },
+                    )
+                    syncEngine.recordLocalMutation(
+                        command = "timePoint.reorder",
+                        entityId = UUID.randomUUID().toString(),
+                        baseVersion = null,
+                        payload = mapOf("ids" to eventIds),
+                        ownerId = ownerId,
+                    )
+                }
+                onComplete(true)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                onComplete(false)
+                _messages.tryEmit(error.userMessage("事件排序失败"))
+            }
+        }
+    }
+
+    fun addTasksToTimePoint(timePointId: String, taskIds: List<String>, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                db.withOwnerTransaction { ownerId ->
+                    val point = db.timePointDao().getTimePointById(timePointId, ownerId)
+                        ?: error("安排位置不存在")
+                    val current = db.placementDao().getPlacementsByTimePoint(timePointId, ownerId)
+                    val existingTaskIds = current.map { it.taskId }.toSet()
+                    var nextRank = current.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L
+                    val now = nowIso()
+                    taskIds.distinct().forEach { taskId ->
+                        if (taskId in existingTaskIds) return@forEach
+                        val task = db.taskDao().getTaskById(taskId, ownerId)
+                            ?: error("任务不存在或已归档")
+                        require(task.archivedAt == null && task.deletedAt == null) { "任务不可安排" }
+                        nextRank += 1024L
+                        val placementId = UUID.randomUUID().toString()
+                        db.placementDao().upsertPlacement(
+                            PlacementEntity(
+                                id = placementId,
+                                ownerId = ownerId,
+                                taskId = task.id,
+                                timePointId = point.id,
+                                rank = nextRank.toString(),
+                                version = 1,
+                                createdAt = now,
+                                updatedAt = now,
+                                pendingSync = true,
+                            ),
+                        )
+                        syncEngine.recordLocalMutation(
+                            command = "placement.create",
+                            entityId = placementId,
+                            baseVersion = null,
+                            payload = mapOf(
+                                "taskId" to task.id,
+                                "timePointId" to point.id,
+                                "__localId" to placementId,
+                            ),
+                            ownerId = ownerId,
+                        )
+                    }
+                }
+                loadTodayData()
+                onComplete(true)
+                _messages.tryEmit("任务已加入安排")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                onComplete(false)
+                _messages.tryEmit(error.userMessage("加入任务失败"))
+            }
+        }
+    }
+
+    fun reorderPlacements(timePointId: String, placementIds: List<String>, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                db.withOwnerTransaction { ownerId ->
+                    val current = db.placementDao().getPlacementsByTimePoint(timePointId, ownerId)
+                    require(current.map { it.id }.toSet() == placementIds.toSet() && current.size == placementIds.size) {
+                        "安排列表已变化，请刷新后重试"
+                    }
+                    val byId = current.associateBy { it.id }
+                    val now = nowIso()
+                    db.placementDao().upsertPlacements(
+                        placementIds.mapIndexed { index, id ->
+                            byId.getValue(id).copy(
+                                rank = ((index + 1) * 1024L).toString(),
+                                version = byId.getValue(id).version + 1,
+                                updatedAt = now,
+                                pendingSync = true,
+                            )
+                        },
+                    )
+                    syncEngine.recordLocalMutation(
+                        command = "placement.reorder",
+                        entityId = timePointId,
+                        baseVersion = null,
+                        payload = mapOf("timePointId" to timePointId, "ids" to placementIds),
+                        ownerId = ownerId,
+                    )
+                }
+                loadTodayData()
+                onComplete(true)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                onComplete(false)
+                _messages.tryEmit(error.userMessage("安排排序失败"))
+            }
+        }
+    }
+
+    fun movePlacementToDate(
+        placement: PlacementEntity,
+        localDate: String,
+        copy: Boolean,
+        onComplete: (Boolean) -> Unit = {},
+    ) {
+        viewModelScope.launch {
+            try {
+                db.withOwnerTransaction { ownerId ->
+                    requireValidLocalDate(localDate)
+                    val point = getOrCreateDatePoint(ownerId, localDate)
+                    relocatePlacement(ownerId, placement, point.id, copy)
+                }
+                loadTodayData()
+                onComplete(true)
+                _messages.tryEmit(if (copy) "已添加另一份日期安排" else "安排已移动")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                onComplete(false)
+                _messages.tryEmit(error.userMessage("移动安排失败"))
+            }
+        }
+    }
+
+    fun movePlacementToTimePoint(
+        placement: PlacementEntity,
+        timePointId: String,
+        copy: Boolean,
+        onComplete: (Boolean) -> Unit = {},
+    ) {
+        viewModelScope.launch {
+            try {
+                db.withOwnerTransaction { ownerId ->
+                    val point = db.timePointDao().getTimePointById(timePointId, ownerId)
+                        ?: error("目标安排位置不存在")
+                    relocatePlacement(ownerId, placement, point.id, copy)
+                }
+                loadTodayData()
+                onComplete(true)
+                _messages.tryEmit(if (copy) "已添加另一份事件安排" else "安排已移动")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                onComplete(false)
+                _messages.tryEmit(error.userMessage("移动安排失败"))
+            }
+        }
+    }
+
+    private suspend fun relocatePlacement(
+        ownerId: String,
+        placement: PlacementEntity,
+        targetTimePointId: String,
+        copy: Boolean,
+    ) {
+        val current = db.placementDao().getById(placement.id, ownerId)
+            ?: error("安排已不存在")
+        require(current.deletedAt == null) { "安排已移除" }
+        require(current.timePointId != targetTimePointId) { "目标位置与当前位置相同" }
+        val targetPlacements = db.placementDao().getPlacementsByTimePoint(targetTimePointId, ownerId)
+        val existing = targetPlacements.firstOrNull { it.taskId == current.taskId }
+        if (existing != null) {
+            if (!copy) {
+                val now = nowIso()
+                db.placementDao().upsertPlacement(
+                    current.copy(
+                        version = current.version + 1,
+                        updatedAt = now,
+                        deletedAt = now,
+                        pendingSync = true,
+                    ),
+                )
+                syncEngine.recordLocalMutation(
+                    command = "placement.move",
+                    entityId = current.id,
+                    baseVersion = current.version,
+                    payload = mapOf("timePointId" to targetTimePointId, "targetPlacementId" to existing.id),
+                    ownerId = ownerId,
+                )
+            }
+            return
+        }
+
+        val now = nowIso()
+        val targetId = UUID.randomUUID().toString()
+        val nextRank = ((targetPlacements.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L) + 1024L).toString()
+        db.placementDao().upsertPlacement(
+            PlacementEntity(
+                id = targetId,
+                ownerId = ownerId,
+                taskId = current.taskId,
+                timePointId = targetTimePointId,
+                rank = nextRank,
+                version = 1,
+                createdAt = now,
+                updatedAt = now,
+                pendingSync = true,
+            ),
+        )
+        if (!copy) {
+            db.placementDao().upsertPlacement(
+                current.copy(
+                    version = current.version + 1,
+                    updatedAt = now,
+                    deletedAt = now,
+                    pendingSync = true,
+                ),
+            )
+        }
+        syncEngine.recordLocalMutation(
+            command = if (copy) "placement.copy" else "placement.move",
+            entityId = current.id,
+            baseVersion = if (copy) null else current.version,
+            payload = mapOf(
+                "timePointId" to targetTimePointId,
+                "targetPlacementId" to targetId,
+            ),
+            ownerId = ownerId,
+        )
     }
 
     fun removePlacement(placement: PlacementEntity) {
@@ -1621,6 +2050,12 @@ class MainViewModel(
 
     private fun nowIso(): String =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date())
+
+    private fun requireValidLocalDate(localDate: String) {
+        val parser = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { isLenient = false }
+        val parsed = parser.parse(localDate)
+        require(parsed != null && parser.format(parsed) == localDate) { "日期无效" }
+    }
 
     private suspend fun <T> AppDatabase.withOwnerTransaction(block: suspend (String) -> T): T =
         withTransaction {

@@ -215,55 +215,45 @@ class WorkspaceScreenTest {
     }
 
     @Test
-    fun allTasksScreenShowsSearchAndRootTask() {
-        var openedTaskId: String? = null
+    fun calendarScreenShowsMonthInsteadOfAllTasksSearch() {
         var backCount = 0
         compose.setContent {
             DevTodoTheme(themeMode = ThemeMode.LIGHT, dynamicColor = false) {
-                AllTasksV2Screen(
+                CalendarScreen(
                     viewModel = vm,
-                    onNavigateToDetail = { openedTaskId = it },
+                    onNavigateToDay = {},
+                    onNavigateToEvents = {},
                     onBack = { backCount++ },
                 )
             }
         }
-        waitForText("搜索任务")
-        waitForText("任务列表")
-        compose.onNodeWithTag("all-tasks-list")
-            .performScrollToNode(hasText(task.title))
-        waitForText(task.title)
-        compose.onNodeWithContentDescription("${task.title}，状态").assertIsDisplayed()
-        compose.onNodeWithContentDescription("${task.title}，更多操作").assertIsDisplayed()
-        screenshot("all-tasks")
-        compose.onNodeWithText(task.title).performClick()
-        compose.runOnIdle { assertEquals(task.id, openedTaskId) }
-        compose.onNodeWithContentDescription("返回").performClick()
+        waitForText("日历")
+        waitForText("点击日期查看当天安排")
+        compose.onNodeWithTag("calendar-month").assertIsDisplayed()
+        compose.onNodeWithText("搜索任务").assertDoesNotExist()
+        compose.onNodeWithText("全部任务").assertDoesNotExist()
+        screenshot("calendar-month")
+        compose.onNodeWithContentDescription("返回目录").performClick()
         compose.runOnIdle { assertEquals(1, backCount) }
     }
 
     @Test
-    fun directoryDrillDownAndSearchKeepTaskReachable() {
+    fun directoryDrillDownKeepsTaskReachable() {
         var opened: String? = null
         var shortcut: String? = null
         var settingsOpened = false
-        val showAllTasks = mutableStateOf(false)
         val openFolder = mutableStateOf<String?>(null)
         compose.setContent {
             DevTodoTheme(themeMode = ThemeMode.DARK, dynamicColor = false) {
-                if (showAllTasks.value) {
-                    AllTasksV2Screen(vm, { opened = it })
-                } else {
-                    TreeScreen(
-                        vm,
-                        { opened = it },
-                        folderId = openFolder.value,
-                        onOpenFolder = { openFolder.value = it },
-                        onBack = { openFolder.value = null },
-                        onNavigateToShortcut = { shortcut = it },
-                        onOpenSettings = { settingsOpened = true },
-                        onOpenSearch = { shortcut = Screen.AllTasks.route },
-                    )
-                }
+                TreeScreen(
+                    vm,
+                    { opened = it },
+                    folderId = openFolder.value,
+                    onOpenFolder = { openFolder.value = it },
+                    onBack = { openFolder.value = null },
+                    onNavigateToShortcut = { shortcut = it },
+                    onOpenSettings = { settingsOpened = true },
+                )
             }
         }
         waitForText("快捷视图")
@@ -333,21 +323,9 @@ class WorkspaceScreenTest {
         compose.onNodeWithText("站点发布检查").performClick()
         compose.runOnIdle { assertEquals(drillDownTaskId, opened) }
         compose.onNodeWithContentDescription("返回上级目录").performClick()
-        compose.onNodeWithTag("directory-tree-list")
-            .performScrollToNode(hasText("全部任务"))
-        compose.onNodeWithText("全部任务").performClick()
-        compose.runOnIdle {
-            assertEquals(Screen.AllTasks.route, shortcut)
-            showAllTasks.value = true
-        }
-        waitForText("搜索任务")
-        screenshot("tasks-search")
-        compose.onNodeWithText("搜索任务").performTextInput("不存在")
-        compose.onNodeWithText("没有匹配的任务").assertExists()
-        compose.onNodeWithText("搜索任务").performTextClearance()
-        compose.onNodeWithTag("all-tasks-list")
-            .performScrollToNode(hasText("站点发布检查"))
-        waitForText("站点发布检查")
+        waitForText("快捷视图")
+        compose.onNodeWithText("事件").performClick()
+        compose.runOnIdle { assertEquals(Screen.Events.route, shortcut) }
     }
 
     @Test
@@ -410,11 +388,16 @@ class WorkspaceScreenTest {
     }
 
     @Test
-    fun scheduleScreenReturnsToDirectory() {
+    fun calendarScreenReturnsToDirectory() {
         var backCount = 0
         compose.setContent {
             DevTodoTheme(themeMode = ThemeMode.LIGHT, dynamicColor = false) {
-                TimeScreen(vm, onNavigateToDetail = {}, onNavigateToTree = { _, _ -> }, onBack = { backCount++ })
+                CalendarScreen(
+                    viewModel = vm,
+                    onNavigateToDay = {},
+                    onNavigateToEvents = {},
+                    onBack = { backCount++ },
+                )
             }
         }
         waitForDescription("返回目录")
@@ -551,10 +534,9 @@ class WorkspaceScreenTest {
         compose.onNodeWithContentDescription("返回目录").performClick()
         waitForText("快捷视图")
 
-        compose.onNodeWithText("日程").performClick()
+        compose.onNodeWithText("日历").performClick()
         waitForDescription("返回目录")
-        waitForText("今天与接下来")
-        waitForText(task.title)
+        waitForText("点击日期查看当天安排")
         screenshot("app-schedule")
         compose.onNodeWithContentDescription("返回目录").performClick()
         waitForText("快捷视图")
@@ -570,23 +552,6 @@ class WorkspaceScreenTest {
         compose.onNodeWithContentDescription("返回流程列表").performClick()
         waitForText(workflow.name)
         compose.onNodeWithContentDescription("返回目录").performClick()
-        waitForText("快捷视图")
-
-        compose.onNodeWithText("全部任务").performClick()
-        waitForText("搜索任务")
-        waitForText("全部任务")
-        waitForText("任务列表")
-        compose.onNodeWithText("快捷视图").assertDoesNotExist()
-        screenshot("app-all-tasks")
-        compose.onNodeWithText("搜索任务").performTextInput("ISC-1")
-        waitForText("管理层权限重构（Ip数据库）")
-        compose.onNodeWithText("管理层权限重构（Ip数据库）").performClick()
-        waitForText(task.referenceId!!)
-        waitForText(task.title)
-        screenshot("app-task-detail")
-        compose.onNodeWithContentDescription("返回").performClick()
-        waitForText("搜索任务")
-        compose.onNodeWithContentDescription("返回").performClick()
         waitForText("快捷视图")
 
         compose.onNodeWithContentDescription("设置").performClick()
@@ -651,17 +616,15 @@ class WorkspaceScreenTest {
 
     @Test
     fun directoryKeepsStructureWithDynamicColor() {
-        var searched = 0
         var settings = 0
         compose.setContent {
             DevTodoTheme(themeMode = ThemeMode.LIGHT, dynamicColor = true) {
-                TreeScreen(vm, onNavigateToDetail = {},
-                    onOpenSearch = { searched++ }, onOpenSettings = { settings++ })
+                TreeScreen(vm, onNavigateToDetail = {}, onOpenSettings = { settings++ })
             }
         }
         waitForText("快捷视图")
         val rootBounds = compose.onRoot().fetchSemanticsNode().boundsInRoot
-        for (description in listOf("搜索全部任务", "设置")) {
+        for (description in listOf("设置")) {
             val action = compose.onNodeWithContentDescription(description).assertIsDisplayed()
             val bounds = action.fetchSemanticsNode().boundsInRoot
             assertTrue("$description must be fully inside the screen: $bounds / $rootBounds",
@@ -680,7 +643,8 @@ class WorkspaceScreenTest {
             assertTrue("$description must have a visible icon", iconVisible)
             action.performClick()
         }
-        compose.runOnIdle { assertEquals(1, searched); assertEquals(1, settings) }
+        compose.runOnIdle { assertEquals(1, settings) }
+        compose.onNodeWithContentDescription("搜索全部任务").assertDoesNotExist()
         compose.onNodeWithTag("directory-tree-list").performScrollToNode(hasText("我的目录"))
         waitForText("我的目录")
         compose.onNodeWithTag("directory-tree-list").performScrollToNode(hasText("快捷视图"))
@@ -689,7 +653,7 @@ class WorkspaceScreenTest {
     }
 
     @Test
-    fun plannerShowsTodayEventsAndKeepsOlderEmptyDatesReachable() {
+    fun calendarOpensASelectedDateAndShowsEventEntryPoint() {
         val zone = TimeZone.getTimeZone("Asia/Shanghai")
         val calendar = Calendar.getInstance(zone, Locale.ROOT).apply { time = Date() }
         val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { timeZone = zone }
@@ -700,7 +664,8 @@ class WorkspaceScreenTest {
         val futurePoint = timePoint("future", TimePointType.DATE, future)
         val oldPoint = timePoint("older-empty", TimePointType.DATE, olderEmpty)
         val eventPoint = timePoint("event", TimePointType.EVENT, null, "Launch review")
-        val displayTheme = mutableStateOf(ThemeMode.DARK)
+        var selectedDate: String? = null
+        var eventsOpened = 0
         runBlocking {
             db.timePointDao().upsertTimePoints(listOf(todayPoint, futurePoint, oldPoint, eventPoint))
             db.placementDao().upsertPlacement(
@@ -717,25 +682,20 @@ class WorkspaceScreenTest {
             )
         }
         compose.setContent {
-            DevTodoTheme(themeMode = displayTheme.value, dynamicColor = false) {
-                TimeScreen(vm, onNavigateToDetail = {}, onNavigateToTree = { _, _ -> })
+            DevTodoTheme(themeMode = ThemeMode.DARK, dynamicColor = false) {
+                CalendarScreen(
+                    viewModel = vm,
+                    onNavigateToDay = { selectedDate = it },
+                    onNavigateToEvents = { eventsOpened++ },
+                )
             }
         }
-        waitForText("今天")
-        waitForText(task.title)
-        screenshot("planning-dark")
-        compose.runOnIdle { displayTheme.value = ThemeMode.LIGHT }
-        waitForText("今天")
-        screenshot("planning-light")
-        compose.onNodeWithTag("planner-timepoints")
-            .performScrollToNode(hasText("过往未安排日期 (1)"))
-        compose.onNodeWithText("过往未安排日期 (1)").assertExists()
-        compose.onNodeWithText("查看全部").performScrollTo().performClick()
-        compose.onNodeWithText(formatLocalDate(olderEmpty, "Asia/Shanghai")).performScrollTo().assertExists()
-        compose.onNodeWithTag("planner-timepoints")
-            .performScrollToNode(hasText("Launch review"))
-        waitForText("Launch review")
-        screenshot("schedule-event")
+        waitForText("日历")
+        compose.onNodeWithTag("calendar-day-$today").performClick()
+        compose.runOnIdle { assertEquals(today, selectedDate) }
+        compose.onNodeWithText("事件").performClick()
+        compose.runOnIdle { assertEquals(1, eventsOpened) }
+        screenshot("calendar-event-entry")
     }
 
     @Test
