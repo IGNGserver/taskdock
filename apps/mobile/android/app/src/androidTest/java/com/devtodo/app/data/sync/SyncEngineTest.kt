@@ -134,7 +134,7 @@ class SyncEngineTest {
     @Test fun repairingLegacyProtectionDoesNotAssignUnrelatedRowsToTheFirstMutation() = runBlocking {
         db.withTransaction {
             db.taskDao().upsertTasks(listOf(task("one", true), task("two", true)))
-            val first = OutboxEntity(mutationId = "first", ownerId = owner, command = "task.update", entityId = "one", baseVersion = 1, payloadJson = "{\"title\":\"one\"}", occurredAt = now)
+            val first = OutboxEntity(mutationId = "first", clientId = auth.clientId, ownerId = owner, command = "task.update", entityId = "one", baseVersion = 1, payloadJson = "{\"title\":\"one\"}", occurredAt = now)
             val second = first.copy(mutationId = "second", entityId = "two")
             val guards = MutationGuards(db, api.json)
             guards.track(first); guards.track(second)

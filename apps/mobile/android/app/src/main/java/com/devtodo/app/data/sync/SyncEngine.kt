@@ -714,9 +714,9 @@ class SyncEngine(
             if (batch.size == 1 && encodedPushSize(batch) > MAX_PUSH_BYTES) {
                 val source = batch.single().source
                 val message = "TERMINAL:mutation payload exceeds the sync request limit"
-                    db.withTransaction {
-                        ensureSession()
-                        db.outboxDao().recordAttempt(source.id, ownerId, Long.MAX_VALUE, message)
+                db.withTransaction {
+                    ensureSession()
+                    db.outboxDao().recordAttempt(source.id, ownerId, Long.MAX_VALUE, message)
                     markEntitySynced(ownerId, source)
                 }
                 blockedMessage = blockedMessage ?: message.removePrefix("TERMINAL:")
