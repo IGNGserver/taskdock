@@ -392,6 +392,20 @@ async function main(): Promise<void> {
     const { BootstrapSnapshots } = await import('../apps/api/src/sync-bootstrap.js');
     const bootstrap = new BootstrapSnapshots(reloadedV2Store);
     const firstPreview = await bootstrap.preview(owner.id, '2026-09-04', null);
+    assert(
+      reloadedSnapshot.timePoints.some(
+        (point) => point.id === today.id && point.localDate === '2026-09-04',
+      ),
+      'SQL DATE shifted under the API host timezone in full snapshot',
+    );
+    assert(
+      firstPreview.changes.some(
+        (change) =>
+          change.entityId === today.id &&
+          (change.snapshot as { localDate?: string }).localDate === '2026-09-04',
+      ),
+      'SQL DATE shifted under the API host timezone in preview',
+    );
     assert(firstPreview.complete === false, 'preview must never advance the global cursor');
     assert(
       !firstPreview.changes.some((change) => change.entityType === 'note'),
@@ -412,6 +426,19 @@ async function main(): Promise<void> {
     await bootstrapPeer.init();
     const peerBootstrap = new BootstrapSnapshots(new PostgresTreeStore(bootstrapPeer));
     const pageOnPeer = await peerBootstrap.page(owner.id, manifest.snapshotId, 0);
+    const allPageChanges = [...pageOnPeer.changes];
+    for (let page = 1; page < manifest.pageCount; page++)
+      allPageChanges.push(
+        ...(await peerBootstrap.page(owner.id, manifest.snapshotId, page)).changes,
+      );
+    assert(
+      allPageChanges.some(
+        (change) =>
+          change.entityId === today.id &&
+          (change.snapshot as { localDate?: string }).localDate === '2026-09-04',
+      ),
+      'SQL DATE shifted under the API host timezone in progressive snapshot',
+    );
     assert(pageOnPeer.cursor === manifest.cursor, 'bootstrap cursor changed across API instances');
     assert(
       JSON.stringify(await bootstrap.page(owner.id, manifest.snapshotId, 0)) ===

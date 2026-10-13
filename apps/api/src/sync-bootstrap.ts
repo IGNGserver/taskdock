@@ -42,7 +42,7 @@ function dto(row: Record<string, unknown>): Record<string, unknown> {
     value[name] =
       raw instanceof Date
         ? key === 'local_date'
-          ? raw.toISOString().slice(0, 10)
+          ? `${raw.getFullYear()}-${String(raw.getMonth() + 1).padStart(2, '0')}-${String(raw.getDate()).padStart(2, '0')}`
           : raw.toISOString()
         : raw;
   }
