@@ -4,7 +4,11 @@ import android.util.Base64
 import com.devtodo.app.data.model.*
 import com.devtodo.app.data.security.SecureAuthManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.asContextElement
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import okhttp3.*
@@ -13,6 +17,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.resumeWithException
 
 enum class ApiFailureCategory {
     AUTH_REQUIRED,
@@ -31,6 +37,34 @@ class ApiClientException(
 ) : IOException("${category.name}: ${errorCode ?: "HTTP_$statusCode"}: $serverMessage")
 
 class ApiClient(private val authManager: SecureAuthManager) {
+    private data class SessionRequest(val key: String, val token: String?, val origin: String)
+    private val requestSession = ThreadLocal<SessionRequest>()
+    private suspend fun <T> inSession(block: suspend CoroutineScope.() -> T): T {
+        val binding = SessionRequest(authManager.sessionKey, authManager.accessToken, authManager.hubOrigin)
+        return withContext(Dispatchers.IO + requestSession.asContextElement(binding), block)
+    }
+    private val activeCalls = ConcurrentHashMap<Call, String>()
+    fun cancelSessionCalls(session: String) {
+        activeCalls.forEach { (call, key) -> if (key == session) call.cancel() }
+    }
+    private suspend fun Call.awaitResponse(): Response = suspendCancellableCoroutine { continuation ->
+        activeCalls[this] = authManager.sessionKey
+        continuation.invokeOnCancellation { cancel(); activeCalls.remove(this) }
+        enqueue(object : Callback {
+            override fun onFailure(call: Call, error: IOException) {
+                activeCalls.remove(call)
+                if (continuation.isActive) continuation.resumeWithException(error)
+            }
+            override fun onResponse(call: Call, response: Response) {
+                activeCalls.remove(call)
+                continuation.resume(response, onCancellation = { _, value, _ -> value.close() })
+            }
+        })
+    }
+    private fun Call.executeTracked(): Response {
+        activeCalls[this] = authManager.sessionKey
+        return try { execute() } finally { activeCalls.remove(this) }
+    }
     val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -51,6 +85,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
+        .callTimeout(30, TimeUnit.SECONDS)
         .pingInterval(30, TimeUnit.SECONDS)
         .build()
 
@@ -60,7 +95,10 @@ class ApiClient(private val authManager: SecureAuthManager) {
             val builder = original.newBuilder()
                 .header("Accept", "application/json")
                 .header("X-Client-Id", authManager.clientId)
-            authManager.accessToken?.let { token ->
+            val binding = original.tag(SessionRequest::class.java)
+            if (binding != null && binding.key != authManager.sessionKey) throw IOException("请求账户或中枢已变化")
+            val publicRoute = original.url.encodedPath in setOf("/api/v1/bootstrap/status", "/api/v1/auth/login")
+            binding?.token?.takeIf { !publicRoute }?.let { token ->
                 builder.header("Authorization", "Bearer $token")
             }
             chain.proceed(builder.build())
@@ -68,16 +106,18 @@ class ApiClient(private val authManager: SecureAuthManager) {
         .authenticator { _, response -> authenticate(response) }
         .build()
 
-    private fun baseUrl(): String = "${authManager.hubOrigin}/api/v1"
-    private fun baseUrlV2(): String = "${authManager.hubOrigin}/api/v2"
+    private fun baseUrl(): String = "${requestSession.get()?.origin ?: authManager.hubOrigin}/api/v1"
+    private fun baseUrlV2(): String = "${requestSession.get()?.origin ?: authManager.hubOrigin}/api/v2"
+    private fun authenticatedCall(request: Request): Call = okHttpClient.newCall(request.newBuilder()
+        .tag(SessionRequest::class.java, requestSession.get() ?: SessionRequest(authManager.sessionKey, authManager.accessToken, authManager.hubOrigin)).build())
 
-    suspend fun checkHubStatus(origin: String): Result<HubStatusResponse> = withContext(Dispatchers.IO) {
+    suspend fun checkHubStatus(origin: String): Result<HubStatusResponse> = inSession {
         try {
             val req = Request.Builder()
                 .url("${origin.trimEnd('/')}/api/v1/bootstrap/status")
                 .get()
                 .build()
-            okHttpClient.newCall(req).execute().use { resp ->
+            authenticatedCall(req).awaitResponse().use { resp ->
                 val bodyStr = resp.body?.string() ?: ""
                 if (resp.isSuccessful) {
                     val status = json.decodeFromString<HubStatusResponse>(bodyStr)
@@ -91,10 +131,11 @@ class ApiClient(private val authManager: SecureAuthManager) {
         }
     }
 
-    suspend fun login(username: String, password: String): Result<LoginResponse> = withContext(Dispatchers.IO) {
+    suspend fun login(username: String, password: String): Result<LoginResponse> = inSession {
         try {
+            val session = authManager.sessionKey
             val challenge = requestNativeChallenge()
-                ?: return@withContext Result.failure(IOException("Native auth challenge failed"))
+                ?: return@inSession Result.failure(IOException("Native auth challenge failed"))
             val payload = json.encodeToString(
                 mapOf(
                     "username" to username,
@@ -109,15 +150,18 @@ class ApiClient(private val authManager: SecureAuthManager) {
                 .header("Origin", nativeOrigin)
                 .post(payload.toRequestBody(jsonMediaType))
                 .build()
-            okHttpClient.newCall(req).execute().use { resp ->
+            authenticatedCall(req).awaitResponse().use { resp ->
                 val bodyStr = resp.body?.string() ?: ""
                 if (resp.isSuccessful) {
+                    if (session != authManager.sessionKey) return@use Result.failure(IOException("登录请求已失效"))
                     val loginRes = json.decodeFromString<LoginResponse>(bodyStr)
                     val refreshToken = loginRes.refreshToken
                         ?: return@use Result.failure(IOException("Login response missing refresh token"))
+                    authManager.advanceSession()
                     authManager.setSessionTokens(loginRes.accessToken, refreshToken)
                     authManager.ownerId = loginRes.user.id
                     authManager.username = loginRes.user.username
+                    loginRes.hubId?.let(authManager::rememberHubIdentity)
                     Result.success(loginRes)
                 } else {
                     Result.failure(apiFailure("login", resp, bodyStr))
@@ -135,6 +179,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
     }
 
     private fun authenticate(response: Response): Request? {
+        if (response.request.tag(SessionRequest::class.java)?.key != authManager.sessionKey) return null
         val authorization = response.request.header("Authorization") ?: return null
         if (responseCount(response) > 1) return null
         val failedAccessToken = authorization.removePrefix("Bearer ")
@@ -145,6 +190,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
                 .build()
         }
         if (!refreshSession(failedAccessToken)) return null
+        if (response.request.tag(SessionRequest::class.java)?.key != authManager.sessionKey) return null
         val nextAccessToken = authManager.accessToken ?: return null
         return response.request.newBuilder()
             .header("Authorization", "Bearer $nextAccessToken")
@@ -153,6 +199,8 @@ class ApiClient(private val authManager: SecureAuthManager) {
 
     private fun refreshSession(failedAccessToken: String?): Boolean {
         synchronized(refreshLock) {
+            val session = authManager.sessionKey
+            val origin = authManager.hubOrigin
             val currentAccessToken = authManager.accessToken
             if (
                 failedAccessToken != null &&
@@ -168,12 +216,13 @@ class ApiClient(private val authManager: SecureAuthManager) {
             val candidate = authManager.pendingRefreshToken
                 ?: newRefreshCandidate().also { authManager.pendingRefreshToken = it }
             val challenge = try {
-                requestNativeChallenge()
+                requestNativeChallenge(origin)
             } catch (_: ApiClientException) {
                 // Session restoration is best-effort. Keep local data usable
                 // when the challenge service rejects or cannot serve a request.
                 return false
             } ?: return false
+            if (session != authManager.sessionKey) return false
             val payload = json.encodeToString(
                 mapOf(
                     "refreshToken" to refreshToken,
@@ -182,14 +231,15 @@ class ApiClient(private val authManager: SecureAuthManager) {
                 )
             )
             val request = Request.Builder()
-                .url("${baseUrl()}/auth/refresh")
+                .url("$origin/api/v1/auth/refresh")
                 .header("Origin", nativeOrigin)
                 .header("X-Client-Id", authManager.clientId)
                 .post(payload.toRequestBody(jsonMediaType))
                 .build()
             return try {
-                rawHttpClient.newCall(request).execute().use { response ->
+                rawHttpClient.newCall(request).executeTracked().use { response ->
                     val body = response.body?.string() ?: ""
+                    if (session != authManager.sessionKey) return@use false
                     if (!response.isSuccessful) {
                         if (isSessionRevocation(response.code, body)) authManager.clearSession()
                         false
@@ -201,6 +251,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
                         authManager.setSessionTokens(result.accessToken, nextRefreshToken)
                         authManager.ownerId = result.user.id
                         authManager.username = result.user.username
+                        result.hubId?.let(authManager::rememberHubIdentity)
                         true
                     }
                 }
@@ -234,16 +285,16 @@ class ApiClient(private val authManager: SecureAuthManager) {
         )
     }
 
-    private fun requestNativeChallenge(): String? {
+    private fun requestNativeChallenge(origin: String = requestSession.get()?.origin ?: authManager.hubOrigin): String? {
         val request = Request.Builder()
-            .url("${baseUrl()}/auth/native/challenge")
+            .url("$origin/api/v1/auth/native/challenge")
             .header("Origin", nativeOrigin)
             .header("Accept", "application/json")
             .header("X-Client-Id", authManager.clientId)
             .post("{}".toRequestBody(jsonMediaType))
             .build()
         return try {
-            rawHttpClient.newCall(request).execute().use { response ->
+            rawHttpClient.newCall(request).executeTracked().use { response ->
                 val body = response.body?.string() ?: ""
                 if (!response.isSuccessful) throw apiFailure("native auth challenge", response, body)
                 json.decodeFromString<NativeChallengeResponse>(body).challenge
@@ -265,7 +316,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
         return count
     }
 
-    suspend fun pushSync(mutations: List<Mutation>): Result<PushResult> = withContext(Dispatchers.IO) {
+    suspend fun pushSync(mutations: List<Mutation>): Result<PushResult> = inSession {
         try {
             val pushReq = PushRequest(
                 protocolVersion = 1,
@@ -276,7 +327,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
                 .url("${baseUrl()}/sync/push")
                 .post(json.encodeToString(pushReq).toRequestBody(jsonMediaType))
                 .build()
-            okHttpClient.newCall(req).execute().use { resp ->
+            authenticatedCall(req).awaitResponse().use { resp ->
                 val bodyStr = resp.body?.string() ?: ""
                 if (resp.isSuccessful) {
                     Result.success(json.decodeFromString<PushResult>(bodyStr))
@@ -289,13 +340,13 @@ class ApiClient(private val authManager: SecureAuthManager) {
         }
     }
 
-    suspend fun pullSync(cursor: String, limit: Int = 100): Result<PullResult> = withContext(Dispatchers.IO) {
+    suspend fun pullSync(cursor: String, limit: Int = 100): Result<PullResult> = inSession {
         try {
             val req = Request.Builder()
                 .url("${baseUrl()}/sync/pull?cursor=$cursor&limit=$limit")
                 .get()
                 .build()
-            okHttpClient.newCall(req).execute().use { resp ->
+            authenticatedCall(req).awaitResponse().use { resp ->
                 val bodyStr = resp.body?.string() ?: ""
                 if (resp.isSuccessful) {
                     Result.success(json.decodeFromString<PullResult>(bodyStr))
@@ -308,13 +359,13 @@ class ApiClient(private val authManager: SecureAuthManager) {
         }
     }
 
-    suspend fun getSnapshot(): Result<SnapshotResult> = withContext(Dispatchers.IO) {
+    suspend fun getSnapshot(): Result<SnapshotResult> = inSession {
         try {
             val req = Request.Builder()
                 .url("${baseUrl()}/sync/snapshot")
                 .get()
                 .build()
-            okHttpClient.newCall(req).execute().use { resp ->
+            authenticatedCall(req).awaitResponse().use { resp ->
                 val bodyStr = resp.body?.string() ?: ""
                 if (resp.isSuccessful) {
                     Result.success(json.decodeFromString<SnapshotResult>(bodyStr))
@@ -327,7 +378,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
         }
     }
 
-    suspend fun pushSyncV2(mutations: List<Mutation>): Result<PushResult> = withContext(Dispatchers.IO) {
+    suspend fun pushSyncV2(mutations: List<Mutation>): Result<PushResult> = inSession {
         try {
             val pushReq = V2PushRequest(
                 protocolVersion = 2,
@@ -338,7 +389,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
                 .url("${baseUrlV2()}/sync/push")
                 .post(json.encodeToString(pushReq).toRequestBody(jsonMediaType))
                 .build()
-            okHttpClient.newCall(req).execute().use { resp ->
+            authenticatedCall(req).awaitResponse().use { resp ->
                 val bodyStr = resp.body?.string() ?: ""
                 if (resp.isSuccessful) Result.success(json.decodeFromString<PushResult>(bodyStr))
                 else Result.failure(apiFailure("v2 push", resp, bodyStr))
@@ -348,13 +399,13 @@ class ApiClient(private val authManager: SecureAuthManager) {
         }
     }
 
-    suspend fun pullSyncV2(cursor: String, limit: Int = 100): Result<PullResult> = withContext(Dispatchers.IO) {
+    suspend fun pullSyncV2(cursor: String, limit: Int = 100): Result<PullResult> = inSession {
         try {
             val req = Request.Builder()
                 .url("${baseUrlV2()}/sync/pull?cursor=$cursor&limit=$limit")
                 .get()
                 .build()
-            okHttpClient.newCall(req).execute().use { resp ->
+            authenticatedCall(req).awaitResponse().use { resp ->
                 val bodyStr = resp.body?.string() ?: ""
                 if (resp.isSuccessful) Result.success(json.decodeFromString<PullResult>(bodyStr))
                 else Result.failure(apiFailure("v2 pull", resp, bodyStr))
@@ -364,15 +415,15 @@ class ApiClient(private val authManager: SecureAuthManager) {
         }
     }
 
-    suspend fun getSnapshotV2(): Result<V2SnapshotResult> = withContext(Dispatchers.IO) {
+    suspend fun getSnapshotV2(): Result<V2SnapshotResult> = inSession {
         try {
             val req = Request.Builder()
                 .url("${baseUrlV2()}/sync/snapshot")
                 .get()
                 .build()
-            okHttpClient.newCall(req).execute().use { resp ->
+            authenticatedCall(req).awaitResponse().use { resp ->
                 val bodyStr = resp.body?.string() ?: ""
-                if (resp.isSuccessful) Result.success(json.decodeFromString<V2SnapshotResult>(bodyStr))
+                if (resp.isSuccessful) Result.success(decodeSnapshot(bodyStr))
                 else Result.failure(apiFailure("v2 snapshot", resp, bodyStr))
             }
         } catch (e: Exception) {
@@ -380,13 +431,13 @@ class ApiClient(private val authManager: SecureAuthManager) {
         }
     }
 
-    suspend fun getV2DeletePreview(folderId: String): Result<DeletePreviewDto> = withContext(Dispatchers.IO) {
+    suspend fun getV2DeletePreview(folderId: String): Result<DeletePreviewDto> = inSession {
         try {
             val req = Request.Builder()
                 .url("${baseUrlV2()}/folders/$folderId/delete-preview")
                 .post("{}".toRequestBody(jsonMediaType))
                 .build()
-            okHttpClient.newCall(req).execute().use { resp ->
+            authenticatedCall(req).awaitResponse().use { resp ->
                 val bodyStr = resp.body?.string() ?: ""
                 if (resp.isSuccessful) Result.success(json.decodeFromString<DeletePreviewDto>(bodyStr))
                 else Result.failure(apiFailure("v2 delete preview", resp, bodyStr))
@@ -396,7 +447,34 @@ class ApiClient(private val authManager: SecureAuthManager) {
         }
     }
 
-    suspend fun deleteV2Tree(folderId: String, confirmationToken: String): Result<Unit> = withContext(Dispatchers.IO) {
+    private fun decodeSnapshot(body: String): V2SnapshotResult {
+        val value = json.parseToJsonElement(body).jsonObject
+        require(listOf("folders", "tasks", "notes", "taskSteps", "timePoints", "placements",
+            "workflows", "workflowStages", "workflowTaskMemberships", "settings", "cursor").all { it in value }) {
+            "中枢返回了不完整快照，已保留本地缓存"
+        }
+        return json.decodeFromJsonElement(value)
+    }
+
+    private suspend inline fun <reified T> v2Request(path: String, body: String? = null): Result<T> = inSession {
+        try {
+            val builder = Request.Builder().url("${baseUrlV2()}$path")
+            val request = if (body == null) builder.get().build() else builder.post(body.toRequestBody(jsonMediaType)).build()
+            authenticatedCall(request).awaitResponse().use { response ->
+                val text = response.body?.string().orEmpty()
+                if (response.isSuccessful) Result.success(json.decodeFromString<T>(text))
+                else Result.failure(apiFailure("v2 request", response, text))
+            }
+        } catch (error: CancellationException) { throw error }
+        catch (error: Exception) { Result.failure(error) }
+    }
+    suspend fun syncCapabilities(): Result<SyncCapabilities> = v2Request("/sync/capabilities")
+    suspend fun syncPreview(date: String, folderId: String? = null): Result<SyncPreview> = v2Request("/sync/preview?localDate=$date&parentFolderId=${folderId ?: "root"}")
+    suspend fun createBootstrap(date: String): Result<BootstrapManifest> = v2Request("/sync/bootstrap", "{\"localDate\":\"$date\"}")
+    suspend fun bootstrapPage(id: String, page: Int): Result<BootstrapPage> = v2Request("/sync/bootstrap/$id?page=$page")
+    suspend fun taskDetails(id: String): Result<TaskDetailV2Dto> = v2Request("/tasks/$id")
+
+    suspend fun deleteV2Tree(folderId: String, confirmationToken: String): Result<Unit> = inSession {
         try {
             val req = Request.Builder()
                 .url("${baseUrlV2()}/folders/$folderId/tree")
@@ -404,7 +482,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
                 .header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                 .delete("{\"confirmationToken\":\"$confirmationToken\"}".toRequestBody(jsonMediaType))
                 .build()
-            okHttpClient.newCall(req).execute().use { resp ->
+            authenticatedCall(req).awaitResponse().use { resp ->
                 val bodyStr = resp.body?.string() ?: ""
                 if (resp.isSuccessful) Result.success(Unit)
                 else Result.failure(apiFailure("v2 delete tree", resp, bodyStr))
@@ -426,6 +504,8 @@ class ApiClient(private val authManager: SecureAuthManager) {
     }
 
     fun createV2WebSocket(listener: WebSocketListener): WebSocket {
+        val session = authManager.sessionKey
+        val accessToken = authManager.accessToken.orEmpty()
         val wsUrl = authManager.hubOrigin
             .replace("http://", "ws://")
             .replace("https://", "wss://") + "/api/v2/ws"
@@ -436,7 +516,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
         // handshake free of bearer headers so all clients share one contract.
         return rawHttpClient.newWebSocket(req, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                val accessToken = authManager.accessToken ?: ""
+                if (session != authManager.sessionKey) { webSocket.cancel(); return }
                 webSocket.send("{\"type\":\"auth\",\"accessToken\":\"$accessToken\"}")
                 listener.onOpen(webSocket, response)
             }

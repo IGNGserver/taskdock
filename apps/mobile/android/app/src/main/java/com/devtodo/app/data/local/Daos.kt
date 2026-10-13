@@ -57,6 +57,14 @@ interface FolderDao {
 
 @Dao
 interface TaskDao {
+    @Query("SELECT EXISTS(SELECT 1 FROM tasks WHERE ownerId = :ownerId AND deletedAt IS NULL) OR EXISTS(SELECT 1 FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL)")
+    fun hasCacheFlow(ownerId: String): Flow<Boolean>
+    @Query("SELECT parentFolderId, status FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL")
+    fun locationsFlow(ownerId: String): Flow<List<TaskLocation>>
+    @Query("SELECT COUNT(*) AS total, COALESCE(SUM(status = 'DONE'), 0) AS done FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent)")
+    fun directoryCounts(ownerId: String, parent: String?): Flow<DirectoryCounts>
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent) AND (id IN (:pinnedIds) OR id IN (SELECT id FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER), id LIMIT :limit)) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER), id")
+    fun directoryWindow(ownerId: String, parent: String?, limit: Int, pinnedIds: List<String>): Flow<List<TaskEntity>>
     @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND projectId IS NULL AND category = 'MISC' AND archivedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC")
     fun getInboxTasksFlow(ownerId: String): Flow<List<TaskEntity>>
 
@@ -257,6 +265,8 @@ interface NoteDao {
 
 @Dao
 interface TimePointDao {
+    @Query("SELECT * FROM time_points WHERE ownerId = :ownerId AND type = 'DATE' AND localDate >= :start AND localDate <= :end AND deletedAt IS NULL AND archivedAt IS NULL ORDER BY localDate")
+    fun monthPoints(ownerId: String, start: String, end: String): Flow<List<TimePointEntity>>
     @Query("SELECT * FROM time_points WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL ORDER BY type, localDate, CAST(rank AS INTEGER)")
     fun getActiveTimePointsFlow(ownerId: String): Flow<List<TimePointEntity>>
 
@@ -290,6 +300,13 @@ interface TimePointDao {
 
 @Dao
 interface PlacementDao {
+    @Query("SELECT time_points.localDate AS localDate, COUNT(*) AS total FROM placements JOIN time_points ON time_points.id = placements.timePointId AND time_points.ownerId = placements.ownerId JOIN tasks ON tasks.id = placements.taskId AND tasks.ownerId = placements.ownerId WHERE placements.ownerId = :ownerId AND time_points.type = 'DATE' AND time_points.localDate >= :start AND time_points.localDate <= :end AND time_points.deletedAt IS NULL AND time_points.archivedAt IS NULL AND placements.deletedAt IS NULL AND tasks.deletedAt IS NULL AND tasks.archivedAt IS NULL GROUP BY time_points.localDate")
+    fun monthCounts(ownerId: String, start: String, end: String): Flow<List<MonthCount>>
+    @Query("SELECT tasks.*, placements.id AS placement_id, placements.ownerId AS placement_ownerId, placements.taskId AS placement_taskId, placements.timePointId AS placement_timePointId, placements.rank AS placement_rank, placements.version AS placement_version, placements.createdAt AS placement_createdAt, placements.updatedAt AS placement_updatedAt, placements.deletedAt AS placement_deletedAt, placements.pendingSync AS placement_pendingSync FROM placements JOIN time_points ON time_points.id = placements.timePointId AND time_points.ownerId = placements.ownerId JOIN tasks ON tasks.id = placements.taskId AND tasks.ownerId = placements.ownerId WHERE placements.ownerId = :ownerId AND time_points.type = 'DATE' AND time_points.localDate = :date AND time_points.deletedAt IS NULL AND time_points.archivedAt IS NULL AND placements.deletedAt IS NULL AND tasks.deletedAt IS NULL AND tasks.archivedAt IS NULL ORDER BY CAST(placements.rank AS INTEGER), placements.id")
+    fun scheduledTasksFlow(ownerId: String, date: String): Flow<List<ScheduledTaskRow>>
+
+    @Query("UPDATE placements SET timePointId = :target WHERE ownerId = :ownerId AND timePointId = :source")
+    suspend fun remapDate(ownerId: String, source: String, target: String)
     @Query("SELECT * FROM placements WHERE ownerId = :ownerId AND deletedAt IS NULL ORDER BY timePointId ASC, CAST(rank AS INTEGER) ASC")
     fun getActivePlacementsFlow(ownerId: String): Flow<List<PlacementEntity>>
 
@@ -353,6 +370,8 @@ interface SettingsDao {
 
 @Dao
 interface OutboxDao {
+    @Query("UPDATE outbox SET payloadJson = :payload, entityId = :entityId WHERE id = :id")
+    suspend fun remap(id: Long, payload: String, entityId: String)
     @Query("SELECT * FROM outbox WHERE ownerId = :ownerId ORDER BY id ASC")
     suspend fun getPendingItems(ownerId: String): List<OutboxEntity>
 
@@ -389,9 +408,43 @@ interface ConflictDao {
 
 @Dao
 interface SyncMetaDao {
+    @Query("DELETE FROM sync_meta WHERE `key` = :key")
+    suspend fun remove(key: String)
     @Query("SELECT value FROM sync_meta WHERE `key` = :key LIMIT 1")
     suspend fun get(key: String): String?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun set(meta: SyncMetaEntity)
 }
+
+@Dao
+interface SyncJournalDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun guard(items: List<SyncGuardEntity>)
+    @Query("SELECT * FROM sync_guards")
+    suspend fun guards(): List<SyncGuardEntity>
+    @Query("DELETE FROM sync_guards WHERE mutationId = :id")
+    suspend fun release(id: String)
+    @Query("SELECT COUNT(*) FROM sync_guards WHERE entityType = :type AND entityId = :id")
+    suspend fun guardCount(type: String, id: String): Int
+    @Query("SELECT * FROM remote_changes")
+    suspend fun deferred(): List<RemoteChangeEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun defer(item: RemoteChangeEntity)
+    @Query("DELETE FROM remote_changes WHERE entityType = :type AND entityId = :id")
+    suspend fun removeDeferred(type: String, id: String)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun seen(items: List<BootstrapRowEntity>)
+    @Query("DELETE FROM bootstrap_rows")
+    suspend fun resetBootstrap()
+}
+
+/** Observes both tasks and placements; reading a date never creates a mutation. */
+data class ScheduledTaskRow(
+    @Embedded val task: TaskEntity,
+    @Embedded(prefix = "placement_") val placement: PlacementEntity,
+)
+
+data class TaskLocation(val parentFolderId: String?, val status: TaskStatus)
+data class DirectoryCounts(val total: Int = 0, val done: Int = 0)
+data class MonthCount(val localDate: String, val total: Int)

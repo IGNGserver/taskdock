@@ -150,7 +150,7 @@
         "security": [],
         "responses": {
           "200": {
-            "description": "session created"
+            "description": "Session created. Includes authenticated persistent hubId, accessToken, user and device; native sessions also return refreshToken."
           }
         }
       }
@@ -800,6 +800,110 @@
           "200": {
             "description": "TaskDock v2 POST /v2/sync/push"
           }
+        }
+      }
+    },
+    "/v2/sync/capabilities": {
+      "servers": [{ "url": "/api" }],
+      "get": {
+        "summary": "Discover progressive synchronization support",
+        "responses": {
+          "200": {
+            "description": "Authenticated capabilities: protocolVersion=2, pagedSnapshot=true, pageSize=200. A legacy Hub may return 404."
+          }
+        }
+      }
+    },
+    "/v2/sync/preview": {
+      "servers": [{ "url": "/api" }],
+      "get": {
+        "summary": "Read today's placements and a lightweight directory window",
+        "description": "Returns changes and complete=false. Excludes large notes. Apply without changing the global sync cursor or deleting absent entities.",
+        "parameters": [
+          {
+            "name": "localDate",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "name": "parentFolderId",
+            "in": "query",
+            "schema": { "type": "string", "default": "root", "description": "Folder UUID or root" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Settings, today time points/placements/tasks and the directory's first 100 folders/tasks; not a complete snapshot."
+          }
+        }
+      }
+    },
+    "/v2/sync/bootstrap": {
+      "servers": [{ "url": "/api" }],
+      "post": {
+        "summary": "Create an immutable owner-scoped snapshot",
+        "description": "Captures one consistent view and its baseline cursor. PostgreSQL pages survive restarts and work across API instances. Valid for 30 minutes; pages target 200 changes and 512 KB, with oversized individual entities on their own page.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["localDate"],
+                "properties": { "localDate": { "type": "string", "format": "date" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Manifest binding snapshotId, cursor, expiresAt and pageCount. Commit cursor only after all pages are transactionally applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["snapshotId", "cursor", "expiresAt", "pageCount", "protocolVersion"],
+                  "properties": {
+                    "snapshotId": { "type": "string", "format": "uuid" },
+                    "cursor": { "type": "string", "pattern": "^[0-9]+$" },
+                    "expiresAt": { "type": "string", "format": "date-time" },
+                    "pageCount": { "type": "integer", "minimum": 1 },
+                    "protocolVersion": { "const": 2 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/sync/bootstrap/{id}": {
+      "servers": [{ "url": "/api" }],
+      "get": {
+        "summary": "Read a fixed snapshot page, including safe replays",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "protocolVersion=2, snapshotId, cursor, page, pageCount, nextPage (null at the end) and changes. Validate the manifest binding before applying; page rows and the next-page checkpoint must commit atomically."
+          },
+          "410": {
+            "description": "SYNC_CURSOR_EXPIRED: unknown, expired or inaccessible owner-scoped snapshot/page. Rebuild while preserving cache and pending mutations."
+          },
+          "400": { "description": "Invalid page index or snapshot UUID." }
         }
       }
     },

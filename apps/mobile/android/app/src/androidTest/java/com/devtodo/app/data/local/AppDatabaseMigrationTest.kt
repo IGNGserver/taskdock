@@ -110,4 +110,18 @@ class AppDatabaseMigrationTest {
         }
         migrated.close()
     }
+
+    @Test fun migrateV8ToV9PreservesOutboxAndAddsSyncJournals() {
+        val name = "taskdock-v8-sync-fixture"
+        helper.createDatabase(name, 8).apply {
+            execSQL("INSERT INTO outbox (mutationId,clientId,ownerId,command,entityId,baseVersion,occurredAt,payloadJson,attempts,nextAttemptAt,lastError) VALUES ('preserved','client','owner','task.update','task',1,'2026-10-13T00:00:00Z','{}',0,0,NULL)")
+            execSQL("INSERT INTO sync_meta (`key`,value) VALUES ('v2:sync_cursor:owner','99')")
+            close()
+        }
+        val migrated = helper.runMigrationsAndValidate(name, 9, true, AppDatabase.MIGRATION_8_9)
+        migrated.query("SELECT mutationId FROM outbox").use { assertEquals(true, it.moveToFirst()); assertEquals("preserved", it.getString(0)) }
+        migrated.query("SELECT value FROM sync_meta WHERE `key`='v2:sync_cursor:owner'").use { assertEquals(true, it.moveToFirst()); assertEquals("99", it.getString(0)) }
+        migrated.query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('sync_guards','remote_changes','bootstrap_rows')").use { assertEquals(true, it.moveToFirst()); assertEquals(3, it.getInt(0)) }
+        migrated.close()
+    }
 }

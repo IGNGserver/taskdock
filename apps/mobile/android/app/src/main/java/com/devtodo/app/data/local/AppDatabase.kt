@@ -23,9 +23,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SettingsEntity::class,
         OutboxEntity::class,
         ConflictEntity::class,
-        SyncMetaEntity::class
+        SyncMetaEntity::class,
+        SyncGuardEntity::class,
+        RemoteChangeEntity::class,
+        BootstrapRowEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,10 +45,21 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun outboxDao(): OutboxDao
     abstract fun conflictDao(): ConflictDao
     abstract fun syncMetaDao(): SyncMetaDao
+    abstract fun syncJournalDao(): SyncJournalDao
 
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
+        private val scopedInstances = mutableMapOf<String, AppDatabase>()
+        fun getScopedInstance(context: Context, namespace: String): AppDatabase = synchronized(scopedInstances) {
+            scopedInstances.getOrPut(namespace) {
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(namespace.toByteArray()).joinToString("") { "%02x".format(it) }
+                Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "taskdock-$digest.db")
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+                        MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build()
+            }
+        }
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -62,6 +76,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_5_6,
                     MIGRATION_6_7,
                     MIGRATION_7_8,
+                    MIGRATION_8_9,
                 )
                 .build().also { INSTANCE = it }
             }
@@ -224,6 +239,19 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_workflow_stages_ownerId_workflowId ON workflow_stages(ownerId, workflowId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_workflow_task_memberships_ownerId_workflowId ON workflow_task_memberships(ownerId, workflowId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_workflow_task_memberships_ownerId_stageId ON workflow_task_memberships(ownerId, stageId)")
+            }
+        }
+
+        internal val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS sync_guards (mutationId TEXT NOT NULL, entityType TEXT NOT NULL, entityId TEXT NOT NULL, PRIMARY KEY(mutationId, entityType, entityId))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS remote_changes (entityType TEXT NOT NULL, entityId TEXT NOT NULL, version INTEGER NOT NULL, json TEXT NOT NULL, PRIMARY KEY(entityType, entityId))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS bootstrap_rows (entityType TEXT NOT NULL, entityId TEXT NOT NULL, PRIMARY KEY(entityType, entityId))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tasks_ownerId_parentFolderId ON tasks(ownerId, parentFolderId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_placements_ownerId_timePointId ON placements(ownerId, timePointId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_time_points_ownerId_localDate ON time_points(ownerId, localDate)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_notes_ownerId_taskId ON notes(ownerId, taskId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_outbox_ownerId_nextAttemptAt ON outbox(ownerId, nextAttemptAt)")
             }
         }
     }

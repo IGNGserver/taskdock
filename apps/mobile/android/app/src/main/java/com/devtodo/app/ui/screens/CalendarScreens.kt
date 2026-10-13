@@ -60,8 +60,6 @@ fun CalendarScreen(
     onNavigateToEvents: () -> Unit,
     onBack: (() -> Unit)? = null,
 ) {
-    val points by viewModel.activeTimePoints.collectAsStateWithLifecycle()
-    val placements by viewModel.activeTimePointPlacements.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val refreshing by viewModel.pullRefreshing.collectAsStateWithLifecycle()
     val timezone = settings?.timezone ?: "Asia/Shanghai"
@@ -69,17 +67,20 @@ fun CalendarScreen(
     val todayParts = remember(today) { localDateParts(today) }
     var year by rememberSaveable { mutableIntStateOf(todayParts.first) }
     var month by rememberSaveable { mutableIntStateOf(todayParts.second) }
+    val rangeStart = String.format(Locale.US, "%04d-%02d-01", year, month)
+    val rangeEnd = String.format(Locale.US, "%04d-%02d-31", year, month)
+    val points by remember(rangeStart, rangeEnd) { viewModel.observeMonthPoints(rangeStart, rangeEnd) }
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val monthCounts by remember(rangeStart, rangeEnd) { viewModel.observeMonthCounts(rangeStart, rangeEnd) }
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val events by viewModel.activeEvents.collectAsStateWithLifecycle()
     val weekStartsOn = settings?.weekStartsOn ?: 1
     val datePoints = remember(points) {
         points.filter { it.type == TimePointType.DATE && it.localDate != null }
             .associateBy { it.localDate!! }
     }
-    val placementCounts = remember(placements) { placements.groupingBy { it.timePointId }.eachCount() }
-    val countByDate = remember(datePoints, placementCounts) {
-        datePoints.mapValues { (_, point) -> placementCounts[point.id] ?: 0 }
-    }
+    val countByDate = remember(monthCounts) { monthCounts.associate { it.localDate to it.total } }
     val cells = remember(year, month, weekStartsOn) { monthCells(year, month, weekStartsOn) }
-    val events = points.filter { it.type == TimePointType.EVENT }
 
     WorkspaceScaffold(
         topBar = {

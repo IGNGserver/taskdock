@@ -43,6 +43,7 @@ import { DatabaseConstraintError, PostgresStore } from './postgres-store.js';
 import { PostgresTreeStore } from './postgres-tree-store.js';
 import { MemoryStore, type Store } from './store.js';
 import { MemoryTreeStore, type V2TreeStore } from './tree-store.js';
+import { BootstrapSnapshots } from './sync-bootstrap.js';
 
 const pageLimitSchema = z.coerce.number().int().min(1).max(500).default(100);
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
@@ -51,6 +52,7 @@ const defaultWebRoot = resolve(moduleDirectory, '../../web/dist');
 declare module 'fastify' {
   interface FastifyRequest {
     auth?: { ownerId: string; deviceId: string };
+    syncStartedAt?: number;
   }
 }
 
@@ -159,6 +161,12 @@ export async function buildServer(
   validateRuntimeConfig(config);
   const store = options.store ?? (await createStore(config));
   await store.init();
+  const hubId =
+    store instanceof PostgresStore
+      ? String(
+          (await store.v2Query('SELECT id FROM hub_identity WHERE singleton = true')).rows[0]?.id,
+        )
+      : cryptoUuid();
   const auth = new AuthService(store, config);
   const rateLimiter = new AuthRateLimiter();
   let appOrigin: string | null = null;
@@ -216,6 +224,23 @@ export async function buildServer(
     connectionTimeout: config.httpConnectionTimeoutMs,
     keepAliveTimeout: 5_000,
     genReqId: () => cryptoUuid(),
+  });
+  app.addHook('onRequest', async (request) => {
+    if (request.url.startsWith('/api/v2/sync/')) request.syncStartedAt = performance.now();
+  });
+  app.addHook('onSend', async (request, reply, payload) => {
+    if (request.syncStartedAt !== undefined) {
+      const durationMs = performance.now() - request.syncStartedAt;
+      reply.header('Server-Timing', `sync;dur=${durationMs.toFixed(1)}`);
+      request.log.info({
+        event: 'sync.response',
+        route: request.routeOptions.url,
+        durationMs,
+        bytes: typeof payload === 'string' ? Buffer.byteLength(payload) : undefined,
+        status: reply.statusCode,
+      });
+    }
+    return payload;
   });
   app.addHook('onClose', async () => {
     websocketConnections.clear();
@@ -332,7 +357,9 @@ export async function buildServer(
 
   app.register(
     async (api) => {
-      api.get('/bootstrap/status', async () => ({ initialized: await store.hasOwner() }));
+      api.get('/bootstrap/status', async () => ({
+        initialized: await store.hasOwner(),
+      }));
 
       api.post('/bootstrap', async (request, reply) => {
         const body = z
@@ -357,6 +384,7 @@ export async function buildServer(
         const result = await auth.login(body);
         setRefreshCookie(reply, result.refreshToken, config);
         return {
+          hubId,
           accessToken: result.accessToken,
           user: result.user,
           device: result.device,
@@ -387,6 +415,7 @@ export async function buildServer(
         const result = await auth.refresh(refreshToken, body.nextRefreshToken);
         setRefreshCookie(reply, result.refreshToken, config);
         return {
+          hubId,
           accessToken: result.accessToken,
           user: result.user,
           device: result.device,
@@ -427,7 +456,11 @@ export async function buildServer(
         return {
           user,
           settings,
-          capabilities: { syncProtocolVersion: 2, websocket: true, offline: true },
+          capabilities: {
+            syncProtocolVersion: 2,
+            websocket: true,
+            offline: true,
+          },
         };
       });
       api.get('/devices', async (request) => store.listDevices(request.auth!.ownerId));
@@ -456,7 +489,10 @@ export async function buildServer(
 
       api.get('/projects', async (request) => {
         const query = z
-          .object({ cursor: z.string().max(512).optional(), limit: pageLimitSchema })
+          .object({
+            cursor: z.string().max(512).optional(),
+            limit: pageLimitSchema,
+          })
           .parse(request.query);
         const page =
           store instanceof PostgresStore
@@ -566,7 +602,10 @@ export async function buildServer(
       });
       api.get('/search/tasks', async (request) => {
         const query = z
-          .object({ q: z.string().trim().max(500).optional(), limit: pageLimitSchema })
+          .object({
+            q: z.string().trim().max(500).optional(),
+            limit: pageLimitSchema,
+          })
           .parse(request.query);
         const items = await store.search(request.auth!.ownerId, query.q ?? '', query.limit);
         return { items };
@@ -595,7 +634,11 @@ export async function buildServer(
                   rank: string;
                 }) =>
                   point.type === 'DATE'
-                    ? { group: 'date', value: point.localDate ?? '', id: point.id }
+                    ? {
+                        group: 'date',
+                        value: point.localDate ?? '',
+                        id: point.id,
+                      }
                     : { group: 'event', value: point.rank, id: point.id },
               );
         return {
@@ -700,7 +743,10 @@ export async function buildServer(
 
       api.get('/time-points/:id/placements', async (request) => {
         const query = z
-          .object({ cursor: z.string().max(512).optional(), limit: pageLimitSchema })
+          .object({
+            cursor: z.string().max(512).optional(),
+            limit: pageLimitSchema,
+          })
           .parse(request.query);
         const page =
           store instanceof PostgresStore
@@ -929,9 +975,15 @@ export async function buildServer(
 function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeStore): void {
   app.register(
     async (api) => {
+      const bootstrap = new BootstrapSnapshots(tree);
       api.addHook('preHandler', async (request) => {
         await requireAccessToken(auth)(request);
-        if (request.auth) await tree.prepare?.(request.auth.ownerId);
+        if (
+          request.auth &&
+          !request.url.startsWith('/api/v2/sync/') &&
+          !(request.method === 'GET' && /^\/api\/v2\/tasks\/[^/?]+(?:\?.*)?$/.test(request.url))
+        )
+          await tree.prepare?.(request.auth.ownerId);
       });
 
       api.get('/status', async (request) => ({
@@ -963,7 +1015,9 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
 
       api.get('/tree/children', async (request) => {
         const query = z
-          .object({ parentFolderId: z.union([uuidSchema, z.literal('root')]).optional() })
+          .object({
+            parentFolderId: z.union([uuidSchema, z.literal('root')]).optional(),
+          })
           .parse(request.query);
         return {
           items: tree.listTreeChildren(
@@ -1076,7 +1130,7 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
         return reply.code(201).send(result);
       });
       api.get('/tasks/:id', async (request) =>
-        tree.getTaskDetails(request.auth!.ownerId, paramId(request)),
+        bootstrap.detail(request.auth!.ownerId, paramId(request)),
       );
       api.patch('/tasks/:id', async (request) => {
         const body = z
@@ -1213,7 +1267,10 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
       });
       api.post('/time-points/events', async (request, reply) => {
         const body = z
-          .object({ id: uuidSchema.optional(), title: z.string().trim().min(1).max(200) })
+          .object({
+            id: uuidSchema.optional(),
+            title: z.string().trim().min(1).max(200),
+          })
           .strict()
           .parse(request.body);
         const meta = mutationMeta(request);
@@ -1271,7 +1328,11 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
       }));
       api.post('/placements', async (request, reply) => {
         const body = z
-          .object({ id: uuidSchema.optional(), taskId: uuidSchema, timePointId: uuidSchema })
+          .object({
+            id: uuidSchema.optional(),
+            taskId: uuidSchema,
+            timePointId: uuidSchema,
+          })
           .strict()
           .parse(request.body);
         const meta = mutationMeta(request);
@@ -1323,7 +1384,10 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
       });
       api.post('/placements/:id/copy', async (request) => {
         const body = z
-          .object({ timePointId: uuidSchema, targetPlacementId: uuidSchema.optional() })
+          .object({
+            timePointId: uuidSchema,
+            targetPlacementId: uuidSchema.optional(),
+          })
           .strict()
           .parse(request.body);
         const meta = mutationMeta(request);
@@ -1561,13 +1625,44 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
           'workflowTask.move',
           paramId(request),
           body.baseVersion,
-          { stageId: body.stageId, beforeId: body.beforeId, afterId: body.afterId },
+          {
+            stageId: body.stageId,
+            beforeId: body.beforeId,
+            afterId: body.afterId,
+          },
         );
       });
       api.delete('/workflow-memberships/:id', async (request) =>
         versionedV2Action(tree, request, 'workflowTask.remove'),
       );
 
+      api.get('/sync/capabilities', async () => ({
+        protocolVersion: 2,
+        pagedSnapshot: true,
+        pageSize: 200,
+      }));
+      api.get('/sync/preview', async (request) => {
+        const query = z
+          .object({
+            localDate: localDateSchema,
+            parentFolderId: z.union([uuidSchema, z.literal('root')]).default('root'),
+          })
+          .parse(request.query);
+        return bootstrap.preview(
+          request.auth!.ownerId,
+          query.localDate,
+          query.parentFolderId === 'root' ? null : query.parentFolderId,
+        );
+      });
+      api.post('/sync/bootstrap', async (request) => {
+        const query = z.object({ localDate: localDateSchema }).parse(request.body);
+        return bootstrap.create(request.auth!.ownerId, query.localDate);
+      });
+      api.get('/sync/bootstrap/:id', async (request) => {
+        const id = uuidSchema.parse((request.params as { id: string }).id);
+        const query = z.object({ page: z.coerce.number().int().min(0) }).parse(request.query);
+        return bootstrap.page(request.auth!.ownerId, id, query.page);
+      });
       api.get('/sync/snapshot', async (request) => tree.snapshot(request.auth!.ownerId));
       api.get('/sync/pull', async (request) => {
         const query = z
@@ -1612,7 +1707,11 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
             results.push({
               mutationId: mutation.mutationId,
               status: domain.code === 'VERSION_CONFLICT' ? 'conflict' : 'rejected',
-              error: { code: domain.code, message: domain.message, details: domain.details },
+              error: {
+                code: domain.code,
+                message: domain.message,
+                details: domain.details,
+              },
             });
           }
         }
@@ -1635,7 +1734,10 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
           authenticating = true;
           void (async () => {
             try {
-              const message = JSON.parse(String(raw)) as { type?: unknown; accessToken?: unknown };
+              const message = JSON.parse(String(raw)) as {
+                type?: unknown;
+                accessToken?: unknown;
+              };
               if (message.type !== 'auth' || typeof message.accessToken !== 'string')
                 throw new DomainError('AUTH_REQUIRED', '需要登录');
               const session = await auth.verifyAccessToken(message.accessToken);
