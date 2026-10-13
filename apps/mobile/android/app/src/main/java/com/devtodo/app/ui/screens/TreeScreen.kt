@@ -63,14 +63,13 @@ fun TreeScreen(
     onOpenSettings: () -> Unit = {},
 ) {
     val allFolders by viewModel.foldersV2.collectAsStateWithLifecycle()
-    val allTasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
+    val aggregates by viewModel.folderAggregates.collectAsStateWithLifecycle()
+    val loadProgress by viewModel.loadProgress.collectAsStateWithLifecycle()
     val todayTasks by viewModel.todayTasks.collectAsStateWithLifecycle()
     val refreshing by viewModel.pullRefreshing.collectAsStateWithLifecycle()
+    LaunchedEffect(folderId) { viewModel.prioritizeDirectory(folderId) }
 
     val folders = allFolders.filter {
-        it.parentFolderId == folderId && it.archivedAt == null && it.deletedAt == null
-    }
-    val tasks = allTasks.filter {
         it.parentFolderId == folderId && it.archivedAt == null && it.deletedAt == null
     }
 
@@ -80,6 +79,12 @@ fun TreeScreen(
     val statusOverrides = remember { mutableStateMapOf<String, TaskStatus>() }
     val groupPins = remember { mutableStateMapOf<String, TaskStatus>() }
     var orderLock by remember { mutableStateOf<List<String>?>(null) }
+    var pageSize by rememberSaveable(folderId) { mutableIntStateOf(100) }
+    val pinned = statusOverrides.keys.toList()
+    val tasks by remember(folderId, pageSize, pinned) { viewModel.observeDirectory(folderId, pageSize, pinned) }
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val counts by remember(folderId) { viewModel.observeDirectoryCounts(folderId) }
+        .collectAsStateWithLifecycle(initialValue = com.devtodo.app.data.local.DirectoryCounts())
 
     fun groupingStatus(row: TreeRow): TaskStatus = treeGroupingStatus(row, groupPins)
 
@@ -92,8 +97,8 @@ fun TreeScreen(
         orderLock = null
     }
 
-    val baseRows = remember(folders, tasks, allFolders, allTasks) {
-        buildTreeRows(folders, tasks, allFolders, allTasks)
+    val baseRows = remember(folders, tasks, aggregates) {
+        buildTreeRows(folders, tasks, aggregates)
     }
     // While a status edit is pending the locked order wins, so a background sync
     // that follows the edit cannot slide the row to a new position. Rows that
@@ -198,9 +203,7 @@ fun TreeScreen(
         val visibleRows = rows.filter {
             it.folder != null || groupingStatus(it) != TaskStatus.DONE || showCompleted
         }
-        val completedCount = rows.count {
-            it.task != null && groupingStatus(it) == TaskStatus.DONE
-        }
+        val completedCount = counts.done
 
         LaunchedEffect(highlightedTaskId, rows, locateRequest) {
             val index = rows.indexOfFirst { it.id == highlightedTaskId }
@@ -241,7 +244,7 @@ fun TreeScreen(
                     item(key = "directory-heading") {
                         DirectorySectionHeader(
                             folderCount = folders.size,
-                            rootTaskCount = tasks.size,
+                            rootTaskCount = counts.total,
                             onCreateFolder = { showFolderDialog = true },
                         )
                     }
@@ -249,12 +252,19 @@ fun TreeScreen(
                     item(key = "directory-overview") {
                         DirectoryOverview(
                             folderCount = folders.size,
-                            taskCount = tasks.size,
+                            taskCount = counts.total,
                             pendingCount = tasks.count { it.status != TaskStatus.DONE },
                         )
                     }
                 }
 
+                if (counts.total > pageSize) {
+                    item(key = "load-directory-page") {
+                        TextButton(onClick = { pageSize += 100 }, modifier = Modifier.fillMaxWidth()) {
+                            Text("加载更多任务 · 已加载 ${tasks.size} / ${counts.total}")
+                        }
+                    }
+                }
                 // Directory rows
                 itemsIndexed(rows, key = { _, row -> "${row.kind}:${row.id}" }) { rowIndex, row ->
                     val status = groupingStatus(row)
@@ -323,7 +333,9 @@ fun TreeScreen(
                     }
                 }
 
-                if (rows.isEmpty()) {
+                if (rows.isEmpty() && !loadProgress.complete) {
+                    item { Text("正在恢复目录数据，加载失败时将自动重试。", Modifier.padding(16.dp)) }
+                } else if (rows.isEmpty()) {
                     item {
                         EmptyState(
                             icon = Icons.Default.Folder,
@@ -692,12 +704,11 @@ internal fun resolveTreeRows(
 private fun buildTreeRows(
     folders: List<FolderEntity>,
     tasks: List<TaskEntity>,
-    allFolders: List<FolderEntity>,
-    allTasks: List<TaskEntity>,
+    aggregates: Map<String, Pair<TaskStatus, Int>>,
 ): List<TreeRow> {
     val folderRows =
         folders.map { folder ->
-            val aggregate = aggregateFor(folder.id, allFolders, allTasks)
+            val aggregate = aggregates[folder.id] ?: (TaskStatus.TODO to 0)
             TreeRow(
                 "FOLDER",
                 folder.id,

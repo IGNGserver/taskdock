@@ -79,7 +79,10 @@ function runConcurrencyWorker(
           .filter(Boolean)
           .at(-1);
         assert(line, `${label} produced no result`);
-        const result = JSON.parse(line) as { worker?: unknown; references?: unknown };
+        const result = JSON.parse(line) as {
+          worker?: unknown;
+          references?: unknown;
+        };
         assert(result.worker === label, `${label} returned an invalid worker label`);
         assert(Array.isArray(result.references), `${label} returned no reference list`);
         resolve(result.references.filter((value): value is string => typeof value === 'string'));
@@ -315,7 +318,9 @@ async function main(): Promise<void> {
       workerReferences.every((reference) => /^DSH-\d+$/.test(reference)),
       'concurrency worker returned an invalid reference ID',
     );
-    const projectTasks = await primary.listTasks(owner.id, { projectId: project.id });
+    const projectTasks = await primary.listTasks(owner.id, {
+      projectId: project.id,
+    });
     assert(
       projectTasks.length === 1 + 1 + workerCount * 2,
       `unexpected project task count: ${projectTasks.length}`,
@@ -384,6 +389,47 @@ async function main(): Promise<void> {
     );
     const reloadedV2Store = new PostgresTreeStore(restartStore);
     const reloadedSnapshot = await reloadedV2Store.snapshot(owner.id);
+    const { BootstrapSnapshots } = await import('../apps/api/src/sync-bootstrap.js');
+    const bootstrap = new BootstrapSnapshots(reloadedV2Store);
+    const firstPreview = await bootstrap.preview(owner.id, '2026-09-04', null);
+    assert(firstPreview.complete === false, 'preview must never advance the global cursor');
+    assert(
+      !firstPreview.changes.some((change) => change.entityType === 'note'),
+      'preview loaded large notes',
+    );
+    const directDetail = await bootstrap.detail(owner.id, v2TaskId);
+    assert(
+      directDetail.task.id === v2TaskId && directDetail.note.contentMarkdown === '',
+      'direct task detail did not match the authoritative task',
+    );
+    assert(
+      directDetail.folderPath.some((folder) => folder.id === v2FolderId),
+      'direct task detail lost the readable folder path',
+    );
+    const manifest = await bootstrap.create(owner.id, '2026-09-04');
+    const bootstrapPeer = new PostgresStore(createPool(databaseUrl));
+    stores.push(bootstrapPeer);
+    await bootstrapPeer.init();
+    const peerBootstrap = new BootstrapSnapshots(new PostgresTreeStore(bootstrapPeer));
+    const pageOnPeer = await peerBootstrap.page(owner.id, manifest.snapshotId, 0);
+    assert(pageOnPeer.cursor === manifest.cursor, 'bootstrap cursor changed across API instances');
+    assert(
+      JSON.stringify(await bootstrap.page(owner.id, manifest.snapshotId, 0)) ===
+        JSON.stringify(pageOnPeer),
+      'bootstrap page replay is not immutable across instances',
+    );
+    await expectDomainError(
+      () => peerBootstrap.page(ownerB, manifest.snapshotId, 0),
+      'SYNC_CURSOR_EXPIRED',
+    );
+    await cleanupPool.query(
+      "UPDATE sync_bootstrap_snapshots SET expires_at = now() - interval '1 minute' WHERE id = $1",
+      [manifest.snapshotId],
+    );
+    await expectDomainError(
+      () => bootstrap.page(owner.id, manifest.snapshotId, 0),
+      'SYNC_CURSOR_EXPIRED',
+    );
     assert(
       reloadedSnapshot.folders.some((folder) => folder.id === v2FolderId),
       'v2 folder did not survive a PostgresTreeStore restart',
@@ -441,7 +487,10 @@ async function main(): Promise<void> {
       occurredAt: new Date().toISOString(),
       payload: { confirmationToken: preview.confirmationToken },
     });
-    const deleted = deleteOutcome.result as { folderCount?: number; taskCount?: number };
+    const deleted = deleteOutcome.result as {
+      folderCount?: number;
+      taskCount?: number;
+    };
     assert(deleted.folderCount === 1, 'delete outcome folder count mismatch');
     assert(deleted.taskCount === 1, 'delete outcome task count mismatch');
     const afterDeleteSnapshot = await reloadedV2Store.snapshot(owner.id);

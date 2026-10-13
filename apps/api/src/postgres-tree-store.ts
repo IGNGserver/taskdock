@@ -21,7 +21,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
    */
   private readonly loaded = new Map<string, string>();
 
-  constructor(private readonly postgres: PostgresStore) {
+  constructor(readonly postgres: PostgresStore) {
     super();
   }
 

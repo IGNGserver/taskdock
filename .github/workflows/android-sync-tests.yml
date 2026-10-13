@@ -1,0 +1,48 @@
+name: android-sync
+
+on:
+  pull_request:
+    paths:
+      - 'apps/mobile/android/**'
+      - '.github/workflows/android-sync-tests.yml'
+  push:
+    paths:
+      - 'apps/mobile/android/**'
+      - '.github/workflows/android-sync-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cache-and-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests, lint and test APK
+        working-directory: apps/mobile/android
+        run: bash ./gradlew --no-daemon --max-workers=2 :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
+      - name: Room migration and sync instrumentation
+        uses: ReactiveCircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808 # v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: default
+          disable-animations: true
+          working-directory: apps/mobile/android
+          script: bash ./gradlew --no-daemon --max-workers=2 :app:connectedDebugAndroidTest
+      - name: Test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-sync-test-reports
+          path: |
+            apps/mobile/android/app/build/reports/
+            apps/mobile/android/app/build/outputs/androidTest-results/
+          if-no-files-found: ignore
+          retention-days: 7

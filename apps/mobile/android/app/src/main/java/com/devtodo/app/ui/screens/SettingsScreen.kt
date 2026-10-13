@@ -1,6 +1,8 @@
 package com.devtodo.app.ui.screens
 
 import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -63,6 +65,9 @@ fun SettingsScreen(
     var discard by remember { mutableStateOf<OutboxEntity?>(null) }
     var queue by rememberSaveable { mutableStateOf(false) }
     var showTimezone by rememberSaveable { mutableStateOf(false) }
+    val legacyExport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.let(viewModel::exportLegacyCache)
+    }
 
     WorkspaceScaffold(
     topBar = {
@@ -100,6 +105,14 @@ fun SettingsScreen(
             onReauthenticate = { logout = true },
         )
 
+        // Server Connection Group
+        if (viewModel.authManager.hasLegacyCache) {
+            ExpressiveSettingsGroup(title = "旧版缓存已保留", description = "旧数据库没有中枢身份，离线队列不会自动上传到当前中枢。") {
+                SettingsActionRow(title = "导出旧缓存与离线队列", subtitle = "包含个人任务数据，请妥善保管；不包含登录凭据", actionLabel = "导出") {
+                    legacyExport.launch("taskdock-legacy-cache.json")
+                }
+            }
+        }
         // Server Connection Group
         ExpressiveSettingsGroup(
             title = "连接",

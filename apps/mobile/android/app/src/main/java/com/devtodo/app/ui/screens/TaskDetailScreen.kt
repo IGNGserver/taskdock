@@ -68,6 +68,7 @@ fun TaskDetailScreen(
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val timePoints by viewModel.activeTimePoints.collectAsStateWithLifecycle()
     val ready by viewModel.dataReady.collectAsStateWithLifecycle()
+    LaunchedEffect(taskId) { viewModel.loadTaskDetails(taskId) }
 
     var title by rememberSaveable(taskId) { mutableStateOf("") }
     var markdownContent by rememberSaveable(taskId) { mutableStateOf("") }
@@ -310,7 +311,7 @@ fun TaskDetailScreen(
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Text(
-                                    text = "支持 Markdown",
+                                    text = if (note == null) "备注尚未加载，连接中枢后可编辑" else "支持 Markdown",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -324,7 +325,7 @@ fun TaskDetailScreen(
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 minLines = 8,
-                                enabled = !isSaving,
+                                enabled = !isSaving && note != null,
                                 shape = TaskDockShapes.Medium,
                             )
                         }

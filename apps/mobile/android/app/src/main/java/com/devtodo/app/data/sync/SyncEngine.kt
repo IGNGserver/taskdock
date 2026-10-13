@@ -34,6 +34,9 @@ sealed interface SyncOutcome {
     data class Failure(val message: String) : SyncOutcome
 }
 
+data class LoadProgress(val phase: String = "cache", val completedPages: Int = 0, val totalPages: Int = 0,
+    val complete: Boolean = false)
+
 class SyncEngine(
     private val db: AppDatabase,
     private val api: ApiClient,
@@ -45,7 +48,54 @@ class SyncEngine(
 
     private val _lastSyncError = MutableStateFlow<String?>(null)
     val lastSyncError: StateFlow<String?> = _lastSyncError.asStateFlow()
+    private val _loadProgress = MutableStateFlow(LoadProgress())
+    val loadProgress: StateFlow<LoadProgress> = _loadProgress.asStateFlow()
     private val syncMutex = Mutex()
+    private val flightLock = Any()
+    private var syncFlight: Deferred<SyncOutcome>? = null
+    private var syncRequested = 0L
+    private var retrySyncJob: Job? = null
+    private var retrySyncAttempt = 0
+    private var engineEpoch = 0L
+    private var directoryPreviewJob: Job? = null
+    private val boundSession = authManager.sessionKey
+
+    private suspend fun ensureSession() {
+        currentCoroutineContext().ensureActive()
+        if (authManager.sessionKey != boundSession) throw CancellationException("账户或中枢已变化")
+    }
+
+    /** All callers share an engine-owned flight. Logout cancels manual refresh too. */
+    suspend fun triggerSync(): SyncOutcome {
+        val flight = synchronized(flightLock) {
+            syncRequested++
+            syncFlight?.takeIf { it.isActive } ?: scope.async {
+                var outcome: SyncOutcome
+                do {
+                    val requested = synchronized(flightLock) { syncRequested }
+                    outcome = runSync()
+                    if (outcome is SyncOutcome.Failure) break
+                } while (synchronized(flightLock) { requested != syncRequested })
+                if (outcome is SyncOutcome.Failure) scheduleSyncRetry()
+                else { retrySyncAttempt = 0; retrySyncJob?.cancel() }
+                outcome
+            }.also { syncFlight = it }
+        }
+        return flight.await()
+    }
+
+    private fun scheduleSyncRetry() {
+        if (!started || !networkAvailable || !authManager.isLoggedIn ||
+            _syncState.value in setOf(SyncState.AUTH_REQUIRED, SyncState.INCOMPATIBLE) ||
+            retrySyncJob?.isActive == true) return
+        val delayMs = (1_000L shl retrySyncAttempt.coerceAtMost(5)).coerceAtMost(30_000L)
+        retrySyncAttempt++
+        retrySyncJob = scope.launch {
+            delay(delayMs + ThreadLocalRandom.current().nextLong(500))
+            retrySyncJob = null
+            triggerSync()
+        }
+    }
 
     private val socketLock = Any()
     @Volatile private var activeWebSocket: WebSocket? = null
@@ -117,6 +167,8 @@ class SyncEngine(
     }
 
     fun stop() {
+        engineEpoch++
+        api.cancelSessionCalls(boundSession)
         val socket = synchronized(socketLock) {
             started = false
             reconnectJob?.cancel()
@@ -131,6 +183,8 @@ class SyncEngine(
         // logs out/in again, while no old engine generation can continue to
         // mutate the database after stop.
         scope.coroutineContext.cancelChildren()
+        synchronized(flightLock) { syncFlight = null }
+        retrySyncJob = null
         socket?.close(1000, "App closed")
         _syncState.value = SyncState.IDLE
     }
@@ -179,9 +233,10 @@ class SyncEngine(
                 }
 
                 override fun onMessage(webSocket: WebSocket, text: String) {
+                    if (!isCurrentSocket(webSocket, generation)) return
                     try {
                         val element = api.json.parseToJsonElement(text).jsonObject
-                        if (element["type"]?.jsonPrimitive?.content == "sync.required") {
+                        if (element["type"]?.jsonPrimitive?.content in setOf("sync.required", "ready")) {
                             scope.launch { triggerSync() }
                         }
                     } catch (_: Exception) {}
@@ -208,7 +263,7 @@ class SyncEngine(
     }
 
     private fun isCurrentSocket(socket: WebSocket, generation: Long): Boolean = synchronized(socketLock) {
-        activeWebSocket === socket && socketGeneration == generation
+        activeWebSocket === socket && socketGeneration == generation && authManager.sessionKey == boundSession
     }
 
     private fun handleWebSocketEnd(socket: WebSocket, generation: Long) {
@@ -328,8 +383,9 @@ class SyncEngine(
         }
     }
 
-    suspend fun triggerSync(): SyncOutcome = syncMutex.withLock {
+    private suspend fun runSync(): SyncOutcome = syncMutex.withLock {
         withContext(Dispatchers.IO) {
+            ensureSession()
             if (!authManager.isLoggedIn) {
                 val message = "登录已失效，请重新登录"
                 _syncState.value = SyncState.AUTH_REQUIRED
@@ -344,6 +400,7 @@ class SyncEngine(
                 return@withContext SyncOutcome.Failure(message)
             }
             if (!networkAvailable) {
+                _loadProgress.value = LoadProgress("cache", complete = db.syncMetaDao().get(v2SyncCursorKey(ownerId)) != null)
                 val message = "当前处于离线状态，请检查网络后重试"
                 _syncState.value = SyncState.OFFLINE
                 _lastSyncError.value = message
@@ -352,16 +409,24 @@ class SyncEngine(
             _syncState.value = SyncState.SYNCING
             _lastSyncError.value = null
             try {
+                repairProtection(ownerId)
                 val cursorKey = v2SyncCursorKey(ownerId)
                 var cursor = db.syncMetaDao().get(cursorKey)
                 if (cursor == null) {
-                    val snapshot = api.getSnapshotV2().getOrThrow()
-                    applyV2Snapshot(snapshot, ownerId)
-                    cursor = snapshot.cursor
-                    db.syncMetaDao().set(SyncMetaEntity(cursorKey, cursor))
+                    bootstrap(ownerId)
+                    cursor = db.syncMetaDao().get(cursorKey)
+                } else {
+                    _loadProgress.value = LoadProgress("refresh", complete = true)
                 }
 
-                val blockedMutation = pushPendingV2(ownerId)
+                var pushFailure: Exception? = null
+                val blockedMutation = try { pushPendingV2(ownerId) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (failure: Exception) {
+                    if (classifyError(failure) in setOf(SyncState.AUTH_REQUIRED, SyncState.INCOMPATIBLE)) throw failure
+                    pushFailure = failure
+                    null
+                }
                 if (blockedMutation != null) {
                     // Rejected/unsupported mutations have just been released
                     // from their pending guards. Reconcile against the
@@ -369,7 +434,6 @@ class SyncEngine(
                     // is not left behind until cursor retention expires.
                     val snapshot = api.getSnapshotV2().getOrThrow()
                     applyV2Snapshot(snapshot, ownerId)
-                    db.syncMetaDao().set(SyncMetaEntity(cursorKey, snapshot.cursor))
                 }
 
                 var currentCursor = db.syncMetaDao().get(cursorKey) ?: "0"
@@ -386,15 +450,22 @@ class SyncEngine(
                         val snapshot = api.getSnapshotV2().getOrThrow()
                         applyV2Snapshot(snapshot, ownerId)
                         currentCursor = snapshot.cursor
-                        db.syncMetaDao().set(SyncMetaEntity(cursorKey, currentCursor))
                         resynced = true
                         continue
                     }
-                    applyV2Changes(result.changes, ownerId)
+                    ensureSession()
+                    require(result.cursor.matches(Regex("\\d+")) &&
+                        (!result.hasMore || result.cursor.toBigInteger() > currentCursor.toBigInteger())) { "增量游标未正确前进" }
+                    db.withTransaction {
+                        applyV2Changes(result.changes, ownerId)
+                        db.syncMetaDao().set(SyncMetaEntity(cursorKey, result.cursor))
+                    }
                     currentCursor = result.cursor
-                    db.syncMetaDao().set(SyncMetaEntity(cursorKey, currentCursor))
                     hasMore = result.hasMore
                 }
+                replayDeferred(ownerId)
+                _loadProgress.value = LoadProgress("ready", complete = true)
+                pushFailure?.let { throw it }
                 if (blockedMutation != null) {
                     _syncState.value = SyncState.ERROR
                     _lastSyncError.value = blockedMutation
@@ -403,12 +474,128 @@ class SyncEngine(
                     _syncState.value = SyncState.IDLE
                     SyncOutcome.Success
                 }
+            } catch (cancelled: CancellationException) { throw cancelled
             } catch (error: Exception) {
                 _syncState.value = classifyError(error)
                 val message = error.message?.takeIf { it.isNotBlank() } ?: "同步失败，请稍后重试"
                 _lastSyncError.value = message
                 SyncOutcome.Failure(message)
             }
+        }
+    }
+
+    private suspend fun bootstrap(ownerId: String) {
+        _loadProgress.value = LoadProgress("preview")
+        val capabilities = api.syncCapabilities()
+        val unsupported = capabilities.exceptionOrNull() as? ApiClientException
+        if (unsupported?.statusCode == 404 || capabilities.getOrNull()?.pagedSnapshot == false) {
+            _loadProgress.value = LoadProgress("snapshot")
+            applyV2Snapshot(api.getSnapshotV2().getOrThrow(), ownerId)
+            return
+        }
+        require(capabilities.getOrThrow().protocolVersion == 2) { "中枢同步协议不兼容" }
+        val key = "bootstrap:$ownerId"
+        val pageKey = "$key:page"
+        val format = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone(db.settingsDao().getSettings(ownerId)?.timezone ?: "Asia/Shanghai")
+        }
+        var date = format.format(Date())
+        var restarted = false
+        while (true) {
+            var manifest = db.syncMetaDao().get(key)?.let { api.json.decodeFromString<BootstrapManifest>(it) }
+            if (manifest == null) {
+                val preview = api.syncPreview(date).getOrThrow()
+                require(!preview.complete) { "首屏响应不能作为完整快照" }
+                applyV2Changes(preview.changes, ownerId)
+                format.timeZone = TimeZone.getTimeZone(db.settingsDao().getSettings(ownerId)?.timezone ?: "Asia/Shanghai")
+                val correctedDate = format.format(Date())
+                if (correctedDate != date) {
+                    date = correctedDate
+                    applyV2Changes(api.syncPreview(date).getOrThrow().changes, ownerId)
+                }
+                manifest = api.createBootstrap(date).getOrThrow()
+                require(manifest.protocolVersion == 2 && manifest.pageCount > 0 && manifest.cursor.matches(Regex("\\d+")))
+                db.withTransaction {
+                    ensureSession()
+                    db.syncJournalDao().resetBootstrap()
+                    db.syncMetaDao().set(SyncMetaEntity(key, api.json.encodeToString(manifest)))
+                    db.syncMetaDao().set(SyncMetaEntity(pageKey, "0"))
+                }
+            }
+            var page = db.syncMetaDao().get(pageKey)?.toIntOrNull() ?: 0
+            try {
+                while (page < manifest.pageCount) {
+                    val batch = api.bootstrapPage(manifest.snapshotId, page).getOrThrow()
+                    require(batch.snapshotId == manifest.snapshotId && batch.cursor == manifest.cursor &&
+                        batch.page == page && batch.pageCount == manifest.pageCount && batch.protocolVersion == 2 &&
+                        batch.nextPage == (page + 1).takeIf { it < manifest.pageCount }) { "快照页面校验失败，已保留缓存" }
+                    require(batch.changes.all { it.snapshot != null && it.operation == "upsert" &&
+                        (it.entityType in MutationGuards.tables || it.entityType == "settings") })
+                    db.withTransaction {
+                        ensureSession()
+                        applyV2Changes(batch.changes, ownerId)
+                        db.syncJournalDao().seen(batch.changes.map { BootstrapRowEntity(it.entityType, it.entityId) })
+                        db.syncMetaDao().set(SyncMetaEntity(pageKey, (page + 1).toString()))
+                    }
+                    page++
+                    _loadProgress.value = LoadProgress("bootstrap", page, manifest.pageCount)
+                    android.util.Log.d("TaskDockSync", "bootstrap pages=$page/${manifest.pageCount} rows=${batch.changes.size}")
+                    yield()
+                }
+                db.withTransaction {
+                    ensureSession()
+                    // Never infer deletion from a partial page or preview.
+                    for ((type, table) in MutationGuards.tables.filterKeys { it != "project" }) {
+                        db.openHelper.writableDatabase.execSQL("DELETE FROM $table WHERE ownerId = ? AND pendingSync = 0 AND id NOT IN (SELECT entityId FROM bootstrap_rows WHERE entityType = ?)", arrayOf(ownerId, type))
+                    }
+                    db.syncMetaDao().set(SyncMetaEntity(v2SyncCursorKey(ownerId), manifest.cursor))
+                    db.syncMetaDao().set(SyncMetaEntity("protocol:$ownerId", "2"))
+                    db.syncMetaDao().remove(key)
+                    db.syncMetaDao().remove(pageKey)
+                    db.syncJournalDao().resetBootstrap()
+                }
+                return
+            } catch (error: ApiClientException) {
+                if (error.category != ApiFailureCategory.CURSOR_EXPIRED || restarted) throw error
+                db.withTransaction { ensureSession(); db.syncMetaDao().remove(key); db.syncMetaDao().remove(pageKey) }
+                restarted = true
+            }
+        }
+    }
+
+    suspend fun loadTaskDetails(taskId: String): SyncOutcome = withContext(Dispatchers.IO) {
+        try {
+            val epoch = engineEpoch
+            ensureSession()
+            val owner = authManager.ownerId ?: error("账户不可用")
+            val detail = api.taskDetails(taskId).getOrThrow()
+            if (epoch != engineEpoch) throw CancellationException("详情请求已失效")
+            fun <T> change(type: String, id: String, version: Long, value: T, serializer: kotlinx.serialization.SerializationStrategy<T>) =
+                ChangeItem("0", type, id, version, "upsert", api.json.encodeToJsonElement(serializer, value))
+            applyV2Changes(buildList {
+                add(change("task", detail.task.id, detail.task.version, detail.task, TreeTaskDto.serializer()))
+                add(change("note", detail.note.id, detail.note.version, detail.note, NoteDto.serializer()))
+                detail.steps.forEach { add(change("taskStep", it.id, it.version, it, TaskStepDto.serializer())) }
+            }, owner)
+            SyncOutcome.Success
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { SyncOutcome.Failure(error.message ?: "详情加载失败") }
+    }
+
+    fun prioritizeDirectory(folderId: String?) {
+        if (folderId == null || !networkAvailable || !authManager.isLoggedIn) return
+        directoryPreviewJob?.cancel()
+        directoryPreviewJob = scope.launch {
+            try {
+                ensureSession()
+                val owner = authManager.ownerId ?: return@launch
+                if (db.syncMetaDao().get(v2SyncCursorKey(owner)) != null) return@launch
+                val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone(db.settingsDao().getSettings(owner)?.timezone ?: "Asia/Shanghai")
+                }.format(Date())
+                applyV2Changes(api.syncPreview(date, folderId).getOrThrow().changes, owner)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* Main bootstrap/retry remains authoritative. */ }
         }
     }
 
@@ -419,91 +606,8 @@ class SyncEngine(
      * owns; otherwise the pull guard would intentionally preserve them forever.
      */
     private suspend fun markEntitySynced(ownerId: String, item: OutboxEntity) {
-        val entityId = item.entityId
-        when (item.command) {
-            "project.create", "project.update", "project.archive", "project.restore" ->
-                db.projectDao().markSynced(ownerId, entityId)
-            "folder.create", "folder.update", "folder.archiveTree", "folder.restoreTree" ->
-                db.folderDao().markSynced(ownerId, entityId)
-            "task.update", "task.archive", "task.restore" ->
-                db.taskDao().markSynced(ownerId, entityId)
-            "task.create" -> {
-                db.taskDao().markSynced(ownerId, entityId)
-                db.noteDao().markSyncedForTask(ownerId, entityId)
-            }
-            "task.delete" -> {
-                db.taskDao().markSynced(ownerId, entityId)
-                db.noteDao().markDeletedSyncedForTask(ownerId, entityId)
-                db.taskStepDao().markSyncedForTask(ownerId, entityId)
-                db.placementDao().markSyncedForTask(ownerId, entityId)
-                db.workflowDao().markMembershipsSyncedForTask(ownerId, entityId)
-            }
-            "task.duplicate" -> {
-                val payload = api.json.decodeFromString<Map<String, JsonElement>>(item.payloadJson)
-                payload["taskId"]?.jsonPrimitive?.contentOrNull?.let { db.taskDao().markSynced(ownerId, it) }
-                payload["noteId"]?.jsonPrimitive?.contentOrNull?.let { db.noteDao().markSynced(ownerId, it) }
-                payload["stepIds"]?.jsonArray?.forEach { step ->
-                    step.jsonPrimitive.contentOrNull?.let { db.taskStepDao().markSynced(ownerId, it) }
-                }
-            }
-            "note.update" -> db.noteDao().markSyncedForTask(ownerId, entityId)
-            "taskStep.create", "taskStep.update", "taskStep.move", "taskStep.delete" ->
-                db.taskStepDao().markSynced(ownerId, entityId)
-            "timePoint.date.create", "timePoint.event.create", "timePoint.update",
-            "timePoint.reach", "timePoint.archive", "timePoint.restore", "timePoint.delete" -> {
-                db.timePointDao().markSynced(ownerId, entityId)
-                if (item.command == "timePoint.delete") {
-                    db.placementDao().markDeletedSyncedForTimePoint(ownerId, entityId)
-                }
-            }
-            "timePoint.reorder" -> {
-                val payload = api.json.decodeFromString<Map<String, JsonElement>>(item.payloadJson)
-                payload["ids"]?.jsonArray?.forEach { id ->
-                    id.jsonPrimitive.contentOrNull?.let { pointId ->
-                        db.timePointDao().markSynced(ownerId, pointId)
-                    }
-                }
-            }
-            "placement.create", "placement.remove" ->
-                db.placementDao().markSynced(ownerId, entityId)
-            "placement.move", "placement.copy" -> {
-                db.placementDao().markSynced(ownerId, entityId)
-                val payload = api.json.decodeFromString<Map<String, JsonElement>>(item.payloadJson)
-                payload["targetPlacementId"]?.jsonPrimitive?.contentOrNull?.let {
-                    db.placementDao().markSynced(ownerId, it)
-                }
-            }
-            "placement.reorder" -> {
-                val payload = api.json.decodeFromString<Map<String, JsonElement>>(item.payloadJson)
-                payload["ids"]?.jsonArray?.forEach { id ->
-                    id.jsonPrimitive.contentOrNull?.let { placementId ->
-                        db.placementDao().markSynced(ownerId, placementId)
-                    }
-                }
-            }
-            "workflow.update", "workflow.archive", "workflow.restore" ->
-                db.workflowDao().markSynced(ownerId, entityId)
-            "workflow.create" -> {
-                db.workflowDao().markSynced(ownerId, entityId)
-                val payload = api.json.decodeFromString<Map<String, JsonElement>>(item.payloadJson)
-                payload["defaultStageId"]?.jsonPrimitive?.contentOrNull?.let {
-                    db.workflowDao().markStageSynced(ownerId, it)
-                }
-            }
-            "workflow.delete" -> {
-                val workflow = db.workflowDao().getWorkflowById(entityId, ownerId)
-                db.workflowDao().markSynced(ownerId, entityId)
-                workflow?.let {
-                    db.workflowDao().markStagesSyncedForWorkflow(ownerId, it.id)
-                    db.workflowDao().markMembershipsSyncedForWorkflow(ownerId, it.id)
-                }
-            }
-            "workflowStage.create", "workflowStage.update", "workflowStage.move", "workflowStage.delete" ->
-                db.workflowDao().markStageSynced(ownerId, entityId)
-            "workflowTask.add", "workflowTask.move", "workflowTask.remove" ->
-                db.workflowDao().markMembershipSynced(ownerId, entityId)
-            else -> Unit
-        }
+        require(item.ownerId == ownerId)
+        MutationGuards(db, api.json).release(item)
     }
 
     /**
@@ -519,6 +623,9 @@ class SyncEngine(
             markEntitySynced(ownerId, item)
             db.outboxDao().deleteByMutationId(item.mutationId, ownerId)
             db.conflictDao().markResolvedByMutationId(item.mutationId, ownerId, isoFormat.format(Date()))
+            // Discard abandons an optimistic version; rebuild from authority,
+            // not an incremental cursor that already skipped that version.
+            db.syncMetaDao().remove(v2SyncCursorKey(ownerId))
         }
     }
 
@@ -560,12 +667,12 @@ class SyncEngine(
         tasks = db.taskDao().getPendingIds(ownerId).toSet(),
         notes = db.noteDao().getPendingIds(ownerId).toSet(),
         taskSteps = db.taskStepDao().getPendingIds(ownerId).toSet(),
-        timePoints = db.timePointDao().getPendingIds(ownerId).toSet(),
-        placements = db.placementDao().getPendingIds(ownerId).toSet(),
+        timePoints = db.timePointDao().getPendingIds(ownerId).toSet() + db.syncJournalDao().guards().filter { it.entityType == "timePoint" }.map { it.entityId },
+        placements = db.placementDao().getPendingIds(ownerId).toSet() + db.syncJournalDao().guards().filter { it.entityType == "placement" }.map { it.entityId },
         workflows = db.workflowDao().getPendingWorkflowIds(ownerId).toSet(),
         workflowStages = db.workflowDao().getPendingStageIds(ownerId).toSet(),
         memberships = db.workflowDao().getPendingMembershipIds(ownerId).toSet(),
-        settings = db.outboxDao().getPendingItems(ownerId).any { it.command == "settings.update" },
+        settings = db.outboxDao().getPendingItems(ownerId).any { it.command == "settings.update" && it.lastError?.startsWith("TERMINAL:") != true },
     )
 
     /**
@@ -579,6 +686,11 @@ class SyncEngine(
     private suspend fun pushPendingV2(ownerId: String): String? {
         val pending = db.outboxDao().getDueItems(ownerId, System.currentTimeMillis())
         if (pending.isEmpty()) return null
+        db.withTransaction {
+            ensureSession()
+            val tracked = db.syncJournalDao().guards().map { it.mutationId }.toSet()
+            pending.filter { it.mutationId !in tracked }.forEach { MutationGuards(db, api.json).track(it) }
+        }
 
         var blockedMessage: String? = null
         val converted = mutableListOf<ConvertedOutbox>()
@@ -602,31 +714,54 @@ class SyncEngine(
             if (batch.size == 1 && encodedPushSize(batch) > MAX_PUSH_BYTES) {
                 val source = batch.single().source
                 val message = "TERMINAL:mutation payload exceeds the sync request limit"
-                db.withTransaction {
-                    db.outboxDao().recordAttempt(source.id, ownerId, Long.MAX_VALUE, message)
+                    db.withTransaction {
+                        ensureSession()
+                        db.outboxDao().recordAttempt(source.id, ownerId, Long.MAX_VALUE, message)
                     markEntitySynced(ownerId, source)
                 }
                 blockedMessage = blockedMessage ?: message.removePrefix("TERMINAL:")
                 continue
             }
 
-            val push = api.pushSyncV2(batch.map { it.mutation }).getOrThrow()
+            ensureSession()
+            // A date creation may return the existing server ID. Re-read later
+            // dependent batches after the acknowledged mapping was committed.
+            val live = db.outboxDao().getPendingItems(ownerId).associateBy { it.mutationId }
+            val guardsByMutation = db.syncJournalDao().guards().groupBy { it.mutationId }
+            val blockedTargets = live.values.filter { it.lastError?.startsWith("CONFLICT:") == true }
+                .flatMap { guardsByMutation[it.mutationId].orEmpty() }.map { it.entityType to it.entityId }.toSet()
+            val refreshed = batch.mapNotNull { converted ->
+                live[converted.source.mutationId]?.let { item ->
+                    if (guardsByMutation[item.mutationId].orEmpty().any { (it.entityType to it.entityId) in blockedTargets }) {
+                        blockedMessage = blockedMessage ?: "有同步冲突，依赖操作已保留等待处理"
+                        null
+                    } else convertV1Outbox(item, null)
+                }
+            }
+            if (refreshed.isEmpty()) continue
+            val push = api.pushSyncV2(refreshed.map { it.mutation }).getOrThrow()
+            require(push.results.map { it.mutationId }.toSet() == refreshed.map { it.mutation.mutationId }.toSet() &&
+                push.results.size == refreshed.size && push.results.all { it.status in setOf("applied", "conflict", "rejected") }) { "上传结果不完整，离线队列已保留" }
             for (result in push.results) {
-                val original = batch.firstOrNull { it.mutation.mutationId == result.mutationId }?.source
+                val original = refreshed.firstOrNull { it.mutation.mutationId == result.mutationId }?.source
                     ?: continue
                 when (result.status) {
                     "applied" -> {
                         db.withTransaction {
+                            ensureSession()
+                            reconcileReturnedIds(ownerId, original, result.result)
                             db.outboxDao().deleteByMutationId(result.mutationId, ownerId)
                             // The optimistic row is now authoritative on the server,
                             // so drop its pending flag before the next pull.
                             markEntitySynced(ownerId, original)
+                            applyReturnedResult(ownerId, original.command, result.result)
                         }
                     }
                     "conflict" -> {
                         val detail = result.error?.toString() ?: result.message ?: "VERSION_CONFLICT"
                         val message = "CONFLICT:$detail"
                         db.withTransaction {
+                            ensureSession()
                             db.outboxDao().recordAttempt(original.id, ownerId, Long.MAX_VALUE, message)
                             db.conflictDao().insert(
                                 ConflictEntity(
@@ -647,6 +782,7 @@ class SyncEngine(
                         val detail = result.error?.toString() ?: result.message ?: "v2 mutation 未应用"
                         val message = "TERMINAL:$detail"
                         db.withTransaction {
+                            ensureSession()
                             db.outboxDao().recordAttempt(original.id, ownerId, Long.MAX_VALUE, message)
                             markEntitySynced(ownerId, original)
                         }
@@ -658,13 +794,22 @@ class SyncEngine(
         return blockedMessage
     }
 
-    private fun splitPushBatches(items: List<ConvertedOutbox>): List<List<ConvertedOutbox>> {
+    private suspend fun splitPushBatches(items: List<ConvertedOutbox>): List<List<ConvertedOutbox>> {
         val batches = mutableListOf<List<ConvertedOutbox>>()
         var current = mutableListOf<ConvertedOutbox>()
+        val guards = db.syncJournalDao().guards().groupBy { it.mutationId }
+        fun targets(item: ConvertedOutbox) = guards[item.source.mutationId].orEmpty().map { it.entityType to it.entityId }.toSet()
         for (item in items) {
+            if (item.source.command in setOf("timePoint.date.create", "placement.create", "placement.copy", "placement.move")) {
+                if (current.isNotEmpty()) batches += current
+                batches += listOf(item)
+                current = mutableListOf()
+                continue
+            }
             val candidate = current + item
             if (current.isNotEmpty() &&
-                (candidate.size > MAX_PUSH_MUTATIONS || encodedPushSize(candidate) > MAX_PUSH_BYTES)
+                (candidate.size > MAX_PUSH_MUTATIONS || encodedPushSize(candidate) > MAX_PUSH_BYTES ||
+                    current.any { previous -> targets(previous).any { it in targets(item) } })
             ) {
                 batches += current
                 current = mutableListOf(item)
@@ -710,7 +855,7 @@ class SyncEngine(
                 Mutation(item.mutationId, "task.update", item.entityId, item.baseVersion, item.occurredAt,
                     payload.filterKeys { it == "title" || it == "status" })
             }
-            "task.archive", "task.restore", "task.duplicate" -> Mutation(item.mutationId, item.command, item.entityId, item.baseVersion, item.occurredAt, payload)
+            "task.archive", "task.restore", "task.duplicate", "task.delete" -> Mutation(item.mutationId, item.command, item.entityId, item.baseVersion, item.occurredAt, payload)
             "note.update" -> Mutation(item.mutationId, "note.update", item.entityId, item.baseVersion, item.occurredAt,
                 mapOf("taskId" to JsonPrimitive(item.entityId), "contentMarkdown" to (payload["contentMarkdown"] ?: JsonPrimitive(""))))
             "timePoint.date.create", "timePoint.event.create", "timePoint.update",
@@ -733,6 +878,7 @@ class SyncEngine(
 
     private suspend fun markUpgradeRequired(item: OutboxEntity): ConvertedOutbox? {
         db.withTransaction {
+            ensureSession()
             db.outboxDao().recordAttempt(item.id, item.ownerId, Long.MAX_VALUE, "TERMINAL:CLIENT_UPGRADE_REQUIRED: ${item.command} 需要确认后转换")
             markEntitySynced(item.ownerId, item)
         }
@@ -741,9 +887,23 @@ class SyncEngine(
 
     private suspend fun applyV2Snapshot(snapshot: V2SnapshotResult, ownerId: String) {
         val now = isoFormat.format(Date())
-        db.runInTransaction {
-            runBlocking {
+        db.withTransaction {
+                ensureSession()
                 val pending = pendingEntityIds(ownerId)
+                // Persist protected rows from full snapshots too. Advancing C
+                // must not lose the authority we deliberately did not apply.
+                val encoded = api.json.encodeToJsonElement(snapshot).jsonObject
+                for ((collection, type) in mapOf("folders" to "folder", "tasks" to "task", "notes" to "note",
+                    "taskSteps" to "taskStep", "timePoints" to "timePoint", "placements" to "placement",
+                    "workflows" to "workflow", "workflowStages" to "workflowStage",
+                    "workflowTaskMemberships" to "workflowTaskMembership")) {
+                    val incoming = encoded[collection]?.jsonArray.orEmpty().map { row ->
+                        val obj = row.jsonObject
+                        ChangeItem(snapshot.cursor, type, obj.getValue("id").jsonPrimitive.content,
+                            obj.getValue("version").jsonPrimitive.long, "upsert", row)
+                    }
+                    applyV2Changes(incoming, ownerId)
+                }
                 // Clear non-pending entities to avoid stale local ghosts, but protect local pending outbox
                 db.folderDao().clearNonPending(ownerId)
                 db.taskDao().clearNonPending(ownerId)
@@ -800,15 +960,17 @@ class SyncEngine(
                     )
                 }
                 db.syncMetaDao().set(SyncMetaEntity("protocol:$ownerId", "2"))
-            }
+                db.syncMetaDao().set(SyncMetaEntity(v2SyncCursorKey(ownerId), snapshot.cursor))
+                ensureSession()
         }
     }
 
     private suspend fun applyV2Changes(changes: List<ChangeItem>, ownerId: String) {
         val now = isoFormat.format(Date())
-        db.runInTransaction {
-            runBlocking {
+        db.withTransaction {
+                ensureSession()
                 val pending = pendingEntityIds(ownerId)
+                val deferred = db.syncJournalDao().deferred().associateBy { it.entityType to it.entityId }.toMutableMap()
                 for (change in changes) {
                     val isPending = when (change.entityType) {
                         "folder" -> change.entityId in pending.folders
@@ -827,8 +989,23 @@ class SyncEngine(
                     // row whose outbox mutation has not reached a terminal
                     // server result yet. The next pull will reconcile it after
                     // the mutation is applied or explicitly blocked.
-                    if (isPending) continue
+                    if (isPending) {
+                        val existing = deferred[change.entityType to change.entityId]
+                        if (existing == null || existing.version <= change.entityVersion) {
+                            val shadow = RemoteChangeEntity(change.entityType, change.entityId,
+                                change.entityVersion, api.json.encodeToString(change))
+                            db.syncJournalDao().defer(shadow)
+                            deferred[change.entityType to change.entityId] = shadow
+                        }
+                        continue
+                    }
                     val snapshot = change.snapshot
+                    (snapshot as? JsonObject)?.let { obj ->
+                        val returnedOwner = obj["ownerId"]?.jsonPrimitive?.contentOrNull
+                        require(returnedOwner == null || returnedOwner == ownerId) { "响应账户不匹配" }
+                        val returnedId = obj["id"]?.jsonPrimitive?.contentOrNull
+                        require(returnedId == null || returnedId == change.entityId) { "响应实体 ID 不匹配" }
+                    }
                     if (snapshot == null || change.operation == "delete") {
                         when (change.entityType) {
                             "folder" -> db.folderDao().getById(change.entityId, ownerId)?.let {
@@ -954,8 +1131,89 @@ class SyncEngine(
                         "archiveOperation" -> db.archiveOperationDao().upsertAll(listOf(archiveEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)))
                     }
                 }
+                ensureSession()
+        }
+    }
+
+    private suspend fun replayDeferred(ownerId: String) {
+        db.withTransaction {
+            ensureSession()
+            for (item in db.syncJournalDao().deferred()) {
+                if (db.syncJournalDao().guardCount(item.entityType, item.entityId) != 0) continue
+                if (item.entityType == "settings" && db.outboxDao().getPendingItems(ownerId).any {
+                    it.command == "settings.update" && it.lastError?.startsWith("TERMINAL:") != true }) continue
+                applyV2Changes(listOf(api.json.decodeFromString<ChangeItem>(item.json)), ownerId)
+                db.syncJournalDao().removeDeferred(item.entityType, item.entityId)
             }
         }
+    }
+
+    private suspend fun reconcileReturnedIds(ownerId: String, item: OutboxEntity, result: JsonElement?) {
+        val obj = result as? JsonObject ?: return
+        val entity = if (item.command.startsWith("placement.")) obj["placement"] as? JsonObject ?: obj else obj
+        val target = entity["id"]?.jsonPrimitive?.contentOrNull ?: return
+        val source = if (item.command in setOf("placement.copy", "placement.move")) {
+            api.json.parseToJsonElement(item.payloadJson).jsonObject["targetPlacementId"]?.jsonPrimitive?.contentOrNull ?: return
+        } else item.entityId
+        if (target == source || item.command !in setOf("timePoint.date.create", "placement.create", "placement.copy", "placement.move")) return
+        fun remap(value: JsonElement, reference: Boolean = false): JsonElement = when (value) {
+            is JsonObject -> JsonObject(value.mapValues { (key, child) -> remap(child, key in setOf("id", "entityId", "timePointId", "targetPlacementId", "ids")) })
+            is JsonArray -> JsonArray(value.map { remap(it, reference) })
+            is JsonPrimitive -> if (reference && value.isString && value.content == source) JsonPrimitive(target) else value
+            else -> value
+        }
+        if (item.command == "timePoint.date.create") {
+            db.placementDao().remapDate(ownerId, source, target)
+            db.timePointDao().upsertTimePoint(timePointEntity(api.json.decodeFromJsonElement(entity), ownerId, isoFormat.format(Date())))
+            db.openHelper.writableDatabase.execSQL("DELETE FROM time_points WHERE id = ? AND ownerId = ?", arrayOf(source, ownerId))
+        } else {
+            db.placementDao().upsertPlacement(placementEntity(api.json.decodeFromJsonElement(entity), ownerId, isoFormat.format(Date())))
+            db.openHelper.writableDatabase.execSQL("DELETE FROM placements WHERE id = ? AND ownerId = ?", arrayOf(source, ownerId))
+        }
+        db.outboxDao().getPendingItems(ownerId).filter { it.id != item.id }.forEach { pending ->
+            db.outboxDao().remap(pending.id, remap(api.json.parseToJsonElement(pending.payloadJson)).toString(),
+                if (pending.entityId == source) target else pending.entityId)
+        }
+        val type = item.command.substringBefore('.')
+        db.openHelper.writableDatabase.execSQL("INSERT OR IGNORE INTO sync_guards (mutationId, entityType, entityId) SELECT mutationId, entityType, ? FROM sync_guards WHERE entityId = ? AND entityType = ?", arrayOf(target, source, type))
+        db.openHelper.writableDatabase.execSQL("DELETE FROM sync_guards WHERE entityId = ? AND entityType = ?", arrayOf(source, type))
+        val table = MutationGuards.tables.getValue(type)
+        db.openHelper.writableDatabase.execSQL("UPDATE $table SET pendingSync = 1 WHERE id = ? AND ownerId = ?", arrayOf(target, ownerId))
+    }
+
+    private suspend fun repairProtection(ownerId: String) = db.withTransaction {
+        ensureSession()
+        val items = db.outboxDao().getPendingItems(ownerId)
+        val tracker = MutationGuards(db, api.json)
+        val tracked = db.syncJournalDao().guards().map { it.mutationId }.toSet()
+        items.filter { it.mutationId !in tracked }.forEach { tracker.track(it) }
+        items.filter { it.lastError?.startsWith("TERMINAL:") == true }.forEach { tracker.release(it) }
+        for ((type, table) in MutationGuards.tables) {
+            db.openHelper.writableDatabase.execSQL("UPDATE $table SET pendingSync = 0 WHERE ownerId = ? AND pendingSync = 1 AND NOT EXISTS (SELECT 1 FROM sync_guards WHERE entityType = ? AND entityId = $table.id)", arrayOf(ownerId, type))
+        }
+    }
+
+    private suspend fun applyReturnedResult(ownerId: String, command: String, result: JsonElement?) {
+        if (result == null) return
+        val returned = mutableListOf<ChangeItem>()
+        fun collect(type: String, value: JsonElement) {
+            if (value is JsonArray) { value.forEach { collect(type, it) }; return }
+            val obj = value as? JsonObject ?: return
+            val id = obj["id"]?.jsonPrimitive?.contentOrNull ?: return
+            val version = obj["version"]?.jsonPrimitive?.longOrNull ?: return
+            if (type !in MutationGuards.tables && type != "settings") return
+            returned += ChangeItem("0", type, id, version, if (obj["deletedAt"] is JsonPrimitive && obj["deletedAt"] != JsonNull) "delete" else "upsert", obj)
+        }
+        var primary = command.substringBefore('.')
+        if (primary == "workflowTask") primary = "workflowTaskMembership"
+        if (primary == "tree") primary = "task"
+        collect(primary, result)
+        (result as? JsonObject)?.let { obj ->
+            for ((key, type) in mapOf("task" to "task", "folder" to "folder", "note" to "note", "steps" to "taskStep", "placement" to "placement", "workflow" to "workflow", "stage" to "workflowStage")) {
+                obj[key]?.let { collect(type, it) }
+            }
+        }
+        applyV2Changes(returned, ownerId)
     }
 
     private fun folderEntity(dto: FolderDto, ownerId: String, now: String) = FolderEntity(dto.id, dto.ownerId ?: ownerId, dto.parentFolderId, dto.title, dto.rank, dto.version, dto.archivedAt, dto.archivedByOperationId, dto.createdAt ?: now, dto.updatedAt ?: now, null, false)
@@ -1191,6 +1449,7 @@ class SyncEngine(
             payloadJson = jsonPayload
         )
         db.outboxDao().insert(item)
+        MutationGuards(db, api.json).track(item)
         // The outbox observer picks this up after the surrounding transaction
         // commits, so callers may record mutations from inside `withTransaction`.
     }

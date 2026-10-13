@@ -23,7 +23,7 @@ data class ProjectEntity(
     val pendingSync: Boolean = false
 )
 
-@Entity(tableName = "tasks")
+@Entity(tableName = "tasks", indices = [Index(value = ["ownerId", "parentFolderId"])])
 data class TaskEntity(
     @PrimaryKey val id: String,
     val ownerId: String,
@@ -154,7 +154,7 @@ data class ArchiveOperationEntity(
     val restoredAt: String? = null
 )
 
-@Entity(tableName = "notes")
+@Entity(tableName = "notes", indices = [Index(value = ["ownerId", "taskId"])])
 data class NoteEntity(
     @PrimaryKey val id: String,
     val ownerId: String,
@@ -167,7 +167,7 @@ data class NoteEntity(
     val pendingSync: Boolean = false
 )
 
-@Entity(tableName = "time_points")
+@Entity(tableName = "time_points", indices = [Index(value = ["ownerId", "localDate"])])
 data class TimePointEntity(
     @PrimaryKey val id: String,
     val ownerId: String,
@@ -184,7 +184,7 @@ data class TimePointEntity(
     val pendingSync: Boolean = false
 )
 
-@Entity(tableName = "placements")
+@Entity(tableName = "placements", indices = [Index(value = ["ownerId", "timePointId"])])
 data class PlacementEntity(
     @PrimaryKey val id: String,
     val ownerId: String,
@@ -210,7 +210,7 @@ data class SettingsEntity(
     val version: Long = 1,
 )
 
-@Entity(tableName = "outbox")
+@Entity(tableName = "outbox", indices = [Index(value = ["ownerId", "nextAttemptAt"])])
 data class OutboxEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val mutationId: String,
@@ -245,3 +245,12 @@ data class SyncMetaEntity(
     @PrimaryKey val key: String,
     val value: String
 )
+
+@Entity(tableName = "sync_guards", primaryKeys = ["mutationId", "entityType", "entityId"])
+data class SyncGuardEntity(val mutationId: String, val entityType: String, val entityId: String)
+
+@Entity(tableName = "remote_changes", primaryKeys = ["entityType", "entityId"])
+data class RemoteChangeEntity(val entityType: String, val entityId: String, val version: Long, val json: String)
+
+@Entity(tableName = "bootstrap_rows", primaryKeys = ["entityType", "entityId"])
+data class BootstrapRowEntity(val entityType: String, val entityId: String)

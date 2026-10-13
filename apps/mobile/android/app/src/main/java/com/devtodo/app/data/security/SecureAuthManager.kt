@@ -5,7 +5,7 @@ import android.util.Base64
 import androidx.core.content.edit
 import org.json.JSONObject
 
-class SecureAuthManager(context: Context) {
+class SecureAuthManager(private val context: Context) {
     private val tokenStore = SecureTokenStore(context)
     private val plainPrefs = context.applicationContext
         .getSharedPreferences("devtodo_config", Context.MODE_PRIVATE)
@@ -63,6 +63,24 @@ class SecureAuthManager(context: Context) {
     var ownerId: String?
         get() = plainPrefs.getString(KEY_OWNER_ID, null)
         set(value) = plainPrefs.edit { putString(KEY_OWNER_ID, value) }
+
+    /** Token rotation does not change the identity of an in-flight sync. */
+    val sessionKey: String get() = "$hubOrigin|$databaseNamespace|${plainPrefs.getLong("session_epoch", 0)}"
+    fun advanceSession() { plainPrefs.edit(commit = true) { putLong("session_epoch", plainPrefs.getLong("session_epoch", 0) + 1) } }
+    val databaseNamespace: String get() {
+        val identity = plainPrefs.getString("hub_identity:$hubOrigin", null)
+        val storage = identity ?: "unverified:$hubOrigin"
+        return "$storage|${ownerId.orEmpty()}"
+    }
+    fun rememberHubIdentity(id: String) {
+        require(id.isNotBlank())
+        plainPrefs.edit(commit = true) {
+            putString("hub_identity:$hubOrigin", id)
+        }
+    }
+    fun scopedDatabase() = com.devtodo.app.data.local.AppDatabase.getScopedInstance(context, databaseNamespace)
+    val hasLegacyCache: Boolean get() = com.devtodo.app.data.local.LegacyCacheBackup.exists(context)
+    suspend fun exportLegacyCache(destination: android.net.Uri) = com.devtodo.app.data.local.LegacyCacheBackup.export(context, destination)
 
     var username: String?
         get() = plainPrefs.getString(KEY_USERNAME, null)
@@ -134,6 +152,7 @@ class SecureAuthManager(context: Context) {
      * behind lets a forced re-login start pre-filled instead of blank.
      */
     fun clearSession() {
+        advanceSession()
         tokenStore.removeAll(
             setOf(
                 AUTH_ACCESS_TOKEN_KEY,

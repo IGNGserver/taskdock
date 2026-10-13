@@ -2,7 +2,7 @@ package com.devtodo.app.ui.screens
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
-import androidx.room.withTransaction
+import androidx.room.withTransaction as roomTransaction
 import kotlinx.coroutines.CancellationException
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -13,10 +13,12 @@ import com.devtodo.app.data.security.SecureAuthManager
 import com.devtodo.app.data.sync.SyncEngine
 import com.devtodo.app.data.sync.SyncOutcome
 import com.devtodo.app.data.sync.SyncState
+import com.devtodo.app.data.sync.LoadProgress
 import com.devtodo.app.ui.theme.ThemeMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.asContextElement
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
@@ -36,15 +38,56 @@ data class TaskStatusChange(
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(
-    private val db: AppDatabase,
-    private val syncEngine: SyncEngine,
+    db: AppDatabase,
+    syncEngine: SyncEngine,
     val authManager: SecureAuthManager,
-    val api: ApiClient
+    val api: ApiClient,
+    private val isolateAccounts: Boolean = false,
 ) : ViewModel() {
+    private var activeDatabase = db
+    private var activeEngine = syncEngine
+    private val transactionDatabase = ThreadLocal<AppDatabase>()
+    private val transactionEngine = ThreadLocal<SyncEngine>()
+    private var db: AppDatabase
+        get() = transactionDatabase.get() ?: activeDatabase
+        set(value) { activeDatabase = value }
+    private var syncEngine: SyncEngine
+        get() = transactionEngine.get() ?: activeEngine
+        set(value) { activeEngine = value }
 
-    val syncState: StateFlow<SyncState> = syncEngine.syncState
-    val lastSyncError: StateFlow<String?> = syncEngine.lastSyncError
-    private val currentOwnerId = MutableStateFlow(authManager.ownerId)
+    private val _syncState = MutableStateFlow(syncEngine.syncState.value)
+    val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
+    private val _lastSyncError = MutableStateFlow<String?>(null)
+    val lastSyncError: StateFlow<String?> = _lastSyncError.asStateFlow()
+    private val _loadProgress = MutableStateFlow(LoadProgress())
+    val loadProgress: StateFlow<LoadProgress> = _loadProgress.asStateFlow()
+    private val ownerIdentity = MutableStateFlow(authManager.ownerId)
+    private val databaseVersion = MutableStateFlow(0)
+    private val currentOwnerId = combine(ownerIdentity, databaseVersion) { owner, _ -> owner }
+    private var boundNamespace = authManager.databaseNamespace
+    private var boundSession = authManager.sessionKey
+    private var engineObservers: Job? = null
+    val hasCachedData = currentOwnerId.flatMapLatest { owner ->
+        owner?.let { db.taskDao().hasCacheFlow(it) } ?: flowOf(false)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    private fun bindAccount() {
+        if (isolateAccounts && (boundNamespace != authManager.databaseNamespace || boundSession != authManager.sessionKey)) {
+            syncEngine.stop()
+            db = authManager.scopedDatabase()
+            syncEngine = SyncEngine(db, api, authManager)
+            boundNamespace = authManager.databaseNamespace
+            boundSession = authManager.sessionKey
+            databaseVersion.value++
+        }
+        ownerIdentity.value = authManager.ownerId
+        engineObservers?.cancel()
+        engineObservers = viewModelScope.launch {
+            launch { syncEngine.syncState.collect { _syncState.value = it } }
+            launch { syncEngine.lastSyncError.collect { _lastSyncError.value = it } }
+            launch { syncEngine.loadProgress.collect { _loadProgress.value = it } }
+        }
+    }
 
     val projects: StateFlow<List<ProjectEntity>> = currentOwnerId
         .flatMapLatest { ownerId ->
@@ -59,6 +102,25 @@ class MainViewModel(
     val treeTasksV2: StateFlow<List<TaskEntity>> = currentOwnerId
         .flatMapLatest { ownerId -> ownerId?.let { db.taskDao().getTreeTasksFlow(it) } ?: flowOf(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val folderAggregates = combine(foldersV2, currentOwnerId.flatMapLatest { owner ->
+        owner?.let { db.taskDao().locationsFlow(it) } ?: flowOf(emptyList())
+    }) { folders, locations -> directoryAggregates(folders, locations) }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    fun observeDirectory(parent: String?, limit: Int, pinnedIds: List<String>): Flow<List<TaskEntity>> = currentOwnerId.flatMapLatest { owner ->
+        owner?.let { db.taskDao().directoryWindow(it, parent, limit, pinnedIds) } ?: flowOf(emptyList())
+    }
+    fun observeDirectoryCounts(parent: String?): Flow<DirectoryCounts> = currentOwnerId.flatMapLatest { owner ->
+        owner?.let { db.taskDao().directoryCounts(it, parent) } ?: flowOf(DirectoryCounts())
+    }
+    fun observeMonthPoints(start: String, end: String): Flow<List<TimePointEntity>> = currentOwnerId.flatMapLatest { owner ->
+        owner?.let { db.timePointDao().monthPoints(it, start, end) } ?: flowOf(emptyList())
+    }
+    fun observeMonthCounts(start: String, end: String): Flow<List<MonthCount>> = currentOwnerId.flatMapLatest { owner ->
+        owner?.let { db.placementDao().monthCounts(it, start, end) } ?: flowOf(emptyList())
+    }
 
     val workflowsV2: StateFlow<List<WorkflowEntity>> = currentOwnerId
         .flatMapLatest { ownerId -> ownerId?.let { db.workflowDao().getActiveFlow(it) } ?: flowOf(emptyList()) }
@@ -150,7 +212,9 @@ class MainViewModel(
         }.format(Date())
 
     init {
+        bindAccount()
         if (authManager.isLoggedIn) {
+            _dataReady.value = true
             loadTodayData()
             restorePersistedSession(showOfflineMessage = true)
         } else {
@@ -201,8 +265,8 @@ class MainViewModel(
     }
 
     private fun markSessionReady() {
+        bindAccount()
         _authenticated.value = true
-        currentOwnerId.value = authManager.ownerId
         _dataReady.value = true
         loadTodayData()
         syncEngine.start()
@@ -230,14 +294,13 @@ class MainViewModel(
         }
 
         todayLoadJob = viewModelScope.launch {
-            val datePoint = getOrCreateDatePoint(ownerId, todayStr)
-            db.placementDao().getPlacementsByTimePointFlow(ownerId, datePoint.id).collect { placements ->
-                _todayTasks.value = placements.mapNotNull { placement ->
-                    db.taskDao().getTaskById(placement.taskId, ownerId)
-                        ?.takeIf { it.archivedAt == null && it.deletedAt == null }
-                        ?.let { it to placement }
-                }
-            }
+            combine(currentOwnerId, settings) { owner, setting ->
+                owner to SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone(setting?.timezone ?: "Asia/Shanghai")
+                }.format(Date())
+            }.flatMapLatest { (owner, date) ->
+                owner?.let { db.placementDao().scheduledTasksFlow(it, date) } ?: flowOf(emptyList())
+            }.collect { rows -> _todayTasks.value = rows.map { it.task to it.placement } }
         }
 
         if (midnightRefreshJob?.isActive != true) {
@@ -1900,9 +1963,9 @@ class MainViewModel(
     fun onAuthenticated() {
         sessionRestoreJob?.cancel()
         sessionRestoreJob = null
+        bindAccount()
         syncEngine.setNetworkAvailable(true)
         _authenticated.value = true
-        currentOwnerId.value = authManager.ownerId
         _dataReady.value = false
         loadTodayData()
         syncEngine.start()
@@ -1914,7 +1977,7 @@ class MainViewModel(
         sessionRestoreJob = null
         syncEngine.stop()
         _authenticated.value = false
-        currentOwnerId.value = null
+        ownerIdentity.value = null
         todayLoadJob?.cancel()
         midnightRefreshJob?.cancel()
         _todayTasks.value = emptyList()
@@ -1929,6 +1992,23 @@ class MainViewModel(
 
     fun observeNote(taskId: String): Flow<NoteEntity?> = currentOwnerId.flatMapLatest { ownerId ->
         ownerId?.let { db.noteDao().getNoteByTaskIdFlow(taskId, it) } ?: flowOf(null)
+    }
+
+    fun loadTaskDetails(taskId: String) {
+        viewModelScope.launch {
+            if (!authManager.isLoggedIn) return@launch
+            val engine = syncEngine
+            val outcome = engine.loadTaskDetails(taskId)
+            if (outcome is SyncOutcome.Failure) _messages.tryEmit(outcome.message)
+        }
+    }
+    fun prioritizeDirectory(folderId: String?) { syncEngine.prioritizeDirectory(folderId) }
+    fun exportLegacyCache(destination: android.net.Uri) {
+        viewModelScope.launch {
+            try { authManager.exportLegacyCache(destination); _messages.tryEmit("旧缓存与离线队列已导出；请妥善保管个人数据") }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { _messages.tryEmit(error.message ?: "旧缓存导出失败，原数据库仍保留") }
+        }
     }
 
     suspend fun saveTaskDetails(
@@ -1963,6 +2043,7 @@ class MainViewModel(
                 }
 
                 val existingNote = db.noteDao().getNoteByTaskId(current.id, ownerId)
+                require(existingNote != null || markdownContent.isBlank()) { "备注尚未加载，请连接中枢后重试" }
                 if (existingNote?.contentMarkdown != markdownContent &&
                     (existingNote != null || markdownContent.isNotBlank())
                 ) {
@@ -2016,7 +2097,7 @@ class MainViewModel(
     }
 
     private suspend fun getOrCreateDatePoint(ownerId: String, localDate: String): TimePointEntity {
-        return db.timePointDao().getTimePointByDate(ownerId, localDate) ?: run {
+        return db.withTransaction { db.timePointDao().getTimePointByDate(ownerId, localDate) ?: run {
             val now = nowIso()
             TimePointEntity(
                 id = UUID.randomUUID().toString(),
@@ -2041,7 +2122,7 @@ class MainViewModel(
                     ownerId = ownerId,
                 )
             }
-        }
+        } }
     }
 
     private fun readThemeMode(): ThemeMode = ThemeMode.values()
@@ -2065,6 +2146,20 @@ class MainViewModel(
             result
         }
 
+    private suspend fun <T> AppDatabase.withTransaction(block: suspend () -> T): T {
+        val session = authManager.sessionKey
+        val selected = this
+        val selectedEngine = syncEngine
+        return withContext(transactionDatabase.asContextElement(selected) + transactionEngine.asContextElement(selectedEngine)) {
+            selected.roomTransaction {
+                require(selected === activeDatabase && authManager.sessionKey == session) { "账户或中枢已变化" }
+                val result = block()
+                require(selected === activeDatabase && authManager.sessionKey == session) { "账户或中枢已变化" }
+                result
+            }
+        }
+    }
+
     private fun Throwable.userMessage(prefix: String): String {
         val detail = message?.takeIf { it.isNotBlank() }
         return if (detail == null) prefix else "$prefix：$detail"
@@ -2080,11 +2175,11 @@ class MainViewModel(
 
 class MainViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        val db = AppDatabase.getInstance(context)
         val auth = SecureAuthManager(context)
+        val db = auth.scopedDatabase()
         val api = ApiClient(auth)
         val syncEngine = SyncEngine(db, api, auth)
         @Suppress("UNCHECKED_CAST")
-        return MainViewModel(db, syncEngine, auth, api) as T
+        return MainViewModel(db, syncEngine, auth, api, isolateAccounts = true) as T
     }
 }

@@ -307,6 +307,7 @@ async function main(): Promise<void> {
       body: JSON.stringify({ username, password, platform: 'web' }),
     });
     assert(login.response.status === 200, `login returned ${login.response.status}`);
+    const hubIdentity = idFromBody(login.body, 'hubId');
     const refreshCookie = cookieFromLogin(login.response);
     const refresh = await requestJson(baseUrl, '/api/v1/auth/refresh', {
       method: 'POST',
@@ -314,6 +315,10 @@ async function main(): Promise<void> {
       body: '{}',
     });
     assert(refresh.response.status === 200, `refresh returned ${refresh.response.status}`);
+    assert(
+      idFromBody(refresh.body, 'hubId') === hubIdentity,
+      'Hub identity changed during token refresh',
+    );
     const refreshedToken = accessToken(refresh.body);
     const me = await requestJson(baseUrl, '/api/v1/me', {
       headers: { Authorization: `Bearer ${refreshedToken}` },
@@ -327,6 +332,21 @@ async function main(): Promise<void> {
     assert(snapshotBefore.response.status === 200, 'initial v2 snapshot failed');
     const initialCursor = idFromBody(snapshotBefore.body, 'cursor');
     assert(/^\d+$/.test(initialCursor), 'initial v2 cursor was invalid');
+    const progressive = await requestJson(baseUrl, '/api/v2/sync/bootstrap', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${refreshedToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ localDate: '2026-10-13' }),
+    });
+    assert(progressive.response.status === 200, 'progressive snapshot creation failed');
+    const snapshotId = idFromBody(progressive.body, 'snapshotId');
+    const pageBeforeRestart = await requestJson(
+      baseUrl,
+      `/api/v2/sync/bootstrap/${snapshotId}?page=0`,
+      {
+        headers: { Authorization: `Bearer ${refreshedToken}` },
+      },
+    );
+    assert(pageBeforeRestart.response.status === 200, 'progressive snapshot first page failed');
 
     socket = await waitForWebSocketReady(`ws://127.0.0.1:${port}/api/v2/ws`, refreshedToken);
     const folderId = randomUUID();
@@ -384,6 +404,18 @@ async function main(): Promise<void> {
     const afterApiRestart = await requestJson(baseUrl, '/api/v2/sync/snapshot', {
       headers: { Authorization: `Bearer ${refreshedToken}` },
     });
+    const pageAfterRestart = await requestJson(
+      baseUrl,
+      `/api/v2/sync/bootstrap/${snapshotId}?page=0`,
+      {
+        headers: { Authorization: `Bearer ${refreshedToken}` },
+      },
+    );
+    assert(
+      pageAfterRestart.response.status === 200 &&
+        JSON.stringify(pageAfterRestart.body) === JSON.stringify(pageBeforeRestart.body),
+      'immutable progressive page did not survive API restart',
+    );
     const restartedFolders = objectBody(afterApiRestart.body)['folders'];
     const restartedTasks = objectBody(afterApiRestart.body)['tasks'];
     assert(

@@ -207,8 +207,11 @@ data class TaskDetailV2Dto(
     val steps: List<TaskStepDto> = emptyList(),
     val placements: List<PlacementDto> = emptyList(),
     val workflowMemberships: List<WorkflowTaskMembershipDto> = emptyList(),
-    val folderPath: List<FolderDto> = emptyList()
+    val folderPath: List<TaskFolderPathDto> = emptyList()
 )
+
+@Serializable
+data class TaskFolderPathDto(val id: String, val title: String)
 
 @Serializable
 data class V2SettingsDto(
@@ -360,6 +363,17 @@ data class V2SnapshotResult(
 )
 
 @Serializable
+data class SyncCapabilities(val protocolVersion: Int, val pagedSnapshot: Boolean = false)
+@Serializable
+data class BootstrapManifest(val snapshotId: String, val cursor: String, val expiresAt: String,
+    val pageCount: Int, val protocolVersion: Int)
+@Serializable
+data class BootstrapPage(val snapshotId: String, val cursor: String, val page: Int,
+    val pageCount: Int, val changes: List<ChangeItem>, val nextPage: Int?, val protocolVersion: Int)
+@Serializable
+data class SyncPreview(val changes: List<ChangeItem>, val complete: Boolean)
+
+@Serializable
 data class HubStatusResponse(
     val initialized: Boolean,
     val version: String? = null,
@@ -370,5 +384,6 @@ data class HubStatusResponse(
 data class LoginResponse(
     val accessToken: String,
     val refreshToken: String? = null,
-    val user: UserDto
+    val user: UserDto,
+    val hubId: String? = null,
 )

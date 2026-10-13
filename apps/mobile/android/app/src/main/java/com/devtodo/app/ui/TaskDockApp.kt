@@ -15,6 +15,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import com.devtodo.app.ui.components.taskStatusLabel
+import com.devtodo.app.ui.components.SyncStatusBanner
 import com.devtodo.app.ui.navigation.Screen
 import com.devtodo.app.ui.screens.*
 import com.devtodo.app.ui.theme.TaskDockMotion
@@ -120,12 +121,13 @@ fun TaskDockApp(
                 )
             },
         ) { padding ->
+            Column(Modifier.fillMaxSize().padding(padding)) {
+            if (loggedIn) SyncStatusBanner(viewModel)
             NavHost(
                 navController = navController,
                 startDestination = if (loggedIn) Screen.Tree.route else Screen.Login.route,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
+                    .weight(1f)
                     .consumeWindowInsets(padding),
                 // Material 3 Expressive motion. Forward navigation is a shared
                 // axis slide + fade; the back stack uses the M3 full-screen
@@ -311,6 +313,7 @@ fun TaskDockApp(
                         onBack = { navController.popBackStack() },
                     )
                 }
+            }
             }
         }
     }
