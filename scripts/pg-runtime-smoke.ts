@@ -109,7 +109,7 @@ function startApi(
       ACCESS_TOKEN_SECRET: runtime.accessTokenSecret,
       REFRESH_TOKEN_PEPPER: runtime.refreshTokenPepper,
       CORS_ALLOWED_ORIGINS: `http://127.0.0.1:${port}`,
-      NATIVE_ALLOWED_ORIGINS: 'devtodo://app,capacitor://localhost,http://localhost',
+      NATIVE_ALLOWED_ORIGINS: 'capacitor://localhost,http://localhost',
       LOG_LEVEL: 'warn',
     },
     stdio: ['ignore', 'pipe', 'pipe'],

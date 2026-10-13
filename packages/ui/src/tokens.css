@@ -4,7 +4,7 @@
  * Every colour, radius, duration, spring and type style used by the clients
  * comes from this file. Page CSS must never hardcode a hex value, a radius or
  * a timing — that rule is what keeps the light, dark and high-contrast schemes
- * in sync across Web, PWA, Electron and the Android WebView.
+ * in sync across Web, PWA and the Android WebView.
  *
  * Layers, in order:
  *   1. colour roles          (M3 role names, never raw tones in components)

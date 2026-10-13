@@ -77,7 +77,7 @@ Task 是唯一事实源。目录项、日期项、时间点项和流程卡片不
 - 用目录树完全替代 Project、FEATURE、MISC 和 Inbox。
 - 保留一个 Task 多个 Placement 的现有正确语义。
 - 保留 Task、Note、Placement、TimePoint、归档历史和 referenceId，不因迁移改变 Task ID。
-- Web、Electron 和原生 Android 使用相同的领域规则、API 和同步协议。
+- Web 和原生 Android 使用相同的领域规则、API 和同步协议。
 - 离线创建、编辑、移动、排序、步骤编辑和流程编辑可以进入 outbox，并在恢复网络后安全同步。
 - 旧客户端或旧本地数据库不能因协议不兼容而静默丢失未同步数据。
 - PostgreSQL、IndexedDB/Dexie 和 Android Room 都有显式、可测试、无损迁移。
@@ -925,7 +925,7 @@ docs/ARCHITECTURE.md 中关于所有客户端共用 React/Capacitor 的旧描述
 
 ### 15.2 目录页
 
-桌面端建议：
+宽屏浏览器建议：
 
 - 左侧为可折叠 Folder 导航树。
 - 右侧为当前 Folder 的直接子项，不一次渲染整棵树。
@@ -964,7 +964,7 @@ docs/ARCHITECTURE.md 中关于所有客户端共用 React/Capacitor 的旧描述
 
 ### 15.5 流程
 
-桌面端：
+宽屏浏览器：
 
 - 阶段可横向排列，阶段内 Task 纵向排序。
 - 流程整体存在清晰方向，但不绘制暗示强依赖的连线。
@@ -1258,13 +1258,12 @@ Android：
 - 旧协议 fail-closed 行为。
 - integration 和 sync 测试。
 
-### 阶段 4：React Web 与 Electron
+### 阶段 4：React Web
 
 - 新导航和目录页。
 - 所有任务、日期、时间点、流程和 Task 详情适配。
 - 删除 Inbox、Project、category、priority UI。
 - 桌面与移动响应式交互、a11y 和 E2E。
-- Electron 安全设置不得回退。
 
 ### 阶段 5：原生 Android
 
@@ -1283,7 +1282,7 @@ Android：
 
 只有同时满足以下条件，开发代理才可以报告“实现完成”：
 
-- v2 领域模型、数据库、API、同步、Web/desktop 和原生 Android 代码均已落地。
+- v2 领域模型、数据库、API、同步、Web 和原生 Android 代码均已落地。
 - 所有已锁定产品决定有自动化测试。
 - v1 PostgreSQL、Dexie 和 Room fixture 均完成无损迁移验证。
 - Android 不再包含 destructive migration fallback。
@@ -1338,7 +1337,7 @@ Android：
 
 这次审查针对工作树中的实现、迁移脚本、测试与开发报告进行交叉核对。当前确实已经落地了一批 v2 domain、内存 API、Dexie、Web、Compose 和 OpenAPI 增量；但第 21 节要求的是可持续、跨端、可恢复且有真实数据库/设备证据的完整替换，以下 P0/P1 契约问题仍会造成数据丢失、同步分叉或用户无法完成核心操作。
 
-开发报告所列的本地门禁（13 个 test files / 110 tests、typecheck、lint、format、OpenAPI、Android debug 编译/单测）可以作为局部 PASS；它们不能证明真实 PostgreSQL v2 migration/backfill/并发/重启、真实浏览器 UI、Electron GUI、Android instrumentation/真机、长时间离线冲突或生产升级。线上只读检查仍显示 `/version` 为 v1 且 `/api/v2/sync/snapshot` 为 404，这也不能算 v2 已发布。
+开发报告所列的本地门禁（13 个 test files / 110 tests、typecheck、lint、format、OpenAPI、Android debug 编译/单测）可以作为局部 PASS；它们不能证明真实 PostgreSQL v2 migration/backfill/并发/重启、真实浏览器 UI、Android instrumentation/真机、长时间离线冲突或生产升级。线上只读检查仍显示 `/version` 为 v1 且 `/api/v2/sync/snapshot` 为 404，这也不能算 v2 已发布。
 
 ### 23.2 六项锁定决定核对
 
@@ -1394,7 +1393,7 @@ Android：
 - Web `apps/web/src/App.tsx:2511-2717` 的 `PlacementRow` 没有目录跳转按钮；`openTask`（`531-538`）只打开任务详情 overlay。`apps/web/src/TreePage.tsx:41-117` 也没有从 query/deep-link 接收 task 并在目录中高亮。
 - Android `TodayV2Screen.kt:72-80` 只传详情/状态回调，没有目录定位；`TaskDockApp.kt:191-193` 仍把时间入口接到旧的 `TimeScreen`，而 `TimeScreen.kt:36-112` 只显示事件，不能选择日期、列出 Placement、添加任务或跳转目录。
 
-**返工与验收：**Today/date/event 列表每行提供“在目录中显示”，携带 folderId/taskId，目录页打开祖先路径并聚焦任务；日期/时间页只能添加 Task（创建 Task+Placement），禁止创建 Folder。Web、Electron、Android 各补真实 UI/E2E 和键盘/返回路径。
+**返工与验收：**Today/date/event 列表每行提供“在目录中显示”，携带 folderId/taskId，目录页打开祖先路径并聚焦任务；日期/时间页只能添加 Task（创建 Task+Placement），禁止创建 Folder。Web、Android 各补真实 UI/E2E 和键盘/返回路径。
 
 #### P1-2 流程图仍不是完整的“阶段内排列 + 直接结束靠后任务”
 
@@ -1450,15 +1449,15 @@ Android：
 ### 23.6 已通过但不足以验收的部分
 
 - Domain 的 Folder aggregate、循环保护、内存 Store 的级联归档/精确恢复/删除预览、TaskStep 独立状态、多流程唯一 membership、基本 Placement 操作有单测或内存 API 证据。
-- TypeScript build/typecheck、lint、format、OpenAPI 路径检查、Dexie 小型迁移夹具、Android debug 编译/JVM 单测和 Electron 静态安全检查通过。
-- 这些结果只能标记对应层级 **PASS**；不能向上推导 PostgreSQL、Room 真机、浏览器/Electron GUI 或生产升级通过。
+- TypeScript build/typecheck、lint、format、OpenAPI 路径检查、Dexie 小型迁移夹具和 Android debug 编译/JVM 单测通过。
+- 这些结果只能标记对应层级 **PASS**；不能向上推导 PostgreSQL、Room 真机、浏览器 GUI 或生产升级通过。
 
 ### 23.7 返工完成门槛（下一轮审查必须逐项给证据）
 
 1. P0/P1 全部关闭，并为每一项添加失败回归测试；P2 至少关闭 P2-1～P2-4 或在文档中明确降级理由。
 2. 用真实 PostgreSQL fixture 执行 v2 migration/backfill，重复运行、坏数据、事务回滚、双进程并发、重启后 pull、change 通知和 preview→delete 跨进程测试全部给出 PASS/FAIL。
 3. 用真实 Dexie/Room v1 fixture 验证 Project/Task/Note/Placement/referenceId/outbox 的无损迁移；覆盖 pending intent、cursor 过期、删除 change、冲突和重启。
-4. Web/Electron/Android UI E2E 必须覆盖：日期/时间任务跳目录并高亮、流程阶段内排序/状态/越序完成、多流程、归档中心明细与恢复、在线删除预览、离线删除拒绝。
+4. Web/Android UI E2E 必须覆盖：日期/时间任务跳目录并高亮、流程阶段内排序/状态/越序完成、多流程、归档中心明细与恢复、在线删除预览、离线删除拒绝。
 5. 统一 v1 兼容策略、`/version`、OpenAPI 和客户端默认 API；旧产品 mutation 不得静默成功。
 6. 报告继续严格分开 **PASS / FAIL / NOT RUN / NOT PROVEN**，并附命令、环境、数据库 fixture 标识和日志；在所有 NOT RUN/NOT PROVEN 门禁完成前不得发布。
 
@@ -1544,12 +1543,11 @@ Android：
 | :----------------------------------------------------------------------- | :-----------------: | :--------------------------------------------------------------------------------------------------------------------- |
 | `pnpm format:check`                                                      |  **FAIL（当时）**   | 第三轮返工时工作树仍有 5 个文件未通过 Prettier；已在 23.10 修复，现为 PASS。                                           |
 | `pnpm lint`                                                              |      **PASS**       | ESLint 静态代码检查 100% PASS（0 warning, 0 error）。                                                                  |
-| `pnpm typecheck`                                                         |      **PASS**       | Workspace 10 个项目（contracts, database, domain, sync-client, api, web, desktop, mobile 等）类型检查完全通过。        |
+| `pnpm typecheck`                                                         |      **PASS**       | Workspace 项目（contracts, database, domain, sync-client, api, web, mobile 等）类型检查完全通过。                      |
 | `pnpm run openapi:check`                                                 |      **PASS**       | OpenAPI 3.1.0 与 Fastify 后端路由一致（当时 95 条，现 99 条）。                                                        |
 | `pnpm test`                                                              |      **PASS**       | 14 个测试套件、116 个单元/集成测试全部 PASS（现为 15 套件 / 131 测试）。                                               |
 | `pnpm test:e2e -- --project=chromium --project=mobile --project=firefox` |      **PASS**       | Playwright Web E2E 测试通过（现 21 passed / 3 skipped）。                                                              |
 | `cd apps/mobile/android && ./gradlew testDebugUnitTest`                  |  **PASS（3 项）**   | 实际仅 3 个 JVM 测试（`ExampleUnitTest` 1 + `ContractsTest` 2）；Room 迁移测试在 `androidTest`，需设备，当时 NOT RUN。 |
-| `pnpm run desktop:test`                                                  |      **PASS**       | Electron 静态安全检查 PASS。                                                                                           |
 | `pnpm test:integration`（真实独立 PostgreSQL）                           | **NOT RUN（当时）** | 当时未配置 `DATABASE_URL` 而跳过；已在 23.10 实际运行并通过。                                                          |
 | WebKit E2E 浏览器运行                                                    |     **NOT RUN**     | 当前 Linux 环境缺失 WebKit 专用图形依赖库，Playwright 按预期跳过。                                                     |
 | Android 真机 / 模拟器 Instrumentation                                    |     **NOT RUN**     | 当前无连接的 Android 硬件真机或运行中的 AVD 模拟器。                                                                   |
@@ -1593,7 +1591,6 @@ pnpm lint                                                         PASS
 pnpm typecheck                                                    PASS
 pnpm test                                                         PASS（15 files / 131 tests）
 pnpm openapi:check                                                PASS（99 paths）
-pnpm desktop:test                                                 PASS
 pnpm test:e2e --projects=chromium,mobile,firefox                   PASS（21 passed / 3 skipped）
 ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin PASS
 DATABASE_URL=... pnpm db:migrate（连续两次）                        PASS（幂等）
@@ -1601,4 +1598,4 @@ DATABASE_URL=... pnpm test:integration                             PASS
 DATABASE_URL=... PG_CTL=... pnpm test:pg-runtime                    PASS
 ```
 
-仍未运行（环境缺失，非实现缺陷）：WebKit E2E、Android 真机/仪器测试、Electron GUI 启动、Docker Compose、长期双端离线矩阵。这些继续阻断正式发布，但不属于已知源码缺陷。
+仍未运行（环境缺失，非实现缺陷）：WebKit E2E、Android 真机/仪器测试、Docker Compose、长期双端离线矩阵。这些继续阻断正式发布，但不属于已知源码缺陷。

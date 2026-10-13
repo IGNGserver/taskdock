@@ -7,7 +7,5 @@ onlyBuiltDependencies:
   - unrs-resolver
 allowBuilds:
   argon2: true
-  electron: true
-  electron-winstaller: true
   esbuild: true
   unrs-resolver: true

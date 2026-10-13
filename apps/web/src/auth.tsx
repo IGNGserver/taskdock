@@ -15,15 +15,10 @@ import {
   createSyncEngine,
   clearNativePendingRefreshToken,
   clearNativeRefreshToken,
-  desktopAuthLogin,
-  desktopAuthLogout,
-  ensureConfiguredHubOrigin,
   getHubOrigin,
   getAccessToken,
   getLastRefreshFailure,
   isNativeClient,
-  isDesktopClient,
-  isDesktopShell,
   isSessionRevocationError,
   readNativeRefreshToken,
   refreshAccessToken,
@@ -125,7 +120,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const initialize = useCallback(
     async (me: MeResponse, sync = true) => {
-      if (isDesktopClient()) await ensureConfiguredHubOrigin();
       disposeLocalSession();
       const generation = sessionGenerationRef.current;
       const localDb = new DevTodoDatabase(getHubOrigin(), me.user.id);
@@ -169,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       socketRef.current?.close();
       socketRef.current = null;
       socketReconnectAttemptRef.current = 0;
-      if (!isDesktopClient()) {
+      {
         const scheduleReconnect = (): void => {
           if (
             sessionGenerationRef.current !== generation ||
@@ -266,25 +260,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     const operation = authOperationRef.current;
-    if (isDesktopShell() && !isDesktopClient()) {
-      if (operation === authOperationRef.current) {
-        setStatus('anonymous');
-        setInitialized(false);
-      }
-      return;
-    }
-    if (isDesktopClient()) {
-      try {
-        await ensureConfiguredHubOrigin();
-      } catch {
-        if (operation === authOperationRef.current) {
-          setStatus('anonymous');
-          setInitialized(false);
-          setConnection('offline');
-        }
-        return;
-      }
-    }
     if (isAuthLocallyLocked()) {
       try {
         setInitialized(
@@ -424,14 +399,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (username: string, password: string, deviceName?: string) => {
       authOperationRef.current += 1;
-      if (isDesktopClient()) {
-        await ensureConfiguredHubOrigin();
-        const result = await desktopAuthLogin(username, password, deviceName ?? '桌面端');
-        unlockAuthLocally();
-        setAccessToken(result.accessToken);
-        await initialize(await requestV1<MeResponse>('/me'));
-        return;
-      }
       const nativeChallenge = isNativeClient() ? await requestNativeChallenge() : undefined;
       const result = await requestV1<{
         accessToken: string;
@@ -463,15 +430,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     authOperationRef.current += 1;
     lockAuthLocally();
-    if (isDesktopClient()) {
-      await desktopAuthLogout().catch(() => undefined);
-    } else {
-      const nativeRefreshToken = await readNativeRefreshToken().catch(() => null);
-      await requestV1('/auth/logout', {
-        method: 'POST',
-        body: JSON.stringify(nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {}),
-      }).catch(() => undefined);
-    }
+    const nativeRefreshToken = await readNativeRefreshToken().catch(() => null);
+    await requestV1('/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify(nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {}),
+    }).catch(() => undefined);
     try {
       await clearNativeRefreshToken();
     } catch {

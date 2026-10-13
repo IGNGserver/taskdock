@@ -1,5 +1,6 @@
 DEVELOPMENT_PLAN.md
+pnpm-lock.yaml
 apps/web/dist
-apps/desktop/dist
+archive/desktop-client/**
 apps/mobile/android
 node_modules

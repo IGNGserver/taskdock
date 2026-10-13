@@ -11,9 +11,8 @@
 
 - 暂无已知问题。
 
-## 安装包
+## Release 附件
 
-- Windows：
-- Linux：
-- Android：
-- Docker：`ghcr.io/igngserver/taskdock:<版本号>`
+- Android APK：`TaskDock-<版本号>-android.apk`
+- GitHub 默认源代码归档：`Source code (zip)`、`Source code (tar.gz)`
+- Docker 镜像（GHCR，非 Release 附件）：`ghcr.io/igngserver/taskdock:<版本号>`

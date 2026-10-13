@@ -2,7 +2,7 @@
 
 ## 范围与仓库审计
 
-Android 是 `apps/mobile/android` 内的原生 Compose 客户端，Room/Outbox 是离线写入入口，OkHttp/SyncEngine 与 Fastify 的 v2 协议同步。Web/Electron 使用 React/Dexie，服务端使用 PostgreSQL change feed；本次不迁移持久化 schema、不更改 Task/Placement/Workflow 的含义。
+Android 是 `apps/mobile/android` 内的原生 Compose 客户端，Room/Outbox 是离线写入入口，OkHttp/SyncEngine 与 Fastify 的 v2 协议同步。Web 使用 React/Dexie，服务端使用 PostgreSQL change feed；本次不迁移持久化 schema、不更改 Task/Placement/Workflow 的含义。
 
 源码审计覆盖客户端入口、全部可达页面、主题、组件、ViewModel、DAO、认证、同步，以及仓库架构、共享 contracts/domain、API 和迁移边界。历史 V1 页面不作为新界面的基础。
 
@@ -58,7 +58,7 @@ Android 是 `apps/mobile/android` 内的原生 Compose 客户端，Room/Outbox �
 
 调试包：`apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`
 
-SHA-256：`7d1a4817e233c0579c73be5bc2a135585f728cb267641c9a7cc0ddc92296022b`
+历史调试包 SHA-256（不属于 GitHub Release 附件）：`7d1a4817e233c0579c73be5bc2a135585f728cb267641c9a7cc0ddc92296022b`
 
 设备准备好后执行：
 

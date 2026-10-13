@@ -1,5 +1,5 @@
 /*
- * Base layer: resets, app frame, desktop shell, auth shell and the shared
+ * Base layer: resets, app frame, auth shell and the shared
  * low-level utilities. Everything below this file may assume these exist.
  */
 
@@ -266,31 +266,6 @@ body {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Desktop shell                                                              */
-/* -------------------------------------------------------------------------- */
-
-.desktop-app-shell {
-  min-block-size: 100dvh;
-}
-
-.desktop-app-shell > .app-frame,
-.desktop-app-shell > .auth-page,
-.desktop-app-shell > .loading-screen,
-.desktop-app-shell > .desktop-startup {
-  block-size: 100dvh;
-}
-
-.desktop-window-drag-region {
-  position: fixed;
-  z-index: 5;
-  inset-block-start: 0;
-  inset-inline: 0;
-  block-size: env(titlebar-area-height, 0px);
-  -webkit-app-region: drag;
-  pointer-events: auto;
 }
 
 /* -------------------------------------------------------------------------- */

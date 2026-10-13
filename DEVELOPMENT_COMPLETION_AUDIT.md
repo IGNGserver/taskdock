@@ -1,5 +1,7 @@
 # DevTodo 开发完成度审计与续做基线
 
+> 历史审计：本文记录 2026-09 的 Electron 时代实现与验证结果。Electron 桌面客户端已于 2026-10 归档；本文中的桌面构建、GUI、Windows 和 Electron 安全门禁不再是当前产品或 Release 要求。当前状态以 `docs/STATUS.md` 和 `docs/TEST_REPORT.md` 为准。
+
 审计日期：2026-09-08  
 审计对象：`/home/<user>/项目/todo-list工具` 当前工作区  
 审计方式：需求对照、源码复核、自动化门禁复跑、正式构建产物 smoke 与真实环境边界核对  

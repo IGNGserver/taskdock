@@ -1,6 +1,6 @@
 # TaskDock Material 3 Expressive 迁移清单
 
-> **实施状态（已落地）：** 本清单已全部执行完毕。设计决策与取舍记录在 [ADR 0003](adr/0003-material-3-expressive.md)。仍在环境上无法运行的门禁（WebKit、Android 真机、Electron GUI）与迁移前一致，见 [STATUS.md](STATUS.md)。
+> **实施状态（已落地）：** 本清单已全部执行完毕。设计决策与取舍记录在 [ADR 0003](adr/0003-material-3-expressive.md)。仍在环境上无法运行的门禁（WebKit、Android 真机）见 [STATUS.md](STATUS.md)。
 >
 > 落地后的实际形态与清单的差异只有两处，均已记录在 ADR 中：
 >
@@ -43,7 +43,6 @@
 | `packages/ui/src/tokens.css`                             | 197       | 颜色/shape/motion 令牌                        |
 | `apps/web/src/theme.ts`                                  | 83        | 主题解析 + `theme-color`                      |
 | `apps/mobile/android/.../ui/theme/{Color,Type,Theme}.kt` | 63/81/122 | Android Compose 主题                          |
-| `apps/desktop/src/main.ts`                               | 703       | 窗口背景/标题栏主题（86–95、122、126）        |
 | `apps/web/public/theme-preload.js`                       | 21        | 首屏主题脚本（19 行硬编码主题色）             |
 | `apps/web/index.html`                                    | 21        | 第 6 行硬编码 `theme-color`                   |
 | `apps/web/vite.config.ts`                                | 52        | 23–24 行 PWA `theme_color`/`background_color` |
@@ -112,16 +111,16 @@ M3E 官方定位：**expressive 方案用于消费级场景，standard 方案 + 
 
 ### 3.1 颜色角色
 
-| #   | 修改点                     | 现状                                                                                                                                   | 目标                                                                                                                                                          |
-| --- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| C1  | 补全角色                   | `tokens.css:6–50` 只有基础角色                                                                                                         | 增加 `surface-container-*` 已存在；新增 `primary/secondary/tertiary-fixed`、`-fixed-dim`、`-on-fixed`、`-on-fixed-variant`（用于 FAB Menu 项、Toast、选中态） |
-| C2  | `tertiary` 启用            | 全站仅 1 处                                                                                                                            | 用于 expressive 强调时刻：今日进度环、到达事件、FAB Menu 图标的第二色                                                                                         |
-| C3  | state layer 改为按角色计算 | `--m3-state-hover` 等 4 个变量用 primary 写死（`tokens.css:46–49`）                                                                    | 改为 `color-mix(in srgb, currentColor X%, transparent)` 或按角色的 `--m3-state-*-on-primary/-on-error/...`，修复"红色按钮 hover 出现蓝色叠加"                 |
-| C4  | 补齐状态层用量             | `pressed`/`dragged` 使用 0 次                                                                                                          | 所有可交互组件必须区分 hover/focus/pressed/dragged/disabled                                                                                                   |
-| C5  | 提高 tonal 对比            | 现状层级主要靠 1px 边框（97 处）                                                                                                       | 用 `surface-container-lowest→highest` 阶梯表达层级（M3E 明确要求 expressive 提高质感对比）                                                                    |
-| C6  | 对比度档位                 | 无                                                                                                                                     | 提供 standard/medium/high 三档（跟随系统 `prefers-contrast`），至少保证 high 档可读                                                                           |
-| C7  | 清理硬编码色               | `styles.css:229/2880` 品牌色、v2 层 9 处 fallback、`App.tsx:3206` `#eee`、`TreePage.tsx:1338` `#666`                                   | 全部替换为角色令牌                                                                                                                                            |
-| C8  | 同步原生主题色             | `theme.ts:31`、`theme-preload.js:19`、`index.html:6`、`vite.config.ts:23–24`、`desktop/src/main.ts:86–95`、Android `values/colors.xml` | 与新调色板一次性对齐（切换时四处必须同时改）                                                                                                                  |
+| #   | 修改点                     | 现状                                                                                                      | 目标                                                                                                                                                          |
+| --- | -------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | 补全角色                   | `tokens.css:6–50` 只有基础角色                                                                            | 增加 `surface-container-*` 已存在；新增 `primary/secondary/tertiary-fixed`、`-fixed-dim`、`-on-fixed`、`-on-fixed-variant`（用于 FAB Menu 项、Toast、选中态） |
+| C2  | `tertiary` 启用            | 全站仅 1 处                                                                                               | 用于 expressive 强调时刻：今日进度环、到达事件、FAB Menu 图标的第二色                                                                                         |
+| C3  | state layer 改为按角色计算 | `--m3-state-hover` 等 4 个变量用 primary 写死（`tokens.css:46–49`）                                       | 改为 `color-mix(in srgb, currentColor X%, transparent)` 或按角色的 `--m3-state-*-on-primary/-on-error/...`，修复"红色按钮 hover 出现蓝色叠加"                 |
+| C4  | 补齐状态层用量             | `pressed`/`dragged` 使用 0 次                                                                             | 所有可交互组件必须区分 hover/focus/pressed/dragged/disabled                                                                                                   |
+| C5  | 提高 tonal 对比            | 现状层级主要靠 1px 边框（97 处）                                                                          | 用 `surface-container-lowest→highest` 阶梯表达层级（M3E 明确要求 expressive 提高质感对比）                                                                    |
+| C6  | 对比度档位                 | 无                                                                                                        | 提供 standard/medium/high 三档（跟随系统 `prefers-contrast`），至少保证 high 档可读                                                                           |
+| C7  | 清理硬编码色               | `styles.css:229/2880` 品牌色、v2 层 9 处 fallback、`App.tsx:3206` `#eee`、`TreePage.tsx:1338` `#666`      | 全部替换为角色令牌                                                                                                                                            |
+| C8  | 同步原生主题色             | `theme.ts:31`、`theme-preload.js:19`、`index.html:6`、`vite.config.ts:23–24`、Android `values/colors.xml` | 与新调色板一次性对齐（切换时五处必须同时改）                                                                                                                  |
 
 ### 3.2 形状
 
@@ -180,21 +179,21 @@ M3E 官方定位：**expressive 方案用于消费级场景，standard 方案 + 
 
 ### 4.2 逐路由结构改造
 
-| 路由                               | 组件（位置）                                                                                                                     | 需要的结构改造                                                                                                                                                                                                                           |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/today`                           | `TodayPage`（`App.tsx:1784`）                                                                                                    | 今日进度卡（`3591`，3 列 grid）→ M3E 强调卡片 + 形状化的 wavy 进度；「今天要做/已完成」两个 section 改为 **grouped list（带间隙的分组列表）**；行内捕获（`QuickCapture` 1320）改为内嵌 SearchBar 形态                                    |
-| `/tree`、`/tree/:folderId`         | `TreePage`（`TreePage.tsx:44`）                                                                                                  | 目录树 + 面包屑（`4596+`）→ 层级列表 + M3E breadcrumb bar；行内捕获表单（`4521+`）→ outlined TextField                                                                                                                                   |
-| `/tasks`                           | `AllTasksV2Page`（`TreePage.tsx:1549`）                                                                                          | 状态 chip（`4494+`）→ M3E Filter Chips + segmented button                                                                                                                                                                                |
-| `/workflows`                       | `WorkflowsPage`（`TreePage.tsx:1038`）                                                                                           | 流程卡片（`4560+`）→ M3E **outlined card** + 阶段内分组列表；内联重命名输入 → TextField                                                                                                                                                  |
-| `/time`                            | `TimeHubPage`（`App.tsx:1106`）                                                                                                  | `.more-grid` 入口卡（594）→ M3E list item（带 leading/trailing icon）                                                                                                                                                                    |
-| `/time/calendar/:date`             | `CalendarPage`（`App.tsx:3304`）                                                                                                 | 7 列日历（`1340`）→ M3E Date Picker 视觉；选中日 `selected`（1368）→ 形状变形选中态；右侧详情面板在 expanded 下保持双栏，compact 下改为 Bottom Sheet                                                                                     |
-| `/time/events`、`/time/events/:id` | `EventsPage`（2048）、`EventPage`（2328）                                                                                        | 时间线（`1232–1290`）→ M3E 带间隙列表 + Badge；`.event-state`（1303）→ Assist Chip                                                                                                                                                       |
-| `/archive`                         | `ArchivePage`（3508）                                                                                                            | 三个分区 + 恢复按钮 → grouped list + SplitButton（恢复 / 恢复选项）                                                                                                                                                                      |
-| `/settings`                        | `SettingsPage`（3784）                                                                                                           | `.settings-section`（1452）→ M3E 卡片分组；`field`/`select`（1462–1490）→ outlined TextField + Exposed Dropdown；冲突收件箱（3995）→ 对话框 + 合并编辑器                                                                                 |
-| `/more`                            | `MorePage`（1142）                                                                                                               | `.more-link-card`（597）→ M3E list item                                                                                                                                                                                                  |
-| 登录/中枢/初始化                   | `LoginScreen`(730)、`HubSetupScreen`(338)、`HubWaitingScreen`(454)、`DesktopStartup`(225)、`DesktopBridgeUnavailableScreen`(191) | `.auth-page` 2 列（2244）→ M3E 自适应：compact 单列 + 大标题；`auth-aside`（2309）在 compact 隐藏或转为底部说明卡；按钮/输入切到 M3E 组件                                                                                                |
-| 任务详情                           | `TaskDetailV2Overlay`/`TaskDetailV2`（`TreePage.tsx:554/596`，样式 `4521+`）                                                     | 当前是 `position: fixed; inset: 10% 4% auto auto` 的自制浮层（**未走 Modal，无焦点陷阱、无 presence 动效、无深色适配**）→ 改为 M3E **Modal Bottom Sheet（手机）/ Side Sheet（展开宽度）**，复用 `Modal`(1451) 的焦点陷阱与 `usePresence` |
-| 命令面板                           | `CommandPalette`（1612）                                                                                                         | → M3E Search View（全屏搜索 + 建议列表）                                                                                                                                                                                                 |
+| 路由                               | 组件（位置）                                                                 | 需要的结构改造                                                                                                                                                                                                                           |
+| ---------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/today`                           | `TodayPage`（`App.tsx:1784`）                                                | 今日进度卡（`3591`，3 列 grid）→ M3E 强调卡片 + 形状化的 wavy 进度；「今天要做/已完成」两个 section 改为 **grouped list（带间隙的分组列表）**；行内捕获（`QuickCapture` 1320）改为内嵌 SearchBar 形态                                    |
+| `/tree`、`/tree/:folderId`         | `TreePage`（`TreePage.tsx:44`）                                              | 目录树 + 面包屑（`4596+`）→ 层级列表 + M3E breadcrumb bar；行内捕获表单（`4521+`）→ outlined TextField                                                                                                                                   |
+| `/tasks`                           | `AllTasksV2Page`（`TreePage.tsx:1549`）                                      | 状态 chip（`4494+`）→ M3E Filter Chips + segmented button                                                                                                                                                                                |
+| `/workflows`                       | `WorkflowsPage`（`TreePage.tsx:1038`）                                       | 流程卡片（`4560+`）→ M3E **outlined card** + 阶段内分组列表；内联重命名输入 → TextField                                                                                                                                                  |
+| `/time`                            | `TimeHubPage`（`App.tsx:1106`）                                              | `.more-grid` 入口卡（594）→ M3E list item（带 leading/trailing icon）                                                                                                                                                                    |
+| `/time/calendar/:date`             | `CalendarPage`（`App.tsx:3304`）                                             | 7 列日历（`1340`）→ M3E Date Picker 视觉；选中日 `selected`（1368）→ 形状变形选中态；右侧详情面板在 expanded 下保持双栏，compact 下改为 Bottom Sheet                                                                                     |
+| `/time/events`、`/time/events/:id` | `EventsPage`（2048）、`EventPage`（2328）                                    | 时间线（`1232–1290`）→ M3E 带间隙列表 + Badge；`.event-state`（1303）→ Assist Chip                                                                                                                                                       |
+| `/archive`                         | `ArchivePage`（3508）                                                        | 三个分区 + 恢复按钮 → grouped list + SplitButton（恢复 / 恢复选项）                                                                                                                                                                      |
+| `/settings`                        | `SettingsPage`（3784）                                                       | `.settings-section`（1452）→ M3E 卡片分组；`field`/`select`（1462–1490）→ outlined TextField + Exposed Dropdown；冲突收件箱（3995）→ 对话框 + 合并编辑器                                                                                 |
+| `/more`                            | `MorePage`（1142）                                                           | `.more-link-card`（597）→ M3E list item                                                                                                                                                                                                  |
+| 登录/中枢/初始化                   | `LoginScreen`、Android `HubSettingsSection`                                  | `.auth-page` 2 列 → M3E 自适应：compact 单列 + 大标题；`auth-aside` 在 compact 隐藏或转为底部说明卡；按钮/输入切到 M3E 组件                                                                                                              |
+| 任务详情                           | `TaskDetailV2Overlay`/`TaskDetailV2`（`TreePage.tsx:554/596`，样式 `4521+`） | 当前是 `position: fixed; inset: 10% 4% auto auto` 的自制浮层（**未走 Modal，无焦点陷阱、无 presence 动效、无深色适配**）→ 改为 M3E **Modal Bottom Sheet（手机）/ Side Sheet（展开宽度）**，复用 `Modal`(1451) 的焦点陷阱与 `usePresence` |
+| 命令面板                           | `CommandPalette`（1612）                                                     | → M3E Search View（全屏搜索 + 建议列表）                                                                                                                                                                                                 |
 
 ### 4.3 样式架构重建（`styles.css` 4711 行）
 
@@ -352,10 +351,8 @@ M3E 官方定位：**expressive 方案用于消费级场景，standard 方案 + 
 | R10 | Android 动态配色  | `Theme.kt:100–101` 已支持 `dynamicLight/DarkColorScheme`；`Shapes` 为 4/8/12/16/24（72–78） | 更新为新形状标尺；动态色与静态方案的角色必须补齐 fixed 角色                   |
 | R11 | Android 系统栏    | `styles.xml` 状态栏/导航栏透明 + `windowLightStatusBar`                                     | edge-to-edge + M3E 系统栏对比，随动态色更新                                   |
 | R12 | Android 主题色    | `values/colors.xml` `#F5F2F9` / `values-night` `#0D0E13`                                    | 与新调色板同步                                                                |
-| R13 | Electron 窗口     | `desktop/src/main.ts:86–95/122/126` 硬编码 `#0d0e13`/`#f5f2f9`/`#171b23`                    | 与新调色板同步；Windows 标题栏 overlay 同步                                   |
-| R14 | PWA 主题色        | `index.html:6`、`theme-preload.js:19`、`theme.ts:31`、`vite.config.ts:23–24`                | 四处同源；建议由构建脚本从令牌生成，避免再次漂移                              |
-| R15 | 桌面 QA 类        | `.desktop-app-shell`（134–160）                                                             | 保留，但补 M3E 窗口控制条与拖拽区视觉                                         |
-| R16 | 原生 WebView 分支 | `html.native-mobile-shell` 27 条规则（含 `!important`）                                     | 逐条复核是否仍需要；能由尺寸类表达的一律删除                                  |
+| R13 | PWA 主题色        | `index.html:6`、`theme-preload.js:19`、`theme.ts:31`、`vite.config.ts:23–24`                | 四处同源；建议由构建脚本从令牌生成，避免再次漂移                              |
+| R14 | 原生 WebView 分支 | `html.native-mobile-shell` 27 条规则（含 `!important`）                                     | 逐条复核是否仍需要；能由尺寸类表达的一律删除                                  |
 
 ### 8.3 可访问性与门禁
 
@@ -389,7 +386,6 @@ M3E 官方定位：**expressive 方案用于消费级场景，standard 方案 + 
 | `apps/web/index.html`                                              | `theme-color` 与令牌同步；`color-scheme` 保持                                                                   | 21 行                |
 | `apps/web/public/theme-preload.js`                                 | 主题色同步（注意 CSP：保持外链脚本，勿改内联）                                                                  | 21 行                |
 | `apps/web/vite.config.ts`                                          | PWA `theme_color`/`background_color` 同步                                                                       | 52 行                |
-| `apps/desktop/src/main.ts`                                         | 窗口背景、Windows 标题栏、`nativeTheme` 颜色同步                                                                | 86–130 行段          |
 | `apps/mobile/.../ui/theme/Color.kt`                                | 补充 fixed 角色与新增 surface 角色                                                                              | 63 行                |
 | `apps/mobile/.../ui/theme/Type.kt`                                 | 对齐 Web 类型令牌                                                                                               | 81 行                |
 | `apps/mobile/.../ui/theme/Theme.kt`                                | `Shapes`（72–78）更新为新标尺；接入 M3E `MotionScheme`（material3 1.4+）                                        | 122 行               |
@@ -409,7 +405,7 @@ M3E 官方定位：**expressive 方案用于消费级场景，standard 方案 + 
 | `apps/web/src/styles/*.css`                                           | 样式分层：`type` / `base` / `tasks` / `pages` / `motion` / `responsive` |
 | `apps/web/src/components/m3e/behavior.ts`                             | 尺寸类、presence、焦点陷阱、滚动锁、触觉反馈                            |
 | `scripts/motion-tokens.ts`                                            | 从弹簧物理生成 `linear()` 令牌（`--check`/`--write`）                   |
-| `scripts/theme-tokens.ts`                                             | 派生并校验六处主题色与 `@devtodo/ui` 令牌镜像                           |
+| `scripts/theme-tokens.ts`                                             | 派生并校验五处主题色与 `@devtodo/ui` 令牌镜像                           |
 | `docs/adr/0003-material-3-expressive.md`                              | 记录本决策（形状/动效/组件取舍与不做的部分）                            |
 | `apps/web/test/m3e-tokens.test.ts`                                    | 令牌契约单测（弹簧峰值、圆角标尺、类型角色、高度、画布）                |
 | `apps/web/test/m3e-behavior.test.ts`                                  | 尺寸类断点与弹簧时长单测                                                |
@@ -436,7 +432,7 @@ M3E 官方定位：**expressive 方案用于消费级场景，standard 方案 + 
 | P3 核心页面   | Today、目录树、所有任务、流程、任务详情 Sheet                                                                                                             | 页面结构完成                 | `v2-features.spec.ts`、`archive-picker.spec.ts` 全绿                 |
 | P4 外围页面   | 日历、时间点、归档、设置、更多、登录/中枢/初始化、冲突收件箱                                                                                              | 页面结构完成                 | 全量 E2E + 新增 a11y 路由覆盖 PASS                                   |
 | P5 动效与适配 | 弹簧令牌全域替换、形状变形、交错入场、减弱动效降级、双栏/导航轨/平板                                                                                      | 动效与响应式完成             | 视觉 spec + `prefers-reduced-motion` 断言 PASS                       |
-| P6 平台同步   | PWA/Electron/Android 主题色与形状/类型同步、系统栏、触觉反馈                                                                                              | 三端一致                     | `desktop:test`、Android 编译 + 单测、`format:check`/`lint` PASS      |
+| P6 平台同步   | PWA/Android 主题色与形状/类型同步、系统栏、触觉反馈                                                                                                       | 两端一致                     | Android 编译 + 单测、`format:check`/`lint` PASS                      |
 | P7 清理与文档 | 删除死 CSS、`!important` 收敛至 1 处、`--dt-*` 收敛、文档与 CHANGELOG                                                                                     | 收尾                         | 全量门禁 + `openapi:check` 不变                                      |
 
 ---
@@ -452,7 +448,6 @@ pnpm typecheck           # workspace build + Web build + noEmit
 pnpm test                # 15 files / 131 tests（含 theme.test.ts）
 pnpm test:e2e --projects=chromium,mobile,firefox
 pnpm a11y                # axe（覆盖范围将扩大）
-pnpm desktop:test        # Electron 静态安全
 ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin
 ```
 
@@ -460,7 +455,7 @@ pnpm desktop:test        # Electron 静态安全
 
 - 组件行为纯函数单测（roving tabindex、disclosure、排序等价路径）。
 - `prefers-reduced-motion` 与三档对比度的自动化断言。
-- PWA/Electron/Android 主题色与 `tokens.css` 一致性检查（由 `tokens-sync.ts` 提供 `--check` 模式）。
+- PWA/Android 主题色与 `tokens.css` 一致性检查（由 `scripts/theme-tokens.ts` 提供默认校验模式）。
 
 ### 11.3 高风险点
 

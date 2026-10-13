@@ -3,8 +3,8 @@
  * Expressive tokens, including the TypeScript token constants that
  * `@devtodo/ui` re-exports for consumers that cannot read CSS.
  *
- * The palette used to live in six places (HTML meta, theme-preload, theme.ts,
- * the PWA manifest, the Electron main process and the Android resources) and
+ * The palette used to live in five places (HTML meta, theme-preload, theme.ts,
+ * the PWA manifest and the Android resources) and
  * nothing tied them together. This script reads `packages/ui/src/tokens.css`,
  * derives the exact text each surface must contain, and either rewrites it
  * (`--write`) or asserts it matches (the default).
@@ -129,13 +129,6 @@ function surfaces(): Surface[] {
     'PWA manifest background colour',
     /(background_color: ')(#[0-9a-fA-F]{6})(')/,
     ({ light }) => `background_color: '${light}'`,
-  );
-
-  add(
-    'apps/desktop/src/main.ts',
-    'Electron window background',
-    /return theme === 'dark' \? '#[0-9a-fA-F]{6}' : '#[0-9a-fA-F]{6}';/,
-    ({ light, dark }) => `return theme === 'dark' ? '${dark}' : '${light}';`,
   );
 
   add(

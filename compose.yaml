@@ -30,7 +30,7 @@ services:
       ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:?set an access token secret in .env}
       REFRESH_TOKEN_PEPPER: ${REFRESH_TOKEN_PEPPER:?set a refresh token pepper in .env}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set explicit allowed origins in .env}
-      NATIVE_ALLOWED_ORIGINS: ${NATIVE_ALLOWED_ORIGINS:-devtodo://app,capacitor://localhost,https://localhost,http://localhost}
+      NATIVE_ALLOWED_ORIGINS: ${NATIVE_ALLOWED_ORIGINS:-capacitor://localhost,https://localhost,http://localhost}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       DEV_MEMORY_STORE: 'false'
     command: ['node', 'apps/api/dist/migrate.js']

@@ -1,13 +1,7 @@
 export type ThemeName = 'light' | 'dark';
 
-interface DesktopThemeBridge {
-  getSystemTheme: () => Promise<ThemeName>;
-  onSystemThemeChanged: (listener: (theme: ThemeName) => void) => () => void;
-}
-
 declare global {
   interface Window {
-    devtodoDesktop?: DesktopThemeBridge;
     __DEVTODO_NATIVE_THEME__?: ThemeName;
   }
 }
@@ -67,17 +61,8 @@ export function installTheme(): () => void {
   };
   window.addEventListener('devtodo:native-theme-changed', onNativeThemeChange);
 
-  const desktop = window.devtodoDesktop;
-  const removeDesktopListener = desktop?.onSystemThemeChanged((theme) => applySystemTheme(theme));
-  if (desktop)
-    void desktop
-      .getSystemTheme()
-      .then(applySystemTheme)
-      .catch(() => undefined);
-
   return () => {
     mediaQuery?.removeEventListener('change', onMediaChange);
     window.removeEventListener('devtodo:native-theme-changed', onNativeThemeChange);
-    removeDesktopListener?.();
   };
 }

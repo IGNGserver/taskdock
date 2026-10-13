@@ -22,7 +22,7 @@ Material 3 Expressive（M3E，2025 发布）改变了三件事：
 
 2. **弹簧令牌由脚本生成，不手写。** CSS 没有弹簧原语，`scripts/motion-tokens.ts` 把每个弹簧（阻尼比 + 刚度）采样成 `linear()` 缓动，写入 `packages/ui/src/tokens.css` 的标记块。`pnpm tokens:motion` 在令牌与物理参数漂移时失败，所以数值不能被悄悄手调。
 
-3. **调色板只有一个来源。** M3E 要求「角色，而非十六进制」。调色板此前散落在 HTML meta、`theme-preload.js`、`theme.ts`、PWA manifest、Electron 主进程和 Android 资源六处，现由 `scripts/theme-tokens.ts` 从 `tokens.css` 派生并校验（`pnpm tokens:theme`）。
+3. **调色板只有一个来源。** M3E 要求「角色，而非十六进制」。调色板此前散落在 HTML meta、`theme-preload.js`、`theme.ts`、PWA manifest 和 Android 资源五处，现由 `scripts/theme-tokens.ts` 从 `tokens.css` 派生并校验（`pnpm tokens:theme`）。
 
 4. **样式按层拆分，删除遗留时间层。** 4711 行的 `styles.css` 拆为 `tokens → 组件 → 页面 → 动效 → 响应式`，导入顺序即层叠契约。删除死选择器、把 `!important` 从 102 处降到 1 处（仅保留减弱动效所需的 `scroll-behavior` 强制覆盖）、消除重复覆盖。v2 目录/流程层使用的一批从未定义过的变量（`--outline/--surface/--muted/--accent/--ink/--focus`）改为令牌或显式别名。
 
