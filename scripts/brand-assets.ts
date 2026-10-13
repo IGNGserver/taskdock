@@ -222,22 +222,6 @@ function encodePng(width: number, height: number, rgba: Buffer): Buffer {
   ]);
 }
 
-function icoFromPng(png: Buffer): Buffer {
-  const header = Buffer.alloc(22);
-  header.writeUInt16LE(0, 0);
-  header.writeUInt16LE(1, 2);
-  header.writeUInt16LE(1, 4);
-  header[6] = 0;
-  header[7] = 0;
-  header[8] = 0;
-  header[9] = 0;
-  header.writeUInt16LE(1, 10);
-  header.writeUInt16LE(32, 12);
-  header.writeUInt32LE(png.length, 14);
-  header.writeUInt32LE(22, 18);
-  return Buffer.concat([header, png]);
-}
-
 async function writeBinary(path: string, data: Buffer): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   let existing: Buffer | null = null;
@@ -263,10 +247,6 @@ async function main(): Promise<void> {
   await writeBinary(join(webPublic, 'pwa-192.png'), resizedIcon(192, 192));
   await writeBinary(join(webPublic, 'pwa-512.png'), resizedIcon(512, 512));
   await writeBinary(join(webPublic, 'brand', 'taskdock-icon.png'), resized(512, 512));
-
-  const desktopIcons = join(rootDir, 'apps', 'desktop', 'resources', 'icons');
-  await writeBinary(join(desktopIcons, 'taskdock-icon.png'), resizedIcon(512, 512));
-  await writeBinary(join(desktopIcons, 'icon.ico'), icoFromPng(resizedIcon(256, 256)));
 
   const androidRes = join(rootDir, 'apps', 'mobile', 'android', 'app', 'src', 'main', 'res');
   const backgroundColor = `#${source.rgba.subarray(0, 3).toString('hex').toUpperCase()}`;

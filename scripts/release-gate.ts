@@ -21,8 +21,6 @@ const checks = [
   ['browser-e2e', ['test:e2e']],
   ['browser-a11y', ['a11y']],
   ['compose-restart-backup', ['compose:smoke']],
-  ['desktop-security', ['desktop:test']],
-  ['desktop-package-and-launch', ['desktop:package']],
   ['android-release', ['android:assembleRelease']],
 ] as const;
 
@@ -37,8 +35,6 @@ function runCheck(
     env: {
       ...process.env,
       ...extraEnv,
-      REQUIRE_DESKTOP_LAUNCH: '1',
-      REQUIRE_WINDOWS_RELEASE: '1',
     },
     stdio: 'inherit',
   });

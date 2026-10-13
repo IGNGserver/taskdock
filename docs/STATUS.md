@@ -1,10 +1,12 @@
 # DevTodo 实施状态
 
-更新时间：2026-09-18
+更新时间：2026-10-13
 
 总体发布状态：**FAIL（v2 完成定义未满足，但阻断项已全部关闭）**。本轮已关闭全部已知 P0/P1 源码缺陷，并补齐归档中心、v2 rollover、V2 restore 策略、离线删除 fail-closed、Folder-first 迁移分层、Android 同步恢复等此前遗留项。所有本地门禁、真实 PostgreSQL migration/integration/runtime 门禁与三浏览器 E2E 均为 PASS。
 
-仍未运行、因而继续阻断正式发布的门禁只有环境类项：WebKit、Android 真机/仪器、Electron GUI、Docker Compose 与长期双端离线矩阵。这些是环境缺失，不是已知实现缺陷。
+仍未运行、因而继续阻断正式发布的门禁只有环境类项：WebKit、Android 真机/仪器、Docker Compose 与长期双端离线矩阵。这些是环境缺失，不是已知实现缺陷。
+
+桌面客户端已停止维护，完整源码和打包配置归档在 `archive/desktop-client/`。当前活动客户端只有响应式 Web/PWA 和 Android；浏览器的大屏布局仍然保留。
 
 ## TaskDock v2 当前状态（2026-09-18，未发布）
 
@@ -18,7 +20,6 @@ pnpm lint                                                         PASS（0 warni
 pnpm typecheck                                                    PASS（workspace build + Web build + noEmit）
 pnpm test                                                         PASS（15 files / 131 tests）
 pnpm openapi:check                                                PASS（99 paths）
-pnpm desktop:test                                                 PASS（Electron 静态安全）
 pnpm test:e2e --projects=chromium,mobile,firefox                   PASS（21 passed / 3 skipped 真实后端按设计跳过）
 ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin PASS
 DATABASE_URL=... pnpm db:migrate（连续两次）                        PASS（幂等）
@@ -31,7 +32,6 @@ DATABASE_URL=... PG_CTL=... pnpm test:pg-runtime                    PASS（真�
 ```text
 WebKit E2E                                                         NOT RUN（当前 Linux 缺少 WebKit 图形依赖）
 Android 真机 / 仪器测试                                             NOT RUN（无 adb 设备/AVD）
-Electron GUI 启动验收                                               NOT RUN（chrome-sandbox 非 root-owned 4755，不用 --no-sandbox 绕过）
 Docker Compose build/up/重启/卷恢复                                 NOT RUN（当前环境无 Docker）
 长期双端离线/冲突/响应丢失矩阵                                       NOT RUN
 ```
@@ -70,8 +70,7 @@ pnpm format:check                                                 PASS
 pnpm lint                                                         PASS（0 warning）
 pnpm typecheck                                                    PASS
 pnpm test                                                         PASS（18 files / 154 tests）
-pnpm tokens:check                                                 PASS（9 弹簧 + 6 处派生主题色）
-pnpm desktop:test                                                 PASS
+pnpm tokens:check                                                 PASS（9 弹簧 + 5 处派生主题色）
 pnpm test:e2e --project=chromium --project=firefox --project=mobile  PASS（51 passed / 15 skipped；跳过项为 a11y 路由矩阵在 firefox/webkit 上的按设计跳过）
 ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin PASS
 ```
@@ -80,7 +79,7 @@ pnpm test:e2e --project=chromium --project=firefox --project=mobile  PASS（51 p
 
 - `styles.css`（4711 行）删除，拆为 `styles/{type,base,tasks,pages,motion,responsive}.css` + `components/m3e/*.css`；导入顺序即层叠契约。`!important` 由 102 处降至 1 处（仅保留减弱动效下的 `scroll-behavior: auto` 强制覆盖，见 `styles/motion.css`），约 54 个死选择器删除。
 - 新增 30 个 M3E 组件（`apps/web/src/components/m3e/`，另有 6 个图标/工具导出），替换全部 `primary-button`/`secondary-button`/`text-button`/`danger-button`/`icon-button` 调用点（约 85 处）。
-- 弹簧动效令牌由 `scripts/motion-tokens.ts` 从阻尼比/刚度生成；调色板由 `scripts/theme-tokens.ts` 派生并校验六处硬编码点。两者接入 `pnpm build`。
+- 弹簧动效令牌由 `scripts/motion-tokens.ts` 从阻尼比/刚度生成；调色板由 `scripts/theme-tokens.ts` 派生并校验五处硬编码点。两者接入 `pnpm build`。
 - 修复 `today-overview-label` 对比度（4.29:1）、`calendar-day.muted` 对比度（2.37:1）、`EmptyState` 标题层级跳级、`LoadingScreen` 缺 main landmark、`IconButton` 的 `aria-label` 被覆盖、FAB menu 关闭时拦截点击、紧凑外壳底栏覆盖内容等缺陷。
 - a11y 门禁从 2 个用例扩展到 12 个：新增 10 条主路由与打开态弹层的 axe 审计（在 chromium 与 mobile 两个外壳变体上运行）。
 
@@ -89,7 +88,6 @@ pnpm test:e2e --project=chromium --project=firefox --project=mobile  PASS（51 p
 ```text
 WebKit E2E                 NOT RUN（当前 Linux 缺少 WebKit 图形依赖；已在迁移前基线上复现同样失败）
 Android 真机 / 仪器测试     NOT RUN（无 adb 设备/AVD）
-Electron GUI 启动验收       NOT RUN（chrome-sandbox 非 root-owned 4755）
 Docker Compose             NOT RUN（当前环境无 Docker）
 ```
 
@@ -102,7 +100,7 @@ Docker Compose             NOT RUN（当前环境无 Docker）
 | M2 Web 核心工作流       | PASS（构建 + 三浏览器 E2E）/NOT RUN（WebKit）              | 今日、目录、任务、归档、设置、详情、搜索、命令面板                |
 | M3 时间点/Placement     | PASS（代码+单测+核心浏览器 smoke）/NOT RUN（真实多端）     | DATE/EVENT、到达/归档、复制/移动/移除/排序、rollover/undo         |
 | M4 离线同步/PWA         | PASS（代码+单测+构建）/NOT RUN（双端真实网络切换）         | Dexie、原子 outbox、push/pull、冲突合并、退避重连、v2 协议        |
-| M5 Electron             | PASS（Linux 目录包+静态安全）/NOT RUN（GUI/Windows）       | Hub IPC、凭据边界、单实例、导航 allowlist                         |
+| M5 响应式 Web 大屏布局  | PASS（构建 + 浏览器 E2E）/NOT RUN（WebKit）                | 桌面浏览器导航、拖放、键盘和非模态详情                            |
 | M6 Android              | PASS（编译+JVM 单测+instrumentation 编译）/NOT RUN（真机） | Room v6 迁移链、Compose 目录/流程/归档、Keystore token 迁移       |
 | M7 生产化/文档          | PASS（静态配置+文档+PG migration/容量）/NOT RUN（Docker）  | Compose、Caddy、Dockerfile、migration job、健康检查、备份恢复文档 |
 
@@ -111,4 +109,4 @@ Docker Compose             NOT RUN（当前环境无 Docker）
 - PostgreSQL 是生产路径的权威状态源。`PostgresTreeStore` 使用 owner 级 `pg_advisory_xact_lock`、数据库持久化 cursor/change/receipt、跨进程 `LISTEN/NOTIFY`，删除预览令牌为 HMAC 无状态签名（跨进程与重启可用）。
 - 删除预览与执行之间内容或版本变化时返回 `SUBTREE_CHANGED`；离线整树删除与离线 rollover 均 fail-closed。
 - 遗留 `projects` 表仍存在于 Dexie schema（v1 SyncEngine 类仍引用它），但 v2 快照会清空其数据；v1 产品写入在服务端已全部返回 `CLIENT_UPGRADE_REQUIRED`，仅保留 auth/bootstrap/device 兼容面。
-- 真实 Electron GUI、Windows NSIS、Android 真机、iOS WebKit、Docker Compose 和长期离线矩阵仍未运行，不构成"已通过"。
+- Android 真机、iOS WebKit、Docker Compose 和长期离线矩阵仍未运行，不构成"已通过"。

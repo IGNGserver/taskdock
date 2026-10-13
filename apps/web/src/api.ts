@@ -9,7 +9,6 @@ import type {
   TaskDto,
   TimePointDto,
   UserDto,
-  DeviceDto,
 } from '@devtodo/contracts';
 import {
   V2SyncEngine,
@@ -37,9 +36,6 @@ const API_V2_BASE = '/api/v2';
 let accessToken: string | null = null;
 let refreshPromise: Promise<boolean> | null = null;
 let secureStorageSetup: Promise<void> | null = null;
-let runtimeHubOrigin: string | null = null;
-let desktopHubOriginLoadPromise: Promise<string | null> | null = null;
-let desktopHubOriginLoadError: string | null = null;
 let lastRefreshFailure: RefreshFailureKind | null = null;
 const localRevalidations = new Map<string, Promise<unknown>>();
 
@@ -84,21 +80,7 @@ export function getAccessToken(): string | null {
 }
 
 export function isNativeClient(): boolean {
-  return Capacitor.isNativePlatform() || Boolean(desktopBridge());
-}
-
-export function isDesktopClient(): boolean {
-  return Boolean(desktopBridge());
-}
-
-export function isDesktopShell(): boolean {
-  if (typeof window === 'undefined') return false;
-  if (window.location.protocol === 'devtodo:') return true;
-  return new URLSearchParams(window.location.search).get('desktop') === '1';
-}
-
-export function isWindowsDesktop(): boolean {
-  return isDesktopClient() && desktopBridge()?.platform === 'win32';
+  return Capacitor.isNativePlatform();
 }
 
 export function isNativeMobileClient(): boolean {
@@ -112,34 +94,11 @@ export function getHubOrigin(): string {
       throw new ApiError('HUB_NOT_CONFIGURED', '移动端尚未配置中枢地址。', null, 400);
     return configured;
   }
-  if (isDesktopClient()) {
-    const configured = getConfiguredHubOrigin();
-    if (!configured)
-      throw new ApiError(
-        'HUB_NOT_CONFIGURED',
-        desktopHubOriginLoadError ?? '桌面端尚未配置中枢地址。',
-        null,
-        400,
-      );
-    return configured;
-  }
-  if (location.protocol !== 'file:' && location.protocol !== 'devtodo:') return location.origin;
-  throw new ApiError('HUB_NOT_CONFIGURED', '桌面端尚未配置中枢地址。', null, 400);
+  if (typeof location !== 'undefined' && location.protocol !== 'file:') return location.origin;
+  throw new ApiError('HUB_NOT_CONFIGURED', '无法确定中枢地址。', null, 400);
 }
 
 export function getConfiguredHubOrigin(): string | null {
-  if (desktopBridge()) {
-    const configured = runtimeHubOrigin ?? new URLSearchParams(location.search).get('hubOrigin');
-    if (!configured) return null;
-    try {
-      const normalized = normalizeHubOrigin(configured);
-      runtimeHubOrigin ??= normalized;
-      desktopHubOriginLoadError = null;
-      return normalized;
-    } catch {
-      return null;
-    }
-  }
   if (!Capacitor.isNativePlatform()) return null;
   try {
     const configured = localStorage.getItem('devtodo.hub-origin');
@@ -151,101 +110,17 @@ export function getConfiguredHubOrigin(): string | null {
 }
 
 export async function loadConfiguredHubOrigin(): Promise<string | null> {
-  const desktop = desktopBridge();
-  if (!desktop) return getConfiguredHubOrigin();
-  const configured = getConfiguredHubOrigin();
-  if (configured) return configured;
-  if (desktopHubOriginLoadPromise) return desktopHubOriginLoadPromise;
-  desktopHubOriginLoadPromise = (async () => {
-    try {
-      const state = await desktop.getHubOriginState?.();
-      if (state) {
-        if (state.status !== 'configured' || !state.origin) {
-          desktopHubOriginLoadError = state.message ?? hubOriginStateMessage(state.status);
-          return null;
-        }
-        const normalized = normalizeHubOrigin(state.origin);
-        runtimeHubOrigin = normalized;
-        desktopHubOriginLoadError = null;
-        return normalized;
-      }
-
-      // Keep development compatibility with an older preload while the main
-      // process and renderer are being upgraded together.
-      const persisted = await desktop.getHubOrigin();
-      if (!persisted) {
-        desktopHubOriginLoadError = '桌面端尚未配置中枢地址。';
-        return null;
-      }
-      const normalized = normalizeHubOrigin(persisted);
-      runtimeHubOrigin = normalized;
-      desktopHubOriginLoadError = null;
-      return normalized;
-    } catch (error) {
-      desktopHubOriginLoadError =
-        error instanceof Error ? error.message : '无法读取桌面端中枢配置。';
-      return null;
-    } finally {
-      desktopHubOriginLoadPromise = null;
-    }
-  })();
-  return desktopHubOriginLoadPromise;
-}
-
-export async function ensureConfiguredHubOrigin(): Promise<string> {
-  const configured = await loadConfiguredHubOrigin();
-  if (configured) return configured;
-  throw new ApiError(
-    'HUB_NOT_CONFIGURED',
-    desktopHubOriginLoadError ?? '桌面端尚未配置中枢地址。',
-    null,
-    400,
-  );
-}
-
-export function getHubOriginLoadError(): string | null {
-  return desktopHubOriginLoadError;
+  return getConfiguredHubOrigin();
 }
 
 export async function setHubOrigin(value: string): Promise<string> {
   const origin = normalizeHubOrigin(value);
-  const desktop = desktopBridge();
-  if (desktop) {
-    await desktop.setHubOrigin(origin);
-    runtimeHubOrigin = origin;
-    desktopHubOriginLoadError = null;
-    desktopHubOriginLoadPromise = Promise.resolve(origin);
-    if (typeof window !== 'undefined' && window.location.protocol === 'devtodo:') {
-      try {
-        const nextUrl = new URL(window.location.href);
-        nextUrl.searchParams.set('hubOrigin', origin);
-        window.history.replaceState(null, '', nextUrl);
-      } catch {
-        // The persisted main-process setting remains authoritative if history is unavailable.
-      }
-    }
-    return origin;
-  }
   if (!Capacitor.isNativePlatform()) throw new Error('仅原生客户端支持保存中枢地址');
   localStorage.setItem('devtodo.hub-origin', origin);
   return origin;
 }
 
 export async function clearConfiguredHubOrigin(): Promise<void> {
-  runtimeHubOrigin = null;
-  desktopHubOriginLoadError = null;
-  desktopHubOriginLoadPromise = Promise.resolve(null);
-  const desktop = desktopBridge();
-  if (desktop) await desktop.clearHubOrigin?.();
-  if (typeof window !== 'undefined' && window.location.protocol === 'devtodo:') {
-    try {
-      const nextUrl = new URL(window.location.href);
-      nextUrl.searchParams.delete('hubOrigin');
-      window.history.replaceState(null, '', nextUrl);
-    } catch {
-      // Ignored if history manipulation is unavailable.
-    }
-  }
   try {
     localStorage.removeItem('devtodo.hub-origin');
   } catch {
@@ -258,8 +133,6 @@ export async function testHubConnection(
   signal?: AbortSignal,
 ): Promise<{ initialized: boolean }> {
   const origin = normalizeHubOrigin(value);
-  const desktop = desktopBridge();
-  if (desktop) return withAbort(desktop.testHubConnection(origin), signal);
   const response = await fetch(`${origin}${API_V1_BASE}/bootstrap/status`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
@@ -368,25 +241,11 @@ async function requestNetwork<T>(
   }
   let response: Response;
   try {
-    const desktop = desktopBridge();
-    if (desktop) {
-      const result = await desktop.request({
-        url: `${getHubOrigin()}${apiBase}${path}`,
-        method,
-        headers: Object.fromEntries(headers.entries()),
-        body: typeof init.body === 'string' ? init.body : null,
-      });
-      response = new Response(result.body, {
-        status: result.status,
-        headers: result.headers,
-      });
-    } else {
-      response = await fetch(`${getHubOrigin()}${apiBase}${path}`, {
-        ...init,
-        headers,
-        credentials: 'include',
-      });
-    }
+    response = await fetch(`${getHubOrigin()}${apiBase}${path}`, {
+      ...init,
+      headers,
+      credentials: 'include',
+    });
   } catch (error) {
     if (isNetworkError(error)) {
       const pathname = path.split('?')[0] ?? path;
@@ -455,16 +314,6 @@ export async function refreshAccessToken(): Promise<boolean> {
   refreshPromise = (async () => {
     lastRefreshFailure = null;
     try {
-      if (isDesktopClient()) {
-        const result = await desktopAuthRefresh();
-        if (isAuthLocallyLocked()) {
-          lastRefreshFailure = 'revoked';
-          setAccessToken(null);
-          return false;
-        }
-        setAccessToken(result.accessToken);
-        return true;
-      }
       // Browsers keep the session in an HttpOnly cookie and have no stored
       // refresh token; only a native platform owns the credential directly.
       const ownsNativeToken = Capacitor.isNativePlatform();
@@ -702,126 +551,9 @@ export function mutationV2<T extends Record<string, unknown>>(
 
 export { isHttpOrigin, normalizeHubOrigin } from './hub-origin.js';
 
-function withAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return promise;
-  const abortReason = () =>
-    signal.reason ?? new DOMException('The operation was aborted', 'AbortError');
-  if (signal.aborted) return Promise.reject(abortReason());
-
-  return new Promise<T>((resolve, reject) => {
-    const cleanup = () => signal.removeEventListener('abort', onAbort);
-    const onAbort = () => {
-      cleanup();
-      reject(abortReason());
-    };
-    signal.addEventListener('abort', onAbort, { once: true });
-    promise.then(
-      (value) => {
-        cleanup();
-        resolve(value);
-      },
-      (error: unknown) => {
-        cleanup();
-        reject(error);
-      },
-    );
-  });
-}
-
 function isNetworkError(error: unknown): boolean {
   return (
     error instanceof TypeError ||
     (error instanceof Error && /network|fetch|offline/i.test(error.message))
   );
-}
-
-interface DesktopBridge {
-  platform: string;
-  testHubConnection: (origin: string) => Promise<{ initialized: boolean }>;
-  request: (input: {
-    url: string;
-    method?: string;
-    headers?: Record<string, string>;
-    body?: string | null;
-  }) => Promise<{ status: number; body: string; headers: Record<string, string> }>;
-  authLogin: (
-    username: string,
-    password: string,
-    deviceName: string,
-  ) => Promise<DesktopAuthResponse>;
-  authRefresh: () => Promise<DesktopAuthResponse>;
-  authLogout: () => Promise<{ ok: true }>;
-  getHubOrigin: () => Promise<string | null>;
-  getHubOriginState?: () => Promise<DesktopHubOriginState>;
-  setHubOrigin: (origin: string) => Promise<string>;
-  clearHubOrigin?: () => Promise<boolean>;
-}
-
-interface DesktopHubOriginState {
-  origin: string | null;
-  status: 'configured' | 'missing' | 'invalid' | 'unreadable';
-  message?: string;
-}
-
-interface DesktopAuthSuccess {
-  ok: true;
-  accessToken: string;
-  user: UserDto;
-  device: DeviceDto;
-}
-
-interface DesktopAuthFailure {
-  ok: false;
-  status: number;
-  code: string;
-  message: string;
-  details?: unknown;
-}
-
-type DesktopAuthResponse = DesktopAuthSuccess | DesktopAuthFailure;
-
-export async function desktopAuthLogin(
-  username: string,
-  password: string,
-  deviceName: string,
-): Promise<DesktopAuthSuccess> {
-  const desktop = desktopBridge();
-  if (!desktop) throw new ApiError('AUTH_REQUIRED', '桌面安全通道不可用', null, 503);
-  const result = await desktop.authLogin(username, password, deviceName);
-  if (!result.ok)
-    throw new ApiError(result.code, result.message, result.details ?? null, result.status);
-  return result;
-}
-
-export async function desktopAuthRefresh(): Promise<DesktopAuthSuccess> {
-  const desktop = desktopBridge();
-  if (!desktop) throw new ApiError('AUTH_REQUIRED', '桌面安全通道不可用', null, 503);
-  const result = await desktop.authRefresh();
-  if (!result.ok)
-    throw new ApiError(result.code, result.message, result.details ?? null, result.status);
-  return result;
-}
-
-export async function desktopAuthLogout(): Promise<void> {
-  const desktop = desktopBridge();
-  if (!desktop) return;
-  await desktop.authLogout();
-}
-
-function desktopBridge(): DesktopBridge | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return (window as Window & { devtodoDesktop?: DesktopBridge }).devtodoDesktop;
-}
-
-function hubOriginStateMessage(status: DesktopHubOriginState['status']): string {
-  switch (status) {
-    case 'missing':
-      return '桌面端尚未配置中枢地址。';
-    case 'invalid':
-      return '桌面端中枢配置无效，请重新保存地址。';
-    case 'unreadable':
-      return '无法读取桌面端中枢配置，请检查应用数据目录权限。';
-    default:
-      return '桌面端中枢配置不可用。';
-  }
 }

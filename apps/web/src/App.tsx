@@ -65,12 +65,8 @@ import {
 import {
   ApiError,
   getConfiguredHubOrigin,
-  getHubOriginLoadError,
-  isDesktopClient,
-  isDesktopShell,
   isNativeClient,
   isNativeMobileClient,
-  isWindowsDesktop,
   loadConfiguredHubOrigin,
   normalizeHubOrigin,
   mutationV2,
@@ -175,13 +171,8 @@ function usePresence(open: boolean, exitDuration: number = SPRING_DURATION.effec
 
 export function App() {
   const auth = useAuth();
-  const desktopShell = isDesktopShell();
   const content =
-    desktopShell && !isDesktopClient() ? (
-      <DesktopBridgeUnavailableScreen />
-    ) : desktopShell ? (
-      <DesktopStartup />
-    ) : auth.status === 'loading' ? (
+    auth.status === 'loading' ? (
       <LoadingScreen label="正在打开本地工作区" />
     ) : auth.status === 'anonymous' ? (
       <LoginScreen initialized={auth.initialized} />
@@ -193,326 +184,10 @@ export function App() {
     typeof window !== 'undefined' &&
     (window.location.protocol === 'http:' || window.location.protocol === 'https:');
   return (
-    <DesktopChrome>
+    <>
       {showPwaNotice && <PwaLifecycleNotice />}
       {content}
-    </DesktopChrome>
-  );
-}
-
-function DesktopChrome({ children }: { children: ReactNode }) {
-  const windowsDesktop = isWindowsDesktop();
-  if (!windowsDesktop) return children;
-  return (
-    <div className="desktop-app-shell">
-      <div className="desktop-window-drag-region" aria-hidden="true" />
-      {children}
-    </div>
-  );
-}
-
-type DesktopStartupPhase = 'checking' | 'setup' | 'waiting' | 'ready' | 'error';
-
-function DesktopBridgeUnavailableScreen() {
-  return (
-    <main className="auth-page hub-setup-page">
-      <div className="auth-panel">
-        <div className="brand auth-brand">
-          <BrandMark size="lg" />
-          <span>TaskDock</span>
-        </div>
-        <p className="eyebrow">DESKTOP RUNTIME</p>
-        <h1>桌面安全通道未加载</h1>
-        <p className="auth-intro">
-          当前窗口是桌面客户端，但安全桥接没有启动，因此无法读取或保存服务器地址。
-        </p>
-        <Alert tone="error" title="桌面桥接不可用">
-          请完全退出 TaskDock 后重试；如果问题持续，请重新安装最新桌面版本。
-        </Alert>
-        <Button
-          variant="filled"
-          className="m3e-button--wide"
-          type="button"
-          onClick={() => window.location.reload()}
-        >
-          重新加载客户端
-        </Button>
-      </div>
-      <aside className="auth-aside">
-        <span className="aside-number">00</span>
-        <p>先恢复连接，再开始工作。</p>
-        <span className="aside-rule" />
-        <small>桌面端不会在桥接缺失时回退到网页登录，以避免使用错误的服务器会话。</small>
-      </aside>
-    </main>
-  );
-}
-
-function DesktopStartup() {
-  const auth = useAuth();
-  const [origin, setOrigin] = useState<string | null>(null);
-  const [phase, setPhase] = useState<DesktopStartupPhase>('checking');
-  const [message, setMessage] = useState('');
-
-  const verify = useCallback(async (candidate: string) => {
-    setPhase('checking');
-    setMessage('正在连接服务器…');
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 8_000);
-    try {
-      const status = await testHubConnection(candidate, controller.signal);
-      setPhase(status.initialized ? 'ready' : 'waiting');
-      setMessage('');
-    } catch (cause) {
-      setPhase('error');
-      setMessage(
-        cause instanceof DOMException && cause.name === 'AbortError'
-          ? '连接超时，请检查地址、证书和网络。'
-          : cause instanceof Error
-            ? cause.message
-            : '无法连接服务器，请检查地址、证书和网络。',
-      );
-    } finally {
-      window.clearTimeout(timeout);
-    }
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    void loadConfiguredHubOrigin().then((initialOrigin) => {
-      if (!active) return;
-      setOrigin(initialOrigin);
-      if (initialOrigin) void verify(initialOrigin);
-      else {
-        const loadError = getHubOriginLoadError();
-        setMessage(loadError?.includes('尚未配置') ? '' : (loadError ?? ''));
-        setPhase('setup');
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [verify]);
-
-  useEffect(() => {
-    let active = true;
-    if (auth.status === 'anonymous') {
-      void loadConfiguredHubOrigin().then((currentOrigin) => {
-        if (!active) return;
-        setOrigin(currentOrigin);
-        if (!currentOrigin) {
-          const loadError = getHubOriginLoadError();
-          setMessage(loadError?.includes('尚未配置') ? '' : (loadError ?? ''));
-          setPhase('setup');
-        }
-      });
-    }
-    return () => {
-      active = false;
-    };
-  }, [auth.status]);
-
-  const handleConnected = useCallback((nextOrigin: string, initialized: boolean) => {
-    setOrigin(nextOrigin);
-    setMessage('');
-    setPhase(initialized ? 'ready' : 'waiting');
-  }, []);
-  const handleChangeOrigin = useCallback(() => {
-    setPhase('setup');
-    setMessage('');
-  }, []);
-  const finishSwitch = useCallback(
-    async (nextOrigin: string, previousOrigin: string | null) => {
-      if (previousOrigin && previousOrigin !== nextOrigin) await auth.logout();
-    },
-    [auth],
-  );
-
-  if (phase === 'setup')
-    return (
-      <HubSetupScreen
-        initialOrigin={origin ?? ''}
-        errorMessage={message}
-        onConnected={handleConnected}
-        afterSave={finishSwitch}
-      />
-    );
-  if (phase === 'checking') return <LoadingScreen label="正在连接服务器" />;
-  if (phase === 'error')
-    return (
-      <HubSetupScreen
-        initialOrigin={origin ?? ''}
-        errorMessage={message}
-        onConnected={handleConnected}
-        afterSave={finishSwitch}
-      />
-    );
-  if (phase === 'waiting')
-    return (
-      <HubWaitingScreen
-        origin={origin ?? ''}
-        onRetry={() => origin && void verify(origin)}
-        onChangeOrigin={handleChangeOrigin}
-      />
-    );
-  if (auth.status === 'loading') return <LoadingScreen label="正在打开本地工作区" />;
-  if (auth.status === 'anonymous')
-    return <LoginScreen initialized onChangeHub={handleChangeOrigin} />;
-  return <AuthenticatedApp />;
-}
-
-function HubSetupScreen({
-  initialOrigin,
-  errorMessage,
-  onConnected,
-  afterSave,
-}: {
-  initialOrigin: string;
-  errorMessage: string;
-  onConnected: (origin: string, initialized: boolean) => void;
-  afterSave?: (origin: string, previousOrigin: string | null) => Promise<void>;
-}) {
-  const [origin, setOrigin] = useState(initialOrigin);
-  const [state, setState] = useState<'idle' | 'checking' | 'error'>(
-    errorMessage ? 'error' : 'idle',
-  );
-  const [message, setMessage] = useState(errorMessage);
-  const originEdited = useRef(false);
-
-  useEffect(() => {
-    setMessage(errorMessage);
-    if (errorMessage) setState('error');
-  }, [errorMessage]);
-  useEffect(() => {
-    if (!originEdited.current) setOrigin(initialOrigin);
-  }, [initialOrigin]);
-
-  const connect = async () => {
-    if (state === 'checking' || !origin.trim()) return;
-    setState('checking');
-    setMessage('正在测试连接…');
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 8_000);
-    try {
-      const normalized = normalizeHubOrigin(origin);
-      const status = await testHubConnection(normalized, controller.signal);
-      const previousOrigin = getConfiguredHubOrigin();
-      const saved = await setHubOrigin(normalized);
-      await afterSave?.(saved, previousOrigin);
-      onConnected(saved, status.initialized);
-    } catch (cause) {
-      setState('error');
-      setMessage(
-        cause instanceof DOMException && cause.name === 'AbortError'
-          ? '连接超时，请检查地址、证书和网络。'
-          : cause instanceof Error
-            ? cause.message
-            : '无法连接服务器，请检查地址、证书和网络。',
-      );
-    } finally {
-      window.clearTimeout(timeout);
-    }
-  };
-
-  return (
-    <main className="auth-page hub-setup-page">
-      <div className="auth-panel">
-        <div className="brand auth-brand">
-          <BrandMark size="lg" />
-          <span>TaskDock</span>
-        </div>
-        <p className="eyebrow">DESKTOP CONNECTION</p>
-        <h1>{origin ? '连接服务器' : '配置服务器地址'}</h1>
-        <p className="auth-intro">
-          先连接你的 TaskDock 服务器，之后登录、同步和离线数据都会跟随这个地址。
-        </p>
-        {message && <Alert tone={state === 'error' ? 'error' : 'info'}>{message}</Alert>}
-        {isHttpOrigin(origin) && (
-          <Alert tone="warning" title="当前地址使用 HTTP" className="m3e-alert--http-security">
-            HTTP 地址可以连接服务器，但密码和会话信息会明文传输；正式公网部署仍建议使用 HTTPS。
-          </Alert>
-        )}
-        <div className="stack-form">
-          <Field
-            label="服务器 HTTP/HTTPS 地址"
-            value={origin}
-            onChange={(value) => {
-              originEdited.current = true;
-              setOrigin(value);
-              setState('idle');
-              setMessage('');
-            }}
-            type="url"
-            autoComplete="url"
-            autoFocus={!origin}
-          />
-          <p className="field-help">
-            例如 https://todo.example.com、http://your-hub.example:48731 或
-            http://localhost:3000。HTTP 地址会显示安全提示。
-          </p>
-          <Button
-            variant="filled"
-            className="m3e-button--wide"
-            type="button"
-            onClick={() => void connect()}
-            disabled={state === 'checking' || !origin.trim()}
-          >
-            {state === 'checking' ? <LoaderCircle className="spin" size={18} /> : '测试并连接'}
-          </Button>
-        </div>
-      </div>
-      <aside className="auth-aside">
-        <span className="aside-number">01</span>
-        <p>先连接，再安排。</p>
-        <span className="aside-rule" />
-        <small>切换服务器后会使用独立的登录会话，数据不会混用。</small>
-      </aside>
-    </main>
-  );
-}
-
-function HubWaitingScreen({
-  origin,
-  onRetry,
-  onChangeOrigin,
-}: {
-  origin: string;
-  onRetry: () => void;
-  onChangeOrigin: () => void;
-}) {
-  return (
-    <main className="auth-page hub-setup-page">
-      <div className="auth-panel">
-        <div className="brand auth-brand">
-          <BrandMark size="lg" />
-          <span>TaskDock</span>
-        </div>
-        <p className="eyebrow">DESKTOP CONNECTION</p>
-        <h1>等待服务器准备就绪</h1>
-        <p className="auth-intro">服务器已经连接，但管理员还没有完成首次初始化。</p>
-        <Alert tone="info" title="请先完成服务器初始化">
-          请让管理员在服务器端完成首次初始化，完成后点击“重新检查”即可登录。
-        </Alert>
-        <div className="hub-origin-card">
-          <span>当前服务器</span>
-          <code>{origin}</code>
-        </div>
-        <div className="hub-check-row">
-          <Button variant="filled" type="button" onClick={onRetry}>
-            重新检查
-          </Button>
-          <Button variant="tonal" type="button" onClick={onChangeOrigin}>
-            更换服务器
-          </Button>
-        </div>
-      </div>
-      <aside className="auth-aside">
-        <span className="aside-number">02</span>
-        <p>部署完成，再开始。</p>
-        <span className="aside-rule" />
-        <small>初始化需要由服务器管理员完成，客户端不会替管理员创建账号。</small>
-      </aside>
-    </main>
+    </>
   );
 }
 
@@ -872,17 +547,10 @@ function WorkspaceEntry() {
   return target ? <Navigate to={target} replace /> : <LoadingScreen label="正在打开目录" />;
 }
 
-function LoginScreen({
-  initialized,
-  onChangeHub,
-}: {
-  initialized: boolean;
-  onChangeHub?: () => void;
-}) {
+function LoginScreen({ initialized }: { initialized: boolean }) {
   const auth = useAuth();
   const nativeClient = isNativeClient();
   const mobileClient = isNativeMobileClient();
-  const desktopClient = isDesktopClient();
   const [hubInitialized, setHubInitialized] = useState(initialized);
   const [hubOrigin, setHubOriginValue] = useState(getConfiguredHubOrigin() ?? '');
   const [username, setUsername] = useState('');
@@ -952,7 +620,7 @@ function LoginScreen({
         setError('服务器尚未准备好，请让管理员完成首次初始化。');
         return;
       }
-      await auth.login(username, password, desktopClient ? '桌面端' : '浏览器');
+      await auth.login(username, password, nativeClient ? 'Android' : '浏览器');
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '操作失败，请检查网络和输入');
     } finally {
@@ -969,15 +637,6 @@ function LoginScreen({
         <p className="eyebrow">PERSONAL DEV WORKSPACE</p>
         <h1>{hubInitialized ? '欢迎回来' : '等待服务器准备就绪'}</h1>
         <p className="auth-intro">一个任务本体，多处安排。离线时也能继续捕获和整理。</p>
-        {desktopClient && onChangeHub && (
-          <div className="hub-origin-card login-hub-origin">
-            <span>当前服务器</span>
-            <code>{hubOrigin}</code>
-            <Button variant="text" type="button" onClick={onChangeHub}>
-              更换服务器
-            </Button>
-          </div>
-        )}
         {!hubInitialized && (
           <Alert tone="info" title="请先完成服务器初始化">
             请让管理员在服务器端完成首次初始化，完成后刷新此页面即可登录。

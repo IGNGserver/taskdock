@@ -1,15 +1,16 @@
 # TaskDock 发布规范
 
-本文档规定 TaskDock 的版本、GitHub Release、客户端安装包和 Docker 镜像如何发布。
+本文档规定 TaskDock 的版本、GitHub Release、Android APK 和 Docker 镜像如何发布。
 
 ## 一、发布原则
 
 1. **默认发布为预发布版本。** 不要因为版本构建成功就直接发布为稳定版。
 2. **只有明确要求正式发布时，才能发布正式 Release。** GitHub Actions 的 `发布类型` 必须明确选择 `正式发布`。
-3. **发布说明必须使用中文。** 每次发布都要说明：本次更新了什么、是否有不兼容变化、已知问题，以及哪些平台安装包已经提供。
+3. **发布说明必须使用中文。** 每次发布都要说明：本次更新了什么、是否有不兼容变化、已知问题，以及 Android APK 是否已提供。
 4. **Docker 发布的是镜像，不是源代码。** 用户部署时使用版本号标签或 `latest` 标签，不在生产服务器上拉取仓库代码并重新构建。
 5. **稳定版和预发布版严格区分。** 预发布版不能移动 `latest` 标签。
 6. **正式发布前必须确认回滚路径。** 至少保留上一个可用版本的 Docker 镜像和数据库备份。
+7. **从旧版本升级时清理桌面来源。** 如果现有 `.env` 的 `NATIVE_ALLOWED_ORIGINS` 明确包含 `devtodo://app`，请删除该项；当前原生客户端只保留 Android 的 `capacitor://localhost` 来源。
 
 ## 二、版本号
 
@@ -40,11 +41,7 @@
 4. 填写版本号，例如 `0.2.0-rc.1`。
 5. `发布类型` 保持默认的 **预发布**，除非本次明确要求稳定版。
 6. 在 `中文更新说明` 中写清楚本次更新。不得填写空白、只有英文或类似“若干修复”的无效说明。
-7. Workflow 会构建并上传：
-   - Windows 桌面安装程序；
-   - Linux 桌面客户端压缩包；
-   - Android APK；
-   - GHCR Docker 镜像。
+7. Workflow 会构建并上传 Android APK，并发布 GHCR Docker 镜像。GitHub 会为 Release 自动提供 `Source code (zip)` 和 `Source code (tar.gz)`；不会生成或上传校验和文件。
 8. Workflow 完成后，在 GitHub Release 页面检查发布说明和附件，再对外通知用户。
 
 ## 四、Docker 镜像标签
@@ -96,12 +93,11 @@ APP_VERSION=0.2.0 docker compose pull
 
 - 当前版本仍存在的问题；没有则填写“暂无已知问题”。
 
-## 安装包
+## Release 附件
 
-- Windows：已提供 / 未提供，原因：
-- Linux：已提供 / 未提供，原因：
-- Android：已提供 / 未提供，原因：
-- Docker：`ghcr.io/igngserver/taskdock:<版本号>`
+- Android APK：`TaskDock-<版本号>-android.apk`
+- Source code (zip)、Source code (tar.gz)：GitHub 自动生成
+- Docker（非 Release 附件）：`ghcr.io/igngserver/taskdock:<版本号>`
 ```
 
 ## 六、发布后检查
@@ -110,7 +106,8 @@ APP_VERSION=0.2.0 docker compose pull
 
 - GitHub Release 的预发布/正式状态是否正确；
 - Release 说明是否为中文且准确描述本次更新；
-- Windows、Linux、Android 附件是否存在；
+- Release 是否只有 Android APK 这一项上传附件，以及 GitHub 默认源代码归档是否可见；
+- 是否没有生成或上传 SHA/校验和文件；
 - Docker 镜像的版本号标签是否可以拉取；
 - 正式版本的 `latest` 是否指向本次稳定版本；
 - Docker 部署使用的是镜像标签，而不是仓库源代码；

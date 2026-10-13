@@ -21,7 +21,7 @@ describe('Fastify API', () => {
         databaseUrl: 'postgres://devtodo:password@localhost:5432/devtodo',
         appOrigin: 'http://tasks.example.com',
         corsAllowedOrigins: ['http://tasks.example.com'],
-        nativeAllowedOrigins: ['devtodo://app', 'capacitor://localhost', 'https://localhost'],
+        nativeAllowedOrigins: ['capacitor://localhost', 'https://localhost'],
         devMemoryStore: false,
       },
     });
@@ -114,7 +114,7 @@ describe('Fastify API', () => {
         databaseUrl: 'postgres://devtodo:password@localhost:5432/devtodo',
         appOrigin: 'http://tasks.example.com',
         corsAllowedOrigins: ['http://tasks.example.com'],
-        nativeAllowedOrigins: ['devtodo://app', 'capacitor://localhost', 'https://localhost'],
+        nativeAllowedOrigins: ['capacitor://localhost', 'https://localhost'],
         devMemoryStore: false,
       },
     });
@@ -142,7 +142,7 @@ describe('Fastify API', () => {
         databaseUrl: 'postgres://devtodo:password@localhost:5432/devtodo',
         appOrigin: 'https://tasks.example.com',
         corsAllowedOrigins: ['https://tasks.example.com'],
-        nativeAllowedOrigins: ['devtodo://app', 'capacitor://localhost', 'https://localhost'],
+        nativeAllowedOrigins: ['capacitor://localhost', 'https://localhost'],
         devMemoryStore: false,
       },
     });
@@ -512,7 +512,7 @@ describe('Fastify API', () => {
     await app.close();
   });
 
-  it('never exposes private user fields or trusts a forged native header', async () => {
+  it('never exposes private user fields or trusts a forged native exchange', async () => {
     const token = 'test-bootstrap-token-that-is-long-enough-public-dto';
     const { app } = await buildServer({
       store: new MemoryStore(),
@@ -526,7 +526,6 @@ describe('Fastify API', () => {
     const browserLogin = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      headers: { 'x-client-platform': 'electron' },
       payload: { username: 'public-user', password: 'correct horse battery staple' },
     });
     expect(browserLogin.statusCode).toBe(200);
@@ -541,7 +540,7 @@ describe('Fastify API', () => {
       url: '/api/v1/auth/native/challenge',
       headers: { origin: 'https://localhost', 'sec-fetch-site': 'same-origin' },
     });
-    // A browser forging the native header is refused at the exchange step (403),
+    // A browser forging the native exchange is refused at the challenge step (403),
     // which is deliberately not a session revocation (401) so clients keep their
     // stored credential.
     expect(sameOriginChallenge.statusCode).toBe(403);

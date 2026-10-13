@@ -1,14 +1,14 @@
 # 中枢连接稳定性与外网 HTTP 可用性开发计划
 
 审计日期：2026-09-15  
-审计范围：中枢 API、PostgreSQL 适配层、Web/Electron、Android 移动端、WebSocket、Docker Compose/Caddy，以及外网 HTTP 连接链路。  
+审计范围：中枢 API、PostgreSQL 适配层、Web、Android 移动端、WebSocket、Docker Compose/Caddy，以及外网 HTTP 连接链路。
 文档用途：交给后续开发任务执行。本次审计只新增本计划文档，没有修改业务代码、配置或数据库。
 
 ## 1. 结论
 
-当前项目不能宣称已经满足“中枢长期运行、桌面端和移动端在外网 HTTP 下稳定连接”的要求。问题分为两类：
+当前项目不能宣称已经满足“中枢长期运行、Web 和移动端在外网 HTTP 下稳定连接”的要求。问题分为两类：
 
-1. **已经确认的协议阻断**：当前公网中枢仍返回 syncProtocolVersion 为 1，/api/v2/status 返回 404；而当前源码的 Web、部分 Electron renderer 和 Android 同步流程已经使用 v2。客户端会把 v2 404 或协议不匹配进一步表现为登录失败、同步失败或“中枢离线”。
+1. **已经确认的协议阻断**：当前公网中枢仍返回 syncProtocolVersion 为 1，/api/v2/status 返回 404；而当前源码的 Web 和 Android 同步流程已经使用 v2。客户端会把 v2 404 或协议不匹配进一步表现为登录失败、同步失败或“中枢离线”。
 2. **已经能从源码确认、但尚未完成长时间实证的稳定性风险**：生产 PostgreSQL 适配器的 v2 change feed/cursor 仍主要存在进程内存中，变更列表没有保留上限；进程重启或多实例后游标可能断裂并漏同步，持续写入还可能造成内存线性增长。数据库黑洞、OOM、重启恢复和真实设备验收目前均未被证明。
 
 当前外网 HTTP 探测结果是“服务可达但版本/契约不对”，不是单纯的网络不通：
@@ -43,16 +43,15 @@
   - 已认证的 /api/v2/status、snapshot、pull、push 均按当前契约返回。
   - 部署脚本必须在启动后校验版本和 v2 探针，不允许只看 HTTP 200。
 
-#### P0-2：Web/Electron renderer 的认证路径默认打到 v2，但服务端认证仍在 v1
+#### P0-2：Web renderer 的认证路径默认打到 v2，但服务端认证仍在 v1
 
 - 证据：
   - apps/web/src/api.ts 的通用 request 默认基址是 /api/v2。
   - apps/web/src/auth.tsx 用通用 request 调用 /bootstrap/status、/auth/login、/auth/logout、/me。
   - 服务端这些认证路由当前位于 apps/api/src/server.ts 的 /api/v1 路由组。
-  - Electron main 进程使用 v1 完成 native login/refresh，但 renderer 登录完成后仍用通用 /me，存在“main 认证成功、renderer 初始化 404”的断点。
   - rollover/undo 等剩余 v1 路由也被部分 Web 调用以 v2 默认基址访问。
 - 影响：
-  - 浏览器或桌面端可能在认证流程中看到 404、登录失败或被清空为未登录。
+  - 浏览器可能在认证流程中看到 404、登录失败或被清空为未登录。
   - 现有 E2E 主要 mock /api/v1/**，无法发现 renderer 实际发出的 v2 错误请求，形成假绿。
 - 完成条件：
   - 明确并冻结认证、数据和遗留功能各自的 API 版本。
@@ -100,7 +99,7 @@
   - snapshot 也会返回完整 owner 数据，没有分页、大小上限或分片策略。
 - 影响：
   - 数据量或 outbox 增长后，请求耗时会按实体量和批次数放大。
-  - 慢请求占用 PostgreSQL pool，进一步导致新请求排队、超时、桌面端/移动端显示中枢离线。
+  - 慢请求占用 PostgreSQL pool，进一步导致新请求排队、超时，Web/移动端显示中枢离线。
   - 大型 full snapshot 可能造成 Node 堆内存峰值或代理超时。
 - 完成条件：
   - 改为按 mutation 做最小增量 SQL，或明确采用批量事务/批量 upsert；禁止每个 mutation 全量 dump owner。
@@ -146,12 +145,12 @@
   - CORS 探测当前对若干 origin 能返回允许值，但仍缺少浏览器真实登录/刷新验收。
 - 影响：
   - 登录初次成功，刷新或重新打开后失效；用户看到“中枢离线”或反复登录。
-  - HTTP 直连、HTTPS 代理和 Electron custom scheme 的行为不一致。
+  - HTTP 直连与 HTTPS 代理的行为不一致。
 - 完成条件：
   - 明确支持矩阵：外网 HTTP 必须可用；生产推荐 HTTPS；若不支持某种组合，客户端要显示明确的配置错误。
   - Caddy 只在 HTTPS 公开入口发送 HSTS，并验证 Host、Origin、X-Forwarded-Proto。
   - cookie 的 Path、Secure、SameSite、Domain 与实际 v1/v2 auth 路径和公开 scheme 一致。
-  - 用真实浏览器、Electron 和移动端分别验证 HTTP 与 HTTPS 的登录、refresh、重启后恢复。
+  - 用真实浏览器和移动端分别验证 HTTP 与 HTTPS 的登录、refresh、重启后恢复。
 
 #### P1-6：镜像标签允许旧版本继续运行，当前公网已出现部署漂移
 
@@ -160,7 +159,7 @@
   - 当前公网 /version 返回旧的 0.1.5-rc.1/local 信息，而源码已经包含 v2 路径。
 - 影响：
   - 源码修复后部署仍可能拉到旧镜像，造成“代码已修复但外网仍离线”的误判。
-  - gateway、桌面端、移动端和 API 实际运行的协议版本不可确认。
+  - gateway、Web、移动端和 API 实际运行的协议版本不可确认。
 - 完成条件：
   - 使用不可变版本或 digest，部署记录 image digest、commitSha、buildTime。
   - 部署后自动校验 /version、/health/ready、v2 探针和一条已认证同步链路。
@@ -232,7 +231,7 @@
 2. 冻结 API 版本职责：
    - v1：bootstrap、login、refresh、logout、me、native challenge，以及暂时保留的 rollover/undo。
    - v2：tree、task、workflow、snapshot、pull、push、status、WebSocket。
-   - 如果决定把认证整体迁移到 v2，必须一次性同步服务端、Web、Electron、Android、cookie、CORS 和 OpenAPI，不允许只移动一部分。
+   - 如果决定把认证整体迁移到 v2，必须一次性同步服务端、Web、Android、cookie、CORS 和 OpenAPI，不允许只移动一部分。
 3. 增加契约测试，要求每个客户端调用点显式声明 v1/v2，并在测试中断言最终 URL、状态码、错误类型和响应 schema。
 4. 先补齐真实 PostgreSQL、迁移、重启、并发和网络故障的测试夹具；不要把内存 store、mock fetch 或静态 build 当成完整验收。
 
@@ -253,12 +252,12 @@
 4. 把 challenge、sync_changes、client_mutations 等清理改成有上限的后台/批处理任务，并增加索引与积压告警。
 5. 增加进程 supervisor、结构化 fatal 日志、优雅 drain、HTTP request/socket timeout、WebSocket 限流和心跳。
 
-### 阶段 3：统一 Web、Electron、Android 连接语义
+### 阶段 3：统一 Web、Android 连接语义
 
-1. Web 和 Electron renderer 显式使用 v1 auth helper 与 v2 data/sync helper，修复 /me、refresh、rollover/undo 等路径。
-2. 统一 cookie Path 和公开 scheme；覆盖直接 HTTP、反向代理 HTTPS、Electron custom scheme 三种场景。
+1. Web renderer 显式使用 v1 auth helper 与 v2 data/sync helper，修复 /me、refresh、rollover/undo 等路径。
+2. 统一 cookie Path 和公开 scheme；覆盖直接 HTTP 与反向代理 HTTPS 两种场景。
 3. Android 修正 status endpoint、去除不可更新的硬编码地址，保留本地 outbox，并实现网络/认证/协议/服务端错误分类。
-4. 为 Web、Electron、Android 增加有上限、可取消、带抖动的重连；WebSocket 解析错误不能破坏整个同步状态机。
+4. 为 Web、Android 增加有上限、可取消、带抖动的重连；WebSocket 解析错误不能破坏整个同步状态机。
 5. 客户端 UI 只有在真正网络不可达或超时才显示 OFFLINE；协议不兼容和认证过期必须给出不同提示。
 
 ### 阶段 4：修复生产部署与外网 HTTP 链路
@@ -279,9 +278,8 @@
 4. **数据库故障**：停止/恢复 PostgreSQL、阻断连接、制造慢查询/锁等待、耗尽 pool；确认 live、ready、API 超时和恢复行为符合定义。
 5. **部署故障**：首次部署、漏跑 migration、应用重启、数据库重启、gateway 重启、旧镜像误部署、升级和回滚；确认版本探针能阻止错误发布。
 6. **真实外网 HTTP**：在非同机网络验证 live、ready、version、v2 status、登录、refresh、snapshot、push、pull 和 WebSocket；验证 NAT/公网端口/代理超时。
-7. **桌面端**：Electron 在 HTTP 和 HTTPS 下登录、退出、refresh、重启恢复、网络断开/恢复、API 重启期间同步。
-8. **移动端**：真实 Android 设备验证 HTTP 和 HTTPS 登录、首次 snapshot、push/pull、杀进程重启、切换网络、飞行模式恢复，以及 401/404/503 的提示分类。
-9. **多实例可选验收**：两个 API 实例轮询或负载均衡，验证任意实例都能用数据库 cursor 完成 pull 和 WebSocket 唤醒。
+7. **移动端**：真实 Android 设备验证 HTTP 和 HTTPS 登录、首次 snapshot、push/pull、杀进程重启、切换网络、飞行模式恢复，以及 401/404/503 的提示分类。
+8. **多实例可选验收**：两个 API 实例轮询或负载均衡，验证任意实例都能用数据库 cursor 完成 pull 和 WebSocket 唤醒。
 
 ## 4. 最终验收门槛
 
@@ -291,9 +289,9 @@
 - 数据库不可用时 ready 正确失败、请求有界超时；数据库恢复后服务能自动恢复，不需要客户端删除本地数据。
 - API 重启、实例切换后，旧 cursor 不会静默漏变更；重复 mutation 不会重复落库。
 - 公网 /version、/health/ready、v2 status 和已认证 v2 sync 均与当前源码版本一致。
-- Web、Electron、Android 在外网 HTTP 下均能完成 login、refresh、snapshot、push、pull；HTTPS 场景也有明确且一致的行为。
+- Web、Android 在外网 HTTP 下均能完成 login、refresh、snapshot、push、pull；HTTPS 场景也有明确且一致的行为。
 - 真实网络不可达才显示 OFFLINE；404、401/403、协议不兼容、503 和 5xx 不得伪装成网络离线。
-- 本地测试、typecheck、lint、OpenAPI、真实 PostgreSQL、真实浏览器/桌面端、真实 Android、外网和长时间运行的证据分别记录，不能用其中一类替代另一类。
+- 本地测试、typecheck、lint、OpenAPI、真实 PostgreSQL、真实浏览器、真实 Android、外网和长时间运行的证据分别记录，不能用其中一类替代另一类。
 
 ## 5. 迁移、发布与回滚约束
 
@@ -305,4 +303,4 @@
 
 ## 6. 交给下一个任务的一句话提示词
 
-请严格按 docs/HUB_CONNECTIVITY_STABILITY_PLAN.md 在保留当前脏工作树的前提下实施并验证中枢长期稳定性、v1/v2 契约统一、PostgreSQL 持久化游标、外网 HTTP、Web/Electron/Android 连接与错误分类，优先修复 P0/P1，完成真实 PostgreSQL、重启/故障注入、外网、桌面端、Android 和长时间 soak 验收，并逐项报告 PASS/FAIL/NOT RUN/NOT PROVEN，未经明确授权不要发布或打 tag。
+请严格按 docs/HUB_CONNECTIVITY_STABILITY_PLAN.md 在保留当前脏工作树的前提下实施并验证中枢长期稳定性、v1/v2 契约统一、PostgreSQL 持久化游标、外网 HTTP、Web/Android 连接与错误分类，优先修复 P0/P1，完成真实 PostgreSQL、重启/故障注入、外网、Android 和长时间 soak 验收，并逐项报告 PASS/FAIL/NOT RUN/NOT PROVEN，未经明确授权不要发布或打 tag。

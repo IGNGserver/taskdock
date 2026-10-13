@@ -13,8 +13,8 @@ apps/mobile/android/.gradle/
 apps/mobile/android/app/build/
 apps/mobile/android/build/
 apps/mobile/android/local.properties
-apps/desktop/out/
-apps/desktop/release/
+archive/desktop-client/**/out/
+archive/desktop-client/**/release/
 *.keystore
 *.jks
 apps/mobile/android/signing/*.properties

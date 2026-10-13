@@ -11,6 +11,7 @@ export default tseslint.config(
       '**/coverage/**',
       '**/android/**',
       '**/release/**',
+      'archive/desktop-client/**',
       '**/test-results/**',
     ],
   },
@@ -29,12 +30,6 @@ export default tseslint.config(
       'import/order': 'off',
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
-    },
-  },
-  {
-    files: ['apps/desktop/src/preload.cts'],
-    rules: {
-      '@typescript-eslint/no-require-imports': 'off',
     },
   },
   {

@@ -15,21 +15,19 @@ TaskDock 是一个为个人开发者准备的任务工作台。
 - **项目和全局任务统一管理**：项目功能、项目杂项和不属于任何项目的事情可以放在一起管理。
 - **开发备注**：每个任务都可以保存 Markdown 笔记，适合记录思路、命令、链接和处理过程。
 - **离线优先**：中枢暂时不可用时，客户端仍可继续处理本地已有内容；恢复连接后再同步。
-- **多端使用**：同一套数据可通过浏览器、桌面客户端和 Android 客户端访问。
+- **多端使用**：同一套数据可通过浏览器和 Android 客户端访问；浏览器界面会按屏幕尺寸响应式适配。
 - **自己掌握数据**：数据存放在你自己的服务器和 PostgreSQL 数据库中，不依赖第三方任务平台。
 
-## 下载客户端
+## 下载与部署
 
-请前往 GitHub 的 [Releases](https://github.com/IGNGserver/taskdock/releases) 页面下载客户端安装包。
+请前往 GitHub 的 [Releases](https://github.com/IGNGserver/taskdock/releases) 页面下载 Android APK，或使用 Docker 镜像部署中枢。
 
-每个版本会尽量提供当前已支持平台的安装包：
+每个版本的 Release 附件只有：
 
-- **Windows**：安装程序（`.exe`）
-- **Linux**：桌面客户端压缩包（`.tar.gz`）
 - **Android**：APK 安装包（`.apk`）
-- **Docker**：服务器镜像，可用于部署 TaskDock 中枢
+- **Source code (zip)** 和 **Source code (tar.gz)**：GitHub 根据标签自动生成的源代码归档
 
-macOS 和 iOS 客户端尚未作为正式安装包发布。不要把“构建成功”理解为已经完成真实设备验收；请以每个版本发布说明中的平台状态为准。
+Docker 镜像单独发布到 GitHub Container Registry（GHCR），不是 Release 附件。网页端直接通过部署后的地址使用，无需另行安装桌面客户端。
 
 ## 最简单的使用方式：直接部署 Docker
 

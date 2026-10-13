@@ -30,8 +30,6 @@
     "server:smoke": "tsx scripts/server-smoke.ts",
     "perf:capacity": "tsx scripts/perf-capacity.ts",
     "release:gate": "tsx scripts/release-gate.ts",
-    "desktop:package": "pnpm brand:sync && pnpm --filter @devtodo/desktop package",
-    "desktop:test": "tsx scripts/desktop-security-smoke.ts",
     "android:assembleRelease": "pnpm brand:sync && tsx scripts/android-assemble.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "openapi:check": "tsx scripts/openapi-check.ts",

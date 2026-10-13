@@ -14,7 +14,7 @@
 
 因此，`Task` 与 `Placement` 必须分离。把任务“复制到明天”表示为同一个任务新增一条明日安排；只有明确执行“复制任务”时，才创建新的任务记录。任务在任意页面完成后，所有安排位置必须同时显示完成状态。
 
-V1 采用单用户、自托管架构：一个 Docker Compose 中枢提供 Web UI、REST API、增量同步、WebSocket 失效通知和 PostgreSQL 持久化；React Web UI 同时服务于浏览器、iOS PWA、Electron 桌面端和 Capacitor Android 端。Web UI 是唯一产品界面，Electron 与 Android 仅提供安全容器和少量平台能力。
+V1 采用单用户、自托管架构：一个 Docker Compose 中枢提供 Web UI、REST API、增量同步、WebSocket 失效通知和 PostgreSQL 持久化；React Web UI 同时服务于浏览器、iOS PWA 和 Capacitor Android 端。Web UI 是唯一产品界面；Android 只提供必要的平台能力，浏览器大屏布局保持响应式适配。
 
 V1 的五个一级产品概念固定为：
 
@@ -34,7 +34,7 @@ V1 的五个一级产品概念固定为：
 - 让项目功能、项目杂项和全局杂项处在同一套任务模型中，保持结构简单。
 - 让任务备注承担轻量开发笔记的作用，可靠支持 Markdown、代码块、列表、链接和任务引用 ID。
 - 在网络不稳定或中枢暂时离线时立即打开已有数据，并允许继续创建、编辑、完成和安排任务。
-- 用一套响应式 Web UI 覆盖浏览器、iOS PWA、Electron 和 Android，避免四套界面分叉。
+- 用一套响应式 Web UI 覆盖浏览器、iOS PWA 和 Android，避免多套界面分叉。
 - 用 Docker Compose 完成可备份、可升级、可恢复的自托管部署。
 
 ### 2.2 成功标准
@@ -44,7 +44,7 @@ V1 的五个一级产品概念固定为：
 - 在任一视图完成该任务后，其余所有视图在本地立即更新，并在其他在线客户端同步后更新。
 - 离线创建的任务、备注和安排在恢复网络后不丢失、不重复，并可明确处理版本冲突。
 - 中枢重启或升级不会丢失数据；备份与恢复流程经过实际演练。
-- Web、PWA、桌面端和 Android 端使用同一套领域规则，不因容器不同产生不同数据语义。
+- Web、PWA 和 Android 端使用同一套领域规则，不因设备尺寸或平台不同产生不同数据语义。
 
 ### 2.3 产品原则
 
@@ -78,7 +78,6 @@ V1 的五个一级产品概念固定为：
 | “复制任务” | 新建 Task | 新引用 ID、状态重置为 `TODO`，复制标题、分类、项目、优先级和备注，不复制安排 |
 | 数据同步 | 增量 change feed + 客户端 outbox | 不引入 CRDT；使用版本号、幂等 mutation ID 和显式冲突处理 |
 | Web 实时性 | WebSocket 失效通知 | WebSocket 断开时由前台轮询、窗口聚焦和网络恢复触发拉取兜底 |
-| 桌面端 | Electron，加载打包后的本地 Web 资源 | 禁止启用 Node integration，禁止从中枢加载可执行前端代码 |
 | Android | Capacitor 容器 | 与 Web 共用构建产物和领域逻辑；不另写一套原生 UI |
 | iOS | PWA 安装 | V1 不交付 iOS App Store 原生包 |
 | 删除 | 主界面只提供归档与恢复 | 内部保留同步 tombstone；V1 不提供不可恢复的批量硬删除 UI |
@@ -118,7 +117,6 @@ V1 的五个一级产品概念固定为：
 - 浏览器响应式 Web UI。
 - 可安装 PWA，iOS Safari 可“添加到主屏幕”。
 - IndexedDB 本地数据库、离线读写、outbox、增量拉取、全量重同步和冲突处理。
-- Electron 桌面包，含全局快速添加快捷键。
 - Capacitor Android 包，处理返回键、网络变化、应用前后台和安全令牌存储。
 
 #### 中枢与运维
@@ -138,7 +136,7 @@ V1 的五个一级产品概念固定为：
 - 原生 iOS 应用、Apple App Store 发布和 Apple Watch 客户端。
 - 端到端加密、本地 PIN 锁和跨用户密钥共享。
 - 自定义任务分类、无限层级子任务、标签体系和自定义字段。
-- 自动更新服务；V1 桌面端采用有校验和的手动更新包。
+- 桌面原生安装包及其自动更新服务；浏览器端随 Web/PWA 应用壳更新。
 
 ### 4.3 V1.1 候选能力
 
@@ -146,7 +144,6 @@ V1 的五个一级产品概念固定为：
 - 一级子任务，但仍复用 `Task`，不创建独立“功能”对象。
 - 截止日期，必须作为独立于 Placement 的字段与提醒语义设计。
 - 事件时间点自动触发器。
-- 桌面端自动更新与正式代码签名流程。
 - Android 本地通知与共享菜单快速添加。
 - 加密导出、导入和用户可见的回收站清理策略。
 
@@ -378,7 +375,6 @@ ARCHIVED --restore------> WAITING or REACHED
 ```mermaid
 flowchart TD
     Browser[Browser / iOS PWA]
-    Desktop[Electron Desktop]
     Android[Capacitor Android]
     LocalDB[(IndexedDB / Dexie)]
     Gateway[HTTPS Gateway]
@@ -386,10 +382,8 @@ flowchart TD
     PG[(PostgreSQL 18)]
 
     Browser --> LocalDB
-    Desktop --> LocalDB
     Android --> LocalDB
     Browser -->|HTTPS/WSS| Gateway
-    Desktop -->|HTTPS/WSS| Gateway
     Android -->|HTTPS/WSS| Gateway
     Gateway --> App
     App --> PG
@@ -413,10 +407,9 @@ flowchart TD
 | 运行时契约 | Zod | 前后端共享 DTO、环境变量和 mutation 校验 |
 | 数据访问 | Drizzle ORM + SQL migration | 禁止运行时自动改表；复杂约束使用显式 SQL migration |
 | 数据库 | PostgreSQL 18 | 固定 18.x 补丁版本；数据库端口默认不暴露到宿主公网 |
-| 桌面 | Electron + Electron Forge | 本地打包 Web 资源；安全 preload 暴露最小能力 |
 | Android | Capacitor 8 | 使用同一 Web 构建；平台能力通过适配器注入 |
 | 单元测试 | Vitest + Testing Library | 领域、同步和组件行为 |
-| 端到端 | Playwright | Web、多浏览器上下文和 Electron 核心流程 |
+| 端到端 | Playwright | Web、多浏览器上下文和 PWA 核心流程 |
 | 集成测试 | Testcontainers/PostgreSQL | 使用真实 PostgreSQL 验证迁移、事务和约束 |
 
 所有三方依赖在 M0 初始化时选择互相兼容的稳定版本，提交精确 lockfile。后续升级按独立变更处理，不在功能提交中顺带升级大版本。
@@ -428,7 +421,6 @@ todo-list工具/
 ├── apps/
 │   ├── api/                 # Fastify API、WebSocket、静态 Web 托管
 │   ├── web/                 # React SPA 与 PWA
-│   ├── desktop/             # Electron main/preload/打包配置
 │   └── mobile/              # Capacitor Android 工程与平台适配
 ├── packages/
 │   ├── contracts/           # Zod DTO、mutation、错误码和共享枚举
@@ -845,7 +837,7 @@ Sidebar 固定结构：
 - Markdown 预览保持正确标题层级，外部链接显式标识并安全打开。
 - 尊重 `prefers-reduced-motion`，关闭非必要位移动画。
 
-## 11. Web、PWA、Electron 与 Android 实现边界
+## 11. Web、PWA 与 Android 实现边界
 
 ### 11.1 Web/PWA
 
@@ -856,17 +848,12 @@ Sidebar 固定结构：
 - iOS PWA 验收包含添加到主屏幕、standalone 打开、安全区、离线启动、恢复联网同步和版本升级。
 - 不依赖 Background Sync API 保证写入；核心同步必须在前台生命周期中可靠完成。
 
-### 11.2 Electron
+### 11.2 浏览器大屏布局
 
-- 只加载打包进应用的本地 Web 资源，使用自定义安全协议，不使用任意远程页面作为主界面。
-- `nodeIntegration: false`、`contextIsolation: true`、`sandbox: true`、`webSecurity: true`。
-- preload 只暴露版本信息、安全凭据读写、窗口控制、全局快捷键和受控外链打开。
-- 每个 IPC handler 校验 sender、参数 schema 和目标 URL allowlist。
-- 禁止 renderer 直接读取文件系统、执行 shell 或获得原始 `ipcRenderer`。
-- 中枢地址只允许 HTTPS；开发模式可显式允许 localhost HTTP，生产包不可关闭 TLS 校验。
-- refresh token 使用操作系统安全存储；access token 只保存在内存。
-- 导航和新窗口默认拒绝；外部链接经 `https:` 校验后交给系统浏览器。
-- 首发至少生成 Windows x64 安装包；Linux 包作为同源构建产物。macOS 签名包只有在可用 macOS runner 和证书条件满足时进入正式验收。
+- 浏览器直接加载同源 Web/PWA 资源，不依赖原生窗口或自定义协议。
+- 使用响应式断点、Navigation Drawer/Rail 和非模态任务详情，覆盖宽屏鼠标、键盘和触摸输入。
+- 浏览器会话使用 HttpOnly refresh Cookie；access token 只保存在内存。
+- PWA 应用壳通过带内容哈希的静态资源更新；不生成或维护桌面安装包。
 
 ### 11.3 Android/Capacitor
 
@@ -884,7 +871,7 @@ Sidebar 固定结构：
 - 密码使用 Argon2id；参数在目标中枢硬件上标定并记录，单次验证目标约 250 至 500ms。
 - access token 短时有效并只存内存；refresh token 为高熵不透明随机值，服务器只保存哈希。
 - 浏览器/PWA 的 refresh token 使用 `Secure`、`HttpOnly`、`SameSite=Lax` Cookie。
-- Electron/Android 通过平台安全存储保存 refresh token，并通过 Authorization header 使用 access token。
+- Android 通过平台安全存储保存 refresh token，并通过 Authorization header 使用 access token；浏览器使用 HttpOnly Cookie 保存 refresh session。
 - refresh token 每次使用都轮换；发现旧 token 重放时撤销整条会话链并要求重新登录。
 - 登录、bootstrap 和 refresh 端点实施按 IP 与用户名维度的速率限制。
 
@@ -998,7 +985,7 @@ Sidebar 固定结构：
 
 - Web：最新两个稳定大版本的 Chromium、Firefox、Safari。
 - iOS PWA：当前与前一主要 iOS Safari 版本，受实际设备条件约束。
-- Desktop：Windows 11 x64 为必测平台；Linux x64 构建和启动 smoke test。
+- Web 大屏：最新两个稳定版本的 Chromium、Firefox、Safari，覆盖鼠标、键盘和非模态详情布局。
 - Android：当前与前一主要 Android WebView/Chrome 版本，最低 SDK 由 Capacitor 8 官方要求确定并记录。
 - 服务端镜像：`linux/amd64` 必须交付；`linux/arm64` 在 CI runner 和所有原生依赖通过时一并交付。
 
@@ -1059,13 +1046,6 @@ Sidebar 固定结构：
 
 ### 15.5 原生容器验收
 
-#### Electron
-
-- Windows 11 实机安装、登录、离线启动、同步、深链、外链和卸载。
-- 全局快捷键在主窗口关闭和最小化时都可打开快速捕获。
-- renderer 无法访问 Node、任意 IPC 或非 allowlist 导航。
-- Windows 安装包哈希与发布清单一致。
-
 #### Android
 
 - 真实 Android 设备安装 release APK。
@@ -1094,8 +1074,6 @@ pnpm test:integration
 pnpm test:e2e
 pnpm build
 pnpm compose:smoke
-pnpm desktop:package
-pnpm desktop:test
 pnpm android:assembleRelease
 ```
 
@@ -1107,7 +1085,7 @@ pnpm android:assembleRelease
 - 代码中不得提交秘密、测试账户真实密码、关闭安全检查的生产配置或未实现的生产路径。
 - 所有 API 输入均有 schema；所有数据库迁移有向前验证与恢复说明。
 - `git diff --check` 必须 PASS；只提交任务相关文件。
-- CI/build PASS 不能代替 Windows、Android、iOS PWA 和长期离线恢复的实机验收。
+- CI/build PASS 不能代替 Android、iOS PWA 和长期离线恢复的实机验收。
 
 ## 17. 分阶段实施计划
 
@@ -1120,13 +1098,13 @@ pnpm android:assembleRelease
 - 初始化 Git、pnpm workspace、Node 24 版本约束和根脚本。
 - 创建 apps/packages/infra/docs 目录与 import boundary。
 - 配置 TypeScript strict、ESLint、格式化、Vitest 和 CI。
-- 创建最小 React、Fastify、Electron、Capacitor 工程并证明可独立构建。
+- 创建最小 React、Fastify、Capacitor 工程并证明可独立构建。
 - 建立 `docs/STATUS.md`，逐项记录阶段、命令和证据。
 - 固定依赖与容器基础镜像，提交 lockfile。
 
 退出条件：
 
-- 四个 app 均有非占位的启动入口。
+- 各活动 app 均有非占位的启动入口。
 - 根目录 lint、typecheck、test、build PASS。
 - API live health 和 Web 空壳可本地访问。
 - 无业务 UI 伪实现冒充功能完成。
@@ -1202,21 +1180,15 @@ pnpm android:assembleRelease
 - PWA 更新不覆盖未保存草稿。
 - iOS 实机条件不可用时该项只能标记 NOT RUN，WebKit 模拟结果单独记录。
 
-### M5：Electron 桌面端（3—5 日）
+### M5：响应式 Web/PWA（已完成）
 
-实施内容：
-
-- 集成本地 Web 构建、自定义协议、安全 preload 和平台凭据适配。
-- 实现中枢地址配置、全局快速添加、单实例与窗口恢复。
-- 限制导航、外链、权限、IPC 和 CSP；启用 Electron 安全检查。
-- 生成 Windows 安装包和 Linux 构建产物，记录校验和。
-- 完成 Electron Playwright smoke 与 Windows 实机测试。
+当前交付使用浏览器和可安装 PWA，不维护桌面原生安装包。宽屏布局、鼠标/键盘操作、非模态详情和窄屏导航分别由响应式 Web 组件与浏览器 E2E 验证；历史桌面客户端源码保存在 `archive/desktop-client/`，不再进入 workspace、构建或 Release。
 
 退出条件：
 
-- Electron 安全清单相关配置有自动断言。
-- Windows 安装、登录、离线、同步和全局快速添加 PASS。
-- renderer 无 Node 权限，外部页面不能调用 preload 能力。
+- 浏览器大屏和窄屏布局共享同一领域与同步实现。
+- Web/PWA 离线读写、同步、冲突和应用壳更新按第 15 节记录真实状态。
+- Release 只提供 Android APK 与 GitHub 默认源代码归档，不生成桌面包或校验和文件。
 
 ### M6：Capacitor Android（3—5 日）
 
@@ -1243,7 +1215,7 @@ pnpm android:assembleRelease
 - 完成备份、校验、临时卷恢复演练和数据不变量检查。
 - 完成安全复核、依赖审计、容量基准和可访问性复核。
 - 完成 README、架构、API、同步、部署、备份、安全和测试文档。
-- 生成镜像、Compose bundle、Windows 包、Linux 包、Android APK 和 SHA-256 清单。
+- 生成镜像、Compose bundle 和 Android APK；GitHub Release 只上传 APK，源代码归档由 GitHub 自动生成。
 
 退出条件：
 
@@ -1270,7 +1242,7 @@ pnpm android:assembleRelease
 12. 客户端 A 离线修改 Note，客户端 B 在线修改同一 Note；A 上线后应出现双版本冲突界面并可合并保存。
 13. 离线创建新任务并关闭应用；重新打开仍可见，联网后在第二客户端出现且只有一份。
 14. 归档项目，确认默认视图隐藏但归档搜索可找到；恢复后原 Task、Note 和 Placement 完整。
-15. 安装 Windows 包，使用全局快捷键快速创建任务，完成离线和同步流程。
+15. 在浏览器大屏布局中完成鼠标/键盘操作、非模态详情、离线和同步流程。
 16. 安装 Android release APK，完成长按“复制到”和系统返回键验收。
 17. 在 iOS Safari 安装 PWA，完成离线创建与恢复同步。
 18. 生成 PostgreSQL 备份，在新数据卷恢复，重新运行第 8 项的数据计数与内容抽样。
@@ -1308,10 +1280,9 @@ pnpm android:assembleRelease
 | Note 多设备覆盖 | 中 | 高 | Note 独立 version；409 保留双方内容；冲突界面禁止静默覆盖 |
 | 日期受 UTC/时区影响错位 | 中 | 高 | DATE 使用本地 `DATE`；IANA 时区；跨午夜和夏令时测试 |
 | PWA 后台能力在 iOS 受限 | 高 | 中 | 不依赖后台同步；前台、online、focus 和定时触发；明确同步状态 |
-| Electron XSS 升级为本地代码执行 | 中 | 极高 | 本地打包内容、Node integration 关闭、context isolation、sandbox、IPC/sender/导航 allowlist |
 | 首次部署被远程抢注 Owner | 中 | 极高 | 随机 bootstrap token、事务锁、一次成功后永久关闭 |
 | 运行时 migration 导致数据损坏 | 低 | 极高 | 显式 migration job、升级前备份、兼容迁移和临时卷恢复演练 |
-| Android/桌面 token 泄漏 | 中 | 高 | 平台安全存储、access token 仅内存、日志脱敏和自动检查 |
+| Android token 泄漏 | 中 | 高 | 平台安全存储、access token 仅内存、日志脱敏和自动检查 |
 | 视觉开发挤占核心正确性 | 中 | 中 | 先完成 design token 与低噪声基础组件；不在 V1 添加装饰动画和主题扩展 |
 | 搜索在中文 Note 上性能下降 | 中 | 中 | pg_trgm、结果上限、基准数据测试；后续再评估专用搜索引擎 |
 | 原生签名条件缺失 | 高 | 中 | 分开报告“可构建/可安装”和“已正式签名”；签名证书不作为核心代码完成的假证据 |
@@ -1327,18 +1298,18 @@ pnpm android:assembleRelease
 - `docs/SYNC_PROTOCOL.md`：snapshot、cursor、mutation、幂等、冲突和恢复。
 - `docs/DEPLOYMENT.md`：生产 Compose、DNS、TLS、初始化、升级和回滚。
 - `docs/BACKUP_RESTORE.md`：完整可执行的备份、校验和临时卷恢复流程。
-- `docs/SECURITY.md`：威胁边界、秘密、Electron/Android 安全和漏洞报告方式。
+- `docs/SECURITY.md`：威胁边界、秘密、Web/Android 安全和漏洞报告方式。
 - `docs/TEST_REPORT.md`：自动化、Compose、性能与实机门禁的 PASS/FAIL/NOT RUN 证据。
 - `CHANGELOG.md`：用户可见变化、迁移要求和已知限制。
 - `compose.yaml`、`.env.example` 和固定镜像说明。
-- Web/PWA 构建、服务端镜像、Windows 安装包、Linux 包、Android release APK 和 SHA-256 清单。
+- Web/PWA 构建、服务端镜像和 Android release APK；GitHub 默认提供 Source code ZIP/tar.gz，不生成 SHA-256 清单。
 
 ## 22. 需求追踪矩阵
 
 | 原始意图 | 本规划落点 | 主要验收 |
 |---|---|---|
 | Docker Compose 部署中枢 | 第 13、17、18 节 | 全新部署、升级、健康检查、备份恢复 |
-| 电脑 Electron/WebView 客户端 | 第 11.2、15.5、M5 | Windows 实机、全局快速添加、安全隔离 |
+| 浏览器大屏 Web 客户端 | 第 11.2、15.3、M5 | 响应式布局、鼠标/键盘操作、非模态详情 |
 | 手机网页套壳 Android | 第 11.3、15.5、M6 | release APK、长按操作、离线同步 |
 | Web UI 与 iOS PWA | 第 10、11.1、M2、M4 | 响应式、主屏安装、飞行模式恢复 |
 | 项目与全局杂项 | 第 3、5、6、10 | 固定分类规则与全局 `MISC-n` |
@@ -1362,11 +1333,11 @@ pnpm android:assembleRelease
 6. 对安全、身份、同步冲突或数据迁移存在无法高置信决定的问题，写入 `NEEDS_SOL_REVIEW.md`，不要用猜测掩盖风险。
 7. 保留用户已有改动；只修改当前阶段需要的文件，不重置、清理或覆盖无关工作。
 8. 阶段末运行相关质量门禁；最终运行第 16 节全部可运行命令。
-9. 最终报告必须逐项给出 `PASS`、`FAIL` 或 `NOT RUN`。构建成功不能代替浏览器、Windows、Android、iOS PWA 或备份恢复验收。
+9. 最终报告必须逐项给出 `PASS`、`FAIL` 或 `NOT RUN`。构建成功不能代替浏览器、Android、iOS PWA 或备份恢复验收。
 
 可直接交给下一对话的任务文本：
 
-> 请在 `/home/<user>/项目/todo-list工具` 中完整阅读并执行 `DEVELOPMENT_PLAN.md`。从 M0 开始实施，不要只给方案、示例代码或待办清单。按阶段落盘完整代码、数据库迁移、测试与文档，持续运行对应门禁并更新 `docs/STATUS.md`。严格保持 Task 与 Placement 分离、任务状态全局唯一、事件状态独立、离线 mutation 幂等和版本冲突可恢复。除非遇到需要新增权限、真实签名材料或会改变产品模型的阻塞决策，否则自行做合理的工程选择继续推进。最终逐项报告 PASS、FAIL、NOT RUN，并区分自动化/构建证据与浏览器、Windows、Android、iOS PWA、备份恢复的真实验收。
+> 请在 `/home/<user>/项目/todo-list工具` 中完整阅读并执行 `DEVELOPMENT_PLAN.md`。从 M0 开始实施，不要只给方案、示例代码或待办清单。按阶段落盘完整代码、数据库迁移、测试与文档，持续运行对应门禁并更新 `docs/STATUS.md`。严格保持 Task 与 Placement 分离、任务状态全局唯一、事件状态独立、离线 mutation 幂等和版本冲突可恢复。除非遇到需要新增权限、真实签名材料或会改变产品模型的阻塞决策，否则自行做合理的工程选择继续推进。最终逐项报告 PASS、FAIL、NOT RUN，并区分自动化/构建证据与浏览器、Android、iOS PWA、备份恢复的真实验收。
 
 ## 24. 规划依据与版本核对
 
@@ -1378,6 +1349,5 @@ pnpm android:assembleRelease
 - [Fastify Documentation](https://fastify.dev/docs/latest/)
 - [Dexie Offline-First Documentation](https://dexie.org/docs/Dexie.js)
 - [Capacitor Documentation](https://capacitorjs.com/docs)
-- [Electron Security Checklist](https://www.electronjs.org/docs/latest/tutorial/security)
 
 Node.js 24 与 PostgreSQL 18 是本文日期下的受支持基线。框架和库的具体补丁版本以 M0 实际解析、兼容性验证并提交的 lockfile 为准；任何未来大版本升级都必须独立验证迁移和多端构建。

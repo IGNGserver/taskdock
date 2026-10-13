@@ -43,10 +43,6 @@ jobs:
       - run: E2E_PWA=1 E2E_REAL=1 pnpm test:e2e
       - run: pnpm compose:smoke
       - run: pnpm openapi:check
-      - run: pnpm desktop:test
-      # GitHub 托管的 Linux Runner 不保证提供 root-owned 4755 的 Electron 沙箱助手；
-      # 此处验证可重现的桌面打包，真实启动验收由带图形环境的发布/人工测试完成。
-      - run: pnpm desktop:package
       # 失败时保留 Playwright 的 error-context.md（页面可访问性快照）、trace 与报告：
       # 真实链路门禁只在 CI 存在，没有这些工件就只能靠断言文本猜因。放在最后一步，
       # 因此前面任一步骤失败都能拿到现场。

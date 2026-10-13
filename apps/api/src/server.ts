@@ -133,7 +133,7 @@ const defaultConfig: AppConfig = {
     .filter(Boolean),
   nativeAllowedOrigins: (
     process.env['NATIVE_ALLOWED_ORIGINS'] ??
-    'devtodo://app,capacitor://localhost,https://localhost,http://localhost'
+    'capacitor://localhost,https://localhost,http://localhost'
   )
     .split(',')
     .map((origin) => origin.trim())
@@ -1970,7 +1970,6 @@ function validateRuntimeConfig(config: AppConfig): void {
         return !(
           ((parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
             parsed.hostname === 'localhost') ||
-          (parsed.protocol === 'devtodo:' && parsed.hostname === 'app') ||
           (parsed.protocol === 'capacitor:' && parsed.hostname === 'localhost')
         );
       } catch {

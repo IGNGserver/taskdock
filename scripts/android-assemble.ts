@@ -1,5 +1,4 @@
-import { createHash } from 'node:crypto';
-import { access, readdir, readFile, writeFile } from 'node:fs/promises';
+import { access, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -69,15 +68,7 @@ async function main(): Promise<void> {
       throw new Error(`APK 签名验证失败：${apkPath}\n${verify.stdout}\n${verify.stderr}`);
     }
   }
-  const manifest = files.map(async (file) => {
-    const bytes = await readFile(join(outputDir, file));
-    const digest = createHash('sha256').update(bytes).digest('hex');
-    return `${digest}  ${file}`;
-  });
-  const lines = await Promise.all(manifest);
-  await writeFile(join(outputDir, 'SHA256SUMS'), `${lines.join('\n')}\n`, 'utf8');
   console.log(`PASS: Android signed release assembled and verified in ${outputDir}`);
-  console.log(lines.join('\n'));
 }
 
 void main().catch((error: unknown) => {
