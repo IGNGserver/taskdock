@@ -144,25 +144,55 @@ function taskStatusClass(status: TaskStatus): string {
  * Swap a placement with its nearest same-status sibling. Status-grouped lists
  * only ever move a row inside its own group, but the reorder API validates the
  * id list against the whole time point, so the returned order still covers
- * every placement.
+ * every placement. `statusOf` carries the frozen group assignment so a move
+ * follows the group the row is currently displayed in.
  */
 function movePlacementWithinStatus(
   items: PlacementWithTask[],
   placementId: string,
   direction: 'up' | 'down',
+  statusOf: (item: PlacementWithTask) => TaskStatus = (item) => item.task.status,
 ): PlacementWithTask[] | null {
   const index = items.findIndex((item) => item.id === placementId);
   if (index < 0) return null;
-  const { status } = items[index]!.task;
+  const status = statusOf(items[index]!);
   const step = direction === 'up' ? -1 : 1;
   let target = index + step;
-  while (target >= 0 && target < items.length && items[target]!.task.status !== status) {
+  while (target >= 0 && target < items.length && statusOf(items[target]!) !== status) {
     target += step;
   }
   if (target < 0 || target >= items.length) return null;
   const next = [...items];
   [next[index], next[target]] = [next[target]!, next[index]!];
   return next;
+}
+
+/**
+ * Freeze each placement's status-group membership for as long as the page
+ * stays open (or until the time point changes). Toggling a status then updates
+ * the row in place, and the list only re-sorts on the next visit; without this
+ * a completed row jumps into 已完成 the moment its circle is tapped.
+ */
+function useFrozenStatusGroup(
+  items: PlacementWithTask[],
+  pointId: string | undefined,
+): (item: PlacementWithTask) => TaskStatus {
+  const frozen = useRef<{ pointId: string | undefined; byPlacement: Map<string, TaskStatus> }>({
+    pointId,
+    byPlacement: new Map(),
+  });
+  if (frozen.current.pointId !== pointId) {
+    frozen.current = { pointId, byPlacement: new Map() };
+  }
+  for (const item of items) {
+    if (!frozen.current.byPlacement.has(item.id)) {
+      frozen.current.byPlacement.set(item.id, item.task.status);
+    }
+  }
+  return useCallback(
+    (item: PlacementWithTask) => frozen.current.byPlacement.get(item.id) ?? item.task.status,
+    [],
+  );
 }
 
 /**
@@ -1778,6 +1808,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       window.removeEventListener('devtodo:data-changed', listener);
     };
   }, [load]);
+  const statusOf = useFrozenStatusGroup(items, point?.id);
   if (loadedEventId !== eventId && loadError)
     return (
       <div className="page">
@@ -1805,7 +1836,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
     }
   };
   const movePlacement = async (placementId: string, direction: 'up' | 'down') => {
-    const next = movePlacementWithinStatus(items, placementId, direction);
+    const next = movePlacementWithinStatus(items, placementId, direction, statusOf);
     if (!next) return;
     try {
       await mutationV2('POST', `/time-points/${point.id}/placements/reorder`, {
@@ -1910,6 +1941,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         items={items}
         pointId={point.id}
         groupByStatus
+        statusOf={statusOf}
         onOpenTask={onOpenTask}
         onChanged={load}
         onMove={movePlacement}
@@ -2240,6 +2272,7 @@ function PlacementList({
   emptyDescription,
   emptyAction,
   groupByStatus = false,
+  statusOf,
   readOnly = false,
 }: {
   items: PlacementWithTask[];
@@ -2253,6 +2286,8 @@ function PlacementList({
   emptyAction?: ReactNode;
   /** Render status sections (进行中 / 待开始 / 已完成), with completed collapsed. */
   groupByStatus?: boolean;
+  /** Frozen group assignment for grouped mode (see useFrozenStatusGroup). */
+  statusOf?: (item: PlacementWithTask) => TaskStatus;
   readOnly?: boolean;
 }) {
   const [dropError, setDropError] = useState('');
@@ -2343,7 +2378,7 @@ function PlacementList({
   const statusGroups = groupByStatus
     ? (['IN_PROGRESS', 'TODO', 'DONE'] as const).map((status) => ({
         status,
-        items: items.filter((item) => item.task.status === status),
+        items: items.filter((item) => (statusOf ? statusOf(item) : item.task.status) === status),
       }))
     : null;
   return (
@@ -3212,9 +3247,10 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       window.removeEventListener('devtodo:data-changed', listener);
     };
   }, [loadSelected]);
+  const statusOf = useFrozenStatusGroup(items, point?.id);
   const movePlacement = async (placementId: string, direction: 'up' | 'down') => {
     if (!point) return;
-    const next = movePlacementWithinStatus(items, placementId, direction);
+    const next = movePlacementWithinStatus(items, placementId, direction, statusOf);
     if (!next) return;
     await mutationV2('POST', `/time-points/${point.id}/placements/reorder`, {
       ids: next.map((item) => item.id),
@@ -3306,6 +3342,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               items={items}
               pointId={point?.id}
               groupByStatus
+              statusOf={statusOf}
               onOpenTask={onOpenTask}
               onChanged={loadSelected}
               onMove={movePlacement}

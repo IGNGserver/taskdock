@@ -338,7 +338,15 @@ fun DayScheduleScreen(
     var targetCopy by rememberSaveable { mutableStateOf(false) }
     var doneOpen by rememberSaveable { mutableStateOf(false) }
     val timezone = settings?.timezone ?: "Asia/Shanghai"
-    val statusGroups = remember(scheduled) { groupScheduledByStatus(scheduled) { it.first.status } }
+    // Status-group membership is frozen while this screen is open: toggling a
+    // status keeps the row in place, and the list re-sorts on the next visit.
+    val frozenStatusById = remember(localDate) { HashMap<String, TaskStatus>() }
+    val statusGroups =
+        remember(scheduled) {
+            groupScheduledByStatus(scheduled) { pair ->
+                frozenStatusById.getOrPut(pair.second.id) { pair.first.status }
+            }
+        }
     val scheduledIndexByPlacement =
         remember(scheduled) {
             scheduled.withIndex().associate { (index, pair) -> pair.second.id to index }
@@ -346,7 +354,10 @@ fun DayScheduleScreen(
 
     fun moveScheduled(placementId: String, direction: Int) {
         val fullIndex = scheduledIndexByPlacement[placementId] ?: return
-        val next = moveWithinTaskStatus(scheduled, fullIndex, direction) { it.first.status } ?: return
+        val next =
+            moveWithinTaskStatus(scheduled, fullIndex, direction) { pair ->
+                frozenStatusById[pair.second.id] ?: pair.first.status
+            } ?: return
         val pointId = point?.id ?: return
         viewModel.reorderPlacements(pointId, next.map { it.second.id })
     }
@@ -654,7 +665,15 @@ fun EventDetailScreen(
     var targetPlacement by remember { mutableStateOf<PlacementEntity?>(null) }
     var targetCopy by rememberSaveable { mutableStateOf(false) }
     var doneOpen by rememberSaveable { mutableStateOf(false) }
-    val statusGroups = remember(scheduled) { groupScheduledByStatus(scheduled) { it.first.status } }
+    // Status-group membership is frozen while this screen is open: toggling a
+    // status keeps the row in place, and the list re-sorts on the next visit.
+    val frozenStatusById = remember(eventId) { HashMap<String, TaskStatus>() }
+    val statusGroups =
+        remember(scheduled) {
+            groupScheduledByStatus(scheduled) { pair ->
+                frozenStatusById.getOrPut(pair.second.id) { pair.first.status }
+            }
+        }
     val scheduledIndexByPlacement =
         remember(scheduled) {
             scheduled.withIndex().associate { (index, pair) -> pair.second.id to index }
@@ -673,7 +692,10 @@ fun EventDetailScreen(
 
     fun moveScheduled(placementId: String, direction: Int) {
         val fullIndex = scheduledIndexByPlacement[placementId] ?: return
-        val next = moveWithinTaskStatus(scheduled, fullIndex, direction) { it.first.status } ?: return
+        val next =
+            moveWithinTaskStatus(scheduled, fullIndex, direction) { pair ->
+                frozenStatusById[pair.second.id] ?: pair.first.status
+            } ?: return
         viewModel.reorderPlacements(event.id, next.map { it.second.id })
     }
 
