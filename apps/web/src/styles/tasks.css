@@ -566,6 +566,21 @@
   background-color: var(--m3-primary);
 }
 
+/*
+ * A task that is already on the time point keeps the checked box so the row
+ * answers "should I add this?" at a glance, but the muted fill separates it
+ * from the user's own selection, which stays fully saturated.
+ */
+.task-picker-selection.is-existing {
+  border-color: color-mix(in srgb, var(--m3-primary) 55%, var(--m3-outline-variant));
+  background-color: color-mix(in srgb, var(--m3-primary) 45%, var(--m3-surface-container-highest));
+}
+
+.task-picker-added-chip {
+  pointer-events: none;
+  font-size: var(--m3-type-label-small-size);
+}
+
 /* Sits in the dialog's pinned footer, left of the confirm action. */
 .task-picker-selection-count {
   margin-inline-end: auto;
@@ -730,4 +745,107 @@
 .today-task-pane .task-row[aria-busy='true'] .task-main,
 .today-complete-pane .task-row[aria-busy='true'] .task-main {
   opacity: 0.62;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Task hover preview                                                         */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Desktop-only glance surface for a task row. It is portalled to the body and
+ * positioned against the row's viewport rect, so it is never clipped by the
+ * list's scroll container. `pointer-events: none` is load-bearing: the popover
+ * must not steal the hover that keeps it open.
+ */
+.task-hover-preview {
+  position: fixed;
+  z-index: 90;
+  display: grid;
+  gap: 10px;
+  max-block-size: min(320px, 60vh);
+  overflow: hidden auto;
+  padding: 12px 14px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-md);
+  background-color: var(--m3-surface-container-high);
+  color: var(--m3-on-surface);
+  box-shadow: var(--m3-elevation-3);
+  pointer-events: none;
+  animation: m3e-menu-in var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast) both;
+}
+
+.task-hover-preview__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.task-hover-preview__title {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--m3-type-title-small-size);
+  line-height: var(--m3-type-title-small-line);
+}
+
+.task-hover-preview__ref {
+  flex: none;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-label-small-size);
+}
+
+.task-hover-preview__section {
+  display: grid;
+  gap: 4px;
+}
+
+.task-hover-preview__label {
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-label-small-size);
+  font-weight: var(--m3-type-emphasized-weight);
+}
+
+.task-hover-preview__note {
+  margin: 0;
+  font-size: var(--m3-type-body-small-size);
+  line-height: var(--m3-type-body-small-line);
+}
+
+.task-hover-preview__muted {
+  margin: 0;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+}
+
+.task-hover-preview__steps {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-hover-preview__steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+  font-size: var(--m3-type-body-small-size);
+}
+
+.task-hover-preview__step-title {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-hover-preview__more {
+  color: var(--m3-on-surface-variant);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-hover-preview {
+    animation-name: m3e-fade-in;
+  }
 }

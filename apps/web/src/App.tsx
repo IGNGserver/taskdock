@@ -123,6 +123,7 @@ import {
 import { useDevice } from './device.js';
 import { useDismissibleMenu } from './components/m3e/behavior.js';
 import { PwaLifecycleNotice } from './pwa.js';
+import { TaskHoverPreviewRow, useTaskHoverPreview } from './components/task-hover-preview.js';
 import { TaskDetailV2Overlay, TreePage } from './TreePage.js';
 import { WorkflowsPage } from './WorkflowsPage.js';
 
@@ -2052,6 +2053,7 @@ function PlacementRow({
     if (id === 'copy') setTargetMode('copy');
   };
   const { isTouch } = useDevice();
+  const preview = useTaskHoverPreview(task, !isTouch);
   const swipe = useSwipeAction({
     disabled: readOnly || busy || !onToggleStatus || !isTouch,
     onSwipeRight: () => {
@@ -2065,6 +2067,8 @@ function PlacementRow({
 
   const rowContent = (
     <div
+      onPointerEnter={preview.anchorProps.onPointerEnter}
+      onPointerDownCapture={preview.anchorProps.onPointerDownCapture}
       className={`task-row${dragging ? ' dragging' : ''}${
         task.status === 'IN_PROGRESS' ? ' is-progress' : ''
       }${task.status === 'DONE' ? ' is-done' : ''}`}
@@ -2081,6 +2085,7 @@ function PlacementRow({
         swipe.handlers.onPointerUp(e);
       }}
       onPointerLeave={(e) => {
+        preview.anchorProps.onPointerLeave();
         cancelLongPress();
         swipe.handlers.onPointerCancel(e);
       }}
@@ -2158,7 +2163,13 @@ function PlacementRow({
     </div>
   );
 
-  if (!isTouch) return rowContent;
+  if (!isTouch)
+    return (
+      <>
+        {rowContent}
+        {preview.popover}
+      </>
+    );
 
   return (
     <div className={`task-swipe-shell${swipe.isSwiping ? ' is-swiping' : ''}`}>
@@ -2563,6 +2574,7 @@ function AddTaskModal({
   onClose: () => void;
   onAdded: () => void;
 }) {
+  const { isTouch } = useDevice();
   const [query, setQuery] = useState('');
   const [folderId, setFolderId] = useState<string | null>(null);
   const [items, setItems] = useState<TreeItemDto[]>([]);
@@ -2577,9 +2589,12 @@ function AddTaskModal({
   const [searchRetry, setSearchRetry] = useState(0);
   const [pickerLoading, setPickerLoading] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<Map<string, TreeTaskDto>>(() => new Map());
+  const [existingTaskIds, setExistingTaskIds] = useState<Set<string>>(() => new Set());
   const [addingSelected, setAddingSelected] = useState(false);
   const pickerLoadSequence = useRef(0);
+  const existingLoadSequence = useRef(0);
   const searchLoadSequence = useRef(0);
+  const loadedPickerFolder = useRef<string | null | undefined>(undefined);
 
   const loadPicker = useCallback(async () => {
     const sequence = ++pickerLoadSequence.current;
@@ -2598,6 +2613,7 @@ function AddTaskModal({
           : Promise.resolve({ items: [] }),
       ]);
       if (sequence !== pickerLoadSequence.current) return;
+      loadedPickerFolder.current = folderId;
       setItems(children.items);
       setPath(nextPath.items);
     } catch (cause) {
@@ -2608,17 +2624,38 @@ function AddTaskModal({
     }
   }, [folderId]);
 
+  /**
+   * The tasks already placed on this time point. They stay visible in the
+   * picker as checked, disabled rows so nobody re-adds a task that is on the
+   * list already. A failed refresh keeps the previous snapshot: the picker is
+   * still usable without it.
+   */
+  const loadExistingPlacements = useCallback(async () => {
+    const sequence = ++existingLoadSequence.current;
+    try {
+      const response = await requestV2<{ items: PlacementWithTask[] }>(
+        `/time-points/${pointId}/placements`,
+      );
+      if (sequence !== existingLoadSequence.current) return;
+      setExistingTaskIds(new Set(response.items.map((item) => item.taskId)));
+    } catch {
+      /* Keep the last snapshot; the picker still works without it. */
+    }
+  }, [pointId]);
+
   useEffect(() => {
     void loadPicker();
+    void loadExistingPlacements();
     const listener = () => {
       setSearchIndex(null);
       setSearchError('');
       setSearchRetry((count) => count + 1);
       void loadPicker();
+      void loadExistingPlacements();
     };
     window.addEventListener('devtodo:data-changed', listener);
     return () => window.removeEventListener('devtodo:data-changed', listener);
-  }, [loadPicker]);
+  }, [loadExistingPlacements, loadPicker]);
 
   useEffect(() => {
     const searchText = query.trim();
@@ -2719,6 +2756,7 @@ function AddTaskModal({
       }
       if (addedIds.size) {
         setSelectedTasks((current) => new Map([...current].filter(([id]) => !addedIds.has(id))));
+        setExistingTaskIds((current) => new Set([...current, ...addedIds]));
         window.dispatchEvent(new Event('devtodo:data-changed'));
       }
       if (failures.length) {
@@ -2734,30 +2772,49 @@ function AddTaskModal({
   };
   const renderTaskRow = (task: TreeTaskDto, showLocation: boolean) => {
     const selected = selectedTasks.has(task.id);
+    const alreadyAdded = existingTaskIds.has(task.id);
     return (
-      <ListItem
-        key={task.id}
-        className="m3e-list-item--picker m3e-list-item--tree-row"
-        headline={task.title}
-        supporting={
-          showLocation ? (
-            <span className="task-picker-location">{taskLocation(task)}</span>
-          ) : undefined
-        }
-        leading={
-          <span
-            className={`task-picker-selection${selected ? ' is-selected' : ''}`}
-            aria-hidden="true"
-          >
-            {selected && <Check size={15} strokeWidth={3} />}
-          </span>
-        }
-        trailing={!selected && <Plus size={18} aria-hidden="true" />}
-        selected={selected}
-        onClick={() => toggleTaskSelection(task)}
-        disabled={addingSelected}
-        ariaLabel={`${selected ? '取消选择' : '选择'}任务 ${task.title}`}
-      />
+      <TaskHoverPreviewRow key={task.id} task={task} enabled={!isTouch}>
+        {(anchorProps) => (
+          <ListItem
+            {...anchorProps}
+            className={`m3e-list-item--picker m3e-list-item--tree-row${
+              alreadyAdded ? ' is-already-added' : ''
+            }`}
+            headline={task.title}
+            supporting={
+              showLocation ? (
+                <span className="task-picker-location">{taskLocation(task)}</span>
+              ) : undefined
+            }
+            leading={
+              <span
+                className={`task-picker-selection${selected || alreadyAdded ? ' is-selected' : ''}${
+                  alreadyAdded ? ' is-existing' : ''
+                }`}
+                aria-hidden="true"
+              >
+                {(selected || alreadyAdded) && <Check size={15} strokeWidth={3} />}
+              </span>
+            }
+            trailing={
+              alreadyAdded ? (
+                <Chip kind="assist" label="已加入" className="task-picker-added-chip" />
+              ) : (
+                !selected && <Plus size={18} aria-hidden="true" />
+              )
+            }
+            selected={selected}
+            onClick={alreadyAdded ? undefined : () => toggleTaskSelection(task)}
+            disabled={!alreadyAdded && addingSelected}
+            ariaLabel={
+              alreadyAdded
+                ? `任务 ${task.title} 已加入当前日程`
+                : `${selected ? '取消选择' : '选择'}任务 ${task.title}`
+            }
+          />
+        )}
+      </TaskHoverPreviewRow>
     );
   };
   const renderTreeItem = (item: TreeItemDto) =>
@@ -2866,7 +2923,9 @@ function AddTaskModal({
         </Alert>
       )}
       {!query.trim() && (
-        <p className="field-help picker-hint">点选任务可同时选择多项；选择会在切换目录时保留。</p>
+        <p className="field-help picker-hint">
+          点选任务可同时选择多项；选择会在切换目录时保留。已加入当前日程的任务会显示为已勾选，不会重复加入。
+        </p>
       )}
       {query.trim() ? (
         <div className="task-picker-scroll" role="region" aria-label="任务搜索结果">
@@ -2920,7 +2979,7 @@ function AddTaskModal({
             role="region"
             aria-label="当前目录"
           >
-            {pickerLoading ? (
+            {pickerLoading && loadedPickerFolder.current !== folderId ? (
               <LoadingState label="正在加载目录" />
             ) : pickerError && !activeItems.length ? null : (
               <Card
@@ -2970,6 +3029,13 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const [dateCounts, setDateCounts] = useState<Record<string, number>>({});
   const [detailError, setDetailError] = useState('');
   const [loadingSelected, setLoadingSelected] = useState(true);
+  /**
+   * The date whose placements are on screen. A background sync re-reads the
+   * selected date in place; only a real date switch (or the first load) may
+   * swap the list for the loading state, because that swap remounts every row
+   * and replays its entry animation.
+   */
+  const [loadedSelectedDate, setLoadedSelectedDate] = useState<string | null>(null);
   const selectedLoadId = useRef(0);
   const days = useMemo(
     () => calendarDays(month, settings?.weekStartsOn ?? 1),
@@ -3041,6 +3107,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       if (loadId !== selectedLoadId.current) return;
       setPoint(nextPoint);
       setItems(result.items);
+      setLoadedSelectedDate(selected);
     } catch (cause) {
       if (loadId !== selectedLoadId.current) return;
       setPoint(null);
@@ -3140,7 +3207,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             <Button
               size="s"
               variant="tonal"
-              disabled={loadingSelected || !point}
+              disabled={!point}
               leadingIcon={<Plus size={16} />}
               onClick={() => setShowAdd(true)}
             >
@@ -3149,7 +3216,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           </div>
           {detailError ? (
             <ErrorState error={detailError} onRetry={() => void loadSelected()} />
-          ) : loadingSelected ? (
+          ) : loadingSelected && loadedSelectedDate !== selected ? (
             <LoadingState label="正在加载日期安排" />
           ) : (
             <PlacementList
