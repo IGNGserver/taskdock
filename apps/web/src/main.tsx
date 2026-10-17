@@ -22,6 +22,7 @@ import './styles/responsive.css';
 import './styles/workspace.css';
 import { App } from './App.js';
 import { AuthProvider } from './auth.js';
+import { FolderProvider } from './folder-context.js';
 import { installTheme } from './theme.js';
 import { installMobileViewport } from './mobile-viewport.js';
 
@@ -33,7 +34,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <App />
+        <FolderProvider>
+          <App />
+        </FolderProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,

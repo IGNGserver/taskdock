@@ -75,6 +75,7 @@ import {
   testHubConnection,
 } from './api.js';
 import { DirectoryNavigation } from './components/directory-navigation.js';
+import { TaskFolderBreadcrumb } from './components/task-folder-breadcrumb.js';
 import { directoryEntries } from './directory-paths.js';
 import { readLastFolderId } from './folder-preference.js';
 import { useAuth } from './auth.js';
@@ -2111,13 +2112,16 @@ function PlacementRow({
         onStatusChange={updateStatus}
         disabled={busy || !onToggleStatus || readOnly}
       />
-      <TaskRowAction
-        busy={busy}
-        onClick={() => onOpen(task.id)}
-        aria-label={`打开任务 ${task.title}`}
-      >
-        <span className="task-title">{task.title}</span>
-      </TaskRowAction>
+      <div className="task-row-main">
+        <TaskRowAction
+          busy={busy}
+          onClick={() => onOpen(task.id)}
+          aria-label={`打开任务 ${task.title}`}
+        >
+          <span className="task-title">{task.title}</span>
+        </TaskRowAction>
+        <TaskFolderBreadcrumb task={task} className="task-row-folder" />
+      </div>
       {!readOnly && (
         <div ref={menuRef} className="task-actions">
           <IconButton

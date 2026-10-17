@@ -1,6 +1,11 @@
 import type { FolderDto } from '@devtodo/contracts';
 import { describe, expect, it } from 'vitest';
-import { blockedDirectoryTargets, directoryEntries } from '../src/directory-paths.js';
+import {
+  blockedDirectoryTargets,
+  directoryEntries,
+  directoryPathSegments,
+  formatDirectoryPath,
+} from '../src/directory-paths.js';
 
 function folder(id: string, title: string, parentFolderId: string | null = null): FolderDto {
   return { id, title, parentFolderId, version: 1, rank: '1024', createdAt: '', updatedAt: '' };
@@ -43,5 +48,40 @@ describe('directory destinations', () => {
     expect(directoryEntries(corrupt).find((entry) => entry.folder.id === 'orphan')?.label).toBe(
       '孤立',
     );
+  });
+  it('resolves breadcrumb segments correctly from root to deepest folder', () => {
+    expect(directoryPathSegments(null, folders)).toEqual([{ id: null, title: '根目录' }]);
+    expect(directoryPathSegments('work', folders)).toEqual([
+      { id: null, title: '根目录' },
+      { id: 'work', title: '工作' },
+    ]);
+    expect(directoryPathSegments('docs', folders)).toEqual([
+      { id: null, title: '根目录' },
+      { id: 'work', title: '工作' },
+      { id: 'release-a', title: '发布' },
+      { id: 'docs', title: '文档' },
+    ]);
+  });
+  it('formats directory path string with collapsing for deep hierarchies', () => {
+    const rootOnly = [{ id: null, title: '根目录' }];
+    const twoLevels = [
+      { id: null, title: '根目录' },
+      { id: 'work', title: '工作' },
+    ];
+    const threeLevels = [
+      { id: null, title: '根目录' },
+      { id: 'work', title: '工作' },
+      { id: 'release-a', title: '发布' },
+    ];
+    const fourLevels = [
+      { id: null, title: '根目录' },
+      { id: 'work', title: '工作' },
+      { id: 'release-a', title: '发布' },
+      { id: 'docs', title: '文档' },
+    ];
+    expect(formatDirectoryPath(rootOnly)).toBe('根目录');
+    expect(formatDirectoryPath(twoLevels)).toBe('根目录 / 工作');
+    expect(formatDirectoryPath(threeLevels)).toBe('根目录 / 工作 / 发布');
+    expect(formatDirectoryPath(fourLevels)).toBe('根目录 / … / 文档');
   });
 });
