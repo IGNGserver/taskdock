@@ -226,10 +226,9 @@
     grid-area: status;
   }
 
-  .task-row > .task-main {
+  .task-row > .task-row-main {
     grid-area: main;
     inline-size: 100%;
-    padding-inline: 0;
   }
 
   .task-row > .task-reorder-actions {
