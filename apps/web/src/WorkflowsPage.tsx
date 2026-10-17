@@ -40,7 +40,7 @@ import {
 } from './components/m3e/index.js';
 import { resolveCaptureFolder } from './folder-preference.js';
 import { useSearchParams } from 'react-router-dom';
-import { directoryEntries } from './directory-paths.js';
+import { TaskFolderBreadcrumb } from './components/task-folder-breadcrumb.js';
 
 type WorkflowStage = NonNullable<WorkflowDto['stages']>[number];
 
@@ -503,9 +503,6 @@ export function WorkflowsPage() {
     ? selectedWorkflowId
     : (workflows[0]?.id ?? '');
   const visibleWorkflows = workflows.filter((item) => item.id === activeWorkflowId);
-  const folderLabels = new Map(
-    directoryEntries(folders).map((entry) => [entry.folder.id, entry.label]),
-  );
 
   return (
     <section className="page-section workflows-page" aria-labelledby="workflows-title">
@@ -717,9 +714,6 @@ export function WorkflowsPage() {
                               const membership = membershipAt(stage, taskIndex);
                               const prevMembership = membershipAt(stage, taskIndex - 1);
                               const nextMembership = membershipAt(stage, taskIndex + 1);
-                              const folderTitle = task.parentFolderId
-                                ? (folderLabels.get(task.parentFolderId) ?? '目录')
-                                : '根目录';
                               return (
                                 <ListItem
                                   className={`m3e-list-item--workflow-task${
@@ -743,10 +737,7 @@ export function WorkflowsPage() {
                                   }
                                   supporting={
                                     <span className="workflow-task__meta">
-                                      <span className="workflow-task__folder">
-                                        <Folder size={14} aria-hidden="true" />
-                                        {folderTitle}
-                                      </span>
+                                      <TaskFolderBreadcrumb task={task} />
                                     </span>
                                   }
                                   trailing={
