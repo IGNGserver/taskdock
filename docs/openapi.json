@@ -1194,6 +1194,20 @@
         }
       }
     },
+    "/v2/time-points/{id}/unreach": {
+      "servers": [
+        {
+          "url": "/api"
+        }
+      ],
+      "post": {
+        "responses": {
+          "200": {
+            "description": "TaskDock v2 POST /v2/time-points/{id}/unreach"
+          }
+        }
+      }
+    },
     "/v2/tree/children": {
       "servers": [
         {

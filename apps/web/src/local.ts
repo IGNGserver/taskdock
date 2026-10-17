@@ -1615,7 +1615,7 @@ async function applyOfflineV2Write(
       },
     );
   }
-  const pointAction = /^\/time-points\/([^/]+)\/(reach)$/.exec(path);
+  const pointAction = /^\/time-points\/([^/]+)\/(reach|unreach)$/.exec(path);
   if (method === 'POST' && pointAction) {
     const current = await db.timePoints.get(pointAction[1]!);
     if (!current || current.type !== 'EVENT') throw new Error('本地事件不存在');
@@ -1623,7 +1623,7 @@ async function applyOfflineV2Write(
     const action = pointAction[2]!;
     const next: LocalTimePoint = {
       ...current,
-      reachedAt: action === 'reach' ? (current.reachedAt ?? timestamp()) : current.reachedAt,
+      reachedAt: action === 'reach' ? (current.reachedAt ?? timestamp()) : null,
       version: current.version + 1,
       updatedAt: timestamp(),
       pendingSync: true,

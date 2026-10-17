@@ -1145,4 +1145,45 @@ describe('SyncEngine', () => {
       restoreNavigator();
     }
   });
+
+  it('applies a timePoint.unreach push result to the local row', async () => {
+    const restoreNavigator = online();
+    try {
+      await withDatabase(async (db) => {
+        const pointId = uuidv7();
+        const reachedPoint: TimePointDto = {
+          ...datePoint(pointId),
+          type: 'EVENT',
+          localDate: null,
+          reachedAt: '2026-10-01T02:00:00.000Z',
+          version: 2,
+        };
+        await db.timePoints.put({ ...reachedPoint, pendingSync: true });
+        await db.outbox.add(outboxItem('timePoint.unreach', pointId, {}, 2));
+
+        const transport: SyncTransport = {
+          push: async (request) => ({
+            results: [
+              {
+                mutationId: request.mutations[0]!.mutationId,
+                status: 'applied',
+                result: { ...reachedPoint, reachedAt: null, version: 3 },
+              },
+            ],
+          }),
+          pull: async () => emptyPull(),
+          snapshot,
+        };
+
+        const engine = new SyncEngine(db, uuidv7(), transport);
+        await engine.sync();
+        expect(await db.outbox.count()).toBe(0);
+        const stored = await db.timePoints.get(pointId);
+        expect(stored?.reachedAt).toBeNull();
+        expect(stored?.version).toBe(3);
+      });
+    } finally {
+      restoreNavigator();
+    }
+  });
 });

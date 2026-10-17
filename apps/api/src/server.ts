@@ -1320,6 +1320,9 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
       api.post('/time-points/:id/reach', async (request) =>
         versionedV2Action(tree, request, 'timePoint.reach'),
       );
+      api.post('/time-points/:id/unreach', async (request) =>
+        versionedV2Action(tree, request, 'timePoint.unreach'),
+      );
       api.delete('/time-points/:id', async (request) =>
         versionedV2Action(tree, request, 'timePoint.delete'),
       );
