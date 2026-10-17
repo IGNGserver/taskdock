@@ -269,6 +269,60 @@ test('撤销到达 clears the reached state and restores the reach action', asyn
   await expect(page.getByText('等待中')).toBeVisible();
 });
 
+test('toggling a status keeps the row in place until the page is entered again', async ({
+  page,
+}) => {
+  const statusById = new Map<string, 'TODO' | 'IN_PROGRESS' | 'DONE'>([
+    [todoFirstTask.id, 'TODO'],
+    [todoSecondTask.id, 'TODO'],
+    [doneTask.id, 'DONE'],
+  ]);
+  const rows = [
+    { id: '00000000-0000-7000-8000-000000000661', task: todoFirstTask, rank: '1024' },
+    { id: '00000000-0000-7000-8000-000000000662', task: todoSecondTask, rank: '2048' },
+    { id: '00000000-0000-7000-8000-000000000663', task: doneTask, rank: '3072' },
+  ];
+  const items = () =>
+    rows.map((row) => ({
+      ...placementFixture(row.id, event.id, row.task, row.rank),
+      task: { ...row.task, status: statusById.get(row.task.id)! },
+    }));
+  const session = await mockSession(page, async (route, path) => {
+    if (path.endsWith(`/tasks/${todoSecondTask.id}`)) {
+      const body = route.request().postDataJSON() as { status: string };
+      expect(body.status).toBe('IN_PROGRESS');
+      statusById.set(todoSecondTask.id, 'IN_PROGRESS');
+      return json(route, { ...todoSecondTask, status: 'IN_PROGRESS', version: 2 });
+    }
+    if (path.endsWith(`/time-points/${event.id}/placements`))
+      return json(route, { items: items() });
+    if (path.endsWith(`/time-points/${event.id}`)) return json(route, event);
+    if (path.endsWith('/time-points/placement-counts')) return json(route, { items: [] });
+    if (path.endsWith('/time-points')) return json(route, { items: [event] });
+    return json(route, { items: [] });
+  });
+
+  await session.login();
+  await page.goto('/time/events');
+  await page.getByRole('link', { name: /发布窗口/ }).click();
+
+  const titles = page.locator('.task-row .task-title');
+  await expect(titles).toHaveText(['待开始一', '待开始二']);
+
+  // Toggling to 进行中 updates the row in place: it keeps its slot and group…
+  const secondRow = page.locator('.task-row', { hasText: '待开始二' });
+  await secondRow.getByRole('button', { name: '标记为进行中' }).click();
+  await expect(secondRow.locator('.m3e-task-status-control__label')).toHaveText('进行中');
+  await expect(titles).toHaveText(['待开始一', '待开始二']);
+  await expect(page.locator('.placement-group-heading__label')).toHaveCount(2);
+
+  // …and only re-sorts after the page is left and entered again.
+  await page.goBack();
+  await page.getByRole('link', { name: /发布窗口/ }).click();
+  await expect(page.locator('.placement-group-heading__label').nth(0)).toContainText('进行中');
+  await expect(titles).toHaveText(['待开始二', '待开始一']);
+});
+
 test('an open row menu is never painted under the following task rows', async ({ page }) => {
   const session = await mockSession(page, async (route, path) => {
     if (path.endsWith(`/time-points/${event.id}/placements`))
