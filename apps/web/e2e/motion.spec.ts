@@ -15,6 +15,44 @@ const settings = {
   updatedAt: user.createdAt,
 };
 
+const point = {
+  id: '00000000-0000-7000-8000-000000000021',
+  type: 'DATE',
+  title: '今天',
+  localDate: '2026-09-19',
+  timezone: 'Asia/Shanghai',
+  reachedAt: null,
+  version: 1,
+  createdAt: '2026-09-19T00:00:00.000Z',
+  updatedAt: '2026-09-19T00:00:00.000Z',
+};
+
+const placementTask = {
+  id: '00000000-0000-7000-8000-000000000031',
+  referenceId: 'TASK-1',
+  parentFolderId: null,
+  title: '排期中的任务',
+  status: 'TODO',
+  rank: '1024',
+  version: 1,
+  completedAt: null,
+  deletedAt: null,
+  createdAt: '2026-09-19T00:00:00.000Z',
+  updatedAt: '2026-09-19T00:00:00.000Z',
+};
+
+const placement = {
+  id: '00000000-0000-7000-8000-000000000041',
+  ownerId: user.id,
+  taskId: placementTask.id,
+  timePointId: point.id,
+  rank: '1024',
+  version: 1,
+  createdAt: '2026-09-19T00:00:00.000Z',
+  updatedAt: '2026-09-19T00:00:00.000Z',
+  task: placementTask,
+};
+
 async function installMockApi(page: Page): Promise<void> {
   let authenticated = false;
   await page.route('**/api/v1/**', async (route: Route) => {
@@ -56,17 +94,13 @@ async function installMockApi(page: Page): Promise<void> {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          id: '00000000-0000-7000-8000-000000000021',
-          type: 'DATE',
-          title: '今天',
-          localDate: '2026-09-19',
-          timezone: 'Asia/Shanghai',
-          reachedAt: null,
-          version: 1,
-          createdAt: '2026-09-19T00:00:00.000Z',
-          updatedAt: '2026-09-19T00:00:00.000Z',
-        }),
+        body: JSON.stringify(point),
+      });
+    if (path.endsWith('/placements'))
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [placement] }),
       });
     if (path.endsWith('/sync/snapshot'))
       return route.fulfill({
@@ -259,4 +293,51 @@ test('route changes enter through a shared transition and logout is explicit', a
     .click();
   await expect(page.getByRole('button', { name: '登录' })).toBeVisible();
   expect(logoutRequests).toBe(1);
+});
+
+/**
+ * Regression: the calendar detail pane used to gate its list on the loading
+ * flag of *every* read, so each background sync (the 30 s interval and every
+ * `devtodo:data-changed`) swapped the rows for the loading state and back —
+ * remounting each row and replaying the row entry fade every cycle. A
+ * background refresh must now re-read the selected date in place.
+ */
+test('a background data refresh keeps calendar task rows mounted', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/time/calendar/2026-09-19');
+  await expect(page.locator('.task-row')).toBeVisible();
+  // Let the initial row entry fade finish before the recorder starts, so the
+  // assertion measures the refresh cycle and not the first paint.
+  await page.waitForTimeout(1_000);
+
+  await page.evaluate(() => {
+    const state = window as unknown as { __row?: Element | null; __rowFades?: number };
+    state.__row = document.querySelector('.task-row');
+    state.__rowFades = 0;
+    document.addEventListener(
+      'animationstart',
+      (event) => {
+        const animation = event as AnimationEvent;
+        if (
+          animation.animationName === 'm3e-fade-in' &&
+          (animation.target as HTMLElement).classList.contains('task-row')
+        )
+          state.__rowFades = (state.__rowFades ?? 0) + 1;
+      },
+      true,
+    );
+  });
+
+  await page.evaluate(() => window.dispatchEvent(new Event('devtodo:data-changed')));
+  await page.waitForTimeout(600);
+
+  const result = await page.evaluate(() => {
+    const state = window as unknown as { __row?: Element | null; __rowFades?: number };
+    return {
+      sameRow: state.__row === document.querySelector('.task-row'),
+      fades: state.__rowFades ?? 0,
+    };
+  });
+  expect(result.sameRow).toBe(true);
+  expect(result.fades).toBe(0);
 });

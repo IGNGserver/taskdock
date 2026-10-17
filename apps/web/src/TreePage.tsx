@@ -6,6 +6,7 @@ import type {
   TreeTaskDto,
 } from '@devtodo/contracts';
 import {
+  Fragment,
   useCallback,
   useEffect,
   useId,
@@ -44,6 +45,7 @@ import { recordLastFolderId } from './folder-preference.js';
 import { blockedDirectoryTargets } from './directory-paths.js';
 import { FolderPicker } from './components/folder-picker.js';
 import { TaskDetailEditor } from './components/task-detail-editor.js';
+import { TaskHoverPreviewRow, type TaskHoverAnchorProps } from './components/task-hover-preview.js';
 import type { TaskEditorDraft } from './task-editor-draft.js';
 
 /** Stable identity for a directory row, whichever kind it holds. */
@@ -198,7 +200,7 @@ export function TreePage() {
   const captureLock = useRef(false);
   const captureRevision = useRef(0);
   const draggedItem = useRef<TreeItemDto | null>(null);
-  const { isPhone } = useDevice();
+  const { isPhone, isTouch } = useDevice();
   const currentFolder = useRef(folderId);
   currentFolder.current = folderId;
   const captureInput = useRef<HTMLInputElement>(null);
@@ -792,9 +794,9 @@ export function TreePage() {
         const record = itemRecord(item);
         const position = statusPosition(item);
         const folder = item.kind === 'FOLDER';
-        return (
+        const row = (anchorProps?: TaskHoverAnchorProps) => (
           <ListItem
-            key={`${item.kind}-${record.id}`}
+            {...(anchorProps ?? {})}
             id={folder ? `folder-${record.id}` : `task-${record.id}`}
             className={`m3e-list-item--tree-row${!folder && displayTask(item.task).status === 'DONE' ? ' is-task-done' : ''}`}
             leading={folder ? <Folder size={19} /> : undefined}
@@ -877,6 +879,13 @@ export function TreePage() {
               />
             }
           />
+        );
+        return folder ? (
+          <Fragment key={`folder-${record.id}`}>{row()}</Fragment>
+        ) : (
+          <TaskHoverPreviewRow key={`task-${record.id}`} task={item.task} enabled={!isTouch}>
+            {(anchorProps) => row(anchorProps)}
+          </TaskHoverPreviewRow>
         );
       })}
     </List>
