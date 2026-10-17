@@ -10,6 +10,16 @@
   user-select: none;
 }
 
+/* An open row menu has to escape the shell. The shell clips so the swipe
+   background stays inside the rounded row, but a clipped dropdown would be
+   painted under the following task blocks — and the content's own z-index:1
+   stacking context cannot lift it out. While the menu is open (and no swipe
+   is in flight) the shell stops clipping and lifts above later siblings. */
+.task-swipe-shell:has(.m3e-menu):not(.is-swiping) {
+  overflow: visible;
+  z-index: 30;
+}
+
 .task-swipe-background {
   position: absolute;
   inset: 0;

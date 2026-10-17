@@ -544,4 +544,70 @@ describe('TaskDock v2 API and sync protocol', () => {
 
     await app.close();
   });
+
+  it('clears an event reached state through timePoint.unreach', async () => {
+    const { app, accessToken } = await boot();
+    const headers = () => ({
+      authorization: `Bearer ${accessToken}`,
+      'x-client-id': uuidv7(),
+      'idempotency-key': uuidv7(),
+    });
+    const event = await app.inject({
+      method: 'POST',
+      url: '/api/v2/time-points/events',
+      headers: headers(),
+      payload: { title: '发布窗口' },
+    });
+    const eventId = event.json().id as string;
+    const eventVersion = event.json().version as number;
+
+    const reached = await app.inject({
+      method: 'POST',
+      url: `/api/v2/time-points/${eventId}/reach`,
+      headers: headers(),
+      payload: { baseVersion: eventVersion },
+    });
+    expect(reached.statusCode).toBe(200);
+    const reachedBody = reached.json() as { reachedAt: string | null; version: number };
+    expect(reachedBody.reachedAt).not.toBeNull();
+
+    const cleared = await app.inject({
+      method: 'POST',
+      url: `/api/v2/time-points/${eventId}/unreach`,
+      headers: headers(),
+      payload: { baseVersion: reachedBody.version },
+    });
+    expect(cleared.statusCode).toBe(200);
+    const clearedBody = cleared.json() as { reachedAt: string | null; version: number };
+    expect(clearedBody.reachedAt).toBeNull();
+    expect(clearedBody.version).toBe(reachedBody.version + 1);
+
+    // Reusing the stale version after the clear must conflict, not silently pass.
+    const stale = await app.inject({
+      method: 'POST',
+      url: `/api/v2/time-points/${eventId}/unreach`,
+      headers: headers(),
+      payload: { baseVersion: reachedBody.version },
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().code).toBe('VERSION_CONFLICT');
+
+    // Dates have no reach state to clear.
+    const date = await app.inject({
+      method: 'POST',
+      url: '/api/v2/time-points/date',
+      headers: headers(),
+      payload: { localDate: '2026-10-17' },
+    });
+    const dateUnreach = await app.inject({
+      method: 'POST',
+      url: `/api/v2/time-points/${date.json().id}/unreach`,
+      headers: headers(),
+      payload: { baseVersion: date.json().version },
+    });
+    expect(dateUnreach.statusCode).toBe(400);
+    expect(dateUnreach.json().code).toBe('VALIDATION_FAILED');
+
+    await app.close();
+  });
 });

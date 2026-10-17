@@ -1035,6 +1035,7 @@ export class SyncEngine {
       }
       case 'timePoint.update':
       case 'timePoint.reach':
+      case 'timePoint.unreach':
       case 'timePoint.delete':
         await put(this.db.timePoints as unknown as Table<unknown, string>, result);
         return;
@@ -2114,6 +2115,7 @@ function pendingSyncIntent(items: OutboxItem[], notes: LocalNote[]): PendingSync
       case 'timePoint.event.create':
       case 'timePoint.update':
       case 'timePoint.reach':
+      case 'timePoint.unreach':
         intent.timePointIds.add(item.entityId);
         break;
       case 'timePoint.reorder':

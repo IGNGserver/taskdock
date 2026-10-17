@@ -859,7 +859,7 @@ class SyncEngine(
             "note.update" -> Mutation(item.mutationId, "note.update", item.entityId, item.baseVersion, item.occurredAt,
                 mapOf("taskId" to JsonPrimitive(item.entityId), "contentMarkdown" to (payload["contentMarkdown"] ?: JsonPrimitive(""))))
             "timePoint.date.create", "timePoint.event.create", "timePoint.update",
-            "timePoint.reach", "timePoint.archive", "timePoint.restore", "timePoint.delete",
+            "timePoint.reach", "timePoint.unreach", "timePoint.archive", "timePoint.restore", "timePoint.delete",
             "timePoint.reorder",
             "placement.create", "placement.remove", "placement.move", "placement.copy", "placement.reorder" ->
                 Mutation(item.mutationId, item.command, item.entityId, item.baseVersion, item.occurredAt, payload)

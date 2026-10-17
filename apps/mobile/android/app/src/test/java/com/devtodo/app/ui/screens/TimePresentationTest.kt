@@ -1,11 +1,13 @@
 package com.devtodo.app.ui.screens
 
 import com.devtodo.app.data.local.TimePointEntity
+import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.data.model.TimePointType
 import java.time.Instant
 import java.util.Date
 import java.util.Locale
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -44,6 +46,54 @@ class TimePresentationTest {
         val instant = Date.from(Instant.parse("2026-09-23T01:00:00Z"))
         assertEquals("2026-09-23", currentLocalDate("Asia/Shanghai", instant))
         assertEquals("2026-09-22", currentLocalDate("America/Los_Angeles", instant))
+    }
+
+    @Test
+    fun scheduledGroupsFollowStatusOrderAndKeepRankOrderInsideEachGroup() {
+        val scheduled =
+            listOf(
+                TaskStatus.TODO to "todo-first",
+                TaskStatus.DONE to "done-first",
+                TaskStatus.IN_PROGRESS to "progress",
+                TaskStatus.TODO to "todo-second",
+            )
+
+        val groups = groupScheduledByStatus(scheduled) { it.first }
+
+        assertEquals(
+            listOf(TaskStatus.IN_PROGRESS, TaskStatus.TODO, TaskStatus.DONE),
+            groups.map { it.status },
+        )
+        assertEquals(listOf("progress"), groups[0].items.map { it.second })
+        assertEquals(listOf("todo-first", "todo-second"), groups[1].items.map { it.second })
+        assertEquals(listOf("done-first"), groups[2].items.map { it.second })
+    }
+
+    @Test
+    fun movingWithinStatusSwapsTheNearestSiblingAndKeepsTheFullOrder() {
+        val scheduled =
+            listOf(
+                TaskStatus.TODO to "todo-first",
+                TaskStatus.DONE to "done",
+                TaskStatus.TODO to "todo-second",
+                TaskStatus.TODO to "todo-third",
+            )
+
+        val movedDown = moveWithinTaskStatus(scheduled, 0, 1) { it.first }!!
+        assertEquals(
+            listOf("todo-second", "done", "todo-first", "todo-third"),
+            movedDown.map { it.second },
+        )
+
+        val movedUp = moveWithinTaskStatus(scheduled, 3, -1) { it.first }!!
+        assertEquals(
+            listOf("todo-first", "done", "todo-third", "todo-second"),
+            movedUp.map { it.second },
+        )
+
+        // A row at the edge of its own group cannot move any further.
+        assertNull(moveWithinTaskStatus(scheduled, 0, -1) { it.first })
+        assertNull(moveWithinTaskStatus(scheduled, 3, 1) { it.first })
     }
 
     private fun date(id: String, localDate: String, rank: String) =

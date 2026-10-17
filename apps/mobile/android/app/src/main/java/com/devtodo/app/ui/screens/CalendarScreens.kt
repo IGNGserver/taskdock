@@ -44,6 +44,7 @@ import com.devtodo.app.ui.components.SectionHeading
 import com.devtodo.app.ui.components.TaskCaptureIsland
 import com.devtodo.app.ui.components.WorkspaceScaffold
 import com.devtodo.app.ui.components.folderPath
+import com.devtodo.app.ui.components.taskStatusLabel
 import com.devtodo.app.ui.theme.TaskDockShapes
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -335,7 +336,20 @@ fun DayScheduleScreen(
     var showPicker by rememberSaveable { mutableStateOf(false) }
     var targetPlacement by remember { mutableStateOf<PlacementEntity?>(null) }
     var targetCopy by rememberSaveable { mutableStateOf(false) }
+    var doneOpen by rememberSaveable { mutableStateOf(false) }
     val timezone = settings?.timezone ?: "Asia/Shanghai"
+    val statusGroups = remember(scheduled) { groupScheduledByStatus(scheduled) { it.first.status } }
+    val scheduledIndexByPlacement =
+        remember(scheduled) {
+            scheduled.withIndex().associate { (index, pair) -> pair.second.id to index }
+        }
+
+    fun moveScheduled(placementId: String, direction: Int) {
+        val fullIndex = scheduledIndexByPlacement[placementId] ?: return
+        val next = moveWithinTaskStatus(scheduled, fullIndex, direction) { it.first.status } ?: return
+        val pointId = point?.id ?: return
+        viewModel.reorderPlacements(pointId, next.map { it.second.id })
+    }
 
     fun openPicker() {
         if (point != null) {
@@ -395,37 +409,50 @@ fun DayScheduleScreen(
                     }
                 } else {
                     item(key = "day-heading") { SectionHeading("当天安排 · ${scheduled.size}") }
-                    itemsIndexed(scheduled, key = { _, pair -> pair.second.id }) { index, (task, placement) ->
-                        ExpressiveTaskCard(
-                            task = task,
-                            onClick = { onNavigateToDetail(task.id) },
-                            onStatusToggle = { viewModel.updateTaskStatus(task, it) },
-                            projectName = folderPath(task.parentFolderId, folders),
-                            actions = listOf(
-                                RowAction("移动到其他位置") {
-                                    targetPlacement = placement
-                                    targetCopy = false
-                                },
-                                RowAction("复制到其他位置") {
-                                    targetPlacement = placement
-                                    targetCopy = true
-                                },
-                                RowAction("从当天移除", destructive = true) { viewModel.removePlacement(placement) },
-                                RowAction("在目录中定位") { onNavigateToTree(task.parentFolderId, task.id) },
-                            ),
-                            rowShape = TaskDockShapes.groupedRow(index, scheduled.size),
-                            modifier = Modifier.animateItem(),
-                        )
-                        PlacementOrderButtons(
-                            canMoveUp = index > 0,
-                            canMoveDown = index < scheduled.lastIndex,
-                            onMoveUp = {
-                                viewModel.reorderPlacements(point!!.id, scheduled.map { it.second.id }.moveItem(index, index - 1))
-                            },
-                            onMoveDown = {
-                                viewModel.reorderPlacements(point!!.id, scheduled.map { it.second.id }.moveItem(index, index + 1))
-                            },
-                        )
+                    statusGroups.forEach { group ->
+                        if (group.items.isEmpty()) return@forEach
+                        item(key = "day-group-${group.status}") {
+                            PlacementGroupHeading(
+                                status = group.status,
+                                count = group.items.size,
+                                collapsed = group.status == TaskStatus.DONE && !doneOpen,
+                                onToggle =
+                                    if (group.status == TaskStatus.DONE) {
+                                        { doneOpen = !doneOpen }
+                                    } else {
+                                        null
+                                    },
+                            )
+                        }
+                        if (group.status == TaskStatus.DONE && !doneOpen) return@forEach
+                        itemsIndexed(group.items, key = { _, pair -> pair.second.id }) { index, (task, placement) ->
+                            ExpressiveTaskCard(
+                                task = task,
+                                onClick = { onNavigateToDetail(task.id) },
+                                onStatusToggle = { viewModel.updateTaskStatus(task, it) },
+                                projectName = folderPath(task.parentFolderId, folders),
+                                actions = listOf(
+                                    RowAction("移动到其他位置") {
+                                        targetPlacement = placement
+                                        targetCopy = false
+                                    },
+                                    RowAction("复制到其他位置") {
+                                        targetPlacement = placement
+                                        targetCopy = true
+                                    },
+                                    RowAction("从当天移除", destructive = true) { viewModel.removePlacement(placement) },
+                                    RowAction("在目录中定位") { onNavigateToTree(task.parentFolderId, task.id) },
+                                ),
+                                rowShape = TaskDockShapes.groupedRow(index, group.items.size),
+                                modifier = Modifier.animateItem(),
+                            )
+                            PlacementOrderButtons(
+                                canMoveUp = index > 0,
+                                canMoveDown = index < group.items.lastIndex,
+                                onMoveUp = { moveScheduled(placement.id, -1) },
+                                onMoveDown = { moveScheduled(placement.id, 1) },
+                            )
+                        }
                     }
                 }
             }
@@ -626,6 +653,12 @@ fun EventDetailScreen(
     var showDelete by rememberSaveable { mutableStateOf(false) }
     var targetPlacement by remember { mutableStateOf<PlacementEntity?>(null) }
     var targetCopy by rememberSaveable { mutableStateOf(false) }
+    var doneOpen by rememberSaveable { mutableStateOf(false) }
+    val statusGroups = remember(scheduled) { groupScheduledByStatus(scheduled) { it.first.status } }
+    val scheduledIndexByPlacement =
+        remember(scheduled) {
+            scheduled.withIndex().associate { (index, pair) -> pair.second.id to index }
+        }
 
     if (event == null) {
         WorkspaceScaffold(
@@ -636,6 +669,12 @@ fun EventDetailScreen(
             }
         }
         return
+    }
+
+    fun moveScheduled(placementId: String, direction: Int) {
+        val fullIndex = scheduledIndexByPlacement[placementId] ?: return
+        val next = moveWithinTaskStatus(scheduled, fullIndex, direction) { it.first.status } ?: return
+        viewModel.reorderPlacements(event.id, next.map { it.second.id })
     }
 
     WorkspaceScaffold(
@@ -667,6 +706,7 @@ fun EventDetailScreen(
                     event = event,
                     count = scheduled.size,
                     onReach = { viewModel.reachEvent(event) },
+                    onUnreach = { viewModel.unreachEvent(event) },
                     onAdd = { showPicker = true },
                 )
             }
@@ -687,33 +727,50 @@ fun EventDetailScreen(
                 }
             } else {
                 item(key = "event-heading") { SectionHeading("事件安排 · ${scheduled.size}") }
-                itemsIndexed(scheduled, key = { _, pair -> pair.second.id }) { index, (task, placement) ->
-                    ExpressiveTaskCard(
-                        task = task,
-                        onClick = { onNavigateToDetail(task.id) },
-                        onStatusToggle = { viewModel.updateTaskStatus(task, it) },
-                        projectName = folderPath(task.parentFolderId, folders),
-                        actions = listOf(
-                            RowAction("移动到其他位置") {
-                                targetPlacement = placement
-                                targetCopy = false
-                            },
-                            RowAction("复制到其他位置") {
-                                targetPlacement = placement
-                                targetCopy = true
-                            },
-                            RowAction("从事件移除", destructive = true) { viewModel.removePlacement(placement) },
-                            RowAction("在目录中定位") { onNavigateToTree(task.parentFolderId, task.id) },
-                        ),
-                        rowShape = TaskDockShapes.groupedRow(index, scheduled.size),
-                        modifier = Modifier.animateItem(),
-                    )
-                    PlacementOrderButtons(
-                        canMoveUp = index > 0,
-                        canMoveDown = index < scheduled.lastIndex,
-                        onMoveUp = { viewModel.reorderPlacements(event.id, scheduled.map { it.second.id }.moveItem(index, index - 1)) },
-                        onMoveDown = { viewModel.reorderPlacements(event.id, scheduled.map { it.second.id }.moveItem(index, index + 1)) },
-                    )
+                statusGroups.forEach { group ->
+                    if (group.items.isEmpty()) return@forEach
+                    item(key = "event-group-${group.status}") {
+                        PlacementGroupHeading(
+                            status = group.status,
+                            count = group.items.size,
+                            collapsed = group.status == TaskStatus.DONE && !doneOpen,
+                            onToggle =
+                                if (group.status == TaskStatus.DONE) {
+                                    { doneOpen = !doneOpen }
+                                } else {
+                                    null
+                                },
+                        )
+                    }
+                    if (group.status == TaskStatus.DONE && !doneOpen) return@forEach
+                    itemsIndexed(group.items, key = { _, pair -> pair.second.id }) { index, (task, placement) ->
+                        ExpressiveTaskCard(
+                            task = task,
+                            onClick = { onNavigateToDetail(task.id) },
+                            onStatusToggle = { viewModel.updateTaskStatus(task, it) },
+                            projectName = folderPath(task.parentFolderId, folders),
+                            actions = listOf(
+                                RowAction("移动到其他位置") {
+                                    targetPlacement = placement
+                                    targetCopy = false
+                                },
+                                RowAction("复制到其他位置") {
+                                    targetPlacement = placement
+                                    targetCopy = true
+                                },
+                                RowAction("从事件移除", destructive = true) { viewModel.removePlacement(placement) },
+                                RowAction("在目录中定位") { onNavigateToTree(task.parentFolderId, task.id) },
+                            ),
+                            rowShape = TaskDockShapes.groupedRow(index, group.items.size),
+                            modifier = Modifier.animateItem(),
+                        )
+                        PlacementOrderButtons(
+                            canMoveUp = index > 0,
+                            canMoveDown = index < group.items.lastIndex,
+                            onMoveUp = { moveScheduled(placement.id, -1) },
+                            onMoveDown = { moveScheduled(placement.id, 1) },
+                        )
+                    }
                 }
             }
         }
@@ -775,7 +832,13 @@ fun EventDetailScreen(
 }
 
 @Composable
-private fun EventSummaryCard(event: TimePointEntity, count: Int, onReach: () -> Unit, onAdd: () -> Unit) {
+private fun EventSummaryCard(
+    event: TimePointEntity,
+    count: Int,
+    onReach: () -> Unit,
+    onUnreach: () -> Unit,
+    onAdd: () -> Unit,
+) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
         shape = TaskDockShapes.HeroShape,
@@ -795,6 +858,12 @@ private fun EventSummaryCard(event: TimePointEntity, count: Int, onReach: () -> 
                         Icon(Icons.Default.Check, null)
                         Spacer(Modifier.width(6.dp))
                         Text("标记到达")
+                    }
+                } else {
+                    OutlinedButton(onClick = onUnreach, shape = TaskDockShapes.FullPill) {
+                        Icon(Icons.Default.Close, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("撤销到达")
                     }
                 }
                 OutlinedButton(onClick = onAdd, shape = TaskDockShapes.FullPill) {
@@ -823,6 +892,37 @@ private fun PlacementOrderButtons(
         }
         IconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(40.dp)) {
             Icon(Icons.Default.KeyboardArrowDown, "安排下移")
+        }
+    }
+}
+
+/**
+ * Status section heading for the day schedule and event detail lists. The
+ * completed section is collapsed by default, so it carries the toggle.
+ */
+@Composable
+private fun PlacementGroupHeading(
+    status: TaskStatus,
+    count: Int,
+    collapsed: Boolean? = null,
+    onToggle: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 10.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "${taskStatusLabel(status)} · $count",
+            style = MaterialTheme.typography.labelLarge,
+            color =
+                if (status == TaskStatus.IN_PROGRESS)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.weight(1f))
+        if (collapsed != null && onToggle != null) {
+            TextButton(onClick = onToggle) { Text(if (collapsed) "展开" else "收起") }
         }
     }
 }

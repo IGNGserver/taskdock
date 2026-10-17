@@ -1,6 +1,7 @@
 package com.devtodo.app.ui.screens
 
 import com.devtodo.app.data.local.TimePointEntity
+import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.data.model.TimePointType
 import java.text.DateFormat
 import java.text.ParsePosition
@@ -8,6 +9,44 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+
+/** One status section of a scheduled list; sections render in this order. */
+internal data class ScheduledStatusGroup<T>(
+    val status: TaskStatus,
+    val items: List<T>,
+)
+
+/** Presentation-only grouping: the stored rank order inside each group stays untouched. */
+internal fun <T> groupScheduledByStatus(
+    items: List<T>,
+    statusOf: (T) -> TaskStatus,
+): List<ScheduledStatusGroup<T>> =
+    listOf(TaskStatus.IN_PROGRESS, TaskStatus.TODO, TaskStatus.DONE).map { status ->
+        ScheduledStatusGroup(status, items.filter { statusOf(it) == status })
+    }
+
+/**
+ * Swap one entry with its nearest same-status sibling. Status-grouped lists
+ * only ever move a row inside its own group, but the reorder mutation must
+ * carry every placement of the time point, so the full order is returned.
+ */
+internal fun <T> moveWithinTaskStatus(
+    items: List<T>,
+    index: Int,
+    direction: Int,
+    statusOf: (T) -> TaskStatus,
+): List<T>? {
+    if (index !in items.indices) return null
+    val status = statusOf(items[index])
+    var target = index + direction
+    while (target in items.indices && statusOf(items[target]) != status) target += direction
+    if (target !in items.indices) return null
+    val next = items.toMutableList()
+    val moved = next[index]
+    next[index] = next[target]
+    next[target] = moved
+    return next
+}
 
 /** Presentation-only groups. The original TimePoint rows and their rank stay untouched. */
 internal data class TimePointGroups(

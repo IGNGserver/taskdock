@@ -220,6 +220,8 @@ export interface V2TreeStore {
   getTimePoint(ownerId: string, id: string): TimePointDto;
   updateTimePoint(ownerId: string, id: string, title: string, baseVersion: number): TimePointDto;
   reachTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto;
+  /** Clear a reached event back to waiting; only EVENT points have a reach state. */
+  unreachTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto;
   deleteTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto;
   addPlacement(
     ownerId: string,
@@ -1119,6 +1121,17 @@ export class MemoryTreeStore implements V2TreeStore {
     return this.timePointDto(point);
   }
 
+  unreachTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto {
+    const point = this.timePoint(ownerId, id);
+    if (point.type !== 'EVENT') throw new DomainError('VALIDATION_FAILED', '日期没有到达状态');
+    this.assertVersion(point.version, baseVersion, this.timePointDto(point));
+    point.reachedAt = null;
+    point.version += 1;
+    point.updatedAt = this.now();
+    this.record(ownerId, 'timePoint', id, point.version, 'upsert', this.timePointDto(point));
+    return this.timePointDto(point);
+  }
+
   /** Deleting an event keeps the task entities and only removes their placements here. */
   deleteTimePoint(ownerId: string, id: string, baseVersion: number): TimePointDto {
     const point = this.timePoint(ownerId, id);
@@ -1829,6 +1842,8 @@ export class MemoryTreeStore implements V2TreeStore {
         );
       case 'timePoint.reach':
         return this.reachTimePoint(ownerId, mutation.entityId, numberValue(base));
+      case 'timePoint.unreach':
+        return this.unreachTimePoint(ownerId, mutation.entityId, numberValue(base));
       case 'timePoint.delete':
         return this.deleteTimePoint(ownerId, mutation.entityId, numberValue(base));
       case 'timePoint.reorder':

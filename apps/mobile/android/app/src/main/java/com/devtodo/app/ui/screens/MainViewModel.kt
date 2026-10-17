@@ -1554,6 +1554,44 @@ class MainViewModel(
         }
     }
 
+    fun unreachEvent(event: TimePointEntity, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                db.withOwnerTransaction { ownerId ->
+                    require(event.ownerId == ownerId) { "事件不属于当前账户" }
+                    val current = db.timePointDao().getTimePointById(event.id, ownerId)
+                        ?: error("事件已不存在")
+                    require(current.type == TimePointType.EVENT) { "日期没有到达状态" }
+                    if (current.reachedAt != null) {
+                        val now = nowIso()
+                        db.timePointDao().upsertTimePoint(
+                            current.copy(
+                                reachedAt = null,
+                                version = current.version + 1,
+                                updatedAt = now,
+                                pendingSync = true,
+                            ),
+                        )
+                        syncEngine.recordLocalMutation(
+                            command = "timePoint.unreach",
+                            entityId = current.id,
+                            baseVersion = current.version,
+                            payload = emptyMap(),
+                            ownerId = ownerId,
+                        )
+                    }
+                }
+                onComplete(true)
+                _messages.tryEmit("事件已撤销到达")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                onComplete(false)
+                _messages.tryEmit(error.userMessage("撤销到达失败"))
+            }
+        }
+    }
+
     fun deleteEvent(event: TimePointEntity, onComplete: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             try {

@@ -106,7 +106,7 @@ V1 的五个一级产品概念固定为：
 
 - 今日首页。
 - 月日历与选中日期任务列表。
-- 自定义事件时间点创建、改名、排序、标记到达、归档和恢复。
+- 自定义事件时间点创建、改名、排序、标记到达、撤销到达、归档和恢复。
 - 从任务库搜索并把已有任务安排到日期或事件。
 - 拖拽添加、移动和排序；移动端提供等价的长按与 Bottom Sheet 操作。
 - 明确区分“复制到”“移动到”“从此处移除”“复制任务”。
@@ -194,6 +194,7 @@ TODO <-> DONE
 
 ```text
 WAITING --mark reached--> REACHED
+REACHED --unreach-------> WAITING
 WAITING --archive-------> ARCHIVED
 REACHED --archive-------> ARCHIVED
 ARCHIVED --restore------> WAITING or REACHED

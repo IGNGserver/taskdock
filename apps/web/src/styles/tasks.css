@@ -323,6 +323,32 @@
   transition: outline-color var(--m3-motion-short3) var(--m3-easing-standard);
 }
 
+/* Status sections inside the placement lists (events, calendar day panel):
+   a compact heading keeps the group order readable without stealing the
+   page-level SectionTitle weight. */
+.placement-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-block-size: 32px;
+  padding: 6px 4px 0;
+}
+
+.placement-group-heading__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-label-large-size);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.placement-group-heading--in-progress .placement-group-heading__label {
+  color: var(--m3-primary);
+}
+
 .placement-drop-target:has(.task-row:active),
 .placement-empty-drop {
   outline-color: var(--m3-primary);

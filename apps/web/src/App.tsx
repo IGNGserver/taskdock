@@ -39,9 +39,11 @@ import {
   Sparkles,
   Target,
   Trash2,
+  Undo2,
   Workflow as WorkflowIcon,
 } from 'lucide-react';
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -136,6 +138,31 @@ function taskStatusLabel(status: TaskStatus): string {
 
 function taskStatusClass(status: TaskStatus): string {
   return status === 'IN_PROGRESS' ? 'in-progress' : status === 'DONE' ? 'done' : 'todo';
+}
+
+/**
+ * Swap a placement with its nearest same-status sibling. Status-grouped lists
+ * only ever move a row inside its own group, but the reorder API validates the
+ * id list against the whole time point, so the returned order still covers
+ * every placement.
+ */
+function movePlacementWithinStatus(
+  items: PlacementWithTask[],
+  placementId: string,
+  direction: 'up' | 'down',
+): PlacementWithTask[] | null {
+  const index = items.findIndex((item) => item.id === placementId);
+  if (index < 0) return null;
+  const { status } = items[index]!.task;
+  const step = direction === 'up' ? -1 : 1;
+  let target = index + step;
+  while (target >= 0 && target < items.length && items[target]!.task.status !== status) {
+    target += step;
+  }
+  if (target < 0 || target >= items.length) return null;
+  const next = [...items];
+  [next[index], next[target]] = [next[target]!, next[index]!];
+  return next;
 }
 
 /**
@@ -1778,11 +1805,8 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
     }
   };
   const movePlacement = async (placementId: string, direction: 'up' | 'down') => {
-    const index = items.findIndex((item) => item.id === placementId);
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (index < 0 || targetIndex < 0 || targetIndex >= items.length) return;
-    const next = [...items];
-    [next[index], next[targetIndex]] = [next[targetIndex]!, next[index]!];
+    const next = movePlacementWithinStatus(items, placementId, direction);
+    if (!next) return;
     try {
       await mutationV2('POST', `/time-points/${point.id}/placements/reorder`, {
         ids: next.map((item) => item.id),
@@ -1791,6 +1815,24 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
       setActionError(cause instanceof ApiError ? cause.message : '安排排序失败，请重试');
+    }
+  };
+  const toggleReached = async () => {
+    if (actionBusy) return;
+    setActionBusy(true);
+    setActionError('');
+    try {
+      await mutationV2(
+        'POST',
+        `/time-points/${point.id}/${point.reachedAt ? 'unreach' : 'reach'}`,
+        { baseVersion: point.version },
+      );
+      await load();
+      window.dispatchEvent(new Event('devtodo:data-changed'));
+    } catch (cause) {
+      setActionError(cause instanceof ApiError ? cause.message : '操作失败');
+    } finally {
+      setActionBusy(false);
     }
   };
   return (
@@ -1811,20 +1853,11 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             </Button>
             <Button
               variant="outlined"
-              leadingIcon={<Check size={16} />}
-              disabled={actionBusy || Boolean(point.reachedAt)}
-              onClick={() =>
-                void mutationV2('POST', `/time-points/${point.id}/reach`, {
-                  baseVersion: point.version,
-                })
-                  .then(load)
-                  .then(() => window.dispatchEvent(new Event('devtodo:data-changed')))
-                  .catch((cause: unknown) =>
-                    setActionError(cause instanceof ApiError ? cause.message : '操作失败'),
-                  )
-              }
+              leadingIcon={point.reachedAt ? <Undo2 size={16} /> : <Check size={16} />}
+              disabled={actionBusy}
+              onClick={() => void toggleReached()}
             >
-              {point.reachedAt ? '已到达' : '标记已到达'}
+              {point.reachedAt ? '撤销到达' : '标记已到达'}
             </Button>
             <Button
               variant="outlined"
@@ -1876,6 +1909,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       <PlacementList
         items={items}
         pointId={point.id}
+        groupByStatus
         onOpenTask={onOpenTask}
         onChanged={load}
         onMove={movePlacement}
@@ -2205,6 +2239,7 @@ function PlacementList({
   emptyTitle,
   emptyDescription,
   emptyAction,
+  groupByStatus = false,
   readOnly = false,
 }: {
   items: PlacementWithTask[];
@@ -2216,10 +2251,13 @@ function PlacementList({
   emptyTitle: string;
   emptyDescription: string;
   emptyAction?: ReactNode;
+  /** Render status sections (进行中 / 待开始 / 已完成), with completed collapsed. */
+  groupByStatus?: boolean;
   readOnly?: boolean;
 }) {
   const [dropError, setDropError] = useState('');
   const [dropBusy, setDropBusy] = useState(false);
+  const [completedOpen, setCompletedOpen] = useState(false);
   const allItems = reorderItems ?? items;
   const handleDrop = async (event: ReactDragEvent<HTMLElement>, targetPlacementId?: string) => {
     if (!pointId || readOnly || dropBusy) return;
@@ -2287,6 +2325,27 @@ function PlacementList({
         </div>
       </>
     );
+  const renderRow = (item: PlacementWithTask, index: number, count: number) => (
+    <PlacementRow
+      key={item.id}
+      placement={item}
+      task={item.task}
+      onOpen={onOpenTask}
+      onChanged={onChanged}
+      onDrop={readOnly ? undefined : (event) => void handleDrop(event, item.id)}
+      onMove={readOnly ? undefined : onMove ? (direction) => onMove(item.id, direction) : undefined}
+      canMoveUp={index > 0}
+      canMoveDown={index < count - 1}
+      onToggleStatus={!readOnly}
+      readOnly={readOnly}
+    />
+  );
+  const statusGroups = groupByStatus
+    ? (['IN_PROGRESS', 'TODO', 'DONE'] as const).map((status) => ({
+        status,
+        items: items.filter((item) => item.task.status === status),
+      }))
+    : null;
   return (
     <>
       {dropNotice}
@@ -2297,25 +2356,52 @@ function PlacementList({
         }}
         onDrop={(event) => void handleDrop(event)}
       >
-        {items.map((item, index) => (
-          <PlacementRow
-            key={item.id}
-            placement={item}
-            task={item.task}
-            onOpen={onOpenTask}
-            onChanged={onChanged}
-            onDrop={readOnly ? undefined : (event) => void handleDrop(event, item.id)}
-            onMove={
-              readOnly ? undefined : onMove ? (direction) => onMove(item.id, direction) : undefined
-            }
-            canMoveUp={index > 0}
-            canMoveDown={index < items.length - 1}
-            onToggleStatus={!readOnly}
-            readOnly={readOnly}
-          />
-        ))}
+        {statusGroups
+          ? statusGroups.map((group) =>
+              group.items.length ? (
+                <Fragment key={group.status}>
+                  <PlacementGroupHeading
+                    status={group.status}
+                    count={group.items.length}
+                    collapsed={group.status === 'DONE' && !completedOpen}
+                    onToggle={
+                      group.status === 'DONE' ? () => setCompletedOpen((open) => !open) : undefined
+                    }
+                  />
+                  {(group.status !== 'DONE' || completedOpen) &&
+                    group.items.map((item, index) => renderRow(item, index, group.items.length))}
+                </Fragment>
+              ) : null,
+            )
+          : items.map((item, index) => renderRow(item, index, items.length))}
       </div>
     </>
+  );
+}
+
+function PlacementGroupHeading({
+  status,
+  count,
+  collapsed,
+  onToggle,
+}: {
+  status: TaskStatus;
+  count: number;
+  collapsed?: boolean;
+  onToggle?: () => void;
+}) {
+  return (
+    <div className={`placement-group-heading placement-group-heading--${taskStatusClass(status)}`}>
+      <span className="placement-group-heading__label">
+        {taskStatusLabel(status)}
+        <span className="count">{count}</span>
+      </span>
+      {onToggle && (
+        <Button variant="text" size="s" aria-expanded={!collapsed} onClick={onToggle}>
+          {collapsed ? '展开' : '收起'}
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -3128,11 +3214,8 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   }, [loadSelected]);
   const movePlacement = async (placementId: string, direction: 'up' | 'down') => {
     if (!point) return;
-    const index = items.findIndex((item) => item.id === placementId);
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (index < 0 || targetIndex < 0 || targetIndex >= items.length) return;
-    const next = [...items];
-    [next[index], next[targetIndex]] = [next[targetIndex]!, next[index]!];
+    const next = movePlacementWithinStatus(items, placementId, direction);
+    if (!next) return;
     await mutationV2('POST', `/time-points/${point.id}/placements/reorder`, {
       ids: next.map((item) => item.id),
     });
@@ -3222,6 +3305,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             <PlacementList
               items={items}
               pointId={point?.id}
+              groupByStatus
               onOpenTask={onOpenTask}
               onChanged={loadSelected}
               onMove={movePlacement}
