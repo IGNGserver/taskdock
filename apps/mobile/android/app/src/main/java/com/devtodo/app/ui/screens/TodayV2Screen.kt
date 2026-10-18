@@ -99,8 +99,23 @@ fun TodayV2Screen(
                                 Text("已完成 $done / $total", style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
-                            TextButton(onClick = { chooseExisting = true }, contentPadding = PaddingValues(horizontal = 0.dp)) {
-                                Text("从已有任务中挑选")
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                TextButton(onClick = { chooseExisting = true }, contentPadding = PaddingValues(horizontal = 0.dp)) {
+                                    Text("从已有任务中挑选")
+                                }
+                                if (pending > 0) {
+                                    FilledTonalButton(
+                                        onClick = { viewModel.rolloverTasks(today) },
+                                        shape = TaskDockShapes.FullPill,
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                                    ) {
+                                        Text("顺延到明天")
+                                    }
+                                }
                             }
                         }
                     }

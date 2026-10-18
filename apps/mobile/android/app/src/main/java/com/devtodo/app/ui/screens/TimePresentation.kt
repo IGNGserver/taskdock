@@ -6,6 +6,7 @@ import com.devtodo.app.data.model.TimePointType
 import java.text.DateFormat
 import java.text.ParsePosition
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
@@ -128,3 +129,15 @@ private fun parseLocalDate(localDate: String?, timezoneId: String): Date? {
 }
 
 private val ISO_LOCAL_DATE = Regex("\\d{4}-\\d{2}-\\d{2}")
+
+/** Shift an ISO local-date string forward or backward by delta days in the given timezone. */
+internal fun shiftLocalDate(localDate: String, deltaDays: Int, timezoneId: String = "Asia/Shanghai"): String {
+    val parsed = parseLocalDate(localDate, timezoneId) ?: return localDate
+    val cal = Calendar.getInstance(TimeZone.getTimeZone(timezoneId), Locale.ROOT).apply {
+        time = parsed
+        add(Calendar.DAY_OF_MONTH, deltaDays)
+    }
+    return SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone(timezoneId)
+    }.format(cal.time)
+}

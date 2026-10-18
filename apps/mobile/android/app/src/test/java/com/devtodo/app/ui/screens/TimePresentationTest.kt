@@ -96,6 +96,14 @@ class TimePresentationTest {
         assertNull(moveWithinTaskStatus(scheduled, 3, 1) { it.first })
     }
 
+    @Test
+    fun shiftLocalDateCorrectlyCalculatesNextAndPreviousDays() {
+        assertEquals("2026-09-24", shiftLocalDate("2026-09-23", 1, "Asia/Shanghai"))
+        assertEquals("2026-09-22", shiftLocalDate("2026-09-23", -1, "Asia/Shanghai"))
+        assertEquals("2026-10-01", shiftLocalDate("2026-09-30", 1, "Asia/Shanghai"))
+        assertEquals("2027-01-01", shiftLocalDate("2026-12-31", 1, "Asia/Shanghai"))
+    }
+
     private fun date(id: String, localDate: String, rank: String) =
         TimePointEntity(
             id = id,

@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.devtodo.app.data.local.ConflictEntity
 import com.devtodo.app.data.local.OutboxEntity
 import com.devtodo.app.data.sync.SyncState
 import com.devtodo.app.ui.components.ActionMenu
@@ -63,6 +64,7 @@ fun SettingsScreen(
     var confirmOrigin by rememberSaveable { mutableStateOf<String?>(null) }
     var logout by rememberSaveable { mutableStateOf(false) }
     var discard by remember { mutableStateOf<OutboxEntity?>(null) }
+    var selectedConflict by remember { mutableStateOf<ConflictEntity?>(null) }
     var queue by rememberSaveable { mutableStateOf(false) }
     var showTimezone by rememberSaveable { mutableStateOf(false) }
     val legacyExport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -151,7 +153,7 @@ fun SettingsScreen(
                 Column(Modifier.padding(bottom = 8.dp)) {
                     if (conflicts.isNotEmpty()) {
                         Text(
-                            text = "存在版本冲突。请在 Web 端“设置 → 高级同步”中检视并解决冲突。",
+                            text = "存在待解决的版本冲突。点击冲突条目可选择采纳服务器、保留本地或编辑合并。",
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -162,7 +164,13 @@ fun SettingsScreen(
                     conflicts.forEach { conflict ->
                         ListItem(
                             headlineContent = { Text(conflict.command ?: conflict.entityType) },
-                            supportingContent = { Text("记录 ID: ${conflict.entityId.take(8)}") },
+                            supportingContent = { Text("记录 ID: ${conflict.entityId.take(8)} · 点击处理冲突") },
+                            trailingContent = {
+                                TextButton(onClick = { selectedConflict = conflict }) {
+                                    Text("解决")
+                                }
+                            },
+                            modifier = Modifier.clickable { selectedConflict = conflict },
                             colors = transparentListItemColors(),
                         )
                     }
@@ -393,6 +401,19 @@ fun SettingsScreen(
         },
         dismissButton = { TextButton(onClick = { discard = null }) { Text("取消") } },
     )
+    }
+
+    val conflictToResolve = selectedConflict
+    if (conflictToResolve != null) {
+        com.devtodo.app.ui.components.ConflictResolutionDialog(
+            conflict = conflictToResolve,
+            onDismiss = { selectedConflict = null },
+            onResolve = { strategy, mergedJson ->
+                viewModel.resolveConflict(conflictToResolve, strategy, mergedJson) { success ->
+                    if (success) selectedConflict = null
+                }
+            },
+        )
     }
 }
 

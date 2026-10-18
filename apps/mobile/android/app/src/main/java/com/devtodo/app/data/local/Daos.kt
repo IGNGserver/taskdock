@@ -387,6 +387,9 @@ interface OutboxDao {
     @Query("DELETE FROM outbox WHERE mutationId = :mutationId AND ownerId = :ownerId")
     suspend fun deleteByMutationId(mutationId: String, ownerId: String)
 
+    @Query("SELECT * FROM outbox WHERE mutationId = :mutationId AND ownerId = :ownerId LIMIT 1")
+    suspend fun getByMutationId(mutationId: String, ownerId: String): OutboxEntity?
+
     @Query("UPDATE outbox SET attempts = attempts + 1, nextAttemptAt = :nextAttemptAt, lastError = :error WHERE id = :id AND ownerId = :ownerId")
     suspend fun recordAttempt(id: Long, ownerId: String, nextAttemptAt: Long, error: String?)
 }
@@ -395,6 +398,9 @@ interface OutboxDao {
 interface ConflictDao {
     @Query("SELECT * FROM conflicts WHERE ownerId = :ownerId AND resolvedAt IS NULL ORDER BY id DESC")
     fun getUnresolvedConflictsFlow(ownerId: String): Flow<List<ConflictEntity>>
+
+    @Query("SELECT * FROM conflicts WHERE id = :id AND ownerId = :ownerId LIMIT 1")
+    suspend fun getById(id: Long, ownerId: String): ConflictEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(conflict: ConflictEntity): Long
