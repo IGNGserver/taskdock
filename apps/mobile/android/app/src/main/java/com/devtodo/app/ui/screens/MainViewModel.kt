@@ -2207,7 +2207,7 @@ class MainViewModel(
                             }
                             db.conflictDao().markResolved(currentConflict.id, ownerId, now)
                             // Re-sync entity from server by dropping cursor so next pull will restore authority
-                            db.syncMetaDao().remove(v2SyncCursorKey(ownerId))
+                            db.syncMetaDao().remove(SyncEngine.v2SyncCursorKey(ownerId))
                         }
                         "discard" -> {
                             if (outboxItem != null) {

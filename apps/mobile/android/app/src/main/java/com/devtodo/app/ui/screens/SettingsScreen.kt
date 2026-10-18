@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.devtodo.app.data.local.ConflictEntity
 import com.devtodo.app.data.local.OutboxEntity
 import com.devtodo.app.data.sync.SyncState
 import com.devtodo.app.ui.components.ActionMenu
@@ -402,12 +403,13 @@ fun SettingsScreen(
     )
     }
 
-    selectedConflict?.let { conflict ->
+    val conflictToResolve = selectedConflict
+    if (conflictToResolve != null) {
         com.devtodo.app.ui.components.ConflictResolutionDialog(
-            conflict = conflict,
+            conflict = conflictToResolve,
             onDismiss = { selectedConflict = null },
             onResolve = { strategy, mergedJson ->
-                viewModel.resolveConflict(conflict, strategy, mergedJson) { success ->
+                viewModel.resolveConflict(conflictToResolve, strategy, mergedJson) { success ->
                     if (success) selectedConflict = null
                 }
             },

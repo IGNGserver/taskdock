@@ -145,10 +145,11 @@ class SyncEngine(
         private const val MAX_PUSH_MUTATIONS = 100
         private const val MAX_PUSH_BYTES = 900_000
         private const val TARGET_PUSH_BYTES = 256_000
+
+        fun v2SyncCursorKey(ownerId: String): String = "v2:$SYNC_CURSOR_KEY:$ownerId"
     }
 
     private fun syncCursorKey(ownerId: String): String = "$SYNC_CURSOR_KEY:$ownerId"
-    private fun v2SyncCursorKey(ownerId: String): String = "v2:$SYNC_CURSOR_KEY:$ownerId"
 
     private val isoFormat: SimpleDateFormat
         get() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
