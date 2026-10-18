@@ -11,7 +11,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -40,6 +39,7 @@ fun TodayV2Screen(
 ) {
     val scheduled by viewModel.todayTasks.collectAsStateWithLifecycle()
     val folders by viewModel.foldersV2.collectAsStateWithLifecycle()
+    val folderAggregates by viewModel.folderAggregates.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val ready by viewModel.dataReady.collectAsStateWithLifecycle()
     val loadProgress by viewModel.loadProgress.collectAsStateWithLifecycle()
@@ -164,48 +164,20 @@ fun TodayV2Screen(
     }
     if (chooseExisting) {
         val allTasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
-        val scheduledIds = scheduled.map { it.first.id }.toSet()
-        ExistingTaskPicker(
-            tasks = allTasks.filter { it.id !in scheduledIds && it.deletedAt == null && it.archivedAt == null && it.status != TaskStatus.DONE },
+        val scheduledIds = remember(scheduled) { scheduled.map { it.first.id }.toSet() }
+        DirectoryTaskPickerDialog(
+            title = "安排到今天",
+            allFolders = folders,
+            allTasks = allTasks,
+            folderAggregates = folderAggregates,
+            alreadyScheduledTaskIds = scheduledIds,
             onDismiss = { chooseExisting = false },
-            onChoose = { task, result -> viewModel.scheduleTask(task, today, copy = true,
-                onComplete = { failure -> result(failure); if (failure == null) chooseExisting = false }) },
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ExistingTaskPicker(
-    tasks: List<TaskEntity>,
-    onDismiss: () -> Unit,
-    onChoose: (TaskEntity, (String?) -> Unit) -> Unit,
-) {
-    var query by rememberSaveable { mutableStateOf("") }
-    var saving by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true,
-        confirmValueChange = { !saving || it != SheetValue.Hidden })
-    ModalBottomSheet(onDismissRequest = { if (!saving) onDismiss() }, sheetState = sheet) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("安排到今天", style = MaterialTheme.typography.titleLarge)
-            OutlinedTextField(query, { query = it }, singleLine = true, label = { Text("搜索已有任务") },
-                leadingIcon = { Icon(Icons.Default.Search, null) }, modifier = Modifier.fillMaxWidth(), shape = TaskDockShapes.FullPill)
-            if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
-            if (saving) LinearProgressIndicator(Modifier.fillMaxWidth())
-            val visible = tasks.filter { it.title.contains(query.trim(), ignoreCase = true) }
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
-                items(visible, key = { it.id }) { task ->
-                    TextButton(enabled = !saving, onClick = {
-                        saving = true; error = null
-                        onChoose(task) { saving = false; error = it }
-                    }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).animateItem()) {
-                        Text(task.title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                        Icon(Icons.Default.Add, null, Modifier.size(20.dp))
-                    }
+            onConfirm = { ids ->
+                val targetTasks = allTasks.filter { it.id in ids }
+                viewModel.scheduleTasks(targetTasks, today) { failure ->
+                    if (failure == null) chooseExisting = false
                 }
-                if (visible.isEmpty()) item { Text("暂无可安排的任务", Modifier.padding(vertical = 24.dp)) }
-            }
-        }
+            },
+        )
     }
 }

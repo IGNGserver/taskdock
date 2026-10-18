@@ -1390,6 +1390,71 @@ class MainViewModel(
      * placements. Use [movePlacementToDate] for the web-compatible move
      * operation on one concrete placement.
      */
+    fun scheduleTasks(
+        tasks: List<TaskEntity>,
+        localDate: String,
+        onComplete: ((String?) -> Unit)? = null,
+    ) {
+        viewModelScope.launch {
+            try {
+                db.withTransaction {
+                    val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
+                    val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+                    require(parser.format(parser.parse(localDate) ?: error("日期无效")) == localDate) { "日期无效" }
+                    val datePoint = getOrCreateDatePoint(ownerId, localDate)
+                    val currentPlacements = db.placementDao().getPlacementsByTimePoint(datePoint.id, ownerId)
+                    val existingTaskIds = currentPlacements.map { it.taskId }.toSet()
+                    var nextRank = currentPlacements.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L
+                    val now = nowIso()
+
+                    tasks.distinctBy { it.id }.forEach { task ->
+                        if (task.id in existingTaskIds) return@forEach
+                        require(task.ownerId == ownerId) { "任务不属于当前账户" }
+                        val current = db.taskDao().getTaskById(task.id, ownerId) ?: error("任务已不存在")
+                        require(current.archivedAt == null && current.deletedAt == null) { "任务已不可用" }
+
+                        nextRank += 1024L
+                        val id = UUID.randomUUID().toString()
+                        db.placementDao().upsertPlacement(
+                            PlacementEntity(
+                                id = id,
+                                ownerId = ownerId,
+                                taskId = task.id,
+                                timePointId = datePoint.id,
+                                rank = nextRank.toString(),
+                                version = 1,
+                                createdAt = now,
+                                updatedAt = now,
+                                deletedAt = null,
+                                pendingSync = true,
+                            ),
+                        )
+                        syncEngine.recordLocalMutation(
+                            command = "placement.create",
+                            entityId = id,
+                            baseVersion = null,
+                            payload = mapOf(
+                                "taskId" to task.id,
+                                "timePointId" to datePoint.id,
+                                "__localId" to id,
+                            ),
+                            ownerId = ownerId,
+                        )
+                    }
+                    require(authManager.ownerId == ownerId) { "当前账户已变化" }
+                }
+                loadTodayData()
+                onComplete?.invoke(null)
+                _messages.tryEmit("已安排到 $localDate")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                val message = error.userMessage("安排任务失败")
+                if (onComplete != null) onComplete(message) else _messages.tryEmit(message)
+            }
+        }
+    }
+
     @Suppress("UNUSED_PARAMETER")
     fun scheduleTask(
         task: TaskEntity,

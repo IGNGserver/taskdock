@@ -36,6 +36,7 @@ import com.devtodo.app.data.local.TimePointEntity
 import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.data.model.TimePointType
 import com.devtodo.app.ui.components.ActionMenu
+import com.devtodo.app.ui.components.DirectoryTaskPickerDialog
 import com.devtodo.app.ui.components.EmptyState
 import com.devtodo.app.ui.components.ExpressiveTaskCard
 import com.devtodo.app.ui.components.RowAction
@@ -322,6 +323,7 @@ fun DayScheduleScreen(
     val placements by viewModel.activeTimePointPlacements.collectAsStateWithLifecycle()
     val tasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
     val folders by viewModel.foldersV2.collectAsStateWithLifecycle()
+    val folderAggregates by viewModel.folderAggregates.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val refreshing by viewModel.pullRefreshing.collectAsStateWithLifecycle()
     val point = points.firstOrNull { it.type == TimePointType.DATE && it.localDate == localDate }
@@ -466,11 +468,13 @@ fun DayScheduleScreen(
     }
 
     if (showPicker && pickerPointId != null) {
-        TaskPickerDialog(
+        val alreadyScheduledIds = remember(scheduled) { scheduled.map { it.first.id }.toSet() }
+        DirectoryTaskPickerDialog(
             title = "添加到当天安排",
-            tasks = tasks.filter {
-                it.archivedAt == null && it.deletedAt == null && scheduled.none { item -> item.first.id == it.id }
-            },
+            allFolders = folders,
+            allTasks = tasks,
+            folderAggregates = folderAggregates,
+            alreadyScheduledTaskIds = alreadyScheduledIds,
             onDismiss = { showPicker = false },
             onConfirm = { ids ->
                 viewModel.addTasksToTimePoint(pickerPointId!!, ids) { success ->
@@ -657,6 +661,7 @@ fun EventDetailScreen(
     val placements by viewModel.activeTimePointPlacements.collectAsStateWithLifecycle()
     val tasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
     val folders by viewModel.foldersV2.collectAsStateWithLifecycle()
+    val folderAggregates by viewModel.folderAggregates.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val event = events.firstOrNull { it.id == eventId }
     val taskById = remember(tasks) { tasks.associateBy { it.id } }
@@ -802,11 +807,13 @@ fun EventDetailScreen(
     }
 
     if (showPicker) {
-        TaskPickerDialog(
+        val alreadyScheduledIds = remember(scheduled) { scheduled.map { it.first.id }.toSet() }
+        DirectoryTaskPickerDialog(
             title = "添加到事件",
-            tasks = tasks.filter {
-                it.archivedAt == null && it.deletedAt == null && scheduled.none { item -> item.first.id == it.id }
-            },
+            allFolders = folders,
+            allTasks = tasks,
+            folderAggregates = folderAggregates,
+            alreadyScheduledTaskIds = alreadyScheduledIds,
             onDismiss = { showPicker = false },
             onConfirm = { ids ->
                 viewModel.addTasksToTimePoint(event.id, ids) { success ->
@@ -932,81 +939,6 @@ private fun PlacementGroupHeading(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TaskPickerDialog(
-    title: String,
-    tasks: List<TaskEntity>,
-    onDismiss: () -> Unit,
-    onConfirm: (List<String>) -> Unit,
-) {
-    var query by rememberSaveable { mutableStateOf("") }
-    val selected = remember { mutableStateListOf<String>() }
-    val visibleTasks = remember(tasks, query) {
-        val normalized = query.trim()
-        tasks.filter {
-            normalized.isEmpty() ||
-                it.title.contains(normalized, ignoreCase = true) ||
-                it.referenceId?.contains(normalized, ignoreCase = true) == true
-        }
-    }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (tasks.isEmpty()) {
-                    Text("没有可添加的任务", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("搜索任务") },
-                        trailingIcon = {
-                            if (query.isNotEmpty()) {
-                                IconButton(onClick = { query = "" }) {
-                                    Icon(Icons.Default.Close, "清除搜索")
-                                }
-                            }
-                        },
-                    )
-                    if (visibleTasks.isEmpty()) {
-                        Text("没有匹配的任务", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else {
-                        LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                            items(visibleTasks, key = { it.id }) { task ->
-                                val checked = task.id in selected
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().clickable {
-                                        if (checked) selected.remove(task.id) else selected.add(task.id)
-                                    }.padding(vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Checkbox(checked = checked, onCheckedChange = null)
-                                    Spacer(Modifier.width(8.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(task.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                        if (task.status == TaskStatus.DONE) {
-                                            Text("已完成", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onConfirm(selected.toList()) }, enabled = selected.isNotEmpty(), shape = TaskDockShapes.FullPill) {
-                Text("添加 ${selected.size} 项")
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
