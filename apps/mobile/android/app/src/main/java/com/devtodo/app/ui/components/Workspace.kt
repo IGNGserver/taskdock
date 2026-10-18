@@ -197,8 +197,8 @@ fun CaptureSheet(
     if (discard)
         AlertDialog(
             onDismissRequest = { discard = false },
-            title = { Text("放弃更改？") },
-            text = { Text("输入的内容尚未保存。") },
+            title = { Text(if (initialValue.isBlank()) "放弃这条草稿？" else "放弃更改？") },
+            text = { Text(if (initialValue.isBlank()) "输入的内容尚未创建。" else "输入的内容尚未保存。") },
             confirmButton = { TextButton(onClick = onDismiss) { Text("放弃") } },
             dismissButton = { TextButton(onClick = { discard = false }) { Text("继续编辑") } },
         )
