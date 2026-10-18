@@ -60,6 +60,7 @@ jobs:
           trap '"$PG_CTL" -D "$PGDATA" -m fast stop || true' EXIT
           "$PG_CTL" -D "$PGDATA" -l "$(dirname "$PGDATA")/postgres.log" -o "-p 55439 -h 127.0.0.1 -k $(dirname "$PGDATA")" start
           "$PG_BIN/createdb" -h 127.0.0.1 -p 55439 -U devtodo devtodo_runtime
+          DATABASE_URL=postgres://devtodo@127.0.0.1:55439/devtodo_runtime pnpm db:migrate
           DATABASE_URL=postgres://devtodo@127.0.0.1:55439/devtodo_runtime pnpm test:pg-runtime
           "$PG_BIN/createdb" -h 127.0.0.1 -p 55439 -U devtodo devtodo_benchmark
           DATABASE_URL=postgres://devtodo@127.0.0.1:55439/devtodo_benchmark pnpm exec tsx scripts/sync-bootstrap-benchmark.ts | tee mobile-loading-benchmark.json

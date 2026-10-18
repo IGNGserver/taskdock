@@ -253,6 +253,13 @@ class SyncEngineTest {
         assertNotNull(db.syncMetaDao().get("confirmed:$owner"))
     }
 
+    @Test fun revokedSessionCannotLeaveTheEngineSpinning() = runBlocking {
+        auth.clearSession()
+        try { engine.triggerSync(); fail("revoked session should cancel the old engine") }
+        catch (_: CancellationException) { }
+        assertEquals(SyncState.AUTH_REQUIRED, engine.syncState.value)
+    }
+
     @Test fun missedSocketNotificationIsRecoveredByForegroundVerification() = runBlocking {
         engine.stop()
         engine = SyncEngine(db, api, auth, verificationIntervalMs = 200)

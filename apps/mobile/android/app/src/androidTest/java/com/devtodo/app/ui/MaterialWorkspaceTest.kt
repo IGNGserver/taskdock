@@ -137,10 +137,12 @@ class MaterialWorkspaceTest {
         }
         compose.onNodeWithTag("tree-create-action").performClick()
         compose.onNodeWithTag("capture-title").assertIsFocused().performTextInput("  先写下来  ")
+        compose.onNodeWithTag("capture-save").performScrollTo()
         // The pending-save spinner is intentionally indeterminate. Freeze its
         // test clock while inspecting the state, then deliver the real callback.
         compose.mainClock.autoAdvance = false
-        compose.onNodeWithTag("capture-save").performScrollTo().performClick()
+        compose.onNodeWithTag("capture-save").performClick()
+        compose.mainClock.advanceTimeByFrame()
         compose.onNodeWithTag("capture-save").assertIsNotEnabled()
         compose.onNodeWithContentDescription("收起并保留草稿").assertIsNotEnabled()
         compose.runOnUiThread {
@@ -153,8 +155,10 @@ class MaterialWorkspaceTest {
         compose.onNodeWithContentDescription("收起并保留草稿").performScrollTo().performClick()
         compose.onNodeWithTag("tree-create-action").performClick()
         compose.onNodeWithTag("capture-title").assertTextContains("  先写下来  ")
+        compose.onNodeWithTag("capture-save").performScrollTo()
         compose.mainClock.autoAdvance = false
-        compose.onNodeWithTag("capture-save").performScrollTo().performClick()
+        compose.onNodeWithTag("capture-save").performClick()
+        compose.mainClock.advanceTimeByFrame()
         compose.runOnUiThread { acknowledge!!(null) }
         compose.mainClock.autoAdvance = true
         compose.onNodeWithTag("capture-title").assertDoesNotExist()
@@ -174,8 +178,10 @@ class MaterialWorkspaceTest {
         compose.onNodeWithTag("tree-create-action").performClick()
         compose.onNodeWithTag("capture-title").performTextInput("第一件事")
         compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch)).performScrollTo().performClick()
+        compose.onNodeWithTag("capture-save").performScrollTo()
         compose.mainClock.autoAdvance = false
-        compose.onNodeWithTag("capture-save").performScrollTo().performClick()
+        compose.onNodeWithTag("capture-save").performClick()
+        compose.mainClock.advanceTimeByFrame()
         compose.runOnUiThread { acknowledge!!(null) }
         compose.mainClock.autoAdvance = true
         compose.onNodeWithTag("capture-title").assertExists().assertIsFocused().assertIsDisplayed()

@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
@@ -58,6 +60,7 @@ class SyncEngine(
     @Volatile private var foreground = false
     @Volatile private var activePage: String? = null
     private val pageFlights = mutableMapOf<String, Deferred<SyncOutcome>>()
+    private val priorityReads = Semaphore(2)
     private val syncMutex = Mutex()
     private val flightLock = Any()
     private var syncFlight: Deferred<SyncOutcome>? = null
@@ -69,7 +72,13 @@ class SyncEngine(
 
     private suspend fun ensureSession() {
         currentCoroutineContext().ensureActive()
-        if (authManager.sessionKey != boundSession) throw CancellationException("账户或中枢已变化")
+        if (authManager.sessionKey != boundSession) {
+            if (!authManager.isLoggedIn) {
+                _syncState.value = SyncState.AUTH_REQUIRED
+                _lastSyncError.value = "登录已失效，请重新登录"
+            }
+            throw CancellationException("账户或中枢已变化")
+        }
     }
 
     /** All callers share an engine-owned flight. Logout cancels manual refresh too. */
@@ -179,12 +188,17 @@ class SyncEngine(
     fun setForeground(value: Boolean) { foreground = value }
 
     fun prioritizePage(key: String, force: Boolean = false) {
+        val previousPage = activePage
         activePage = key
+        if (previousPage != null && previousPage != key) synchronized(pageFlights) {
+            pageFlights.remove(previousPage)?.cancel()
+        }
         if (!networkAvailable || !authManager.isLoggedIn) return
         val previous = _pageLoads.value[key]
         if (!force && previous?.error == null && previous != null &&
             System.currentTimeMillis() - previous.loadedAt in 0 until verificationIntervalMs) return
         scope.launch {
+            if (activePage != key) return@launch
             when {
                 key.startsWith("task:") -> loadTaskDetails(key.removePrefix("task:"))
                 key.startsWith("directory:") || key == "today" -> loadPreview(key)
@@ -201,30 +215,34 @@ class SyncEngine(
                 pageFlights.entries.removeAll { !it.value.isActive && it.key != key && it.key != activePage }
                 _pageLoads.update { states -> states.filterKeys { it in pageFlights || it == key || it == activePage } }
             }
-            pageFlights[key]?.takeIf { it.isActive } ?: scope.async {
-                _pageLoads.update { it + (key to (it[key] ?: PageLoadState()).copy(loading = true, error = null)) }
+            pageFlights[key]?.takeIf { it.isActive } ?: scope.async(start = CoroutineStart.LAZY) {
+                val job = currentCoroutineContext()[Job]
+                fun publish(transform: (PageLoadState) -> PageLoadState) = synchronized(pageFlights) {
+                    if (pageFlights[key] === job) _pageLoads.update { it + (key to transform(it[key] ?: PageLoadState())) }
+                }
+                fun failure(message: String): SyncOutcome.Failure {
+                    publish { it.copy(loading = false, error = message) }
+                    return SyncOutcome.Failure(message)
+                }
+                if (activePage != null && activePage != key) throw CancellationException("页面已变化")
+                publish { it.copy(loading = true, error = null) }
                 try {
-                    withTimeout(12_000L) { ensureSession(); block(); ensureSession() }
-                    _pageLoads.update { it + (key to PageLoadState(loadedAt = System.currentTimeMillis())) }
+                    withTimeout(12_000L) { priorityReads.withPermit { ensureSession(); block(); ensureSession() } }
+                    publish { PageLoadState(loadedAt = System.currentTimeMillis()) }
                     SyncOutcome.Success
                 } catch (timeout: TimeoutCancellationException) {
                     currentCoroutineContext().ensureActive()
-                    pageFailure(key, "页面更新超时，显示已缓存内容")
+                    failure("页面更新超时，显示已缓存内容")
                 } catch (cancelled: CancellationException) { throw cancelled
                 } catch (error: Exception) {
                     ensureSession()
-                    pageFailure(key, error.message ?: "页面更新失败")
+                    failure(error.message ?: "页面更新失败")
                 } finally {
-                    _pageLoads.update { states -> states[key]?.let { states + (key to it.copy(loading = false)) } ?: states }
+                    publish { it.copy(loading = false) }
                 }
-            }.also { pageFlights[key] = it }
+            }.also { pageFlights[key] = it; it.start() }
         }
         return flight.await()
-    }
-
-    private fun pageFailure(key: String, message: String): SyncOutcome.Failure {
-        _pageLoads.update { it + (key to (it[key] ?: PageLoadState()).copy(loading = false, error = message)) }
-        return SyncOutcome.Failure(message)
     }
 
     private suspend fun loadPreview(key: String): SyncOutcome = pageRequest(key) {

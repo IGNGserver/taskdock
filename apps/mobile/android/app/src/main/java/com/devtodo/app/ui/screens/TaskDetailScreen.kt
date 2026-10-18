@@ -112,7 +112,7 @@ fun TaskDetailScreen(
     // it with the normal predictive back preview.
     BackHandler(enabled = dirty || isSaving) { back() }
 
-    LaunchedEffect(task?.id, task?.version, task?.title) {
+    LaunchedEffect(task?.id, task?.version, task?.title, title, originalTitle) {
         task?.let {
             val reconciled = reconcileDraft(title, originalTitle, it.title)
             title = reconciled.value
@@ -121,7 +121,7 @@ fun TaskDetailScreen(
         }
     }
 
-    LaunchedEffect(note?.id, note?.version, note?.contentMarkdown) {
+    LaunchedEffect(note?.id, note?.version, note?.contentMarkdown, markdownContent, originalNote, noteEdited) {
         note?.let {
             // A note typed before its first response is also a draft.
             val baseline = originalNote ?: if (noteEdited) "" else null

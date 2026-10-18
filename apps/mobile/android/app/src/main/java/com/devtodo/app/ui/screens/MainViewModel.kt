@@ -91,7 +91,10 @@ class MainViewModel(
         ownerIdentity.value = authManager.ownerId
         engineObservers?.cancel()
         engineObservers = viewModelScope.launch {
-            launch { syncEngine.syncState.collect { _syncState.value = it } }
+            launch { syncEngine.syncState.collect {
+                _syncState.value = it
+                if (it == SyncState.AUTH_REQUIRED && !authManager.isLoggedIn) onLoggedOut()
+            } }
             launch { syncEngine.lastSyncError.collect { _lastSyncError.value = it } }
             launch { syncEngine.loadProgress.collect { _loadProgress.value = it } }
             launch { syncEngine.pageLoads.collect { _pageLoads.value = it } }

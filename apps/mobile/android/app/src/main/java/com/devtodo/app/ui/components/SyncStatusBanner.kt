@@ -41,7 +41,8 @@ fun SyncStatusBanner(viewModel: MainViewModel, pageKey: String) {
     if (recent && !failed && !loading && progress.complete && pending.isEmpty()) {
         Text(checked, style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).testTag("sync-last-confirmed"))
+            modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                .padding(horizontal = 16.dp, vertical = 4.dp).testTag("sync-last-confirmed"))
         return
     }
     val message = when {

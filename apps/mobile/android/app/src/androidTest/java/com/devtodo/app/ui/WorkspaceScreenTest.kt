@@ -742,6 +742,10 @@ class WorkspaceScreenTest {
         compose.waitUntil(10_000) { runCatching { compose.onNodeWithText("中枢内容已变化，已保留你的未保存编辑。请核对后再保存。").assertExists(); true }.getOrDefault(false) }
         compose.onNodeWithText("我的未保存草稿").assertExists()
         screenshot("detail-remote-draft-conflict")
+        // Reverting the draft to its old baseline must reveal the newer remote
+        // value even if no further DB invalidation or network response arrives.
+        compose.onNodeWithText("任务标题").performScrollTo().performTextReplacement("远端新版标题")
+        compose.waitUntil(10_000) { runCatching { compose.onNodeWithText("另一设备的修改").assertExists(); true }.getOrDefault(false) }
     }
 
     @Test
