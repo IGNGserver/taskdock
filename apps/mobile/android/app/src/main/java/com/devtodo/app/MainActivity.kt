@@ -67,6 +67,11 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    override fun onStop() {
+        viewModel.onAppBackground()
+        super.onStop()
+    }
+
     private fun registerNetworkCallback() {
         connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val callback = object : ConnectivityManager.NetworkCallback() {

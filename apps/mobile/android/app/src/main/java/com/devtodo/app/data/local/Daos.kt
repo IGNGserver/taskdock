@@ -408,6 +408,11 @@ interface ConflictDao {
 
 @Dao
 interface SyncMetaDao {
+    @Query("SELECT value FROM sync_meta WHERE `key` = :key LIMIT 1")
+    fun observe(key: String): Flow<String?>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM tasks WHERE ownerId = :ownerId AND deletedAt IS NULL) OR EXISTS(SELECT 1 FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL) OR EXISTS(SELECT 1 FROM time_points WHERE ownerId = :ownerId AND deletedAt IS NULL) OR EXISTS(SELECT 1 FROM workflows WHERE ownerId = :ownerId AND deletedAt IS NULL) OR EXISTS(SELECT 1 FROM sync_meta WHERE `key` = :cursorKey)")
+    fun hasCache(ownerId: String, cursorKey: String): Flow<Boolean>
     @Query("DELETE FROM sync_meta WHERE `key` = :key")
     suspend fun remove(key: String)
     @Query("SELECT value FROM sync_meta WHERE `key` = :key LIMIT 1")

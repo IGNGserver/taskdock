@@ -53,8 +53,8 @@ class SyncEngineTest {
     private fun response(body: String, status: Int = 200) = MockResponse().setResponseCode(status).setHeader("Content-Type", "application/json").setBody(body)
     private fun task(id: String, pending: Boolean = false) = TaskEntity(id, owner, null, null, id,
         TaskStatus.TODO, TaskCategory.MISC, TaskPriority.NONE, "1024", 1, null, now, now, pendingSync = pending)
-    private fun snapshot(id: String = "hub-task") = """{"folders":[],"tasks":[{"id":"$id","title":"$id","status":"TODO","rank":"1024","version":1}],"notes":[],"taskSteps":[],"timePoints":[],"placements":[],"workflows":[],"workflowStages":[],"workflowTaskMemberships":[],"settings":{"ownerId":"$owner","timezone":"Asia/Shanghai"},"cursor":"7"}"""
-    private fun taskChange(id: String) = """{"seq":"7","entityType":"task","entityId":"$id","entityVersion":1,"operation":"upsert","snapshot":{"id":"$id","title":"$id","status":"TODO","rank":"1024","version":1}}"""
+    private fun snapshot(id: String = "hub-task") = """{"folders":[],"tasks":[{"id":"$id","referenceId":"TEST-1","title":"$id","status":"TODO","rank":"1024","version":1}],"notes":[],"taskSteps":[],"timePoints":[],"placements":[],"workflows":[],"workflowStages":[],"workflowTaskMemberships":[],"settings":{"ownerId":"$owner","timezone":"Asia/Shanghai"},"cursor":"7"}"""
+    private fun taskChange(id: String) = """{"seq":"7","entityType":"task","entityId":"$id","entityVersion":1,"operation":"upsert","snapshot":{"id":"$id","referenceId":"TEST-1","title":"$id","status":"TODO","rank":"1024","version":1}}"""
 
     @Test fun initialHttpFailureRetriesWithoutRefreshOrRestart() = runBlocking {
         var snapshots = 0
@@ -202,7 +202,7 @@ class SyncEngineTest {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when {
                 request.path == "/api/v2/sync/push" -> if (++pushes == 1) response("{}", 503)
-                    else response("""{"results":[{"mutationId":"${mutation.mutationId}","status":"applied","result":{"id":"edited","title":"confirmed edit","status":"TODO","rank":"1024","version":2}}]}""")
+                    else response("""{"results":[{"mutationId":"${mutation.mutationId}","status":"applied","result":{"id":"edited","referenceId":"TEST-1","title":"confirmed edit","status":"TODO","rank":"1024","version":2}}]}""")
                 request.path?.contains("cursor=1&") == true -> response("""{"nextCursor":"7","changes":[${taskChange("edited")}],"hasMore":false}""")
                 request.path?.startsWith("/api/v2/sync/pull") == true -> response("""{"nextCursor":"7","changes":[],"hasMore":false}""")
                 else -> response("{}", 404)
@@ -215,6 +215,87 @@ class SyncEngineTest {
         assertEquals(SyncOutcome.Success, engine.triggerSync())
         assertEquals("confirmed edit", db.taskDao().getTaskById("edited", owner)!!.title)
         assertTrue(db.syncJournalDao().deferred().isEmpty())
+    }
+
+    @Test fun boundedRefreshPreservesCacheAndDoesNotConfirmAnUnansweredRequest() = runBlocking {
+        engine.stop()
+        engine = SyncEngine(db, api, auth, syncBudgetMs = 250)
+        db.syncMetaDao().set(SyncMetaEntity("v2:sync_cursor:$owner", "1"))
+        db.taskDao().upsertTask(task("cached"))
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest) = MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
+        }
+        val result = withTimeout(5_000) { engine.triggerSync() }
+        assertTrue(result is SyncOutcome.Failure)
+        assertEquals(SyncState.ERROR, engine.syncState.value)
+        assertNotNull(db.taskDao().getTaskById("cached", owner))
+        assertNull(db.syncMetaDao().get("confirmed:$owner"))
+    }
+
+    @Test fun expiredCursorRecoversThroughPagesWithoutDownloadingLegacySnapshot() = runBlocking {
+        db.syncMetaDao().set(SyncMetaEntity("v2:sync_cursor:$owner", "1"))
+        db.taskDao().upsertTask(task("deleted-on-hub"))
+        val id = UUID.randomUUID().toString()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.contains("cursor=1&") == true -> response("""{"code":"SYNC_CURSOR_EXPIRED","message":"expired"}""", 410)
+                request.path == "/api/v2/sync/capabilities" -> response("""{"protocolVersion":2,"pagedSnapshot":true}""")
+                request.path?.startsWith("/api/v2/sync/preview") == true -> response("""{"changes":[],"complete":false}""")
+                request.path == "/api/v2/sync/bootstrap" -> response("""{"snapshotId":"$id","cursor":"7","expiresAt":"2099-01-01T00:00:00Z","pageCount":1,"protocolVersion":2}""")
+                request.path?.endsWith("page=0") == true -> response("""{"snapshotId":"$id","cursor":"7","page":0,"pageCount":1,"nextPage":null,"protocolVersion":2,"changes":[${taskChange("current")}]}""")
+                request.path?.startsWith("/api/v2/sync/pull") == true -> response("""{"nextCursor":"7","changes":[],"hasMore":false}""")
+                else -> response("{}", 500)
+            }
+        }
+        assertEquals(SyncOutcome.Success, engine.triggerSync())
+        assertNull(db.taskDao().getTaskById("deleted-on-hub", owner))
+        assertNotNull(db.taskDao().getTaskById("current", owner))
+        assertNotNull(db.syncMetaDao().get("confirmed:$owner"))
+    }
+
+    @Test fun missedSocketNotificationIsRecoveredByForegroundVerification() = runBlocking {
+        engine.stop()
+        engine = SyncEngine(db, api, auth, verificationIntervalMs = 200)
+        db.syncMetaDao().set(SyncMetaEntity("v2:sync_cursor:$owner", "1"))
+        val publish = java.util.concurrent.atomic.AtomicBoolean(false)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/api/v2/sync/pull") == true -> if (publish.get())
+                    response("""{"nextCursor":"7","changes":[${taskChange("missed-notification")}],"hasMore":false}""")
+                    else response("""{"nextCursor":"1","changes":[],"hasMore":false}""")
+                else -> response("{}", 404)
+            }
+        }
+        engine.setForeground(true)
+        engine.start()
+        withTimeout(5_000) { db.syncMetaDao().observe("confirmed:$owner").first { it != null } }
+        publish.set(true)
+        withTimeout(5_000) { db.taskDao().getTaskByIdFlow("missed-notification", owner).first { it != null } }
+        engine.setForeground(false)
+    }
+
+    @Test fun remoteChangesAreVisibleBeforeASlowUploadFinishes() = runBlocking {
+        db.syncMetaDao().set(SyncMetaEntity("v2:sync_cursor:$owner", "1"))
+        db.withTransaction {
+            db.taskDao().upsertTask(task("local-edit", true))
+            engine.recordLocalMutation("task.update", "local-edit", 1, mapOf("title" to "draft"))
+        }
+        val uploading = CompletableDeferred<Unit>()
+        val release = java.util.concurrent.CountDownLatch(1)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/api/v2/sync/pull") == true -> response("""{"nextCursor":"7","changes":[${taskChange("remote-first")}],"hasMore":false}""")
+                request.path == "/api/v2/sync/push" -> { uploading.complete(Unit); release.await(5, java.util.concurrent.TimeUnit.SECONDS); response("{}", 503) }
+                else -> response("{}", 404)
+            }
+        }
+        val flight = async { engine.triggerSync() }
+        try {
+            withTimeout(5_000) { uploading.await() }
+            assertNotNull(db.taskDao().getTaskById("remote-first", owner))
+            assertTrue(db.taskDao().getTaskById("local-edit", owner)!!.pendingSync)
+        } finally { release.countDown() }
+        assertTrue(flight.await() is SyncOutcome.Failure)
     }
 
     @Test fun returnedDateIdentityRewritesDependentPlacementsAndOutbox() = runBlocking {

@@ -68,12 +68,16 @@ fun TaskDetailScreen(
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val timePoints by viewModel.activeTimePoints.collectAsStateWithLifecycle()
     val ready by viewModel.dataReady.collectAsStateWithLifecycle()
+    val pageLoads by viewModel.pageLoads.collectAsStateWithLifecycle()
+    val pageLoad = pageLoads["task:$taskId"]
     LaunchedEffect(taskId) { viewModel.loadTaskDetails(taskId) }
 
     var title by rememberSaveable(taskId) { mutableStateOf("") }
     var markdownContent by rememberSaveable(taskId) { mutableStateOf("") }
     var originalTitle by rememberSaveable(taskId) { mutableStateOf<String?>(null) }
     var originalNote by rememberSaveable(taskId) { mutableStateOf<String?>(null) }
+    var titleConflict by rememberSaveable(taskId) { mutableStateOf(false) }
+    var noteConflict by rememberSaveable(taskId) { mutableStateOf(false) }
     var noteEdited by rememberSaveable(taskId) { mutableStateOf(false) }
     var tab by rememberSaveable(taskId) { mutableIntStateOf(0) }
     var isSaving by remember { mutableStateOf(false) }
@@ -108,17 +112,23 @@ fun TaskDetailScreen(
     // it with the normal predictive back preview.
     BackHandler(enabled = dirty || isSaving) { back() }
 
-    LaunchedEffect(task?.id) {
-        if (originalTitle == null && task != null) {
-            title = task!!.title
-            originalTitle = title
+    LaunchedEffect(task?.id, task?.version, task?.title) {
+        task?.let {
+            val reconciled = reconcileDraft(title, originalTitle, it.title)
+            title = reconciled.value
+            originalTitle = reconciled.baseline
+            titleConflict = reconciled.conflict
         }
     }
 
-    LaunchedEffect(note?.id) {
-        if (originalNote == null && note != null) {
-            originalNote = note!!.contentMarkdown
-            if (!noteEdited) markdownContent = note!!.contentMarkdown
+    LaunchedEffect(note?.id, note?.version, note?.contentMarkdown) {
+        note?.let {
+            // A note typed before its first response is also a draft.
+            val baseline = originalNote ?: if (noteEdited) "" else null
+            val reconciled = reconcileDraft(markdownContent, baseline, it.contentMarkdown)
+            markdownContent = reconciled.value
+            originalNote = reconciled.baseline
+            noteConflict = reconciled.conflict
         }
     }
 
@@ -136,6 +146,8 @@ fun TaskDetailScreen(
                         originalTitle = savedTitle
                         originalNote = savedNote
                         noteEdited = false
+                        titleConflict = false
+                        noteConflict = false
                         isSaving = false
                         snackbarHostState.showSnackbar("已保存到本地工作区")
                     }
@@ -196,6 +208,12 @@ fun TaskDetailScreen(
                 )
             )
 
+            if (titleConflict || noteConflict) {
+                Surface(color = MaterialTheme.colorScheme.errorContainer) {
+                    Text("中枢内容已变化，已保留你的未保存编辑。请核对后再保存。",
+                        Modifier.fillMaxWidth().padding(16.dp), color = MaterialTheme.colorScheme.onErrorContainer)
+                }
+            }
             PrimaryScrollableTabRow(
                 selectedTabIndex = tab,
                 edgePadding = 16.dp,
@@ -212,7 +230,11 @@ fun TaskDetailScreen(
     val current = task
     if (current == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (!ready || detail == null) CircularProgressIndicator() else Text("找不到任务，可能已被删除")
+            when {
+                pageLoad?.error != null -> Text("详情加载失败，请使用顶部重试。", Modifier.padding(16.dp))
+                pageLoad?.loading == true || !ready || detail == null -> CircularProgressIndicator()
+                else -> Text("找不到任务，可能已被删除")
+            }
         }
     } else {
         Column(

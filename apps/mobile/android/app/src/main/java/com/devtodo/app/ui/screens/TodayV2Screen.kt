@@ -39,10 +39,10 @@ fun TodayV2Screen(
     onBack: (() -> Unit)? = null,
 ) {
     val scheduled by viewModel.todayTasks.collectAsStateWithLifecycle()
-    val allTasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
     val folders by viewModel.foldersV2.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val ready by viewModel.dataReady.collectAsStateWithLifecycle()
+    val loadProgress by viewModel.loadProgress.collectAsStateWithLifecycle()
     val refreshing by viewModel.pullRefreshing.collectAsStateWithLifecycle()
     val timezone = settings?.timezone ?: "Asia/Shanghai"
     val today = currentLocalDate(timezone)
@@ -88,6 +88,7 @@ fun TodayV2Screen(
                         Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(todayLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                             Text(when {
+                                total == 0 && !loadProgress.complete -> "正在恢复今日安排"
                                 total == 0 -> "从一件小事开始"
                                 pending == 0 -> "今天的安排已完成"
                                 else -> "还有 $pending 件待办"
@@ -104,8 +105,8 @@ fun TodayV2Screen(
                         }
                     }
                 }
-                if (!ready) {
-                    item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                if (scheduled.isEmpty() && (!ready || !loadProgress.complete)) {
+                    item { Text("今日安排尚未加载完整，请查看顶部更新状态。", Modifier.padding(16.dp)) }
                 } else if (scheduled.isEmpty()) {
                     item {
                         EmptyState(Icons.Default.Today, "今天还没有安排", "记一件事，或从已有任务中挑选。")
@@ -162,6 +163,7 @@ fun TodayV2Screen(
         }
     }
     if (chooseExisting) {
+        val allTasks by viewModel.treeTasksV2.collectAsStateWithLifecycle()
         val scheduledIds = scheduled.map { it.first.id }.toSet()
         ExistingTaskPicker(
             tasks = allTasks.filter { it.id !in scheduledIds && it.deletedAt == null && it.archivedAt == null && it.status != TaskStatus.DONE },

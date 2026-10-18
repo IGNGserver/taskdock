@@ -23,6 +23,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+/** Supplied by the app shell; each destination renders it below its own safe top bar. */
+val LocalSyncStatus = staticCompositionLocalOf<@Composable () -> Unit> { {} }
+
 /** Each page scaffold owns safe-area padding while its surface draws edge to edge. */
 @Composable
 fun WorkspaceScaffold(
@@ -36,7 +39,7 @@ fun WorkspaceScaffold(
 ) {
     Scaffold(
         contentWindowInsets = contentWindowInsets,
-        topBar = topBar,
+        topBar = { Column { topBar(); LocalSyncStatus.current() } },
         bottomBar = bottomBar,
         floatingActionButton = floatingActionButton,
         floatingActionButtonPosition = floatingActionButtonPosition,

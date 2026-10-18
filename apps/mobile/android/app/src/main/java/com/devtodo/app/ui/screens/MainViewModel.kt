@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -61,6 +62,10 @@ class MainViewModel(
     val lastSyncError: StateFlow<String?> = _lastSyncError.asStateFlow()
     private val _loadProgress = MutableStateFlow(LoadProgress())
     val loadProgress: StateFlow<LoadProgress> = _loadProgress.asStateFlow()
+    private val _pageLoads = MutableStateFlow<Map<String, com.devtodo.app.data.sync.PageLoadState>>(emptyMap())
+    val pageLoads = _pageLoads.asStateFlow()
+    private var activePageKey: String? = null
+    private var foreground = false
     private val ownerIdentity = MutableStateFlow(authManager.ownerId)
     private val databaseVersion = MutableStateFlow(0)
     private val currentOwnerId = combine(ownerIdentity, databaseVersion) { owner, _ -> owner }
@@ -68,8 +73,11 @@ class MainViewModel(
     private var boundSession = authManager.sessionKey
     private var engineObservers: Job? = null
     val hasCachedData = currentOwnerId.flatMapLatest { owner ->
-        owner?.let { db.taskDao().hasCacheFlow(it) } ?: flowOf(false)
+        owner?.let { db.syncMetaDao().hasCache(it, "v2:sync_cursor:$it") } ?: flowOf(false)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val lastConfirmedAt = currentOwnerId.flatMapLatest { owner ->
+        owner?.let { db.syncMetaDao().observe("confirmed:$it").map { value -> value?.toLongOrNull() ?: 0L } } ?: flowOf(0L)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
     private fun bindAccount() {
         if (isolateAccounts && (boundNamespace != authManager.databaseNamespace || boundSession != authManager.sessionKey)) {
@@ -86,6 +94,7 @@ class MainViewModel(
             launch { syncEngine.syncState.collect { _syncState.value = it } }
             launch { syncEngine.lastSyncError.collect { _lastSyncError.value = it } }
             launch { syncEngine.loadProgress.collect { _loadProgress.value = it } }
+            launch { syncEngine.pageLoads.collect { _pageLoads.value = it } }
         }
     }
 
@@ -270,6 +279,8 @@ class MainViewModel(
         _dataReady.value = true
         loadTodayData()
         syncEngine.start()
+        syncEngine.setForeground(foreground)
+        activePageKey?.let { syncEngine.prioritizePage(it) }
     }
 
     fun onNetworkStateChanged(available: Boolean) {
@@ -280,12 +291,15 @@ class MainViewModel(
     }
 
     fun onAppForeground() {
+        foreground = true
+        syncEngine.setForeground(true)
         if (authManager.isLoggedIn) {
             restorePersistedSession(showOfflineMessage = false)
         }
     }
 
     fun loadTodayData() {
+        // Room observation is independent of the network refresh state.
         todayLoadJob?.cancel()
         val ownerId = authManager.ownerId?.takeIf { it.isNotBlank() }
         if (ownerId == null) {
@@ -1966,7 +1980,9 @@ class MainViewModel(
         _pullRefreshing.value = true
         viewModelScope.launch {
             try {
-                when (val outcome = syncEngine.triggerSync()) {
+                activePageKey?.let { syncEngine.prioritizePage(it, force = true) }
+                when (val outcome = withTimeoutOrNull(15_000L) { syncEngine.triggerSync() }) {
+                    null -> _messages.tryEmit("刷新仍在后台继续，已保留当前内容")
                     SyncOutcome.Success -> loadTodayData()
                     is SyncOutcome.Failure -> _messages.tryEmit("同步失败：${outcome.message}")
                 }
@@ -2033,12 +2049,22 @@ class MainViewModel(
     }
 
     fun loadTaskDetails(taskId: String) {
-        viewModelScope.launch {
-            if (!authManager.isLoggedIn) return@launch
-            val engine = syncEngine
-            val outcome = engine.loadTaskDetails(taskId)
-            if (outcome is SyncOutcome.Failure) _messages.tryEmit(outcome.message)
-        }
+        activatePage("task:$taskId")
+    }
+    fun onAppBackground() {
+        foreground = false
+        syncEngine.setForeground(false)
+    }
+
+    fun activatePage(key: String) {
+        activePageKey = key
+        syncEngine.prioritizePage(key)
+    }
+
+    fun retryCurrentPage() {
+        activePageKey?.let { syncEngine.prioritizePage(it, force = true) }
+        onAppForeground()
+        pullRefresh()
     }
     fun prioritizeDirectory(folderId: String?) { syncEngine.prioritizeDirectory(folderId) }
     fun exportLegacyCache(destination: android.net.Uri) {
