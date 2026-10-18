@@ -579,12 +579,10 @@ fun EventsScreen(
                             event = event,
                             count = placements.count { it.timePointId == event.id },
                             onClick = { onNavigateToEvent(event.id) },
-                        )
-                        PlacementOrderButtons(
-                            canMoveUp = index > 0,
-                            canMoveDown = index < events.lastIndex,
                             onMoveUp = { viewModel.reorderEvents(events.map { it.id }.moveItem(index, index - 1)) },
                             onMoveDown = { viewModel.reorderEvents(events.map { it.id }.moveItem(index, index + 1)) },
+                            canMoveUp = index > 0,
+                            canMoveDown = index < events.lastIndex,
                         )
                     }
                 }
@@ -604,7 +602,15 @@ fun EventsScreen(
 }
 
 @Composable
-private fun EventListRow(event: TimePointEntity, count: Int, onClick: () -> Unit) {
+private fun EventListRow(
+    event: TimePointEntity,
+    count: Int,
+    onClick: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+) {
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -612,7 +618,7 @@ private fun EventListRow(event: TimePointEntity, count: Int, onClick: () -> Unit
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 13.dp, bottom = 13.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(shape = TaskDockShapes.Medium, color = MaterialTheme.colorScheme.tertiaryContainer) {
@@ -627,7 +633,13 @@ private fun EventListRow(event: TimePointEntity, count: Int, onClick: () -> Unit
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Icon(Icons.AutoMirrored.Filled.ArrowForward, "打开事件")
+            ActionMenu(
+                label = "${event.title ?: "事件"}，更多操作",
+                actions = listOf(
+                    RowAction("上移", enabled = canMoveUp, onClick = onMoveUp),
+                    RowAction("下移", enabled = canMoveDown, onClick = onMoveDown),
+                ),
+            )
         }
     }
 }
@@ -884,26 +896,6 @@ private fun EventSummaryCard(
                     Text("添加任务")
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun PlacementOrderButtons(
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 2.dp),
-        horizontalArrangement = Arrangement.End,
-    ) {
-        IconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Default.KeyboardArrowUp, "安排上移")
-        }
-        IconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Default.KeyboardArrowDown, "安排下移")
         }
     }
 }
