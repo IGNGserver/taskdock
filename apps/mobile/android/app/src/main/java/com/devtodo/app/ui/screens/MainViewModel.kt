@@ -25,6 +25,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.*
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -213,6 +214,12 @@ class MainViewModel(
 
     private val _pureBlack = MutableStateFlow(authManager.pureBlack)
     val pureBlack: StateFlow<Boolean> = _pureBlack.asStateFlow()
+
+    data class RolloverUndoState(val localDate: String, val createdPlacementIds: List<String>)
+    private val _lastRollover = MutableStateFlow<RolloverUndoState?>(null)
+    val lastRollover: StateFlow<RolloverUndoState?> = _lastRollover.asStateFlow()
+    private val _rolloverEvents = MutableSharedFlow<Int>(extraBufferCapacity = 16)
+    val rolloverEvents: SharedFlow<Int> = _rolloverEvents.asSharedFlow()
 
     private var todayLoadJob: Job? = null
     private var midnightRefreshJob: Job? = null
@@ -2036,6 +2043,225 @@ class MainViewModel(
     }
 
     fun showMessage(message: String) { _messages.tryEmit(message) }
+
+    fun clearRolloverUndo() {
+        _lastRollover.value = null
+    }
+
+    /**
+     * Rollover uncompleted tasks from localDate into the following calendar date.
+     * Web equivalent: POST /api/v2/dates/:localDate/rollover
+     */
+    fun rolloverTasks(localDate: String, onComplete: ((Int) -> Unit)? = null) {
+        viewModelScope.launch {
+            try {
+                val timezone = settings.value?.timezone ?: "Asia/Shanghai"
+                val tomorrow = shiftLocalDate(localDate, 1, timezone)
+                val createdIds = mutableListOf<String>()
+
+                db.withOwnerTransaction { ownerId ->
+                    val sourcePoint = db.timePointDao().getTimePointByDate(ownerId, localDate)
+                    if (sourcePoint == null) {
+                        return@withOwnerTransaction
+                    }
+                    val targetPoint = getOrCreateDatePoint(ownerId, tomorrow)
+                    val activeSourcePlacements = db.placementDao().getPlacementsByTimePoint(sourcePoint.id, ownerId)
+                    val targetPlacements = db.placementDao().getPlacementsByTimePoint(targetPoint.id, ownerId)
+                    val targetTaskIds = targetPlacements.map { it.taskId }.toSet()
+                    var nextRank = targetPlacements.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L
+                    val now = nowIso()
+
+                    for (placement in activeSourcePlacements) {
+                        val task = db.taskDao().getTaskById(placement.taskId, ownerId) ?: continue
+                        if (task.status == TaskStatus.DONE || task.archivedAt != null || task.deletedAt != null) {
+                            continue
+                        }
+                        if (task.id in targetTaskIds) {
+                            continue
+                        }
+
+                        nextRank += 1024L
+                        val newPlacementId = UUID.randomUUID().toString()
+                        createdIds.add(newPlacementId)
+                        db.placementDao().upsertPlacement(
+                            PlacementEntity(
+                                id = newPlacementId,
+                                ownerId = ownerId,
+                                taskId = task.id,
+                                timePointId = targetPoint.id,
+                                rank = nextRank.toString(),
+                                version = 1,
+                                createdAt = now,
+                                updatedAt = now,
+                                deletedAt = null,
+                                pendingSync = true,
+                            ),
+                        )
+                        syncEngine.recordLocalMutation(
+                            command = "placement.create",
+                            entityId = newPlacementId,
+                            baseVersion = null,
+                            payload = mapOf(
+                                "taskId" to task.id,
+                                "timePointId" to targetPoint.id,
+                                "__localId" to newPlacementId,
+                            ),
+                            ownerId = ownerId,
+                        )
+                    }
+                }
+
+                if (createdIds.isNotEmpty()) {
+                    _lastRollover.value = RolloverUndoState(localDate, createdIds)
+                    loadTodayData()
+                    _rolloverEvents.tryEmit(createdIds.size)
+                    onComplete?.invoke(createdIds.size)
+                } else {
+                    _messages.tryEmit("今天没有未完成的待办任务")
+                    onComplete?.invoke(0)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _messages.tryEmit(error.userMessage("顺延任务失败"))
+                onComplete?.invoke(0)
+            }
+        }
+    }
+
+    /**
+     * Undo previous rollover mutation by removing the created placement records.
+     * Web equivalent: POST /api/v2/rollovers/undo
+     */
+    fun undoLastRollover(onComplete: ((Boolean) -> Unit)? = null) {
+        val last = _lastRollover.value ?: return
+        viewModelScope.launch {
+            try {
+                db.withOwnerTransaction { ownerId ->
+                    val now = nowIso()
+                    for (placementId in last.createdPlacementIds) {
+                        val placement = db.placementDao().getById(placementId, ownerId) ?: continue
+                        db.placementDao().upsertPlacement(
+                            placement.copy(
+                                version = placement.version + 1,
+                                updatedAt = now,
+                                deletedAt = now,
+                                pendingSync = true,
+                            ),
+                        )
+                        syncEngine.recordLocalMutation(
+                            command = "placement.remove",
+                            entityId = placement.id,
+                            baseVersion = placement.version,
+                            payload = emptyMap(),
+                            ownerId = ownerId,
+                        )
+                    }
+                }
+                _lastRollover.value = null
+                loadTodayData()
+                _messages.tryEmit("已撤销顺延操作")
+                onComplete?.invoke(true)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _messages.tryEmit(error.userMessage("撤销失败"))
+                onComplete?.invoke(false)
+            }
+        }
+    }
+
+    /**
+     * Resolves an offline/sync conflict with a given strategy:
+     * - "server": accept server version and drop local mutation
+     * - "local": keep local payload and retry against updated server version
+     * - "merged": apply merged text/JSON payload and retry
+     * - "discard": drop local optimistic changes and mark resolved
+     */
+    fun resolveConflict(
+        conflict: ConflictEntity,
+        strategy: String,
+        mergedPayloadJson: String? = null,
+        onComplete: ((Boolean) -> Unit)? = null,
+    ) {
+        viewModelScope.launch {
+            try {
+                db.withOwnerTransaction { ownerId ->
+                    require(conflict.ownerId == ownerId) { "冲突不属于当前账户" }
+                    val currentConflict = db.conflictDao().getById(conflict.id, ownerId)
+                        ?: error("冲突记录已不存在或已解决")
+                    val outboxItem = db.outboxDao().getByMutationId(currentConflict.mutationId, ownerId)
+
+                    val now = nowIso()
+                    val serverElement = try {
+                        val root = api.json.parseToJsonElement(currentConflict.serverJson)
+                        if (root is JsonObject && root["server"] is JsonObject) root["server"]!! else root
+                    } catch (_: Exception) {
+                        JsonNull
+                    }
+
+                    when (strategy) {
+                        "server" -> {
+                            if (outboxItem != null) {
+                                db.outboxDao().deleteByMutationId(outboxItem.mutationId, ownerId)
+                            }
+                            db.conflictDao().markResolved(currentConflict.id, ownerId, now)
+                            // Re-sync entity from server by dropping cursor so next pull will restore authority
+                            db.syncMetaDao().remove(v2SyncCursorKey(ownerId))
+                        }
+                        "discard" -> {
+                            if (outboxItem != null) {
+                                syncEngine.discardLocalMutation(outboxItem)
+                            } else {
+                                db.conflictDao().markResolved(currentConflict.id, ownerId, now)
+                            }
+                        }
+                        "local", "merged" -> {
+                            val serverObj = serverElement as? JsonObject
+                            val serverVersion = serverObj?.get("version")?.jsonPrimitive?.longOrNull
+                                ?: (outboxItem?.baseVersion ?: 1L) + 1L
+
+                            val nextPayloadJson = if (strategy == "merged" && !mergedPayloadJson.isNullOrBlank()) {
+                                mergedPayloadJson
+                            } else {
+                                currentConflict.localJson
+                            }
+
+                            if (outboxItem != null) {
+                                db.outboxDao().deleteByMutationId(outboxItem.mutationId, ownerId)
+                            }
+
+                            val newMutationId = UUID.randomUUID().toString()
+                            val nextOutbox = OutboxEntity(
+                                mutationId = newMutationId,
+                                clientId = authManager.clientId,
+                                ownerId = ownerId,
+                                command = currentConflict.command ?: "task.update",
+                                entityId = currentConflict.entityId,
+                                baseVersion = serverVersion,
+                                occurredAt = now,
+                                payloadJson = nextPayloadJson,
+                                attempts = 0,
+                                nextAttemptAt = System.currentTimeMillis(),
+                                lastError = null,
+                            )
+                            db.outboxDao().insert(nextOutbox)
+                            db.conflictDao().markResolved(currentConflict.id, ownerId, now)
+                        }
+                        else -> error("未知冲突解决策略: $strategy")
+                    }
+                }
+                syncEngine.triggerSync()
+                _messages.tryEmit("已解决冲突并触发同步")
+                onComplete?.invoke(true)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _messages.tryEmit(error.userMessage("冲突解决失败"))
+                onComplete?.invoke(false)
+            }
+        }
+    }
 
     /**
      * Pull-to-refresh entry point for every list screen. Runs a full sync

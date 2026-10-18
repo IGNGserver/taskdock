@@ -104,6 +104,22 @@ fun TaskDockApp(
         }
     }
 
+    LaunchedEffect(viewModel) {
+        viewModel.rolloverEvents.collectLatest { count ->
+            snackbar.currentSnackbarData?.dismiss()
+            val result = snackbar.showSnackbar(
+                message = "已安排 $count 项任务到明天",
+                actionLabel = "撤销",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.undoLastRollover()
+            } else {
+                viewModel.clearRolloverUndo()
+            }
+        }
+    }
+
     LaunchedEffect(loggedIn, currentRoute) {
         if (currentRoute == null) return@LaunchedEffect
         if (loggedIn && currentRoute == Screen.Login.route) {
