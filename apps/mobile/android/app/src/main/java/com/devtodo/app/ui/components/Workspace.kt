@@ -140,13 +140,16 @@ fun ActionMenu(label: String, actions: List<RowAction>) {
 fun CaptureSheet(
     title: String,
     label: String = "任务标题",
+    initialValue: String = "",
+    confirmLabel: String = "创建",
     onDismiss: () -> Unit,
     onCreate: (String) -> Unit,
 ) {
-    var value by rememberSaveable { mutableStateOf("") }
+    var value by rememberSaveable(initialValue) { mutableStateOf(initialValue) }
     var discard by remember { mutableStateOf(false) }
+    val isDirty = value != initialValue
     fun dismiss() {
-        if (value.isBlank()) onDismiss() else discard = true
+        if (!isDirty || value.isBlank()) onDismiss() else discard = true
     }
     ModalBottomSheet(
         onDismissRequest = ::dismiss,
@@ -154,7 +157,7 @@ fun CaptureSheet(
             rememberModalBottomSheetState(
                 skipPartiallyExpanded = true,
                 confirmValueChange = { next ->
-                    if (next == SheetValue.Hidden && value.isNotBlank()) {
+                    if (next == SheetValue.Hidden && isDirty && value.isNotBlank()) {
                         discard = true
                         false
                     } else true
@@ -186,7 +189,7 @@ fun CaptureSheet(
                     },
                     enabled = value.isNotBlank(),
                 ) {
-                    Text("创建")
+                    Text(confirmLabel)
                 }
             }
         }
@@ -194,8 +197,8 @@ fun CaptureSheet(
     if (discard)
         AlertDialog(
             onDismissRequest = { discard = false },
-            title = { Text("放弃这条草稿？") },
-            text = { Text("输入的内容尚未创建。") },
+            title = { Text("放弃更改？") },
+            text = { Text("输入的内容尚未保存。") },
             confirmButton = { TextButton(onClick = onDismiss) { Text("放弃") } },
             dismissButton = { TextButton(onClick = { discard = false }) { Text("继续编辑") } },
         )
