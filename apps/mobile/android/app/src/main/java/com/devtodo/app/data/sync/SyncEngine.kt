@@ -13,7 +13,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
@@ -40,7 +43,9 @@ data class LoadProgress(val phase: String = "cache", val completedPages: Int = 0
 class SyncEngine(
     private val db: AppDatabase,
     private val api: ApiClient,
-    private val authManager: SecureAuthManager
+    private val authManager: SecureAuthManager,
+    private val syncBudgetMs: Long = 45_000L,
+    private val verificationIntervalMs: Long = 30_000L,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _syncState = MutableStateFlow(SyncState.IDLE)
@@ -50,6 +55,12 @@ class SyncEngine(
     val lastSyncError: StateFlow<String?> = _lastSyncError.asStateFlow()
     private val _loadProgress = MutableStateFlow(LoadProgress())
     val loadProgress: StateFlow<LoadProgress> = _loadProgress.asStateFlow()
+    private val _pageLoads = MutableStateFlow<Map<String, PageLoadState>>(emptyMap())
+    val pageLoads = _pageLoads.asStateFlow()
+    @Volatile private var foreground = false
+    @Volatile private var activePage: String? = null
+    private val pageFlights = mutableMapOf<String, Deferred<SyncOutcome>>()
+    private val priorityReads = Semaphore(2)
     private val syncMutex = Mutex()
     private val flightLock = Any()
     private var syncFlight: Deferred<SyncOutcome>? = null
@@ -57,12 +68,17 @@ class SyncEngine(
     private var retrySyncJob: Job? = null
     private var retrySyncAttempt = 0
     private var engineEpoch = 0L
-    private var directoryPreviewJob: Job? = null
     private val boundSession = authManager.sessionKey
 
     private suspend fun ensureSession() {
         currentCoroutineContext().ensureActive()
-        if (authManager.sessionKey != boundSession) throw CancellationException("账户或中枢已变化")
+        if (authManager.sessionKey != boundSession) {
+            if (!authManager.isLoggedIn) {
+                _syncState.value = SyncState.AUTH_REQUIRED
+                _lastSyncError.value = "登录已失效，请重新登录"
+            }
+            throw CancellationException("账户或中枢已变化")
+        }
     }
 
     /** All callers share an engine-owned flight. Logout cancels manual refresh too. */
@@ -71,11 +87,23 @@ class SyncEngine(
             syncRequested++
             syncFlight?.takeIf { it.isActive } ?: scope.async {
                 var outcome: SyncOutcome
+                var passes = 0
+                val flightStartedAt = System.nanoTime()
                 do {
                     val requested = synchronized(flightLock) { syncRequested }
-                    outcome = runSync()
+                    outcome = try {
+                        val remaining = syncBudgetMs - (System.nanoTime() - flightStartedAt) / 1_000_000
+                        withTimeout(remaining.coerceAtLeast(1L)) { runSync() }
+                    } catch (timeout: TimeoutCancellationException) {
+                        currentCoroutineContext().ensureActive()
+                        val message = "更新超时，已保留缓存和加载进度，可重试"
+                        _syncState.value = SyncState.ERROR
+                        _lastSyncError.value = message
+                        SyncOutcome.Failure(message)
+                    }
+                    passes++
                     if (outcome is SyncOutcome.Failure) break
-                } while (synchronized(flightLock) { requested != syncRequested })
+                } while (passes < 2 && synchronized(flightLock) { requested != syncRequested })
                 if (outcome is SyncOutcome.Failure) scheduleSyncRetry()
                 else { retrySyncAttempt = 0; retrySyncJob?.cancel() }
                 outcome
@@ -114,8 +142,9 @@ class SyncEngine(
     companion object {
         private const val SYNC_CURSOR_KEY = "sync_cursor"
         private const val OUTBOX_DEBOUNCE_MS = 80L
-        private const val MAX_PUSH_MUTATIONS = 500
+        private const val MAX_PUSH_MUTATIONS = 100
         private const val MAX_PUSH_BYTES = 900_000
+        private const val TARGET_PUSH_BYTES = 256_000
     }
 
     private fun syncCursorKey(ownerId: String): String = "$SYNC_CURSOR_KEY:$ownerId"
@@ -145,6 +174,91 @@ class SyncEngine(
         scope.launch {
             triggerSync()
         }
+        scope.launch {
+            while (isActive) {
+                delay(verificationIntervalMs)
+                if (foreground && networkAvailable && authManager.isLoggedIn) {
+                    val page = activePage
+                    if (page != null) prioritizePage(page, force = true) else triggerSync()
+                }
+            }
+        }
+    }
+
+    fun setForeground(value: Boolean) { foreground = value }
+
+    fun prioritizePage(key: String, force: Boolean = false) {
+        val previousPage = activePage
+        activePage = key
+        if (previousPage != null && previousPage != key) synchronized(pageFlights) {
+            pageFlights.remove(previousPage)?.cancel()
+        }
+        if (!networkAvailable || !authManager.isLoggedIn) return
+        val previous = _pageLoads.value[key]
+        if (!force && previous?.error == null && previous != null &&
+            System.currentTimeMillis() - previous.loadedAt in 0 until verificationIntervalMs) return
+        scope.launch {
+            if (activePage != key) return@launch
+            when {
+                key.startsWith("task:") -> loadTaskDetails(key.removePrefix("task:"))
+                key.startsWith("directory:") || key == "today" -> loadPreview(key)
+            }
+            // Preview/detail responses are partial. Reconcile deletions and
+            // relations with the global feed before claiming cache freshness.
+            triggerSync()
+        }
+    }
+
+    private suspend fun pageRequest(key: String, block: suspend () -> Unit): SyncOutcome {
+        val flight = synchronized(pageFlights) {
+            if (pageFlights.size >= 48) {
+                pageFlights.entries.removeAll { !it.value.isActive && it.key != key && it.key != activePage }
+                _pageLoads.update { states -> states.filterKeys { it in pageFlights || it == key || it == activePage } }
+            }
+            pageFlights[key]?.takeIf { it.isActive } ?: scope.async(start = CoroutineStart.LAZY) {
+                val job = currentCoroutineContext()[Job]
+                fun publish(transform: (PageLoadState) -> PageLoadState) = synchronized(pageFlights) {
+                    if (pageFlights[key] === job) _pageLoads.update { it + (key to transform(it[key] ?: PageLoadState())) }
+                }
+                fun failure(message: String): SyncOutcome.Failure {
+                    publish { it.copy(loading = false, error = message) }
+                    return SyncOutcome.Failure(message)
+                }
+                if (activePage != null && activePage != key) throw CancellationException("页面已变化")
+                publish { it.copy(loading = true, error = null) }
+                try {
+                    withTimeout(12_000L) { priorityReads.withPermit { ensureSession(); block(); ensureSession() } }
+                    publish { PageLoadState(loadedAt = System.currentTimeMillis()) }
+                    SyncOutcome.Success
+                } catch (timeout: TimeoutCancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    failure("页面更新超时，显示已缓存内容")
+                } catch (cancelled: CancellationException) { throw cancelled
+                } catch (error: Exception) {
+                    ensureSession()
+                    failure(error.message ?: "页面更新失败")
+                } finally {
+                    publish { it.copy(loading = false) }
+                }
+            }.also { pageFlights[key] = it; it.start() }
+        }
+        return flight.await()
+    }
+
+    private suspend fun loadPreview(key: String): SyncOutcome = pageRequest(key) {
+        val owner = authManager.ownerId ?: error("账户不可用")
+        val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone(db.settingsDao().getSettings(owner)?.timezone ?: "Asia/Shanghai")
+        }.format(Date())
+        val folder = key.takeIf { it.startsWith("directory:") }?.removePrefix("directory:")?.takeUnless { it == "root" }
+        val response = api.syncPreview(date, folder)
+        val failure = response.exceptionOrNull() as? ApiClientException
+        // Older v2 Hubs have no preview route. The caller still runs the
+        // authoritative global sync; absence is not a page failure forever.
+        if (failure?.statusCode == 404) return@pageRequest
+        val preview = response.getOrThrow()
+        require(!preview.complete) { "首屏响应不能作为完整快照" }
+        applyV2Changes(preview.changes, owner)
     }
 
     private suspend fun outboxSyncLoop() {
@@ -184,6 +298,8 @@ class SyncEngine(
         // mutate the database after stop.
         scope.coroutineContext.cancelChildren()
         synchronized(flightLock) { syncFlight = null }
+        synchronized(pageFlights) { pageFlights.clear() }
+        _pageLoads.value = emptyMap()
         retrySyncJob = null
         socket?.close(1000, "App closed")
         _syncState.value = SyncState.IDLE
@@ -419,6 +535,11 @@ class SyncEngine(
                     _loadProgress.value = LoadProgress("refresh", complete = true)
                 }
 
+                // Remote reads must not wait behind a large or failing Outbox.
+                // Pending rows are protected and their remote versions journalled.
+                pullRemote(ownerId)
+
+                val hadPending = db.outboxDao().getPendingItems(ownerId).isNotEmpty()
                 var pushFailure: Exception? = null
                 val blockedMutation = try { pushPendingV2(ownerId) }
                 catch (cancelled: CancellationException) { throw cancelled }
@@ -432,37 +553,10 @@ class SyncEngine(
                     // from their pending guards. Reconcile against the
                     // authoritative snapshot now so a locally-created ghost
                     // is not left behind until cursor retention expires.
-                    val snapshot = api.getSnapshotV2().getOrThrow()
-                    applyV2Snapshot(snapshot, ownerId)
+                    bootstrap(ownerId)
                 }
 
-                var currentCursor = db.syncMetaDao().get(cursorKey) ?: "0"
-                var hasMore = true
-                var resynced = false
-                while (hasMore) {
-                    val result = try {
-                        api.pullSyncV2(currentCursor, 100).getOrThrow()
-                    } catch (error: ApiClientException) {
-                        // The server dropped changes older than our cursor. Rebuild
-                        // from an authoritative snapshot instead of silently
-                        // skipping data, then replay the still-pending outbox.
-                        if (error.category != ApiFailureCategory.CURSOR_EXPIRED || resynced) throw error
-                        val snapshot = api.getSnapshotV2().getOrThrow()
-                        applyV2Snapshot(snapshot, ownerId)
-                        currentCursor = snapshot.cursor
-                        resynced = true
-                        continue
-                    }
-                    ensureSession()
-                    require(result.cursor.matches(Regex("\\d+")) &&
-                        (!result.hasMore || result.cursor.toBigInteger() > currentCursor.toBigInteger())) { "增量游标未正确前进" }
-                    db.withTransaction {
-                        applyV2Changes(result.changes, ownerId)
-                        db.syncMetaDao().set(SyncMetaEntity(cursorKey, result.cursor))
-                    }
-                    currentCursor = result.cursor
-                    hasMore = result.hasMore
-                }
+                if (hadPending || blockedMutation != null) pullRemote(ownerId)
                 replayDeferred(ownerId)
                 _loadProgress.value = LoadProgress("ready", complete = true)
                 pushFailure?.let { throw it }
@@ -471,16 +565,43 @@ class SyncEngine(
                     _lastSyncError.value = blockedMutation
                     SyncOutcome.Failure(blockedMutation)
                 } else {
-                    _syncState.value = SyncState.IDLE
+                    _syncState.value = if (networkAvailable) SyncState.IDLE else SyncState.OFFLINE
                     SyncOutcome.Success
                 }
             } catch (cancelled: CancellationException) { throw cancelled
             } catch (error: Exception) {
+                ensureSession()
                 _syncState.value = classifyError(error)
                 val message = error.message?.takeIf { it.isNotBlank() } ?: "同步失败，请稍后重试"
                 _lastSyncError.value = message
                 SyncOutcome.Failure(message)
             }
+        }
+    }
+
+    private suspend fun pullRemote(ownerId: String) {
+        val cursorKey = v2SyncCursorKey(ownerId)
+        var cursor = db.syncMetaDao().get(cursorKey) ?: "0"
+        var resynced = false
+        while (true) {
+            val result = try { api.pullSyncV2(cursor, 200).getOrThrow() }
+            catch (error: ApiClientException) {
+                if (error.category != ApiFailureCategory.CURSOR_EXPIRED || resynced) throw error
+                bootstrap(ownerId)
+                cursor = db.syncMetaDao().get(cursorKey) ?: error("缺少快照游标")
+                resynced = true
+                continue
+            }
+            ensureSession()
+            require(result.cursor.matches(Regex("\\d+")) && result.cursor.toBigInteger() >= cursor.toBigInteger() &&
+                (!result.hasMore || result.cursor.toBigInteger() > cursor.toBigInteger())) { "增量游标未正确前进" }
+            db.withTransaction {
+                applyV2Changes(result.changes, ownerId)
+                db.syncMetaDao().set(SyncMetaEntity(cursorKey, result.cursor))
+                if (!result.hasMore) db.syncMetaDao().set(SyncMetaEntity("confirmed:$ownerId", System.currentTimeMillis().toString()))
+            }
+            cursor = result.cursor
+            if (!result.hasMore) break
         }
     }
 
@@ -504,14 +625,16 @@ class SyncEngine(
         while (true) {
             var manifest = db.syncMetaDao().get(key)?.let { api.json.decodeFromString<BootstrapManifest>(it) }
             if (manifest == null) {
-                val preview = api.syncPreview(date).getOrThrow()
+                val priorityFolder = activePage?.takeIf { it.startsWith("directory:") }
+                    ?.removePrefix("directory:")?.takeUnless { it == "root" }
+                val preview = api.syncPreview(date, priorityFolder).getOrThrow()
                 require(!preview.complete) { "首屏响应不能作为完整快照" }
                 applyV2Changes(preview.changes, ownerId)
                 format.timeZone = TimeZone.getTimeZone(db.settingsDao().getSettings(ownerId)?.timezone ?: "Asia/Shanghai")
                 val correctedDate = format.format(Date())
                 if (correctedDate != date) {
                     date = correctedDate
-                    applyV2Changes(api.syncPreview(date).getOrThrow().changes, ownerId)
+                    applyV2Changes(api.syncPreview(date, priorityFolder).getOrThrow().changes, ownerId)
                 }
                 manifest = api.createBootstrap(date).getOrThrow()
                 require(manifest.protocolVersion == 2 && manifest.pageCount > 0 && manifest.cursor.matches(Regex("\\d+")))
@@ -563,8 +686,7 @@ class SyncEngine(
         }
     }
 
-    suspend fun loadTaskDetails(taskId: String): SyncOutcome = withContext(Dispatchers.IO) {
-        try {
+    suspend fun loadTaskDetails(taskId: String): SyncOutcome = pageRequest("task:$taskId") {
             val epoch = engineEpoch
             ensureSession()
             val owner = authManager.ownerId ?: error("账户不可用")
@@ -577,26 +699,10 @@ class SyncEngine(
                 add(change("note", detail.note.id, detail.note.version, detail.note, NoteDto.serializer()))
                 detail.steps.forEach { add(change("taskStep", it.id, it.version, it, TaskStepDto.serializer())) }
             }, owner)
-            SyncOutcome.Success
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { SyncOutcome.Failure(error.message ?: "详情加载失败") }
     }
 
     fun prioritizeDirectory(folderId: String?) {
-        if (folderId == null || !networkAvailable || !authManager.isLoggedIn) return
-        directoryPreviewJob?.cancel()
-        directoryPreviewJob = scope.launch {
-            try {
-                ensureSession()
-                val owner = authManager.ownerId ?: return@launch
-                if (db.syncMetaDao().get(v2SyncCursorKey(owner)) != null) return@launch
-                val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
-                    timeZone = TimeZone.getTimeZone(db.settingsDao().getSettings(owner)?.timezone ?: "Asia/Shanghai")
-                }.format(Date())
-                applyV2Changes(api.syncPreview(date, folderId).getOrThrow().changes, owner)
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { /* Main bootstrap/retry remains authoritative. */ }
-        }
+        prioritizePage("directory:${folderId ?: "root"}")
     }
 
     /**
@@ -790,6 +896,8 @@ class SyncEngine(
                     }
                 }
             }
+            // Yield between bounded uploads so other devices' changes remain visible.
+            pullRemote(ownerId)
         }
         return blockedMessage
     }
@@ -808,7 +916,7 @@ class SyncEngine(
             }
             val candidate = current + item
             if (current.isNotEmpty() &&
-                (candidate.size > MAX_PUSH_MUTATIONS || encodedPushSize(candidate) > MAX_PUSH_BYTES ||
+                (candidate.size > MAX_PUSH_MUTATIONS || encodedPushSize(candidate) > TARGET_PUSH_BYTES ||
                     current.any { previous -> targets(previous).any { it in targets(item) } })
             ) {
                 batches += current
@@ -966,6 +1074,7 @@ class SyncEngine(
     }
 
     private suspend fun applyV2Changes(changes: List<ChangeItem>, ownerId: String) {
+        val startedAt = System.nanoTime()
         val now = isoFormat.format(Date())
         db.withTransaction {
                 ensureSession()
@@ -1066,47 +1175,47 @@ class SyncEngine(
                         "folder" -> {
                             val folder = folderEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
                             val local = db.folderDao().getById(folder.id, ownerId)
-                            if (local == null || local.version <= folder.version) db.folderDao().upsert(folder)
+                            if (local == null || (local.version <= folder.version && local != folder)) db.folderDao().upsert(folder)
                         }
                         "task" -> {
                             val task = treeTaskEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
                             val local = db.taskDao().getTaskByIdIncludingDeleted(task.id, ownerId)
-                            if (local == null || local.version <= task.version) db.taskDao().upsertTask(task)
+                            if (local == null || (local.version <= task.version && local != task)) db.taskDao().upsertTask(task)
                         }
                         "note" -> {
                             val note = noteEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
                             val local = db.noteDao().getById(note.id, ownerId)
-                            if (local == null || local.version <= note.version) db.noteDao().upsertNote(note)
+                            if (local == null || (local.version <= note.version && local != note)) db.noteDao().upsertNote(note)
                         }
                         "taskStep" -> {
                             val step = stepEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
                             val local = db.taskStepDao().getById(step.id, ownerId)
-                            if (local == null || local.version <= step.version) db.taskStepDao().upsert(step)
+                            if (local == null || (local.version <= step.version && local != step)) db.taskStepDao().upsert(step)
                         }
                         "timePoint" -> {
                             val timePoint = timePointEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
                             val local = db.timePointDao().getTimePointByIdIncludingDeleted(timePoint.id, ownerId)
-                            if (local == null || local.version <= timePoint.version) db.timePointDao().upsertTimePoint(timePoint)
+                            if (local == null || (local.version <= timePoint.version && local != timePoint)) db.timePointDao().upsertTimePoint(timePoint)
                         }
                         "placement" -> {
                             val placement = placementEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
                             val local = db.placementDao().getById(placement.id, ownerId)
-                            if (local == null || local.version <= placement.version) db.placementDao().upsertPlacement(placement)
+                            if (local == null || (local.version <= placement.version && local != placement)) db.placementDao().upsertPlacement(placement)
                         }
                         "workflow" -> {
                             val workflow = workflowEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
                             val local = db.workflowDao().getWorkflowById(workflow.id, ownerId)
-                            if (local == null || local.version <= workflow.version) db.workflowDao().upsertWorkflow(workflow)
+                            if (local == null || (local.version <= workflow.version && local != workflow)) db.workflowDao().upsertWorkflow(workflow)
                         }
                         "workflowStage" -> {
                             val stage = stageEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
                             val local = db.workflowDao().getStageById(stage.id, ownerId)
-                            if (local == null || local.version <= stage.version) db.workflowDao().upsertStages(listOf(stage))
+                            if (local == null || (local.version <= stage.version && local != stage)) db.workflowDao().upsertStages(listOf(stage))
                         }
                         "workflowTaskMembership" -> {
                             val membership = membershipEntity(api.json.decodeFromJsonElement(snapshot), ownerId, now)
                             val local = db.workflowDao().getMembershipById(membership.id, ownerId)
-                            if (local == null || local.version <= membership.version) db.workflowDao().upsertMemberships(listOf(membership))
+                            if (local == null || (local.version <= membership.version && local != membership)) db.workflowDao().upsertMemberships(listOf(membership))
                         }
                         "settings" -> {
                             val settings = api.json.decodeFromJsonElement<V2SettingsDto>(snapshot)
@@ -1133,6 +1242,7 @@ class SyncEngine(
                 }
                 ensureSession()
         }
+        android.util.Log.d("TaskDockSync", "stage=apply rows=${changes.size} durationMs=${(System.nanoTime() - startedAt) / 1_000_000}")
     }
 
     private suspend fun replayDeferred(ownerId: String) {

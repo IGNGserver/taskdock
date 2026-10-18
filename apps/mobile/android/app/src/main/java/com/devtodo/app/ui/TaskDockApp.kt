@@ -16,6 +16,7 @@ import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import com.devtodo.app.ui.components.taskStatusLabel
 import com.devtodo.app.ui.components.SyncStatusBanner
+import com.devtodo.app.ui.components.LocalSyncStatus
 import com.devtodo.app.ui.navigation.Screen
 import com.devtodo.app.ui.screens.*
 import com.devtodo.app.ui.theme.TaskDockMotion
@@ -30,6 +31,15 @@ fun TaskDockApp(
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
     val loggedIn by viewModel.authenticated.collectAsStateWithLifecycle()
+    val pageKey = when (currentRoute) {
+        Screen.Tree.route -> "directory:root"
+        Screen.TreeFolder.route -> "directory:${backStack?.arguments?.getString("folderId")}"
+        Screen.TaskDetail.route -> "task:${backStack?.arguments?.getString("taskId")}"
+        else -> currentRoute ?: "directory:root"
+    }
+    LaunchedEffect(loggedIn, pageKey) {
+        if (loggedIn && currentRoute != Screen.Login.route) viewModel.activatePage(pageKey)
+    }
     val snackbar = remember { SnackbarHostState() }
     var locateTask by rememberSaveable { mutableStateOf<String?>(null) }
     var locateRequest by rememberSaveable { mutableIntStateOf(0) }
@@ -103,6 +113,9 @@ fun TaskDockApp(
         }
     }
 
+    CompositionLocalProvider(LocalSyncStatus provides {
+        if (loggedIn) SyncStatusBanner(viewModel, pageKey)
+    }) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -122,7 +135,6 @@ fun TaskDockApp(
             },
         ) { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
-            if (loggedIn) SyncStatusBanner(viewModel)
             NavHost(
                 navController = navController,
                 startDestination = if (loggedIn) Screen.Tree.route else Screen.Login.route,
@@ -316,5 +328,6 @@ fun TaskDockApp(
             }
             }
         }
+    }
     }
 }

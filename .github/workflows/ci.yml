@@ -1,8 +1,21 @@
 name: quality
 
 on:
-  push:
   pull_request:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'scripts/**'
+      - '*.json'
+      - '*.yaml'
+      - '*.ts'
+      - '*.mjs'
+      - '.github/workflows/ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   checks:
@@ -35,6 +48,22 @@ jobs:
         env:
           DATABASE_URL: postgres://devtodo:devtodo_test_password@127.0.0.1:5432/devtodo_test
       - run: pnpm build
+      - name: PostgreSQL restart and mobile loading benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          PG_BIN="$(pg_config --bindir)"
+          export PG_CTL="$PG_BIN/pg_ctl"
+          export PGDATA="$RUNNER_TEMP/taskdock-runtime-pg/data"
+          mkdir -p "$(dirname "$PGDATA")"
+          "$PG_BIN/initdb" -D "$PGDATA" -A trust -U devtodo
+          trap '"$PG_CTL" -D "$PGDATA" -m fast stop || true' EXIT
+          "$PG_CTL" -D "$PGDATA" -l "$(dirname "$PGDATA")/postgres.log" -o "-p 55439 -h 127.0.0.1 -k $(dirname "$PGDATA")" start
+          "$PG_BIN/createdb" -h 127.0.0.1 -p 55439 -U devtodo devtodo_runtime
+          DATABASE_URL=postgres://devtodo@127.0.0.1:55439/devtodo_runtime pnpm db:migrate
+          DATABASE_URL=postgres://devtodo@127.0.0.1:55439/devtodo_runtime pnpm test:pg-runtime
+          "$PG_BIN/createdb" -h 127.0.0.1 -p 55439 -U devtodo devtodo_benchmark
+          DATABASE_URL=postgres://devtodo@127.0.0.1:55439/devtodo_benchmark pnpm exec tsx scripts/sync-bootstrap-benchmark.ts | tee mobile-loading-benchmark.json
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
       - run: pnpm test:e2e
       # 真实链路门禁必须跑生产构建：e2e-real-server.ts 只在 E2E_PWA=1 时用 vite preview

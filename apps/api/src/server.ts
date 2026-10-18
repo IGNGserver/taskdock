@@ -226,12 +226,17 @@ export async function buildServer(
     genReqId: () => cryptoUuid(),
   });
   app.addHook('onRequest', async (request) => {
-    if (request.url.startsWith('/api/v2/sync/')) request.syncStartedAt = performance.now();
+    if (
+      request.url.startsWith('/api/v2/sync/') ||
+      /^\/api\/v2\/tasks\/[^/?]+(?:\?.*)?$/.test(request.url)
+    )
+      request.syncStartedAt = performance.now();
   });
   app.addHook('onSend', async (request, reply, payload) => {
     if (request.syncStartedAt !== undefined) {
       const durationMs = performance.now() - request.syncStartedAt;
       reply.header('Server-Timing', `sync;dur=${durationMs.toFixed(1)}`);
+      reply.header('X-Request-Id', request.id);
       request.log.info({
         event: 'sync.response',
         route: request.routeOptions.url,
@@ -976,12 +981,24 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
   app.register(
     async (api) => {
       const bootstrap = new BootstrapSnapshots(tree);
+      bootstrap.startMaintenance((error) =>
+        api.log.error({ err: error, event: 'sync.bootstrap.cleanup' }),
+      );
+      api.addHook('onClose', async () => bootstrap.close());
+      api.addHook('onSend', async (_request, reply, payload) => {
+        reply.header('Cache-Control', 'private, no-store');
+        return payload;
+      });
       api.addHook('preHandler', async (request) => {
         await requireAccessToken(auth)(request);
         if (
           request.auth &&
           !request.url.startsWith('/api/v2/sync/') &&
-          !(request.method === 'GET' && /^\/api\/v2\/tasks\/[^/?]+(?:\?.*)?$/.test(request.url))
+          !(request.method === 'GET' && /^\/api\/v2\/tasks\/[^/?]+(?:\?.*)?$/.test(request.url)) &&
+          !(
+            request.method === 'PATCH' &&
+            /^\/api\/v2\/tasks\/[^/?]+(?:\/note)?(?:\?.*)?$/.test(request.url)
+          )
         )
           await tree.prepare?.(request.auth.ownerId);
       });

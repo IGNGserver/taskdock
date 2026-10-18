@@ -3,7 +3,12 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../src/server.js';
 import { MemoryStore } from '../src/store.js';
-import { splitBootstrapPages, type BootstrapChange } from '../src/sync-bootstrap.js';
+import {
+  BootstrapSnapshots,
+  splitBootstrapPages,
+  type BootstrapChange,
+} from '../src/sync-bootstrap.js';
+import { MemoryTreeStore } from '../src/tree-store.js';
 
 const apps: FastifyInstance[] = [];
 afterEach(async () => {
@@ -60,6 +65,13 @@ describe('immutable progressive bootstrap', () => {
       headers,
     });
     expect(preview.statusCode).toBe(200);
+    expect(preview.headers['cache-control']).toBe('private, no-store');
+    expect(preview.json().coverage).toMatchObject({
+      limit: 100,
+      tasksHasMore: false,
+      parentFolderId: null,
+    });
+    expect(preview.json().cursor).toMatch(/^\d+$/);
     expect(preview.json().complete).toBe(false);
     expect(
       preview.json().changes.some((c: BootstrapChange) => c.entityId === created.task.id),
@@ -167,5 +179,25 @@ describe('immutable progressive bootstrap', () => {
           page.reduce((n, item) => n + Buffer.byteLength(JSON.stringify(item)), 0) <= 512_000,
       ),
     ).toBe(true);
+  });
+
+  it('reports truncated preview coverage and coalesces simultaneous snapshot creation', async () => {
+    const tree = new MemoryTreeStore();
+    const owner = randomUUID();
+    for (let i = 0; i < 101; i++)
+      tree.createTask(owner, { id: randomUUID(), title: `task ${i}`, parentFolderId: null });
+    const bootstrap = new BootstrapSnapshots(tree);
+    const preview = await bootstrap.preview(owner, '2026-10-18', null);
+    expect(preview.coverage.tasksHasMore).toBe(true);
+    expect(preview.changes.filter((item) => item.entityType === 'task')).toHaveLength(100);
+    expect(preview.complete).toBe(false);
+    const manifests = await Promise.all([
+      bootstrap.create(owner, '2026-10-18'),
+      bootstrap.create(owner, '2026-10-18'),
+    ]);
+    expect(manifests[0]!.snapshotId).toBe(manifests[1]!.snapshotId);
+    tree.createTask(owner, { id: randomUUID(), title: 'later', parentFolderId: null });
+    const next = await bootstrap.create(owner, '2026-10-18');
+    expect(next.cursor).not.toBe(manifests[0]!.cursor);
   });
 });

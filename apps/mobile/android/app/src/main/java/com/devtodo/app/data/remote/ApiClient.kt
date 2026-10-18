@@ -458,11 +458,18 @@ class ApiClient(private val authManager: SecureAuthManager) {
 
     private suspend inline fun <reified T> v2Request(path: String, body: String? = null): Result<T> = inSession {
         try {
+            val started = System.nanoTime()
             val builder = Request.Builder().url("${baseUrlV2()}$path")
             val request = if (body == null) builder.get().build() else builder.post(body.toRequestBody(jsonMediaType)).build()
             authenticatedCall(request).awaitResponse().use { response ->
                 val text = response.body?.string().orEmpty()
-                if (response.isSuccessful) Result.success(json.decodeFromString<T>(text))
+                if (response.isSuccessful) {
+                    val received = System.nanoTime()
+                    val decoded = json.decodeFromString<T>(text)
+                    val route = if (path.startsWith("/tasks/")) "task.detail" else path.substringBefore('?').split('/').take(3).joinToString("/")
+                    android.util.Log.d("TaskDockSync", "route=$route receiveMs=${(received - started) / 1_000_000} parseMs=${(System.nanoTime() - received) / 1_000_000} chars=${text.length} requestId=${response.header("X-Request-Id").orEmpty()}")
+                    Result.success(decoded)
+                }
                 else Result.failure(apiFailure("v2 request", response, text))
             }
         } catch (error: CancellationException) { throw error }
@@ -537,7 +544,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
             code == "AUTH_CHALLENGE_INVALID" -> ApiFailureCategory.REQUEST_REJECTED
             response.code == 401 || response.code == 403 -> ApiFailureCategory.AUTH_REQUIRED
             code == "SYNC_CURSOR_EXPIRED" -> ApiFailureCategory.CURSOR_EXPIRED
-            response.code == 404 || code == "CLIENT_UPGRADE_REQUIRED" || code == "SYNC_PROTOCOL_UNSUPPORTED" ->
+            (response.code == 404 && code != "ENTITY_NOT_FOUND") || code == "CLIENT_UPGRADE_REQUIRED" || code == "SYNC_PROTOCOL_UNSUPPORTED" ->
                 ApiFailureCategory.INCOMPATIBLE
             response.code >= 500 -> ApiFailureCategory.SERVER_UNAVAILABLE
             else -> ApiFailureCategory.REQUEST_REJECTED

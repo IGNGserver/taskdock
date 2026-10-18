@@ -11,6 +11,15 @@ import android.os.SystemClock
 import android.util.Base64
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import com.devtodo.app.ui.components.LocalSyncStatus
+import com.devtodo.app.ui.components.SyncStatusBanner
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.lifecycle.ViewModelStore
@@ -693,9 +702,57 @@ class WorkspaceScreenTest {
         waitForText("日历")
         compose.onNodeWithTag("calendar-day-$today").performClick()
         compose.runOnIdle { assertEquals(today, selectedDate) }
-        compose.onNodeWithText("事件").performClick()
+        compose.onNodeWithContentDescription("事件").performClick()
         compose.runOnIdle { assertEquals(1, eventsOpened) }
         screenshot("calendar-event-entry")
+    }
+
+    @Test
+    fun staleNoticeRemainsBelowTheToolbarWithLargeText() {
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(
+                LocalDensity provides Density(density.density, 2f),
+                LocalSyncStatus provides { SyncStatusBanner(vm, "today") },
+            ) {
+                DevTodoTheme(themeMode = ThemeMode.DARK, dynamicColor = false) {
+                    Box(Modifier.width(320.dp)) { TodayV2Screen(vm, {}) }
+                }
+            }
+        }
+        compose.onNodeWithTag("sync-status-banner").assertIsDisplayed()
+        compose.onNodeWithText("重试").assertIsDisplayed()
+        val title = compose.onNodeWithText("今天").fetchSemanticsNode().boundsInRoot
+        val banner = compose.onNodeWithTag("sync-status-banner").fetchSemanticsNode().boundsInRoot
+        assertTrue("notice overlaps the toolbar", banner.top >= title.bottom)
+        screenshot("stale-notice-large-text")
+    }
+
+    @Test
+    fun remoteRevisionsUpdateUntouchedDetailsButPreserveDrafts() {
+        compose.setContent { DevTodoTheme(dynamicColor = false) { TaskDetailScreen(task.id, vm, {}) } }
+        waitForText("保留原始备注")
+        runBlocking {
+            db.taskDao().upsertTask(task.copy(title = "远端新版标题", version = 2))
+            db.noteDao().upsertNote(NoteEntity("fixture-note", "fixture-owner", task.id, "远端新版备注", 2, now, now))
+        }
+        compose.waitUntil(10_000) { runCatching { compose.onNodeWithText("远端新版备注").assertExists(); true }.getOrDefault(false) }
+        compose.onNodeWithText("任务标题").performScrollTo().performTextReplacement("我的未保存草稿")
+        runBlocking { db.taskDao().upsertTask(task.copy(title = "另一设备的修改", version = 3)) }
+        compose.waitUntil(10_000) { runCatching { compose.onNodeWithText("中枢内容已变化，已保留你的未保存编辑。请核对后再保存。").assertExists(); true }.getOrDefault(false) }
+        compose.onNodeWithText("我的未保存草稿").assertExists()
+        screenshot("detail-remote-draft-conflict")
+        // Reverting the draft to its old baseline must reveal the newer remote
+        // value even if no further DB invalidation or network response arrives.
+        compose.onNodeWithText("任务标题").performScrollTo().performTextReplacement("远端新版标题")
+        compose.waitUntil(10_000) { runCatching { compose.onNodeWithText("另一设备的修改").assertExists(); true }.getOrDefault(false) }
+    }
+
+    @Test
+    fun uncachedTodayDoesNotClaimAnAuthoritativeEmptyState() {
+        compose.setContent { DevTodoTheme(dynamicColor = false) { TodayV2Screen(vm, {}) } }
+        compose.onNodeWithText("今日安排尚未加载完整，请查看顶部更新状态。").assertExists()
+        compose.onNodeWithText("今天还没有安排").assertDoesNotExist()
     }
 
     @Test
