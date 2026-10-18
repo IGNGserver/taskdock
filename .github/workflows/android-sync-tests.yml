@@ -5,10 +5,11 @@ on:
     paths:
       - 'apps/mobile/android/**'
       - '.github/workflows/android-sync-tests.yml'
-  push:
-    paths:
-      - 'apps/mobile/android/**'
-      - '.github/workflows/android-sync-tests.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: android-sync-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -24,6 +25,10 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
+      - name: Enable emulator acceleration
+        run: |
+          test -e /dev/kvm
+          sudo chmod a+rw /dev/kvm
       - name: Unit tests, lint and test APK
         working-directory: apps/mobile/android
         run: bash ./gradlew --no-daemon --max-workers=2 :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
@@ -34,8 +39,9 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -cores 2 -memory 2048
           working-directory: apps/mobile/android
-          script: bash ./gradlew --no-daemon --max-workers=2 :app:connectedDebugAndroidTest
+          script: bash -c 'bash ./gradlew --no-daemon --max-workers=2 :app:connectedDebugAndroidTest; result=$?; adb pull /sdcard/Android/data/com.devtodo.app.debug/files/ui-evidence app/build/reports/ui-evidence || true; exit $result'
       - name: Test reports
         if: always()
         uses: actions/upload-artifact@v4
