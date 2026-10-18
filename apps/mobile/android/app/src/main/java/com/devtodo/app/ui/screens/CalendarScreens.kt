@@ -19,8 +19,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.EventAvailable
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -443,6 +441,8 @@ fun DayScheduleScreen(
                                 onStatusToggle = { viewModel.updateTaskStatus(task, it) },
                                 projectName = folderPath(task.parentFolderId, folders),
                                 actions = listOf(
+                                    RowAction("上移", enabled = index > 0) { moveScheduled(placement.id, -1) },
+                                    RowAction("下移", enabled = index < group.items.lastIndex) { moveScheduled(placement.id, 1) },
                                     RowAction("移动到其他位置") {
                                         targetPlacement = placement
                                         targetCopy = false
@@ -456,12 +456,6 @@ fun DayScheduleScreen(
                                 ),
                                 rowShape = TaskDockShapes.groupedRow(index, group.items.size),
                                 modifier = Modifier.animateItem(),
-                            )
-                            PlacementOrderButtons(
-                                canMoveUp = index > 0,
-                                canMoveDown = index < group.items.lastIndex,
-                                onMoveUp = { moveScheduled(placement.id, -1) },
-                                onMoveDown = { moveScheduled(placement.id, 1) },
                             )
                         }
                     }
@@ -772,6 +766,8 @@ fun EventDetailScreen(
                             onStatusToggle = { viewModel.updateTaskStatus(task, it) },
                             projectName = folderPath(task.parentFolderId, folders),
                             actions = listOf(
+                                RowAction("上移", enabled = index > 0) { moveScheduled(placement.id, -1) },
+                                RowAction("下移", enabled = index < group.items.lastIndex) { moveScheduled(placement.id, 1) },
                                 RowAction("移动到其他位置") {
                                     targetPlacement = placement
                                     targetCopy = false
@@ -785,12 +781,6 @@ fun EventDetailScreen(
                             ),
                             rowShape = TaskDockShapes.groupedRow(index, group.items.size),
                             modifier = Modifier.animateItem(),
-                        )
-                        PlacementOrderButtons(
-                            canMoveUp = index > 0,
-                            canMoveDown = index < group.items.lastIndex,
-                            onMoveUp = { moveScheduled(placement.id, -1) },
-                            onMoveDown = { moveScheduled(placement.id, 1) },
                         )
                     }
                 }
