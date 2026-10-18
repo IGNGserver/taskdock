@@ -133,6 +133,7 @@ fun TreeScreen(
     }
 
     var showFolderDialog by rememberSaveable { mutableStateOf(false) }
+    var editingFolder by remember { mutableStateOf<FolderEntity?>(null) }
     var pendingPreview by remember { mutableStateOf<DeletePreviewDto?>(null) }
     var pendingDeleteFolder by remember { mutableStateOf<FolderEntity?>(null) }
     var pendingMoveRow by remember { mutableStateOf<TreeRow?>(null) }
@@ -173,6 +174,15 @@ fun TreeScreen(
                             Icon(Icons.Default.Settings, "设置", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
+                        val currentFolder = allFolders.find { it.id == folderId }
+                        if (currentFolder != null) {
+                            IconButton(
+                                onClick = { editingFolder = currentFolder },
+                                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
+                            ) {
+                                Icon(Icons.Default.Edit, "重命名当前目录", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                         IconButton(
                             onClick = { showFolderDialog = true },
                             modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
@@ -295,9 +305,12 @@ fun TreeScreen(
                                     folder = folder,
                                     itemCount = row.taskCount,
                                     onClick = { onOpenFolder(folder.id) },
-                                    actions = actions + RowAction("删除目录树", destructive = true) {
-                                        pendingDeleteFolder = folder
-                                    },
+                                    actions = actions + listOf(
+                                        RowAction("重命名") { editingFolder = folder },
+                                        RowAction("删除目录树", destructive = true) {
+                                            pendingDeleteFolder = folder
+                                        },
+                                    ),
                                     rowShape = TaskDockShapes.groupedRow(
                                         visibleRows.indexOfFirst { it.id == row.id }.coerceAtLeast(0),
                                         visibleRows.size,
@@ -366,6 +379,21 @@ fun TreeScreen(
         CaptureSheet("新建文件夹", "文件夹名称", onDismiss = { showFolderDialog = false }) {
             releasePins()
             viewModel.createFolderV2(folderId, it)
+        }
+    }
+
+    editingFolder?.let { folder ->
+        CaptureSheet(
+            title = "重命名文件夹",
+            label = "文件夹名称",
+            initialValue = folder.title,
+            confirmLabel = "保存",
+            onDismiss = { editingFolder = null },
+        ) { newTitle ->
+            releasePins()
+            viewModel.updateFolderTitleV2(folder, newTitle) { success ->
+                if (success) editingFolder = null
+            }
         }
     }
 
