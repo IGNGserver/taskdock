@@ -19,8 +19,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.EventAvailable
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -37,6 +35,7 @@ import com.devtodo.app.data.local.TaskEntity
 import com.devtodo.app.data.local.TimePointEntity
 import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.data.model.TimePointType
+import com.devtodo.app.ui.components.ActionMenu
 import com.devtodo.app.ui.components.EmptyState
 import com.devtodo.app.ui.components.ExpressiveTaskCard
 import com.devtodo.app.ui.components.RowAction
@@ -443,6 +442,8 @@ fun DayScheduleScreen(
                                 onStatusToggle = { viewModel.updateTaskStatus(task, it) },
                                 projectName = folderPath(task.parentFolderId, folders),
                                 actions = listOf(
+                                    RowAction("上移", enabled = index > 0) { moveScheduled(placement.id, -1) },
+                                    RowAction("下移", enabled = index < group.items.lastIndex) { moveScheduled(placement.id, 1) },
                                     RowAction("移动到其他位置") {
                                         targetPlacement = placement
                                         targetCopy = false
@@ -456,12 +457,6 @@ fun DayScheduleScreen(
                                 ),
                                 rowShape = TaskDockShapes.groupedRow(index, group.items.size),
                                 modifier = Modifier.animateItem(),
-                            )
-                            PlacementOrderButtons(
-                                canMoveUp = index > 0,
-                                canMoveDown = index < group.items.lastIndex,
-                                onMoveUp = { moveScheduled(placement.id, -1) },
-                                onMoveDown = { moveScheduled(placement.id, 1) },
                             )
                         }
                     }
@@ -585,12 +580,10 @@ fun EventsScreen(
                             event = event,
                             count = placements.count { it.timePointId == event.id },
                             onClick = { onNavigateToEvent(event.id) },
-                        )
-                        PlacementOrderButtons(
-                            canMoveUp = index > 0,
-                            canMoveDown = index < events.lastIndex,
                             onMoveUp = { viewModel.reorderEvents(events.map { it.id }.moveItem(index, index - 1)) },
                             onMoveDown = { viewModel.reorderEvents(events.map { it.id }.moveItem(index, index + 1)) },
+                            canMoveUp = index > 0,
+                            canMoveDown = index < events.lastIndex,
                         )
                     }
                 }
@@ -610,7 +603,15 @@ fun EventsScreen(
 }
 
 @Composable
-private fun EventListRow(event: TimePointEntity, count: Int, onClick: () -> Unit) {
+private fun EventListRow(
+    event: TimePointEntity,
+    count: Int,
+    onClick: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+) {
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -618,7 +619,7 @@ private fun EventListRow(event: TimePointEntity, count: Int, onClick: () -> Unit
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 13.dp, bottom = 13.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(shape = TaskDockShapes.Medium, color = MaterialTheme.colorScheme.tertiaryContainer) {
@@ -633,7 +634,13 @@ private fun EventListRow(event: TimePointEntity, count: Int, onClick: () -> Unit
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Icon(Icons.AutoMirrored.Filled.ArrowForward, "打开事件")
+            ActionMenu(
+                label = "${event.title ?: "事件"}，更多操作",
+                actions = listOf(
+                    RowAction("上移", enabled = canMoveUp, onClick = onMoveUp),
+                    RowAction("下移", enabled = canMoveDown, onClick = onMoveDown),
+                ),
+            )
         }
     }
 }
@@ -772,6 +779,8 @@ fun EventDetailScreen(
                             onStatusToggle = { viewModel.updateTaskStatus(task, it) },
                             projectName = folderPath(task.parentFolderId, folders),
                             actions = listOf(
+                                RowAction("上移", enabled = index > 0) { moveScheduled(placement.id, -1) },
+                                RowAction("下移", enabled = index < group.items.lastIndex) { moveScheduled(placement.id, 1) },
                                 RowAction("移动到其他位置") {
                                     targetPlacement = placement
                                     targetCopy = false
@@ -785,12 +794,6 @@ fun EventDetailScreen(
                             ),
                             rowShape = TaskDockShapes.groupedRow(index, group.items.size),
                             modifier = Modifier.animateItem(),
-                        )
-                        PlacementOrderButtons(
-                            canMoveUp = index > 0,
-                            canMoveDown = index < group.items.lastIndex,
-                            onMoveUp = { moveScheduled(placement.id, -1) },
-                            onMoveDown = { moveScheduled(placement.id, 1) },
                         )
                     }
                 }
@@ -894,26 +897,6 @@ private fun EventSummaryCard(
                     Text("添加任务")
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun PlacementOrderButtons(
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 2.dp),
-        horizontalArrangement = Arrangement.End,
-    ) {
-        IconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Default.KeyboardArrowUp, "安排上移")
-        }
-        IconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Default.KeyboardArrowDown, "安排下移")
         }
     }
 }
