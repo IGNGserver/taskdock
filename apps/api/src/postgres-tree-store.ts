@@ -217,6 +217,9 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     clientId: string,
     mutation: V2Mutation,
   ): Promise<{ replayed: boolean; result: unknown }> {
+    if (mutation.command === 'task.update' || mutation.command === 'note.update') {
+      return this.applyFocusedMutation(ownerId, clientId, mutation);
+    }
     let committedCursor: string | undefined;
     // Snapshot the projection outside the database transaction as well. If
     // COMMIT itself fails, MemoryTreeStore restores the exact pre-request
@@ -252,6 +255,82 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     );
     if (committedCursor) this.loaded.set(ownerId, committedCursor);
     this.clearChangeBuffer();
+    return response;
+  }
+
+  /** Frequent mobile edits use the same domain rules on a one-task projection.
+   * No account-wide notes read, clone, or flush is needed. Receipt, row and feed
+   * remain in the existing atomic transaction and owner lock. */
+  private async applyFocusedMutation(ownerId: string, clientId: string, mutation: V2Mutation) {
+    const response = await this.postgres.withMutation(() =>
+      this.postgres.withIdempotency(
+        ownerId,
+        clientId,
+        mutation.mutationId,
+        v2MutationIdempotencyInput(mutation),
+        async () => {
+          await this.postgres.v2LockOwner(ownerId);
+          const taskId =
+            mutation.command === 'note.update'
+              ? (mutation.payload['taskId'] ?? mutation.entityId)
+              : mutation.entityId;
+          const tasks = await this.postgres.v2Query(
+            'SELECT * FROM tasks WHERE owner_id = $1 AND id = $2 AND deleted_at IS NULL FOR UPDATE',
+            [ownerId, taskId],
+          );
+          const notes =
+            mutation.command === 'note.update'
+              ? await this.postgres.v2Query(
+                  'SELECT * FROM notes WHERE owner_id = $1 AND task_id = $2 AND deleted_at IS NULL FOR UPDATE',
+                  [ownerId, taskId],
+                )
+              : { rows: [] };
+          const focused = new MemoryTreeStore();
+          focused.loadOwnerState(ownerId, {
+            tasks: tasks.rows.map((row) => ({
+              id: String(row.id),
+              ownerId,
+              referenceId: String(row.reference_id),
+              parentFolderId: nullableString(row.parent_folder_id),
+              title: String(row.title),
+              status: String(row.status),
+              rank: String(row.rank),
+              version: Number(row.version),
+              completedAt: isoOrNull(row.completed_at),
+              createdAt: iso(row.created_at),
+              updatedAt: iso(row.updated_at),
+              deletedAt: null,
+            })),
+            notes: notes.rows.map((row) => ({
+              id: String(row.id),
+              ownerId,
+              taskId: String(row.task_id),
+              contentMarkdown: String(row.content_markdown),
+              version: Number(row.version),
+              createdAt: iso(row.created_at),
+              updatedAt: iso(row.updated_at),
+              deletedAt: null,
+            })),
+          });
+          const result = await focused.applyMutationIdempotent(ownerId, clientId, mutation);
+          const changes = focused.changesFrom(0);
+          await this.persistChanges(ownerId, changes);
+          for (const change of changes)
+            await this.postgres.appendV2Change(
+              ownerId,
+              change.entityType,
+              change.entityId,
+              change.entityVersion,
+              change.operation,
+              change.snapshot,
+            );
+          return result.result;
+        },
+      ),
+    );
+    // Invalidate only after COMMIT. A rolled-back focused edit never touches
+    // the shared read projection; other replicas invalidate via the DB cursor.
+    this.loaded.delete(ownerId);
     return response;
   }
 

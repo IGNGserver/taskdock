@@ -408,6 +408,10 @@ async function main(): Promise<void> {
     );
     assert(firstPreview.complete === false, 'preview must never advance the global cursor');
     assert(
+      firstPreview.coverage.limit === 100 && /^\d+$/.test(firstPreview.cursor),
+      'preview coverage missing',
+    );
+    assert(
       !firstPreview.changes.some((change) => change.entityType === 'note'),
       'preview loaded large notes',
     );
@@ -420,11 +424,70 @@ async function main(): Promise<void> {
       directDetail.folderPath.some((folder) => folder.id === v2FolderId),
       'direct task detail lost the readable folder path',
     );
+    // Focused mobile edits must reuse domain validation without prepare/full-account reads.
+    const focusedStore = new PostgresTreeStore(restartStore);
+    focusedStore.prepare = async () => {
+      throw new Error('focused mutation loaded the entire owner');
+    };
+    const focusedEdit = {
+      mutationId: uuidv7(),
+      command: 'task.update' as const,
+      entityId: v2TaskId,
+      baseVersion: 1,
+      occurredAt: new Date().toISOString(),
+      payload: { title: 'focused update' },
+    };
+    const edited = await focusedStore.applyMutationIdempotent(owner.id, clientId, focusedEdit);
+    assert((edited.result as { version: number }).version === 2, 'focused edit version incorrect');
+    const replayed = await focusedStore.applyMutationIdempotent(owner.id, clientId, focusedEdit);
+    assert(replayed.replayed, 'focused edit lost its idempotency receipt');
+    await expectDomainError(
+      () =>
+        focusedStore.applyMutationIdempotent(owner.id, clientId, {
+          ...focusedEdit,
+          mutationId: uuidv7(),
+        }),
+      'VERSION_CONFLICT',
+    );
+    const noteEdit = {
+      mutationId: uuidv7(),
+      command: 'note.update' as const,
+      entityId: v2TaskId,
+      baseVersion: 1,
+      occurredAt: new Date().toISOString(),
+      payload: { taskId: v2TaskId, contentMarkdown: 'focused note' },
+    };
+    const originalAppend = restartStore.appendV2Change;
+    restartStore.appendV2Change = async () => {
+      throw new Error('injected feed failure');
+    };
+    let rolledBack = false;
+    try {
+      await focusedStore.applyMutationIdempotent(owner.id, clientId, noteEdit);
+    } catch {
+      rolledBack = true;
+    } finally {
+      restartStore.appendV2Change = originalAppend;
+    }
+    assert(
+      rolledBack && (await bootstrap.detail(owner.id, v2TaskId)).note.contentMarkdown === '',
+      'focused edit escaped rollback',
+    );
+    await focusedStore.applyMutationIdempotent(owner.id, clientId, noteEdit);
+    assert(
+      (await bootstrap.detail(owner.id, v2TaskId)).note.contentMarkdown === 'focused note',
+      'focused retry lost the edit',
+    );
     const manifest = await bootstrap.create(owner.id, '2026-09-04');
     const bootstrapPeer = new PostgresStore(createPool(databaseUrl));
     stores.push(bootstrapPeer);
     await bootstrapPeer.init();
     const peerBootstrap = new BootstrapSnapshots(new PostgresTreeStore(bootstrapPeer));
+    const peerManifest = await peerBootstrap.create(owner.id, '2026-09-04');
+    assert(
+      peerManifest.snapshotId === manifest.snapshotId,
+      'unchanged snapshot was rebuilt on another instance',
+    );
     const pageOnPeer = await peerBootstrap.page(owner.id, manifest.snapshotId, 0);
     const allPageChanges = [...pageOnPeer.changes];
     for (let page = 1; page < manifest.pageCount; page++)
@@ -457,6 +520,12 @@ async function main(): Promise<void> {
       () => bootstrap.page(owner.id, manifest.snapshotId, 0),
       'SYNC_CURSOR_EXPIRED',
     );
+    await bootstrap.cleanup();
+    const expired = await cleanupPool.query(
+      'SELECT 1 FROM sync_bootstrap_snapshots WHERE id = $1',
+      [manifest.snapshotId],
+    );
+    assert(expired.rowCount === 0, 'bounded background cleanup retained expired snapshot');
     assert(
       reloadedSnapshot.folders.some((folder) => folder.id === v2FolderId),
       'v2 folder did not survive a PostgresTreeStore restart',

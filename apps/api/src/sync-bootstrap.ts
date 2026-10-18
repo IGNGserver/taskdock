@@ -100,7 +100,42 @@ export function splitBootstrapPages(items: BootstrapChange[]): BootstrapChange[]
 
 export class BootstrapSnapshots {
   private readonly sessions = new Map<string, Session>();
+  private readonly flights = new Map<
+    string,
+    Promise<Awaited<ReturnType<BootstrapSnapshots['createNew']>>>
+  >();
+  private maintenance: ReturnType<typeof setInterval> | undefined;
+  private cleanupFlight: Promise<void> | undefined;
   constructor(private readonly tree: V2TreeStore) {}
+
+  startMaintenance(onError: (error: unknown) => void): void {
+    if (this.maintenance || !(this.tree instanceof PostgresTreeStore)) return;
+    this.maintenance = setInterval(() => {
+      void this.cleanup().catch(onError);
+    }, 60_000);
+    this.maintenance.unref();
+  }
+
+  async close(): Promise<void> {
+    clearInterval(this.maintenance);
+    await this.cleanupFlight;
+  }
+
+  /** Bounded and outside request transactions; replicas skip each other's locks. */
+  cleanup(): Promise<void> {
+    if (this.cleanupFlight) return this.cleanupFlight;
+    const tree = this.tree;
+    if (!(tree instanceof PostgresTreeStore)) return Promise.resolve();
+    this.cleanupFlight = tree.postgres
+      .v2Query(
+        'DELETE FROM sync_bootstrap_snapshots WHERE id IN (SELECT id FROM sync_bootstrap_snapshots WHERE expires_at <= now() ORDER BY expires_at LIMIT 2 FOR UPDATE SKIP LOCKED)',
+      )
+      .then(() => undefined)
+      .finally(() => {
+        this.cleanupFlight = undefined;
+      });
+    return this.cleanupFlight;
+  }
 
   private async capture(ownerId: string): Promise<V2Snapshot> {
     if (!(this.tree instanceof PostgresTreeStore)) return this.tree.snapshot(ownerId);
@@ -132,7 +167,8 @@ export class BootstrapSnapshots {
       const full = await this.capture(ownerId);
       const points = full.timePoints.filter((p) => p.localDate === localDate);
       const ids = new Set(points.map((p) => p.id));
-      const placements = full.placements.filter((p) => ids.has(p.timePointId)).slice(0, 100);
+      const allPlacements = full.placements.filter((p) => ids.has(p.timePointId));
+      const placements = allPlacements.slice(0, 100);
       const tasks = new Set(placements.map((p) => p.taskId));
       const priority = { IN_PROGRESS: 0, TODO: 1, DONE: 2 };
       const roots = full.tasks
@@ -151,6 +187,17 @@ export class BootstrapSnapshots {
         [...roots, ...full.tasks.filter((t) => tasks.has(t.id))].map((t) => [t.id, t]),
       );
       return {
+        cursor: full.cursor,
+        checkedAt: new Date().toISOString(),
+        coverage: {
+          parentFolderId,
+          localDate,
+          limit: 100,
+          foldersHasMore:
+            full.folders.filter((f) => f.parentFolderId === parentFolderId).length > 100,
+          tasksHasMore: full.tasks.filter((t) => t.parentFolderId === parentFolderId).length > 100,
+          placementsHasMore: allPlacements.length > 100,
+        },
         changes: changes({
           ...full,
           folders: full.folders.filter((f) => f.parentFolderId === parentFolderId).slice(0, 100),
@@ -168,12 +215,17 @@ export class BootstrapSnapshots {
     }
     const postgres = this.tree.postgres;
     return postgres.v2ReadSnapshot(async () => {
+      const cursor = (await postgres.syncStatusV2(ownerId)).cursor;
+      // Explicit null/equality branches let PostgreSQL use the ordered directory indexes.
+      const parent =
+        parentFolderId === null ? 'parent_folder_id IS NULL' : 'parent_folder_id = $2::uuid';
+      const parentValues = parentFolderId === null ? [ownerId] : [ownerId, parentFolderId];
       const settings = await postgres.v2Query('SELECT * FROM user_settings WHERE owner_id = $1', [
         ownerId,
       ]);
       const folders = await postgres.v2Query(
-        'SELECT *, rank::text AS rank FROM folders WHERE owner_id = $1 AND deleted_at IS NULL AND parent_folder_id IS NOT DISTINCT FROM $2::uuid ORDER BY folders.rank, id LIMIT 100',
-        [ownerId, parentFolderId],
+        `SELECT *, rank::text AS rank FROM folders WHERE owner_id = $1 AND deleted_at IS NULL AND ${parent} ORDER BY folders.rank, id LIMIT 101`,
+        parentValues,
       );
       const points = await postgres.v2Query(
         "SELECT *, rank::text AS rank FROM time_points WHERE owner_id = $1 AND type = 'DATE' AND local_date = $2::date AND deleted_at IS NULL",
@@ -181,39 +233,65 @@ export class BootstrapSnapshots {
       );
       const pointIds = points.rows.map((p) => p['id']);
       const placements = await postgres.v2Query(
-        'SELECT *, rank::text AS rank FROM placements WHERE owner_id = $1 AND time_point_id = ANY($2::uuid[]) AND deleted_at IS NULL ORDER BY placements.rank, id LIMIT 100',
+        'SELECT *, rank::text AS rank FROM placements WHERE owner_id = $1 AND time_point_id = ANY($2::uuid[]) AND deleted_at IS NULL ORDER BY placements.rank, id LIMIT 101',
         [ownerId, pointIds],
       );
-      const taskIds = placements.rows.map((p) => p['task_id']);
+      const taskIds = placements.rows.slice(0, 100).map((p) => p['task_id']);
       const rootTasks = await postgres.v2Query(
-        "SELECT *, rank::text AS rank FROM tasks WHERE owner_id = $1 AND parent_folder_id IS NOT DISTINCT FROM $2::uuid AND deleted_at IS NULL ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, tasks.rank, id LIMIT 100",
-        [ownerId, parentFolderId],
+        `SELECT *, rank::text AS rank FROM tasks WHERE owner_id = $1 AND ${parent} AND deleted_at IS NULL ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, tasks.rank, id LIMIT 101`,
+        parentValues,
       );
       const scheduledTasks = await postgres.v2Query(
         'SELECT *, rank::text AS rank FROM tasks WHERE owner_id = $1 AND id = ANY($2::uuid[]) AND deleted_at IS NULL',
         [ownerId, taskIds],
       );
       const selected = new Map(
-        [...rootTasks.rows, ...scheduledTasks.rows].map((t) => [t['id'], dto(t)]),
+        [...rootTasks.rows.slice(0, 100), ...scheduledTasks.rows].map((t) => [t['id'], dto(t)]),
       );
       const snapshot = {
         settings: dto(settings.rows[0]!),
-        folders: folders.rows.map(dto),
+        folders: folders.rows.slice(0, 100).map(dto),
         tasks: [...selected.values()],
         timePoints: points.rows.map(dto),
-        placements: placements.rows.map(dto),
-        cursor: '0',
+        placements: placements.rows.slice(0, 100).map(dto),
+        cursor,
         notes: [],
         taskSteps: [],
         workflows: [],
         workflowStages: [],
         workflowTaskMemberships: [],
       } as unknown as V2Snapshot;
-      return { changes: changes(snapshot), complete: false };
+      return {
+        changes: changes(snapshot),
+        complete: false,
+        cursor,
+        checkedAt: new Date().toISOString(),
+        coverage: {
+          parentFolderId,
+          localDate,
+          limit: 100,
+          foldersHasMore: folders.rows.length > 100,
+          tasksHasMore: rootTasks.rows.length > 100,
+          placementsHasMore: placements.rows.length > 100,
+        },
+      };
     });
   }
 
   async create(ownerId: string, localDate: string) {
+    const key = `${ownerId}:${localDate}`;
+    const existing = this.flights.get(key);
+    if (existing) return existing;
+    const flight = this.createNew(ownerId, localDate);
+    this.flights.set(key, flight);
+    try {
+      return await flight;
+    } finally {
+      if (this.flights.get(key) === flight) this.flights.delete(key);
+    }
+  }
+
+  private async createNew(ownerId: string, localDate: string) {
     if (this.tree instanceof PostgresTreeStore) return this.createPostgres(ownerId);
     const snapshot = await this.capture(ownerId);
     // Dependencies precede relations; large note bodies are always last.
@@ -252,15 +330,24 @@ export class BootstrapSnapshots {
   private async createPostgres(ownerId: string) {
     if (!(this.tree instanceof PostgresTreeStore)) throw new Error('PostgreSQL required');
     const postgres = this.tree.postgres;
-    // Maintenance precedes the capture transaction; it must not pin its MVCC view.
-    await postgres.v2Query('DELETE FROM sync_bootstrap_snapshots WHERE expires_at <= now()');
-    await postgres.v2Query(
-      'DELETE FROM sync_bootstrap_snapshots WHERE id IN (SELECT id FROM sync_bootstrap_snapshots WHERE owner_id = $1 ORDER BY expires_at DESC OFFSET 3)',
-      [ownerId],
-    );
     return postgres.withMutation(async () => {
       await postgres.v2Query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
       const cursor = (await postgres.syncStatusV2(ownerId)).cursor;
+      // Reuse only an immutable snapshot at exactly this revision, with enough
+      // remaining lifetime to resume it. This also works across API instances.
+      const reusable = await postgres.v2Query(
+        "SELECT id, expires_at, page_count FROM sync_bootstrap_snapshots WHERE owner_id = $1 AND cursor = $2 AND expires_at > now() + interval '5 minutes' AND page_count > 0 ORDER BY expires_at DESC LIMIT 1",
+        [ownerId, cursor],
+      );
+      const previous = reusable.rows[0];
+      if (previous)
+        return {
+          snapshotId: String(previous['id']),
+          cursor,
+          expiresAt: new Date(String(previous['expires_at'])).toISOString(),
+          pageCount: Number(previous['page_count']),
+          protocolVersion: 2,
+        };
       const snapshotId = randomUUID();
       const expiresAt = new Date(Date.now() + ttlMs).toISOString();
       await postgres.v2Query(

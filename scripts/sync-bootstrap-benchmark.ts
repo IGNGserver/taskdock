@@ -57,6 +57,30 @@ try {
   const manifest = await optimized.create(owner.id, '2026-10-13');
   const bootstrapMs = Math.round(performance.now() - started);
   const page = await optimized.page(owner.id, manifest.snapshotId, 0);
+  const reuseStarted = performance.now();
+  const reused = await optimized.create(owner.id, '2026-10-13');
+  if (reused.snapshotId !== manifest.snapshotId) throw new Error('unchanged bootstrap was rebuilt');
+  const reuseMs = Math.round(performance.now() - reuseStarted);
+  await pool.query('ANALYZE tasks');
+  const directoryPlan = await pool.query(
+    "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT id FROM tasks WHERE owner_id=$1 AND parent_folder_id IS NULL AND deleted_at IS NULL ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, rank, id LIMIT 101",
+    [owner.id],
+  );
+  const taskId = String(
+    (await pool.query('SELECT id FROM tasks WHERE owner_id=$1 LIMIT 1', [owner.id])).rows[0].id,
+  );
+  let version = 1;
+  const benchmarkClient = randomUUID();
+  const focusedEdit = await measure(() =>
+    new PostgresTreeStore(store).applyMutationIdempotent(owner.id, benchmarkClient, {
+      mutationId: randomUUID(),
+      command: 'task.update',
+      entityId: taskId,
+      baseVersion: version++,
+      occurredAt: new Date().toISOString(),
+      payload: { title: `updated ${version}` },
+    }),
+  );
   console.log(
     JSON.stringify(
       {
@@ -67,6 +91,9 @@ try {
         fullSnapshot: full,
         firstPreview: preview,
         bootstrapMs,
+        unchangedBootstrapReuseMs: reuseMs,
+        focusedEdit,
+        directoryQueryPlan: directoryPlan.rows[0]['QUERY PLAN'],
         pageCount: manifest.pageCount,
         firstPageBytes: Buffer.byteLength(JSON.stringify(page)),
       },
