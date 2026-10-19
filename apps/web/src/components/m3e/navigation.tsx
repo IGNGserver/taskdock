@@ -320,6 +320,7 @@ export function TopAppBar({
   eyebrow,
   leading,
   actions,
+  content,
   className,
   id,
 }: {
@@ -328,6 +329,7 @@ export function TopAppBar({
   eyebrow?: ReactNode;
   leading?: ReactNode;
   actions?: ReactNode;
+  content?: ReactNode;
   className?: string;
   id?: string;
 }) {
@@ -350,6 +352,7 @@ export function TopAppBar({
             {title}
           </div>
         </div>
+        {content && <div className="m3e-app-bar__content">{content}</div>}
         {actions && <div className="m3e-app-bar__actions">{actions}</div>}
       </div>
     </header>

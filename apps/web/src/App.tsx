@@ -79,7 +79,7 @@ import {
 import { DirectoryNavigation } from './components/directory-navigation.js';
 import { TaskFolderBreadcrumb } from './components/task-folder-breadcrumb.js';
 import { directoryEntries } from './directory-paths.js';
-import { readLastFolderId } from './folder-preference.js';
+import { readLastFolderId, resolveCaptureFolder } from './folder-preference.js';
 import { useAuth } from './auth.js';
 import { BrandMark } from './components/brand-mark.js';
 import {
@@ -121,6 +121,7 @@ import {
   useSwipeAction,
   useWindowSizeClass,
   type NavigationDestination,
+  type ButtonGroupOption,
 } from './components/m3e/index.js';
 import { useDevice } from './device.js';
 import { useDismissibleMenu } from './components/m3e/behavior.js';
@@ -261,6 +262,7 @@ function AuthenticatedApp() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [toast, setToast] = useState('');
+  const [globalCaptureOpen, setGlobalCaptureOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useSearchParams();
 
   // Only reset scroll when the top-level route changes. Moving between
@@ -300,6 +302,53 @@ function AuthenticatedApp() {
     next.delete('editTitle');
     setSelectedTask(next);
   }, [selectedTask, setSelectedTask]);
+
+  // Handle shortcut URL actions such as ?action=new-task
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('action') === 'new-task') {
+      setGlobalCaptureOpen(true);
+      params.delete('action');
+      navigate({ search: params.toString() }, { replace: true });
+    }
+  }, [location.search, navigate]);
+
+  const handleGlobalCaptureSubmit = async (title: string) => {
+    let targetFolderId: string | null = null;
+    try {
+      const { items } = await requestV2<{ items: FolderDto[] }>('/folders');
+      targetFolderId = resolveCaptureFolder({
+        folders: items ?? [],
+        defaultCaptureTarget: auth.settings?.defaultCaptureTarget,
+        activeFolderId: null,
+      });
+    } catch {
+      // Fallback to root if folder fetch fails
+      targetFolderId = null;
+    }
+
+    const { task: createdTask } = (await mutationV2('POST', '/tasks', {
+      parentFolderId: targetFolderId,
+      title,
+    })) as { task: TreeTaskDto };
+
+    // If currently on /today, also place into today's timeline
+    if (location.pathname.startsWith('/today')) {
+      try {
+        const localDate = todayInTimezone(auth.settings?.timezone ?? 'Asia/Shanghai');
+        const point = (await mutationV2('POST', '/time-points/date', { localDate })) as TimePointDto;
+        await mutationV2('POST', '/placements', {
+          taskId: createdTask.id,
+          timePointId: point.id,
+        });
+      } catch {
+        // Placement failure non-blocking
+      }
+    }
+
+    window.dispatchEvent(new Event('devtodo:data-changed'));
+    setToast('已创建任务');
+  };
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -368,6 +417,21 @@ function AuthenticatedApp() {
   }, [location.pathname, navItems]);
   /** Navigating to a folder detail should still highlight 目录. */
   const activeForExpanded = activeExpanded || '/tree';
+
+  const activeTabletSegment = useMemo(() => {
+    if (location.pathname.startsWith('/today')) return '/today';
+    if (location.pathname.startsWith('/tree')) return '/tree';
+    if (location.pathname.startsWith('/workflows')) return '/workflows';
+    if (location.pathname.startsWith('/time')) return '/time';
+    return '';
+  }, [location.pathname]);
+
+  const tabletNavOptions: ButtonGroupOption<string>[] = [
+    { value: '/today', label: '今日', icon: <Target size={16} /> },
+    { value: '/tree', label: '目录', icon: <LayoutList size={16} /> },
+    { value: '/workflows', label: '流程', icon: <WorkflowIcon size={16} /> },
+    { value: '/time/calendar', label: '日历', icon: <CalendarDays size={16} /> },
+  ];
 
   const drawerHeader = (
     <div className="brand">
@@ -456,8 +520,32 @@ function AuthenticatedApp() {
               </IconButton>
             ) : undefined
           }
+          content={
+            isTablet && activeTabletSegment ? (
+              <div className="tablet-topbar-segments">
+                <ButtonGroup
+                  label="快速视图切换"
+                  value={activeTabletSegment}
+                  options={tabletNavOptions}
+                  onChange={(to) => navigate(to)}
+                />
+              </div>
+            ) : undefined
+          }
           actions={
             <>
+              {isTablet && (
+                <IconButton
+                  variant="filled"
+                  size="m"
+                  label="快速新建任务"
+                  title="快速新建任务"
+                  className="tablet-topbar-quick-add"
+                  onClick={() => setGlobalCaptureOpen(true)}
+                >
+                  <Plus size={20} />
+                </IconButton>
+              )}
               {sizeClass !== 'compact' ? (
                 <Toolbar
                   variant="floating"
@@ -565,6 +653,13 @@ function AuthenticatedApp() {
       />
 
       {toast && <Snackbar message={toast} onDismiss={() => setToast('')} />}
+      <MobileQuickCaptureSheet
+        open={globalCaptureOpen}
+        onClose={() => setGlobalCaptureOpen(false)}
+        title="快速新建任务"
+        placeholder="准备做点什么？"
+        onSubmit={handleGlobalCaptureSubmit}
+      />
       <ConfirmDialog
         open={logoutConfirmOpen}
         title="退出登录"

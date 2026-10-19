@@ -58,6 +58,36 @@ export default defineConfig({
             purpose: 'maskable',
           },
         ],
+        shortcuts: [
+          {
+            name: '今日待办',
+            short_name: '今日',
+            description: '查看今天的安排与待办任务',
+            url: '/today',
+            icons: [{ src: '/pwa-192.png', sizes: '192x192', type: 'image/png' }],
+          },
+          {
+            name: '新建任务',
+            short_name: '新建',
+            description: '快速创建并捕获一条新任务',
+            url: '/today?action=new-task',
+            icons: [{ src: '/pwa-192.png', sizes: '192x192', type: 'image/png' }],
+          },
+          {
+            name: '任务目录树',
+            short_name: '目录',
+            description: '浏览完整文件夹结构与任务清单',
+            url: '/tree',
+            icons: [{ src: '/pwa-192.png', sizes: '192x192', type: 'image/png' }],
+          },
+          {
+            name: '工作流看板',
+            short_name: '流程',
+            description: '按阶段跟踪任务流动与交付',
+            url: '/workflows',
+            icons: [{ src: '/pwa-192.png', sizes: '192x192', type: 'image/png' }],
+          },
+        ],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png}'],
