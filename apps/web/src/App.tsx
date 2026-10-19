@@ -336,7 +336,9 @@ function AuthenticatedApp() {
     if (location.pathname.startsWith('/today')) {
       try {
         const localDate = todayInTimezone(auth.settings?.timezone ?? 'Asia/Shanghai');
-        const point = (await mutationV2('POST', '/time-points/date', { localDate })) as TimePointDto;
+        const point = (await mutationV2('POST', '/time-points/date', {
+          localDate,
+        })) as TimePointDto;
         await mutationV2('POST', '/placements', {
           taskId: createdTask.id,
           timePointId: point.id,
