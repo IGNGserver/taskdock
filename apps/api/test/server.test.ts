@@ -597,6 +597,38 @@ describe('Fastify API', () => {
       payload: {},
     });
     expect(removedTicketEndpoint.statusCode).toBe(404);
+
+    // Native mobile app challenge and login when reverse proxy strips the Origin header
+    const proxyStrippedChallenge = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/native/challenge',
+      headers: {
+        'x-client-platform': 'android',
+        'x-client-id': 'test-android-device-uuid',
+      },
+    });
+    expect(proxyStrippedChallenge.statusCode).toBe(201);
+    const proxyStrippedChallengeValue = (proxyStrippedChallenge.json() as { challenge: string })
+      .challenge;
+
+    const proxyStrippedLogin = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      headers: {
+        'x-client-platform': 'android',
+        'x-client-id': 'test-android-device-uuid',
+      },
+      payload: {
+        username: 'public-user',
+        password: 'correct horse battery staple',
+        nativeChallenge: proxyStrippedChallengeValue,
+      },
+    });
+    expect(proxyStrippedLogin.statusCode).toBe(200);
+    expect((proxyStrippedLogin.json() as { refreshToken?: string }).refreshToken).toEqual(
+      expect.any(String),
+    );
+
     await app.close();
   });
 

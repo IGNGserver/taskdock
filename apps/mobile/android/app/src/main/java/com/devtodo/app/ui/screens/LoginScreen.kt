@@ -77,11 +77,20 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                             when (error.category) {
                                 ApiFailureCategory.AUTH_REQUIRED -> "账号或密码错误，或登录会话已失效"
                                 ApiFailureCategory.INCOMPATIBLE -> "服务器版本不兼容，请升级服务器后重试"
-                                ApiFailureCategory.SERVER_UNAVAILABLE -> "服务器暂不可用，请稍后重试"
-                                ApiFailureCategory.REQUEST_REJECTED -> error.serverMessage
+                                ApiFailureCategory.SERVER_UNAVAILABLE -> "服务器暂不可用（HTTP ${error.statusCode}），请检查后端服务"
+                                ApiFailureCategory.REQUEST_REJECTED -> {
+                                    if (error.errorCode == "AUTH_CHALLENGE_INVALID") {
+                                        "反向代理拦截了原生认证请求，请确保代理透传了客户端标头 (AUTH_CHALLENGE_INVALID)"
+                                    } else {
+                                        error.serverMessage
+                                    }
+                                }
                                 ApiFailureCategory.CURSOR_EXPIRED -> error.serverMessage
                             }
-                        is java.io.IOException -> "无法连接服务器，请检查网络和服务器地址"
+                        is java.net.UnknownHostException -> "无法解析中枢域名，请检查服务器地址是否正确"
+                        is java.net.SocketTimeoutException -> "连接中枢超时，请检查网络质量或代理穿透状态"
+                        is javax.net.ssl.SSLException -> "SSL 证书握手失败，若使用自签名证书请改用 HTTPS 穿透有效证书或 HTTP 内网直连"
+                        is java.io.IOException -> error.message?.takeIf { it.isNotBlank() } ?: "无法连接服务器，请检查网络和服务器地址"
                         else -> "登录失败，请检查服务器地址、账号和密码"
                     }
             }
