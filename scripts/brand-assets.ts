@@ -238,14 +238,25 @@ async function main(): Promise<void> {
   const source = decodePng(sourceBytes);
   const resized = (width: number, height: number) =>
     encodePng(width, height, resizeCover(source, width, height));
-  const resizedIcon = (width: number, height: number) =>
-    encodePng(width, height, resizeContain(source, width, height));
+  const resizedIcon = (width: number, height: number, contentScale = 0.72) =>
+    encodePng(width, height, resizeContain(source, width, height, contentScale));
   const webPublic = join(rootDir, 'apps', 'web', 'public');
 
   await writeBinary(join(webPublic, 'favicon.png'), resizedIcon(64, 64));
+  await writeBinary(join(webPublic, 'pwa-64.png'), resizedIcon(64, 64));
   await writeBinary(join(webPublic, 'pwa-180.png'), resizedIcon(180, 180));
   await writeBinary(join(webPublic, 'pwa-192.png'), resizedIcon(192, 192));
   await writeBinary(join(webPublic, 'pwa-512.png'), resizedIcon(512, 512));
+  await writeBinary(join(webPublic, 'pwa-maskable-192.png'), resizedIcon(192, 192, 0.65));
+  await writeBinary(join(webPublic, 'pwa-maskable-512.png'), resizedIcon(512, 512, 0.65));
+
+  // Apple touch icons with solid background
+  await writeBinary(join(webPublic, 'apple-touch-icon.png'), resizedIcon(180, 180));
+  await writeBinary(join(webPublic, 'apple-touch-icon-180x180.png'), resizedIcon(180, 180));
+  await writeBinary(join(webPublic, 'apple-touch-icon-167x167.png'), resizedIcon(167, 167));
+  await writeBinary(join(webPublic, 'apple-touch-icon-152x152.png'), resizedIcon(152, 152));
+  await writeBinary(join(webPublic, 'apple-touch-icon-120x120.png'), resizedIcon(120, 120));
+
   await writeBinary(join(webPublic, 'brand', 'taskdock-icon.png'), resized(512, 512));
 
   const androidRes = join(rootDir, 'apps', 'mobile', 'android', 'app', 'src', 'main', 'res');
