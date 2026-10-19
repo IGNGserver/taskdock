@@ -51,5 +51,33 @@ export default defineConfig({
       '/version': 'http://127.0.0.1:3000',
     },
   },
-  build: { target: 'es2022', sourcemap: true },
+  build: {
+    target: 'es2022',
+    sourcemap: true,
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (
+              id.includes('react/') ||
+              id.includes('react-dom/') ||
+              id.includes('react-router-dom/')
+            ) {
+              return 'vendor-react';
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons';
+            }
+            if (id.includes('marked') || id.includes('dompurify')) {
+              return 'vendor-content';
+            }
+            if (id.includes('dexie')) {
+              return 'vendor-db';
+            }
+          }
+        },
+      },
+    },
+  },
 });

@@ -2206,18 +2206,54 @@ function nativeClient(request: FastifyRequest, config: AppConfig): boolean {
   const origin = requestOrigin(request);
   const fetchSite = request.headers['sec-fetch-site'];
   const normalizedFetchSite = Array.isArray(fetchSite) ? fetchSite[0] : fetchSite;
-  return (
+  if (normalizedFetchSite === 'same-origin') return false;
+
+  if (
     origin !== undefined &&
-    (config.nativeAllowedOrigins.includes(origin) || origin === 'http://localhost') &&
-    normalizedFetchSite !== 'same-origin'
-  );
+    (config.nativeAllowedOrigins.includes(origin) || origin === 'http://localhost')
+  ) {
+    return true;
+  }
+
+  // Fallback for native mobile clients accessing via proxies/tunnels (e.g. Cloudflare Tunnel, VPS reverse proxy)
+  // that strip or rewrite the Origin header.
+  const platform = request.headers['x-client-platform'];
+  const clientId = request.headers['x-client-id'];
+  const normalizedPlatform = Array.isArray(platform) ? platform[0] : platform;
+  const normalizedClientId = Array.isArray(clientId) ? clientId[0] : clientId;
+  if (
+    (normalizedPlatform === 'android' || normalizedPlatform === 'ios') &&
+    typeof normalizedClientId === 'string' &&
+    normalizedClientId.length > 0 &&
+    fetchSite === undefined
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function requestOrigin(request: FastifyRequest): string | undefined {
   const origin = Array.isArray(request.headers.origin)
     ? request.headers.origin[0]
     : request.headers.origin;
-  return origin;
+  if (origin) return origin;
+
+  // When native client connects through a proxy that removes Origin, use explicit client platform identity
+  const platform = request.headers['x-client-platform'];
+  const clientId = request.headers['x-client-id'];
+  const normalizedPlatform = Array.isArray(platform) ? platform[0] : platform;
+  const normalizedClientId = Array.isArray(clientId) ? clientId[0] : clientId;
+  if (
+    (normalizedPlatform === 'android' || normalizedPlatform === 'ios') &&
+    typeof normalizedClientId === 'string' &&
+    normalizedClientId.length > 0 &&
+    request.headers['sec-fetch-site'] === undefined
+  ) {
+    return `native://${normalizedPlatform}`;
+  }
+
+  return undefined;
 }
 
 function redactSensitiveUrl(value: string): string {

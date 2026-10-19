@@ -82,11 +82,17 @@ class ApiClient(private val authManager: SecureAuthManager) {
      * revoked refresh token also returns 401.
      */
     private val rawHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .callTimeout(30, TimeUnit.SECONDS)
-        .pingInterval(30, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(45, TimeUnit.SECONDS)
+        .pingInterval(20, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .addInterceptor { chain ->
+            val builder = chain.request().newBuilder()
+                .header("X-Client-Platform", "android")
+            chain.proceed(builder.build())
+        }
         .build()
 
     private val okHttpClient = rawHttpClient.newBuilder()
@@ -95,6 +101,7 @@ class ApiClient(private val authManager: SecureAuthManager) {
             val builder = original.newBuilder()
                 .header("Accept", "application/json")
                 .header("X-Client-Id", authManager.clientId)
+                .header("X-Client-Platform", "android")
             val binding = original.tag(SessionRequest::class.java)
             if (binding != null && binding.key != authManager.sessionKey) throw IOException("请求账户或中枢已变化")
             val publicRoute = original.url.encodedPath in setOf("/api/v1/bootstrap/status", "/api/v1/auth/login")
