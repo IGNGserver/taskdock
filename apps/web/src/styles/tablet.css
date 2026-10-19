@@ -5,6 +5,20 @@
 .app-frame.is-tablet-frame {
   /* Provide comfortable breathing room on tablets */
   --m3-tablet-gutter: 24px;
+  /* Respect safe-areas for notches, rounded corners and dynamic island/stage manager capsules */
+  padding-inline-start: var(--dt-safe-left, env(safe-area-inset-left, 0px));
+  padding-inline-end: var(--dt-safe-right, env(safe-area-inset-right, 0px));
+}
+
+.is-tablet-frame .m3e-app-bar {
+  /* Ensure tablet top bar always protects status bar and Stage Manager controls */
+  padding-block-start: max(var(--dt-safe-top, 0px), env(safe-area-inset-top, 0px));
+}
+
+.is-tablet-frame .m3e-app-bar__row {
+  /* Generous touch targets and comfortable vertical breathing room */
+  min-block-size: 64px;
+  padding-inline: max(20px, var(--m3-tablet-gutter));
 }
 
 .is-tablet-frame .page {
@@ -33,4 +47,31 @@
   inline-size: 80px;
   background-color: var(--m3-surface-container);
   border-inline-end: 1px solid var(--m3-outline-variant);
+}
+
+/* iPadOS / Tablet top bar segmented views and quick actions */
+.tablet-topbar-segments {
+  display: inline-flex;
+  margin-inline: 8px;
+}
+
+.tablet-topbar-segments .m3e-button-group {
+  background-color: color-mix(in srgb, var(--m3-surface-container-high) 80%, transparent);
+  border-color: color-mix(in srgb, var(--m3-outline-variant) 60%, transparent);
+}
+
+.tablet-topbar-segments .m3e-button {
+  min-block-size: 38px;
+  padding-inline: 14px;
+  font-size: var(--m3-type-label-large-size);
+}
+
+.tablet-topbar-quick-add {
+  margin-inline-end: 4px;
+}
+
+@media (max-width: 900px) {
+  .tablet-topbar-segments {
+    display: none;
+  }
 }

@@ -395,8 +395,11 @@
 
 .m3e-app-bar {
   flex: none;
+  padding-block-start: var(--dt-safe-top, env(safe-area-inset-top, 0px));
   border-block-end: 1px solid var(--m3-outline-variant);
-  background-color: var(--m3-canvas);
+  background-color: color-mix(in srgb, var(--m3-canvas) 92%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .m3e-app-bar__row {
@@ -413,6 +416,13 @@
   flex: none;
   align-items: center;
   gap: 4px;
+}
+
+.m3e-app-bar__content {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: center;
 }
 
 .m3e-app-bar__titles {

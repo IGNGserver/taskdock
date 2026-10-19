@@ -28,6 +28,19 @@ export function detectTouch(): boolean {
   );
 }
 
+/** Check if current device is an iPad (including modern iPadOS with desktop UA) */
+export function detectIPad(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent.toLowerCase();
+  const isExplicitIPad = /ipad/.test(ua);
+  // iPadOS 13+ sends Macintosh UA by default, but has multi-touch capability
+  const isModernIPad =
+    /macintosh|mac os x/.test(ua) &&
+    typeof navigator.maxTouchPoints === 'number' &&
+    navigator.maxTouchPoints > 1;
+  return isExplicitIPad || isModernIPad;
+}
+
 /** Check if the display mode is standalone (installed PWA) */
 export function detectStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -42,6 +55,7 @@ export function detectStandalone(): boolean {
 export function determineFormFactor(
   sizeClass: WindowSizeClass,
   isTouch: boolean,
+  isIPadDevice: boolean = false,
 ): DeviceFormFactor {
   // Compact is always phone layout
   if (sizeClass === 'compact') {
@@ -53,13 +67,18 @@ export function determineFormFactor(
     return 'tablet';
   }
 
-  // Medium screens without touch could be a narrow desktop window, but let's check UA for iPad/Android tablets
+  // Check UA for iPad/Android tablets
   if (typeof navigator !== 'undefined') {
     const ua = navigator.userAgent.toLowerCase();
-    const isTabletUA = /ipad|tablet|(android(?!.*mobile))/.test(ua);
+    const isTabletUA = /ipad|tablet|(android(?!.*mobile))/.test(ua) || detectIPad();
     if (isTabletUA && (sizeClass === 'medium' || sizeClass === 'expanded')) {
       return 'tablet';
     }
+  }
+
+  // If explicitly flagged as iPad in medium/expanded, treat as tablet
+  if (isIPadDevice && (sizeClass === 'medium' || sizeClass === 'expanded')) {
+    return 'tablet';
   }
 
   // Large or wide non-touch screens are desktop
@@ -92,7 +111,8 @@ export function useDevice(): DeviceInfo {
     };
   }, []);
 
-  const formFactor = determineFormFactor(sizeClass, isTouch);
+  const isIPad = detectIPad();
+  const formFactor = determineFormFactor(sizeClass, isTouch, isIPad);
 
   return {
     formFactor,
