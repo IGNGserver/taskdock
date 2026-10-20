@@ -177,7 +177,7 @@ class SyncEngine(
         }
         scope.launch {
             while (isActive) {
-                delay(verificationIntervalMs)
+                delay(if (api.isConstrainedNetwork) verificationIntervalMs * 3 else verificationIntervalMs)
                 if (foreground && networkAvailable && authManager.isLoggedIn) {
                     val page = activePage
                     if (page != null) prioritizePage(page, force = true) else triggerSync()
@@ -649,6 +649,12 @@ class SyncEngine(
             var page = db.syncMetaDao().get(pageKey)?.toIntOrNull() ?: 0
             try {
                 while (page < manifest.pageCount) {
+                    // Do not start another bulk page while a visible-page read
+                    // is waiting. The immutable page checkpoint remains intact.
+                    while (api.isConstrainedNetwork && synchronized(pageFlights) { pageFlights.values.any { it.isActive } }) {
+                        ensureSession()
+                        delay(100)
+                    }
                     val batch = api.bootstrapPage(manifest.snapshotId, page).getOrThrow()
                     require(batch.snapshotId == manifest.snapshotId && batch.cursor == manifest.cursor &&
                         batch.page == page && batch.pageCount == manifest.pageCount && batch.protocolVersion == 2 &&

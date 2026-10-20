@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { missingProgressiveRoute } from './legacy-hub-fixture.js';
 
 const user = {
   id: '00000000-0000-7000-8000-000000000011',
@@ -88,7 +89,7 @@ async function installMockApi(page: Page): Promise<void> {
     return body({ items: [] });
   });
 
-  await page.route('**/api/v2/**', (route: Route) => {
+  await page.route('**/api/v2/**', async (route: Route) => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/time-points/date'))
       return route.fulfill({
@@ -102,6 +103,7 @@ async function installMockApi(page: Page): Promise<void> {
         contentType: 'application/json',
         body: JSON.stringify({ items: [placement] }),
       });
+    if (await missingProgressiveRoute(route, path)) return;
     if (path.endsWith('/sync/snapshot'))
       return route.fulfill({
         status: 200,

@@ -491,6 +491,47 @@ async function main(): Promise<void> {
       'cursor did not read a change after PostgreSQL restart',
     );
 
+    const pointId = randomUUID();
+    const point = await requestJson(baseUrl, '/api/v2/time-points/date', {
+      method: 'POST',
+      headers: mutationHeaders(refreshedToken, clientId, randomUUID()),
+      body: JSON.stringify({ id: pointId, localDate: '2026-10-20' }),
+    });
+    assert(point.response.status === 201, 'Today fixture date could not be created');
+    const placement = await requestJson(baseUrl, '/api/v2/placements', {
+      method: 'POST',
+      headers: mutationHeaders(refreshedToken, clientId, randomUUID()),
+      body: JSON.stringify({ taskId, timePointId: pointId }),
+    });
+    assert(placement.response.status === 201, 'Today fixture placement could not be created');
+    const todayHeaders = { Authorization: `Bearer ${refreshedToken}` };
+    const beforeToday = await requestJson(baseUrl, '/api/v2/sync/status', {
+      headers: todayHeaders,
+    });
+    const today = await requestJson(baseUrl, '/api/v2/today?localDate=2026-10-20', {
+      headers: todayHeaders,
+    });
+    assert(today.response.status === 200, 'PostgreSQL read-only Today failed');
+    assert(
+      objectBody(objectBody(today.body)['point'])['id'] === pointId,
+      'Today returned the wrong date',
+    );
+    const todayItems = objectBody(today.body)['items'];
+    assert(
+      Array.isArray(todayItems) && todayItems.length === 1,
+      'Today did not return its placement',
+    );
+    assert(
+      objectBody(objectBody(todayItems[0])['task'])['id'] === taskId,
+      'Today did not join its task',
+    );
+    assert(typeof objectBody(todayItems[0])['rank'] === 'string', 'Today lost rank precision');
+    const afterToday = await requestJson(baseUrl, '/api/v2/sync/status', { headers: todayHeaders });
+    assert(
+      objectBody(beforeToday.body)['cursor'] === objectBody(afterToday.body)['cursor'],
+      'Today advanced the sync cursor',
+    );
+
     console.log(
       `PASS: real PostgreSQL API runtime, cookie refresh, v2 WebSocket notification, idempotency, API restart cursor continuity, PostgreSQL restart recovery, and ready/live failure boundary; cursor ${cursorAfterWrites}`,
     );

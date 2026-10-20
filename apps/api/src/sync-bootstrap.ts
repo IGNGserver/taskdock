@@ -162,6 +162,55 @@ export class BootstrapSnapshots {
     });
   }
 
+  /** Read-only Today surface: no date creation, notes or account-wide projection. */
+  async today(ownerId: string, localDate: string) {
+    if (!(this.tree instanceof PostgresTreeStore)) {
+      const full = await this.capture(ownerId);
+      const point =
+        full.timePoints.find(
+          (row) => row.type === 'DATE' && row.localDate === localDate && !row.deletedAt,
+        ) ?? null;
+      const tasks = new Map(full.tasks.filter((row) => !row.deletedAt).map((row) => [row.id, row]));
+      const items = full.placements
+        .filter(
+          (row) => point && row.timePointId === point.id && !row.deletedAt && tasks.has(row.taskId),
+        )
+        .sort((a, b) =>
+          BigInt(a.rank) < BigInt(b.rank)
+            ? -1
+            : BigInt(a.rank) > BigInt(b.rank)
+              ? 1
+              : a.id.localeCompare(b.id),
+        )
+        .map((row) => ({ ...row, task: tasks.get(row.taskId)! }));
+      return { point, items };
+    }
+    const postgres = this.tree.postgres;
+    return postgres.withMutation(async () => {
+      await postgres.v2Query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+      const points = await postgres.v2Query(
+        "SELECT *, rank::text AS rank FROM time_points WHERE owner_id = $1 AND type = 'DATE' AND local_date = $2::date AND deleted_at IS NULL",
+        [ownerId, localDate],
+      );
+      const point = points.rows[0];
+      if (!point) return { point: null, items: [] };
+      const placements = await postgres.v2Query(
+        `SELECT p.*, p.rank::text AS rank, to_jsonb(t) || jsonb_build_object('rank', t.rank::text) AS task
+         FROM placements p JOIN tasks t ON t.id = p.task_id AND t.owner_id = p.owner_id
+         WHERE p.owner_id = $1 AND p.time_point_id = $2 AND p.deleted_at IS NULL AND t.deleted_at IS NULL
+         ORDER BY p.rank, p.id`,
+        [ownerId, point['id']],
+      );
+      return {
+        point: dto(point),
+        items: placements.rows.map(({ task, ...row }) => ({
+          ...dto(row),
+          task: dto(task as Record<string, unknown>),
+        })),
+      };
+    });
+  }
+
   async preview(ownerId: string, localDate: string, parentFolderId: string | null) {
     if (!(this.tree instanceof PostgresTreeStore)) {
       const full = await this.capture(ownerId);

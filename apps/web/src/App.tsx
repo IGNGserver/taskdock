@@ -44,6 +44,8 @@ import {
 } from 'lucide-react';
 import {
   Fragment,
+  Suspense,
+  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -126,9 +128,16 @@ import {
 import { useDevice } from './device.js';
 import { useDismissibleMenu } from './components/m3e/behavior.js';
 import { PwaLifecycleNotice } from './pwa.js';
+import { LazyPageBoundary } from './components/lazy-page-boundary.js';
+import { getNetworkMode, setNetworkMode, type NetworkMode } from './network-policy.js';
 import { TaskHoverPreviewRow, useTaskHoverPreview } from './components/task-hover-preview.js';
-import { TaskDetailV2Overlay, TreePage } from './TreePage.js';
-import { WorkflowsPage } from './WorkflowsPage.js';
+const TreePage = lazy(() => import('./TreePage.js').then((page) => ({ default: page.TreePage })));
+const TaskDetailV2Overlay = lazy(() =>
+  import('./TreePage.js').then((page) => ({ default: page.TaskDetailV2Overlay })),
+);
+const WorkflowsPage = lazy(() =>
+  import('./WorkflowsPage.js').then((page) => ({ default: page.WorkflowsPage })),
+);
 
 type PlacementWithTask = PlacementDto & { task: TreeTaskDto };
 type PresenceState = 'entering' | 'present' | 'exiting';
@@ -581,32 +590,39 @@ function AuthenticatedApp() {
         <div className="workspace-body">
           <div ref={pageWrapRef} className="page-wrap">
             <div key={topRoute} className="route-transition">
-              <Routes>
-                <Route path="/" element={<WorkspaceEntry />} />
-                <Route path="/today" element={<TodayPage onOpenTask={openTask} />} />
-                <Route path="/tree" element={<TreePage />} />
-                <Route path="/tree/:folderId" element={<TreePage />} />
-                <Route path="/tasks" element={<Navigate to="/tree" replace />} />
-                <Route path="/workflows" element={<WorkflowsPage />} />
-                <Route path="/projects" element={<Navigate to="/tree" replace />} />
-                <Route path="/projects/:projectId" element={<Navigate to="/tree" replace />} />
-                <Route path="/inbox" element={<Navigate to="/tree" replace />} />
-                <Route path="/misc" element={<Navigate to="/tree" replace />} />
-                <Route path="/time" element={<TimeHubPage />} />
-                <Route path="/time/calendar" element={<CalendarPage onOpenTask={openTask} />} />
-                <Route
-                  path="/time/calendar/:localDate"
-                  element={<CalendarPage onOpenTask={openTask} />}
-                />
-                <Route path="/time/events" element={<EventsPage />} />
-                <Route path="/time/events/:eventId" element={<EventPage onOpenTask={openTask} />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route
-                  path="/more"
-                  element={<MorePage onOpenSearch={() => setCommandOpen(true)} />}
-                />
-                <Route path="*" element={<Navigate to="/today" replace />} />
-              </Routes>
+              <LazyPageBoundary resetKey={location.pathname}>
+                <Suspense fallback={<LoadingScreen label="正在打开页面" />}>
+                  <Routes>
+                    <Route path="/" element={<WorkspaceEntry />} />
+                    <Route path="/today" element={<TodayPage onOpenTask={openTask} />} />
+                    <Route path="/tree" element={<TreePage />} />
+                    <Route path="/tree/:folderId" element={<TreePage />} />
+                    <Route path="/tasks" element={<Navigate to="/tree" replace />} />
+                    <Route path="/workflows" element={<WorkflowsPage />} />
+                    <Route path="/projects" element={<Navigate to="/tree" replace />} />
+                    <Route path="/projects/:projectId" element={<Navigate to="/tree" replace />} />
+                    <Route path="/inbox" element={<Navigate to="/tree" replace />} />
+                    <Route path="/misc" element={<Navigate to="/tree" replace />} />
+                    <Route path="/time" element={<TimeHubPage />} />
+                    <Route path="/time/calendar" element={<CalendarPage onOpenTask={openTask} />} />
+                    <Route
+                      path="/time/calendar/:localDate"
+                      element={<CalendarPage onOpenTask={openTask} />}
+                    />
+                    <Route path="/time/events" element={<EventsPage />} />
+                    <Route
+                      path="/time/events/:eventId"
+                      element={<EventPage onOpenTask={openTask} />}
+                    />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route
+                      path="/more"
+                      element={<MorePage onOpenSearch={() => setCommandOpen(true)} />}
+                    />
+                    <Route path="*" element={<Navigate to="/today" replace />} />
+                  </Routes>
+                </Suspense>
+              </LazyPageBoundary>
             </div>
           </div>
           <TaskDetailV2Overlay
@@ -1359,33 +1375,27 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const localDate = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
   const loader = useCallback(async () => {
-    const point = (await mutationV2('POST', '/time-points/date', { localDate })) as TimePointDto;
-    const [placementResponse, eventResponse, eventCountResponse] = await Promise.all([
-      requestV2<{ items: PlacementWithTask[] }>(`/time-points/${point.id}/placements`),
-      requestV2<{ items: TimePointDto[] }>('/time-points?type=EVENT'),
-      requestV2<{ items: TimePointPlacementCountDto[] }>(
-        '/time-points/placement-counts?type=EVENT',
-      ),
-    ]);
-    return {
-      point,
-      items: placementResponse.items,
-      reachedEvents: eventResponse.items.filter((candidate) => candidate.reachedAt),
-      eventCounts: Object.fromEntries(
-        eventCountResponse.items.map((item) => [item.timePointId, item]),
-      ),
-    };
+    try {
+      return await requestV2<{ point: TimePointDto | null; items: PlacementWithTask[] }>(
+        `/today?localDate=${localDate}`,
+      );
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 404) throw error;
+      // Older Hubs: read only, without creating an otherwise unused date.
+      const response = await requestV2<{ items: TimePointDto[] }>('/time-points?type=DATE');
+      const point = response.items.find((candidate) => candidate.localDate === localDate) ?? null;
+      const placements = point
+        ? await requestV2<{ items: PlacementWithTask[] }>(`/time-points/${point.id}/placements`)
+        : { items: [] };
+      return { point, items: placements.items };
+    }
   }, [localDate]);
   const { data, error, hasData, initialLoading, reload } = useReloadable<{
     point: TimePointDto | null;
     items: PlacementWithTask[];
-    reachedEvents: TimePointDto[];
-    eventCounts: Record<string, TimePointPlacementCountDto>;
   }>(loader, {
     point: null as TimePointDto | null,
     items: [] as PlacementWithTask[],
-    reachedEvents: [] as TimePointDto[],
-    eventCounts: {} as Record<string, TimePointPlacementCountDto>,
   });
   // Rollover is a v2 mutation: it must go through `/api/v2` so the created
   // placements land in the v2 change feed and every client converges. The
@@ -1394,6 +1404,9 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const [rolloverError, setRolloverError] = useState('');
   const [completedOpen, setCompletedOpen] = useState(false);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
+  const [pickerPointId, setPickerPointId] = useState<string | null>(null);
+  const ensureTodayPoint = async (): Promise<TimePointDto> =>
+    data.point ?? ((await mutationV2('POST', '/time-points/date', { localDate })) as TimePointDto);
   const doRollover = async () => {
     setRolloverError('');
     try {
@@ -1451,8 +1464,16 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             <Button
               variant="tonal"
               leadingIcon={<Plus size={16} />}
-              onClick={() => setShowTaskPicker(true)}
-              disabled={!data.point}
+              onClick={() => {
+                void ensureTodayPoint()
+                  .then((point) => {
+                    setPickerPointId(point.id);
+                    setShowTaskPicker(true);
+                  })
+                  .catch((cause: unknown) =>
+                    setRolloverError(cause instanceof Error ? cause.message : '日期创建失败'),
+                  );
+              }}
             >
               从目录加入
             </Button>
@@ -1551,9 +1572,9 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           </aside>
         </section>
       ) : null}
-      {showTaskPicker && data.point && (
+      {showTaskPicker && pickerPointId && (
         <AddTaskModal
-          pointId={data.point.id}
+          pointId={pickerPointId}
           onClose={() => setShowTaskPicker(false)}
           onAdded={() => {
             setShowTaskPicker(false);
@@ -1581,7 +1602,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         title="添加今日任务"
         placeholder="今天要做什么？"
         onSubmit={async (title) => {
-          if (!data.point) return;
+          const point = await ensureTodayPoint();
           // Create task first
           const { task: createdTask } = (await mutationV2('POST', '/tasks', {
             parentFolderId: null,
@@ -1590,7 +1611,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           // Place into today's timePoint
           await mutationV2('POST', '/placements', {
             taskId: createdTask.id,
-            timePointId: data.point.id,
+            timePointId: point.id,
           });
           await reload();
           window.dispatchEvent(new Event('devtodo:data-changed'));
@@ -3465,6 +3486,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
 
 function SettingsPage() {
   const auth = useAuth();
+  const [networkMode, updateNetworkMode] = useState<NetworkMode>(getNetworkMode);
   const [timezone, setTimezone] = useState(auth.settings?.timezone ?? 'Asia/Shanghai');
   const [weekStartsOn, setWeekStartsOn] = useState<0 | 1>(auth.settings?.weekStartsOn ?? 1);
   const [defaultCaptureTarget, setDefaultCaptureTarget] = useState<'ROOT' | 'RECENT_FOLDER'>(
@@ -3495,6 +3517,26 @@ function SettingsPage() {
       <PageHeader eyebrow="PREFERENCES" title="设置" />
       {isNativeClient() && <HubSettingsSection />}
       <form className="settings-form" onSubmit={save}>
+        <div className="settings-section">
+          <h2>本机网络策略</h2>
+          <Select
+            label="加载与省流"
+            value={networkMode}
+            options={[
+              { value: 'auto', label: '自动适配' },
+              { value: 'standard', label: '标准' },
+              { value: 'low-data', label: '省流弱网' },
+            ]}
+            onChange={(value) => {
+              if (value !== 'auto' && value !== 'standard' && value !== 'low-data') return;
+              setNetworkMode(value);
+              updateNetworkMode(value);
+            }}
+          />
+          <p className="field-help">
+            仅保存在本设备。省流模式降低后台核验频率，当前页面仍优先更新。
+          </p>
+        </div>
         <div className="settings-section">
           <h2>日期与安排</h2>
           <Select

@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { missingProgressiveRoute } from './legacy-hub-fixture.js';
 
 /**
  * Covers two row-level affordances of the arrangement flow:
@@ -29,7 +30,12 @@ const point = {
   id: '00000000-0000-7000-8000-000000000402',
   type: 'DATE',
   title: '今天',
-  localDate: '2026-09-21',
+  localDate: new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date()),
   timezone: 'Asia/Shanghai',
   reachedAt: null,
   version: 1,
@@ -153,12 +159,13 @@ async function installMockApi(page: Page): Promise<void> {
 
   await page.route('**/api/v2/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (await missingProgressiveRoute(route, path)) return;
     if (path.endsWith('/sync/snapshot'))
       return json(route, {
         folders: [],
         tasks: [placedTask, freeTask],
-        notes: [],
-        taskSteps: [],
+        notes: [taskDetail.note],
+        taskSteps: taskDetail.steps,
         timePoints: [point],
         placements: [placement],
         workflows: [],
@@ -171,6 +178,7 @@ async function installMockApi(page: Page): Promise<void> {
       return json(route, { changes: [], nextCursor: '0', hasMore: false });
     if (path.endsWith('/sync/push')) return json(route, { protocolVersion: 2, results: [] });
     if (path.endsWith('/time-points/date')) return json(route, point);
+    if (path.endsWith('/time-points')) return json(route, { items: [point] });
     if (path.endsWith('/placements')) return json(route, { items: [placement] });
     if (path.endsWith('/time-points/placement-counts')) return json(route, { items: [] });
     if (path.endsWith('/tree/children'))

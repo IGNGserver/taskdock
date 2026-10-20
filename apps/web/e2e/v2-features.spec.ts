@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { missingProgressiveRoute } from './legacy-hub-fixture.js';
 
 test('verifies v2 workflow reordering, direct status toggles, folder display, and folder-first tree sorting', async ({
   page,
@@ -160,8 +161,9 @@ test('verifies v2 workflow reordering, direct status toggles, folder display, an
     return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
   });
 
-  await page.route('**/api/v2/**', (route) => {
+  await page.route('**/api/v2/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (await missingProgressiveRoute(route, path)) return;
     if (path.endsWith('/sync/snapshot'))
       return route.fulfill({
         status: 200,

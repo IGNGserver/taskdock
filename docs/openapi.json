@@ -1061,6 +1061,85 @@
         }
       }
     },
+    "/v2/today": {
+      "servers": [{ "url": "/api" }],
+      "get": {
+        "summary": "Read a local date and its placements without creating it",
+        "description": "Authenticated, private/no-store read. Returns point=null and items=[] when the date does not exist. Includes lightweight v2 task rows, never note bodies or steps. Does not advance the sync cursor. Older Hubs may return 404; clients can fall back to read-only date/placement queries.",
+        "parameters": [
+          {
+            "name": "localDate",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The existing date and placements ordered by numeric rank then ID; an empty date is not created as a side effect.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["point", "items"],
+                  "properties": {
+                    "point": {
+                      "type": ["object", "null"],
+                      "required": ["id", "type", "localDate", "rank", "version"],
+                      "properties": {
+                        "id": { "type": "string", "format": "uuid" },
+                        "type": { "const": "DATE" },
+                        "localDate": { "type": "string", "format": "date" },
+                        "rank": { "type": "string" },
+                        "version": { "type": "integer" }
+                      }
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          { "$ref": "#/components/schemas/Placement" },
+                          {
+                            "type": "object",
+                            "required": ["task"],
+                            "properties": {
+                              "task": {
+                                "type": "object",
+                                "required": [
+                                  "id",
+                                  "parentFolderId",
+                                  "title",
+                                  "status",
+                                  "rank",
+                                  "version"
+                                ],
+                                "properties": {
+                                  "id": { "type": "string", "format": "uuid" },
+                                  "parentFolderId": {
+                                    "type": ["string", "null"],
+                                    "format": "uuid"
+                                  },
+                                  "title": { "type": "string" },
+                                  "status": { "enum": ["TODO", "IN_PROGRESS", "DONE"] },
+                                  "rank": { "type": "string" },
+                                  "version": { "type": "integer" }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Missing or invalid localDate" },
+          "401": { "description": "Authentication required" }
+        }
+      }
+    },
     "/v2/time-points": {
       "servers": [
         {

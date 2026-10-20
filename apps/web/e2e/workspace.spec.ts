@@ -6,6 +6,7 @@ import type {
   TreeTaskDto,
 } from '@devtodo/contracts';
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { missingProgressiveRoute } from './legacy-hub-fixture.js';
 
 // These cases exercise deliberately delayed and rejected API requests.
 test.skip(
@@ -126,6 +127,7 @@ async function workspace(page: Page) {
     const url = new URL(request.url());
     const path = url.pathname.replace('/api/v2', '');
     const method = request.method();
+    if (await missingProgressiveRoute(route, path)) return;
     if (path === '/sync/snapshot')
       return json(route, {
         folders,

@@ -32,6 +32,7 @@ import {
 import { isAuthLocallyLocked, lockAuthLocally, unlockAuthLocally } from './auth-lock.js';
 import { deactivateLocalCache } from './local.js';
 import { installNativeLifecycle } from './native.js';
+import { verificationInterval } from './network-policy.js';
 
 type AuthStatus = 'loading' | 'anonymous' | 'authenticated';
 export type ConnectionStatus = 'online' | 'offline' | 'syncing' | 'conflict' | 'error';
@@ -53,23 +54,20 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 const AUTH_NETWORK_TIMEOUT_MS = 5_000;
 
-function withTimeout<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(
-      () => reject(new Error('认证请求超时，已保留本地工作区')),
-      milliseconds,
-    );
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (error: unknown) => {
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
+async function withTimeout<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  milliseconds: number,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(
+    () => controller.abort(new DOMException('认证请求超时', 'TimeoutError')),
+    milliseconds,
+  );
+  try {
+    return await operation(controller.signal);
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -91,6 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const unsubscribeEngineRef = useRef<(() => void) | null>(null);
   const sessionGenerationRef = useRef(0);
   const authOperationRef = useRef(0);
+  const localIdentityRef = useRef<string | null>(null);
+  const refreshFlightRef = useRef<Promise<void> | null>(null);
 
   const disposeLocalSession = useCallback(() => {
     sessionGenerationRef.current += 1;
@@ -114,12 +114,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     dbRef.current = null;
     engineRef.current = null;
+    localIdentityRef.current = null;
     setDb(null);
     setEngine(null);
   }, []);
 
   const initialize = useCallback(
     async (me: MeResponse, sync = true) => {
+      const operation = authOperationRef.current;
+      const identity = JSON.stringify([getHubOrigin(), me.user.id]);
+      const currentDb = dbRef.current;
+      const currentEngine = engineRef.current;
+      if (localIdentityRef.current === identity && currentDb && currentEngine) {
+        // Revalidating the same restored account is not an account switch.
+        // Keep its DB/engine generation so in-flight page reads stay valid.
+        const generation = sessionGenerationRef.current;
+        await currentDb.settings.put(me.settings);
+        await currentDb.syncMeta.put({ key: 'user', value: JSON.stringify(me.user) });
+        if (sessionGenerationRef.current !== generation || operation !== authOperationRef.current)
+          return;
+        setUser(me.user);
+        setSettings(me.settings);
+        if (sync && navigator.onLine) {
+          socketConnectRef.current?.();
+          void currentEngine.sync().catch(() => undefined);
+        }
+        return;
+      }
       disposeLocalSession();
       const generation = sessionGenerationRef.current;
       const localDb = new DevTodoDatabase(getHubOrigin(), me.user.id);
@@ -129,6 +150,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           { key: 'user', value: JSON.stringify(me.user) },
           { key: 'ownerId', value: me.user.id },
         ]);
+        if (sessionGenerationRef.current !== generation || operation !== authOperationRef.current) {
+          localDb.close();
+          return;
+        }
         try {
           localStorage.setItem('devtodo.owner-id', me.user.id);
         } catch {
@@ -146,15 +171,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (navigator.storage?.persist) void navigator.storage.persist();
       const localEngine = createSyncEngine(localDb);
-      const unsubscribe = localEngine.subscribe((next) => {
+      const unsubscribeState = localEngine.subscribe((next) => {
         if (sessionGenerationRef.current !== generation) return;
         setConnection(next === 'idle' ? 'online' : next);
-        if (next === 'idle' || next === 'conflict' || next === 'error')
+      });
+      const unsubscribeData = localEngine.subscribeData(() => {
+        if (sessionGenerationRef.current === generation)
           window.dispatchEvent(new Event('devtodo:data-changed'));
       });
       dbRef.current = localDb;
       engineRef.current = localEngine;
-      unsubscribeEngineRef.current = unsubscribe;
+      localIdentityRef.current = identity;
+      setDb(localDb);
+      setEngine(localEngine);
+      unsubscribeEngineRef.current = () => {
+        unsubscribeState();
+        unsubscribeData();
+      };
       setUser(me.user);
       setSettings(me.settings);
       setStatus('authenticated');
@@ -221,6 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const restoreOfflineSession = useCallback(async (): Promise<boolean> => {
+    const operation = authOperationRef.current;
     let ownerId: string | null = null;
     try {
       ownerId = localStorage.getItem('devtodo.owner-id');
@@ -238,6 +272,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!userMeta || !localSettings) return false;
       const localUser = JSON.parse(userMeta.value) as UserDto;
       if (localUser.id !== ownerId || !localUser.username) return false;
+      if (operation !== authOperationRef.current) return false;
       await initialize(
         {
           user: localUser,
@@ -258,14 +293,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [initialize]);
 
-  const refresh = useCallback(async () => {
+  const restoreAndVerifySession = useCallback(async () => {
     const operation = authOperationRef.current;
     if (isAuthLocallyLocked()) {
       try {
         setInitialized(
           (
             await withTimeout(
-              requestV1<{ initialized: boolean }>('/bootstrap/status'),
+              (signal) => requestV1<{ initialized: boolean }>('/bootstrap/status', { signal }),
               AUTH_NETWORK_TIMEOUT_MS,
             )
           ).initialized,
@@ -288,9 +323,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return;
     }
-    const refreshed = await withTimeout(refreshAccessToken(), AUTH_NETWORK_TIMEOUT_MS).catch(
-      () => false,
-    );
+    const refreshed = await withTimeout(
+      (signal) => refreshAccessToken(signal),
+      AUTH_NETWORK_TIMEOUT_MS,
+    ).catch(() => false);
     if (!refreshed) {
       if (operation !== authOperationRef.current) return;
       const failure = getLastRefreshFailure();
@@ -313,7 +349,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setInitialized(
           (
             await withTimeout(
-              requestV1<{ initialized: boolean }>('/bootstrap/status'),
+              (signal) => requestV1<{ initialized: boolean }>('/bootstrap/status', { signal }),
               AUTH_NETWORK_TIMEOUT_MS,
             )
           ).initialized,
@@ -352,6 +388,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [initialize, restoreOfflineSession]);
 
+  const refresh = useCallback(() => {
+    // StrictMode setup and simultaneous foreground callbacks must share the
+    // whole restore flow, not only the refresh-token HTTP exchange.
+    refreshFlightRef.current ??= restoreAndVerifySession().finally(() => {
+      refreshFlightRef.current = null;
+    });
+    return refreshFlightRef.current;
+  }, [restoreAndVerifySession]);
+
   useEffect(() => {
     void refresh();
     const syncCurrent = () => {
@@ -367,7 +412,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     const onOnline = () => syncCurrent();
     const onOffline = () => setConnection('offline');
-    const onFocus = () => syncCurrent();
+    const onFocus = () => {
+      if (!document.hidden) syncCurrent();
+    };
     const removeNativeLifecycle = installNativeLifecycle({
       onForeground: () => syncCurrent(),
       onNetworkChange: (online) => {
@@ -376,15 +423,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
     window.addEventListener('online', onOnline);
+    window.addEventListener('devtodo:outbox-changed', onOnline);
     window.addEventListener('offline', onOffline);
     window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    let lastVerification = 0;
     const timer = window.setInterval(() => {
+      if (document.hidden || Date.now() - lastVerification < verificationInterval()) return;
+      lastVerification = Date.now();
       syncCurrent();
-    }, 30_000);
+    }, 10_000);
     return () => {
       window.removeEventListener('online', onOnline);
+      window.removeEventListener('devtodo:outbox-changed', onOnline);
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
       window.clearInterval(timer);
       removeNativeLifecycle();
       if (socketReconnectTimerRef.current !== null) {

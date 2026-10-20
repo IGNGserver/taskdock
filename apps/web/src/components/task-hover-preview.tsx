@@ -11,6 +11,8 @@ import {
 import { createPortal } from 'react-dom';
 
 import { requestV2 } from '../api.js';
+import { localCacheGeneration } from '../local.js';
+import { isLowDataMode } from '../network-policy.js';
 import {
   previewNoteText,
   previewStepProgress,
@@ -79,6 +81,7 @@ export function useTaskHoverPreview(
   const [position, setPosition] = useState<PreviewPosition | null>(null);
   const delayRef = useRef<number | null>(null);
   const requestRef = useRef(0);
+  const controllerRef = useRef<AbortController | null>(null);
 
   const clearDelay = useCallback(() => {
     if (delayRef.current !== null) {
@@ -90,12 +93,19 @@ export function useTaskHoverPreview(
   const close = useCallback(() => {
     clearDelay();
     requestRef.current += 1;
+    controllerRef.current?.abort();
     setOpen(false);
     setData(null);
     setPosition(null);
   }, [clearDelay]);
 
-  useEffect(() => () => clearDelay(), [clearDelay]);
+  useEffect(
+    () => () => {
+      clearDelay();
+      controllerRef.current?.abort();
+    },
+    [clearDelay],
+  );
 
   // Any scroll or resize moves the anchor away from the recorded position, so
   // the popover closes instead of drifting over unrelated content.
@@ -114,16 +124,24 @@ export function useTaskHoverPreview(
     async (anchor: HTMLElement) => {
       setPosition(previewPosition(anchor));
       setOpen(true);
-      const cached = detailCache.get(task.id);
+      const key = `${localCacheGeneration()}:${task.id}`;
+      const cached = detailCache.get(key);
       if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
         setData({ status: 'ready', detail: cached.detail });
         return;
       }
       const request = ++requestRef.current;
+      controllerRef.current?.abort();
+      const controller = new AbortController();
+      controllerRef.current = controller;
       setData({ status: 'loading' });
       try {
-        const detail = await requestV2<TaskDetailV2Dto>(`/tasks/${task.id}`);
-        detailCache.set(task.id, { detail, fetchedAt: Date.now() });
+        const detail = await requestV2<TaskDetailV2Dto>(`/tasks/${task.id}`, {
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        if (detailCache.size >= 48) detailCache.delete(detailCache.keys().next().value!);
+        detailCache.set(key, { detail, fetchedAt: Date.now() });
         if (requestRef.current === request) setData({ status: 'ready', detail });
       } catch {
         if (requestRef.current === request) setData({ status: 'error' });
@@ -135,7 +153,7 @@ export function useTaskHoverPreview(
   const anchorProps = useMemo<TaskHoverAnchorProps>(
     () => ({
       onPointerEnter: (event) => {
-        if (!enabled || event.pointerType !== 'mouse') return;
+        if (!enabled || event.pointerType !== 'mouse' || isLowDataMode()) return;
         clearDelay();
         const anchor = event.currentTarget;
         delayRef.current = window.setTimeout(() => {

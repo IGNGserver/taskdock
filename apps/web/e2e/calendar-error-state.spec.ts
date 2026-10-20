@@ -1,4 +1,5 @@
 import { expect, test, type Route } from '@playwright/test';
+import { missingProgressiveRoute } from './legacy-hub-fixture.js';
 
 /*
  * This suite fabricates API failures with `page.route`, so it belongs to the
@@ -75,6 +76,9 @@ test('calendar distinguishes a failed load from an empty day and recovers on ret
   await page.route('**/api/v2/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
+    if (await missingProgressiveRoute(route, path)) return;
+    // This tests a genuinely unhydrated first read, not a complete empty cache.
+    if (path.endsWith('/sync/snapshot') && holdSyncPull) await syncPullGate;
     if (path.endsWith('/sync/snapshot'))
       return json(route, {
         folders: [],

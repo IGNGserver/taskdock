@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { missingProgressiveRoute } from './legacy-hub-fixture.js';
 
 const user = {
   id: '00000000-0000-7000-8000-000000000011',
@@ -87,6 +88,7 @@ async function installMockApi(page: Page): Promise<void> {
           updatedAt: '2026-09-19T00:00:00.000Z',
         }),
       });
+    if (await missingProgressiveRoute(route, path)) return;
     if (path.endsWith('/sync/snapshot'))
       return route.fulfill({
         status: 200,

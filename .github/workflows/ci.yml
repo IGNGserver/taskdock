@@ -42,12 +42,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
       - run: pnpm lint
+      - run: pnpm openapi:check
+      - name: Parse browser regression suites before heavy checks
+        run: pnpm exec playwright test --list
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm test:integration
         env:
           DATABASE_URL: postgres://devtodo:devtodo_test_password@127.0.0.1:5432/devtodo_test
       - run: pnpm build
+      - name: Verify precompressed static delivery
+        run: pnpm exec tsx scripts/check-static-delivery.ts
       - name: PostgreSQL restart and mobile loading benchmark
         shell: bash
         run: |
@@ -71,7 +76,6 @@ jobs:
       # 依赖已构建产物与 IndexedDB 真实链路的用例永远不可能通过。
       - run: E2E_PWA=1 E2E_REAL=1 pnpm test:e2e
       - run: pnpm compose:smoke
-      - run: pnpm openapi:check
       # 失败时保留 Playwright 的 error-context.md（页面可访问性快照）、trace 与报告：
       # 真实链路门禁只在 CI 存在，没有这些工件就只能靠断言文本猜因。放在最后一步，
       # 因此前面任一步骤失败都能拿到现场。

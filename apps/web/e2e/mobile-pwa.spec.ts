@@ -197,6 +197,84 @@ test('production PWA caches assets and can reopen the workspace offline', async 
   await assertFits(page);
 });
 
+test('a loaded Today page reopens offline even when global bootstrap was interrupted', async ({
+  page,
+  context,
+}) => {
+  skipEnginesWithoutServiceWorker();
+  test.skip(process.env['E2E_PWA'] !== '1', 'requires a production service worker');
+  let blockedPages = 0;
+  await page.route('**/api/v2/sync/bootstrap/*', async (route) => {
+    blockedPages++;
+    await route.abort('failed');
+  });
+  await login(page);
+  await expect(page.getByRole('heading', { name: '今天要做' })).toBeVisible();
+  await expect.poll(() => blockedPages).toBeGreaterThan(0);
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
+  await expect(page.getByRole('heading', { name: '今天要做' })).toBeVisible();
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '今天要做' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: '移动导航' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '快速创建任务', exact: true })).toBeEnabled();
+});
+
+test('cached PWA reopens while API connections remain blackholed', async ({ page }) => {
+  skipEnginesWithoutServiceWorker();
+  test.skip(process.env['E2E_PWA'] !== '1', 'requires a production service worker');
+  await login(page);
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
+  // A complete sync cursor distinguishes a useful cache from merely opening IDB.
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        for (const entry of await indexedDB.databases()) {
+          if (!entry.name?.startsWith('devtodo:')) continue;
+          const complete = await new Promise<boolean>((resolve) => {
+            const request = indexedDB.open(entry.name!);
+            request.onerror = () => resolve(false);
+            request.onsuccess = () => {
+              const database = request.result;
+              const transaction = database.transaction('syncMeta');
+              const cursor = transaction.objectStore('syncMeta').get('v2:cursor');
+              cursor.onsuccess = () => resolve(Boolean(cursor.result));
+              cursor.onerror = () => resolve(false);
+              transaction.oncomplete = () => database.close();
+            };
+          });
+          if (complete) return true;
+        }
+        return false;
+      }),
+    )
+    .toBe(true);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/**', async (route) => {
+    await gate;
+    await route.abort().catch(() => undefined);
+  });
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    // This is a regression bound on a CI browser, not a measured public-link P95.
+    await expect(page.getByRole('navigation', { name: '移动导航' })).toBeVisible({ timeout: 2000 });
+    await expect(page.getByRole('heading', { name: '今天要做' })).toBeVisible({ timeout: 2000 });
+  } finally {
+    release();
+  }
+});
+
 test('landscape and enlarged text keep navigation and forms within reach', async ({ page }) => {
   skipEnginesWithoutServiceWorker();
   await login(page);

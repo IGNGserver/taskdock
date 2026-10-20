@@ -53,6 +53,9 @@ try {
   };
   const full = await measure(() => new PostgresTreeStore(store).snapshot(owner.id));
   const preview = await measure(() => optimized.preview(owner.id, '2026-10-13', null));
+  const today = await measure(() => optimized.today(owner.id, '2026-10-13'));
+  if ((await optimized.today(owner.id, '2026-10-13')).point !== null)
+    throw new Error('read-only Today created an unexpected date');
   const started = performance.now();
   const manifest = await optimized.create(owner.id, '2026-10-13');
   const bootstrapMs = Math.round(performance.now() - started);
@@ -90,6 +93,7 @@ try {
         noteCharactersPerTask: 2000,
         fullSnapshot: full,
         firstPreview: preview,
+        emptyTodayWithoutNotes: today,
         bootstrapMs,
         unchangedBootstrapReuseMs: reuseMs,
         focusedEdit,

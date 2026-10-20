@@ -169,6 +169,8 @@ test('opens the authenticated command palette and exposes mobile navigation', as
     const json = (body: unknown, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
+    if (/\/(?:sync\/(?:preview|bootstrap)|today)$/.test(path))
+      return json({ code: 'NOT_FOUND' }, 404);
     if (path.endsWith('/sync/snapshot'))
       return json({
         folders: [],

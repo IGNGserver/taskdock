@@ -14,6 +14,7 @@ import { uuidSchema, uuidv7 } from '@devtodo/contracts';
 import { isValidIanaTimezone, validateLocalDate } from '@devtodo/domain';
 import { ApiError } from './api.js';
 import {
+  applyLocalStateImage,
   captureLocalStateImage,
   type DevTodoDatabase,
   type LocalFolder,
@@ -38,6 +39,11 @@ interface OfflineResult {
 }
 
 let activeContext: LocalContext | null = null;
+let cacheGeneration = 0;
+
+export function localCacheGeneration(): number {
+  return cacheGeneration;
+}
 
 const entityTables = (db: DevTodoDatabase) =>
   [
@@ -57,11 +63,15 @@ const entityTables = (db: DevTodoDatabase) =>
   ] as const;
 
 export function activateLocalCache(db: DevTodoDatabase, clientId: string): void {
+  cacheGeneration++;
   activeContext = { db, clientId };
 }
 
 export function deactivateLocalCache(db: DevTodoDatabase): void {
-  if (activeContext?.db === db) activeContext = null;
+  if (activeContext?.db === db) {
+    activeContext = null;
+    cacheGeneration++;
+  }
 }
 
 export async function cacheResponse(path: string, value: unknown): Promise<void> {
@@ -70,6 +80,34 @@ export async function cacheResponse(path: string, value: unknown): Promise<void>
   try {
     await context.db.transaction('rw', entityTables(context.db), async () => {
       await cacheResponseInTransaction(context.db, path, value);
+      for (const item of await context.db.outbox.toArray())
+        if (item.afterImage) await applyLocalStateImage(context.db, item.afterImage);
+      const [pathname, query = ''] = path.split('?');
+      const date = new URLSearchParams(query).get('localDate');
+      if (
+        pathname === '/v2/today' &&
+        date &&
+        /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+        isRecord(value) &&
+        (value['point'] === null || isRecord(value['point'])) &&
+        Array.isArray(value['items'])
+      ) {
+        // Coverage is exact to this read, not the global snapshot. Retain IDs,
+        // not stale copies of tasks: local edits continue to project from IDB.
+        const key = `v2:today:${date}`;
+        await context.db.syncMeta.put({
+          key,
+          value: JSON.stringify({
+            pointId: isRecord(value['point']) ? value['point']['id'] : null,
+            placementIds: value['items'].map((item: { id: string }) => item.id),
+          }),
+        });
+        const keys = await context.db.syncMeta.where('key').startsWith('v2:today:').primaryKeys();
+        if (keys.length > 8)
+          await context.db.syncMeta.bulkDelete(
+            keys.filter((entry) => entry !== key).slice(0, keys.length - 8),
+          );
+      }
     });
   } catch {
     // A failed local cache write must not make an otherwise successful API call fail.
@@ -83,6 +121,34 @@ export async function cacheMutationSideEffects(path: string, method: string): Pr
     await context.db.transaction('rw', entityTables(context.db), async () => {
       const [pathname] = path.split('?');
       if (method === 'DELETE') {
+        if (pathname?.startsWith('/v2/')) {
+          const match =
+            /^\/v2\/(tasks|folders|time-points|placements|workflows|workflow-stages|workflow-task-memberships|task-steps)\/([^/]+)$/.exec(
+              pathname,
+            );
+          const tables = {
+            tasks: context.db.tasks,
+            folders: context.db.folders,
+            'time-points': context.db.timePoints,
+            placements: context.db.placements,
+            workflows: context.db.workflows,
+            'workflow-stages': context.db.workflowStages,
+            'workflow-task-memberships': context.db.workflowTaskMemberships,
+            'task-steps': context.db.taskSteps,
+          };
+          if (match) {
+            const table = tables[match[1] as keyof typeof tables];
+            const row = await table.get(match[2]!);
+            if (row) await table.put({ ...row, deletedAt: new Date().toISOString() } as never);
+          }
+          // Until the authoritative feed applies cascades, derived projections
+          // cannot claim a complete post-delete view. Keep the sync cursor.
+          if (
+            match &&
+            ['folders', 'tasks', 'time-points', 'workflows', 'workflow-stages'].includes(match[1]!)
+          )
+            await context.db.syncMeta.put({ key: 'v2:read-invalidated', value: uuidv7() });
+        }
         const placement = /^\/placements\/([^/]+)$/.exec(pathname ?? '');
         if (placement) await context.db.placements.delete(placement[1]!);
       }
@@ -98,6 +164,72 @@ export async function readLocal(path: string): Promise<unknown | undefined> {
   return context.db.transaction('r', entityTables(context.db), () =>
     readLocalInTransaction(context.db, path),
   );
+}
+
+/** A missing row in a partial cache is not an authoritative empty response. */
+export async function readCachedV2(path: string): Promise<unknown | undefined> {
+  const context = activeContext;
+  if (!context) return undefined;
+  return context.db.transaction('r', entityTables(context.db), async () => {
+    const complete = await context.db.syncMeta.get('v2:cursor');
+    if (await context.db.syncMeta.get('v2:read-invalidated')) return undefined;
+    const [pathname = '', query = ''] = path.split('?');
+    const params = new URLSearchParams(query);
+    // These query shapes are the ones the local projection implements. Search,
+    // cursor paging and unknown filters must not silently become unfiltered lists.
+    const allowed =
+      pathname === '/tree/children'
+        ? ['parentFolderId']
+        : pathname === '/time-points'
+          ? ['type', 'from', 'to']
+          : pathname === '/time-points/placement-counts'
+            ? ['type', 'from', 'to']
+            : pathname === '/today'
+              ? ['localDate']
+              : [];
+    if ([...params.keys()].some((key) => !allowed.includes(key))) return undefined;
+    if (!complete || (await context.db.syncMeta.get('v2:bootstrap'))) {
+      if (pathname !== '/today') return undefined;
+      const date = params.get('localDate');
+      const stored = date ? await context.db.syncMeta.get(`v2:today:${date}`) : undefined;
+      if (!stored) return undefined;
+      const coverage = JSON.parse(stored.value) as {
+        pointId: string | null;
+        placementIds: string[];
+      };
+      // A successful local date/placement creation extends the covered page.
+      // An unrelated preview/snapshot row does not establish page membership.
+      const pendingPoint = await context.db.timePoints
+        .filter(
+          (row) =>
+            row.type === 'DATE' &&
+            row.localDate === date &&
+            row.pendingSync === true &&
+            !row.deletedAt,
+        )
+        .first();
+      const pointId = pendingPoint?.id ?? coverage.pointId;
+      if (!pointId) return { point: null, items: [] };
+      const point = pendingPoint ?? (await context.db.timePoints.get(pointId));
+      if (!point || point.deletedAt) return undefined;
+      const covered = new Set(coverage.placementIds);
+      const placements = await context.db.placements.where('timePointId').equals(pointId).toArray();
+      if (coverage.placementIds.some((id) => !placements.some((row) => row.id === id)))
+        return undefined;
+      const items = [];
+      for (const placement of sortByRank(
+        placements.filter(
+          (row) => !row.deletedAt && (covered.has(row.id) || row.pendingSync === true),
+        ),
+      )) {
+        const task = await context.db.tasks.get(placement.taskId);
+        if (!task) return undefined;
+        if (!task.deletedAt) items.push({ ...placement, task });
+      }
+      return { point, items };
+    }
+    return readLocalInTransaction(context.db, `/v2${path}`);
+  });
 }
 
 export async function applyOfflineWrite(
@@ -1849,7 +1981,14 @@ async function enqueue(
     nextAttemptAt: Date.now(),
   };
   const value = await context.db.transaction('rw', entityTables(context.db), async () => {
+    if (activeContext !== context) throw new DOMException('会话已变化', 'AbortError');
     const beforeImage = await captureLocalStateImage(context.db, command, entityId, payload);
+    if (command === 'task.update' || command === 'note.update') {
+      const table = command === 'task.update' ? 'tasks' : 'notes';
+      const row = beforeImage.rows.find((candidate) => candidate.table === table);
+      if (!isRecord(row?.value) || row.value['version'] !== baseVersion)
+        throw new ApiError('VERSION_CONFLICT', '本地数据已变化，请重新打开后编辑', null, 409);
+    }
     const result = await write();
     const afterImage = await captureLocalStateImage(context.db, command, entityId, payload);
     item.beforeImage = beforeImage;
@@ -2005,9 +2144,10 @@ async function cacheV2ResponseInTransaction(
         await db.folders.put(item['folder'] as unknown as LocalFolder);
       else if (item['kind'] === 'TASK' && isRecord(item['task']))
         await db.tasks.put(item['task'] as unknown as LocalTreeTask);
-      else if (typeof item['taskId'] === 'string' && typeof item['timePointId'] === 'string')
-        await db.placements.put(item as unknown as LocalPlacement);
-      else if (typeof item['id'] === 'string' && typeof item['type'] === 'string')
+      else if (typeof item['taskId'] === 'string' && typeof item['timePointId'] === 'string') {
+        await db.placements.put(stripTask(item) as unknown as LocalPlacement);
+        if (isRecord(item['task'])) await db.tasks.put(item['task'] as unknown as LocalTreeTask);
+      } else if (typeof item['id'] === 'string' && typeof item['type'] === 'string')
         await db.timePoints.put(item as unknown as LocalTimePoint);
       else if (
         typeof item['parentFolderId'] !== 'undefined' &&
@@ -2030,6 +2170,8 @@ async function cacheV2ResponseInTransaction(
     }
   }
   if (isRecord(value['task'])) await db.tasks.put(value['task'] as unknown as LocalTreeTask);
+  if (isRecord(value['point']))
+    await db.timePoints.put(value['point'] as unknown as LocalTimePoint);
   if (isRecord(value['note'])) await db.notes.put(value['note'] as unknown as LocalNote);
   if (Array.isArray(value['steps'])) await db.taskSteps.bulkPut(value['steps'] as LocalTaskStep[]);
   if (Array.isArray(value['placements']))
@@ -2443,6 +2585,11 @@ async function readV2LocalInTransaction(
       items: (await db.timePoints.toArray())
         .filter((point) => params.get('type') === null || point.type === params.get('type'))
         .filter((point) => !point.deletedAt)
+        .filter(
+          (point) =>
+            (!params.get('from') || (point.localDate ?? '') >= params.get('from')!) &&
+            (!params.get('to') || (point.localDate ?? '') <= params.get('to')!),
+        )
         .sort(timePointSort),
     };
   if (pathname === '/time-points/placement-counts') {
@@ -2474,6 +2621,21 @@ async function readV2LocalInTransaction(
     };
   }
   const pointPlacements = /^\/time-points\/([^/]+)\/placements$/.exec(pathname);
+  if (pathname === '/today') {
+    const point = await db.timePoints
+      .filter(
+        (row) => row.type === 'DATE' && row.localDate === params.get('localDate') && !row.deletedAt,
+      )
+      .first();
+    if (!point) return { point: null, items: [] };
+    const taskMap = new Map(tasks.filter(visibleTask).map((task) => [task.id, task]));
+    const items = sortByRank(
+      (await db.placements.where('timePointId').equals(point.id).toArray()).filter(
+        (placement) => !placement.deletedAt && taskMap.has(placement.taskId),
+      ),
+    ).map((placement) => ({ ...placement, task: taskMap.get(placement.taskId)! }));
+    return { point, items };
+  }
   if (pointPlacements) {
     const taskMap = new Map(tasks.map((task) => [task.id, task]));
     const items = (await db.placements.where('timePointId').equals(pointPlacements[1]!).toArray())

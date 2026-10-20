@@ -34,7 +34,7 @@ export function PwaLifecycleNotice() {
   if (offlineReady)
     return (
       <Snackbar
-        message="应用已准备好，可在离线时打开。"
+        message="应用核心已缓存，已访问的页面可离线打开。"
         action={{ label: '知道了', onAction: () => setOfflineReady(false) }}
         onDismiss={() => setOfflineReady(false)}
         duration={5000}
