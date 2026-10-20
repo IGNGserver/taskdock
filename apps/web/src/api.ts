@@ -21,8 +21,11 @@ import {
   applyOfflineWrite,
   cacheMutationSideEffects,
   cacheResponse,
+  localCacheGeneration,
+  readCachedV2,
   readLocal,
 } from './local.js';
+import { recordNetworkSample } from './network-policy.js';
 import { isAuthLocallyLocked } from './auth-lock.js';
 import { normalizeHubOrigin } from './hub-origin.js';
 
@@ -38,6 +41,7 @@ let refreshPromise: Promise<boolean> | null = null;
 let secureStorageSetup: Promise<void> | null = null;
 let lastRefreshFailure: RefreshFailureKind | null = null;
 const localRevalidations = new Map<string, Promise<unknown>>();
+const lastRevalidationValues = new Map<string, string>();
 
 export class ApiError extends Error {
   constructor(
@@ -144,12 +148,13 @@ export async function testHubConnection(
   return { initialized: body.initialized };
 }
 
-export async function requestNativeChallenge(): Promise<string> {
+export async function requestNativeChallenge(signal?: AbortSignal): Promise<string> {
   if (!isNativeClient()) throw new Error('仅原生客户端支持安全令牌交换');
   const response = await fetch(`${getHubOrigin()}${API_V1_BASE}/auth/native/challenge`, {
     method: 'POST',
     headers: { Accept: 'application/json', 'X-Client-Id': createBrowserSyncId() },
     credentials: 'include',
+    signal,
   });
   const body = (await response.json().catch(() => ({}))) as {
     challenge?: unknown;
@@ -225,6 +230,39 @@ async function requestNetwork<T>(
   allowLocalFallback = true,
   apiBase = API_V1_BASE,
 ): Promise<T> {
+  const controller = new AbortController();
+  const abort = () => controller.abort(init.signal?.reason);
+  if (init.signal?.aborted) abort();
+  else init.signal?.addEventListener('abort', abort, { once: true });
+  const timer = setTimeout(
+    () => controller.abort(new DOMException('请求超时', 'TimeoutError')),
+    path.startsWith('/sync/') ? 60_000 : 15_000,
+  );
+  try {
+    return await requestNetworkBound<T>(
+      path,
+      { ...init, signal: controller.signal },
+      retry,
+      previousHeaders,
+      allowLocalFallback,
+      apiBase,
+    );
+  } finally {
+    clearTimeout(timer);
+    init.signal?.removeEventListener('abort', abort);
+  }
+}
+
+async function requestNetworkBound<T>(
+  path: string,
+  init: RequestInit,
+  retry: boolean,
+  previousHeaders: Headers | undefined,
+  allowLocalFallback: boolean,
+  apiBase: string,
+): Promise<T> {
+  const generation = localCacheGeneration();
+  const started = performance.now();
   const headers = new Headers(init.headers);
   if (previousHeaders) {
     for (const [key, value] of previousHeaders) headers.set(key, value);
@@ -247,6 +285,8 @@ async function requestNetwork<T>(
       credentials: 'include',
     });
   } catch (error) {
+    if (generation !== localCacheGeneration()) throw new DOMException('会话已变化', 'AbortError');
+    if (init.signal?.aborted) throw error;
     if (isNetworkError(error)) {
       const pathname = path.split('?')[0] ?? path;
       if (
@@ -254,7 +294,8 @@ async function requestNetwork<T>(
         ['GET', 'HEAD', 'OPTIONS'].includes(method) &&
         !pathname.startsWith('/sync/')
       ) {
-        const localValue = await readLocal(cachePath);
+        const localValue =
+          apiBase === API_V2_BASE ? await readCachedV2(path) : await readLocal(cachePath);
         if (localValue !== undefined) return localValue as T;
       } else if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
         const localResult = await applyOfflineWrite(cachePath, method, init, headers);
@@ -263,6 +304,8 @@ async function requestNetwork<T>(
     }
     throw error;
   }
+  if (generation !== localCacheGeneration()) throw new DOMException('会话已变化', 'AbortError');
+  recordNetworkSample(performance.now() - started);
   if (response.status === 401 && retry && !path.startsWith('/auth/')) {
     const refreshed = await refreshAccessToken();
     if (refreshed)
@@ -286,7 +329,8 @@ async function requestNetwork<T>(
     return undefined as T;
   }
   const value = (await response.json()) as T;
-  await cacheResponse(cachePath, value);
+  if (generation !== localCacheGeneration()) throw new DOMException('会话已变化', 'AbortError');
+  if (!path.startsWith('/sync/')) await cacheResponse(cachePath, value);
   return value;
 }
 
@@ -304,13 +348,14 @@ function canReadFromLocalFirst(path: string, method: string): boolean {
   );
 }
 
-export async function refreshAccessToken(): Promise<boolean> {
+export async function refreshAccessToken(signal?: AbortSignal): Promise<boolean> {
   if (isAuthLocallyLocked()) {
     lastRefreshFailure = 'revoked';
     setAccessToken(null);
     return false;
   }
   if (refreshPromise) return refreshPromise;
+  const generation = localCacheGeneration();
   refreshPromise = (async () => {
     lastRefreshFailure = null;
     try {
@@ -330,11 +375,13 @@ export async function refreshAccessToken(): Promise<boolean> {
         ? ((await readNativePendingRefreshToken()) ?? generateRefreshCandidate())
         : null;
       if (candidate) await saveNativePendingRefreshToken(candidate);
-      const nativeChallenge = isNativeClient() ? await requestNativeChallenge() : undefined;
+      const nativeChallenge = isNativeClient() ? await requestNativeChallenge(signal) : undefined;
+      if (generation !== localCacheGeneration() || signal?.aborted) return false;
       const result = await requestV1<{ accessToken: string; refreshToken?: string }>(
         '/auth/refresh',
         {
           method: 'POST',
+          signal,
           body: JSON.stringify({
             ...(confirmedRefreshToken ? { refreshToken: confirmedRefreshToken } : {}),
             ...(candidate ? { nextRefreshToken: candidate } : {}),
@@ -343,6 +390,7 @@ export async function refreshAccessToken(): Promise<boolean> {
         },
         false,
       );
+      if (generation !== localCacheGeneration() || signal?.aborted) return false;
       if (isAuthLocallyLocked()) {
         lastRefreshFailure = 'revoked';
         setAccessToken(null);
@@ -356,6 +404,7 @@ export async function refreshAccessToken(): Promise<boolean> {
       }
       return true;
     } catch (error) {
+      if (generation !== localCacheGeneration()) return false;
       lastRefreshFailure = classifyRefreshFailure(error);
       setAccessToken(null);
       return false;
@@ -422,21 +471,51 @@ export async function cacheSnapshot(
 export function createSyncEngine(db: DevTodoDatabase): V2SyncEngine {
   const clientId = createBrowserSyncId();
   activateLocalCache(db, clientId);
+  const generation = localCacheGeneration();
+  const bound = async <T>(operation: () => Promise<T>): Promise<T> => {
+    if (generation !== localCacheGeneration()) throw new DOMException('会话已变化', 'AbortError');
+    const result = await operation();
+    if (generation !== localCacheGeneration()) throw new DOMException('会话已变化', 'AbortError');
+    return result;
+  };
+  const localDate = async () => {
+    const settings = await db.settings.toCollection().first();
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: settings?.timezone ?? 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  };
   const transport: V2SyncTransport = {
     push: (body) =>
-      requestV2<Awaited<ReturnType<V2SyncTransport['push']>>>('/sync/push', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
-    pull: (cursor, limit) =>
-      requestV2<Awaited<ReturnType<V2SyncTransport['pull']>>>(
-        `/sync/pull?cursor=${encodeURIComponent(cursor)}&limit=${limit}`,
+      bound(() =>
+        requestV2<Awaited<ReturnType<V2SyncTransport['push']>>>('/sync/push', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
       ),
-    snapshot: async () => {
-      const snapshot =
-        await requestV2<Awaited<ReturnType<V2SyncTransport['snapshot']>>>('/sync/snapshot');
-      return snapshot;
-    },
+    pull: (cursor, limit) =>
+      bound(() =>
+        requestV2<Awaited<ReturnType<V2SyncTransport['pull']>>>(
+          `/sync/pull?cursor=${encodeURIComponent(cursor)}&limit=${limit}`,
+        ),
+      ),
+    snapshot: () =>
+      bound(() => requestV2<Awaited<ReturnType<V2SyncTransport['snapshot']>>>('/sync/snapshot')),
+    preview: () =>
+      bound(async () =>
+        requestV2(`/sync/preview?localDate=${await localDate()}&parentFolderId=root`),
+      ),
+    beginBootstrap: () =>
+      bound(async () =>
+        requestV2('/sync/bootstrap', {
+          method: 'POST',
+          body: JSON.stringify({ localDate: await localDate() }),
+        }),
+      ),
+    bootstrapPage: (id, page) =>
+      bound(() => requestV2(`/sync/bootstrap/${encodeURIComponent(id)}?page=${page}`)),
   };
   return new V2SyncEngine(db, clientId, transport);
 }
@@ -537,7 +616,56 @@ async function ensureNativeStorage(): Promise<void> {
   await secureStorageSetup;
 }
 
-export function requestV2<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function requestV2<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const method = (init.method ?? 'GET').toUpperCase();
+  // Only the tested, versioned edit surface is optimistic online. Destructive
+  // previews, move/reorder and unknown commands retain authoritative semantics.
+  if (method === 'PATCH' && /^\/tasks\/[^/?]+(?:\/note)?$/.test(path) && !isAuthLocallyLocked()) {
+    const generation = localCacheGeneration();
+    if (await readCachedV2('/settings').catch(() => undefined)) {
+      if (init.signal?.aborted) throw init.signal.reason;
+      if (generation !== localCacheGeneration()) throw new DOMException('会话已变化', 'AbortError');
+      const headers = new Headers(init.headers);
+      headers.set('Idempotency-Key', headers.get('Idempotency-Key') ?? uuidv7());
+      headers.set('X-Client-Id', createBrowserSyncId());
+      const local = await applyOfflineWrite(`/v2${path}`, method, init, headers);
+      if (local) {
+        if (typeof window !== 'undefined')
+          window.dispatchEvent(new Event('devtodo:outbox-changed'));
+        return local.value as T;
+      }
+    }
+  }
+  // Mutation previews, sync and auth must always consult the authority.
+  if (method === 'GET' && !path.startsWith('/sync/') && !path.includes('delete-preview')) {
+    const generation = localCacheGeneration();
+    const local = await readCachedV2(path).catch(() => undefined);
+    if (init.signal?.aborted) throw init.signal.reason;
+    if (generation !== localCacheGeneration()) throw new DOMException('会话已变化', 'AbortError');
+    if (local !== undefined) {
+      const key = `${generation}:${path}`;
+      if (navigator.onLine && !localRevalidations.has(key)) {
+        const revalidation = requestNetwork<T>(path, init, true, undefined, false, API_V2_BASE)
+          .then((fresh) => {
+            const encoded = JSON.stringify(fresh);
+            const previous = lastRevalidationValues.get(key) ?? JSON.stringify(local);
+            lastRevalidationValues.set(key, encoded);
+            if (lastRevalidationValues.size > 128)
+              lastRevalidationValues.delete(lastRevalidationValues.keys().next().value!);
+            if (
+              generation === localCacheGeneration() &&
+              previous !== encoded &&
+              typeof window !== 'undefined'
+            )
+              window.dispatchEvent(new Event('devtodo:data-changed'));
+          })
+          .catch(() => undefined)
+          .finally(() => localRevalidations.delete(key));
+        localRevalidations.set(key, revalidation);
+      }
+      return local as T;
+    }
+  }
   return requestNetwork<T>(path, init, true, undefined, true, API_V2_BASE);
 }
 

@@ -32,6 +32,7 @@ import {
 import { isAuthLocallyLocked, lockAuthLocally, unlockAuthLocally } from './auth-lock.js';
 import { deactivateLocalCache } from './local.js';
 import { installNativeLifecycle } from './native.js';
+import { verificationInterval } from './network-policy.js';
 
 type AuthStatus = 'loading' | 'anonymous' | 'authenticated';
 export type ConnectionStatus = 'online' | 'offline' | 'syncing' | 'conflict' | 'error';
@@ -53,23 +54,20 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 const AUTH_NETWORK_TIMEOUT_MS = 5_000;
 
-function withTimeout<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(
-      () => reject(new Error('认证请求超时，已保留本地工作区')),
-      milliseconds,
-    );
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (error: unknown) => {
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
+async function withTimeout<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  milliseconds: number,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(
+    () => controller.abort(new DOMException('认证请求超时', 'TimeoutError')),
+    milliseconds,
+  );
+  try {
+    return await operation(controller.signal);
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -146,15 +144,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (navigator.storage?.persist) void navigator.storage.persist();
       const localEngine = createSyncEngine(localDb);
-      const unsubscribe = localEngine.subscribe((next) => {
+      const unsubscribeState = localEngine.subscribe((next) => {
         if (sessionGenerationRef.current !== generation) return;
         setConnection(next === 'idle' ? 'online' : next);
-        if (next === 'idle' || next === 'conflict' || next === 'error')
+      });
+      const unsubscribeData = localEngine.subscribeData(() => {
+        if (sessionGenerationRef.current === generation)
           window.dispatchEvent(new Event('devtodo:data-changed'));
       });
       dbRef.current = localDb;
       engineRef.current = localEngine;
-      unsubscribeEngineRef.current = unsubscribe;
+      setDb(localDb);
+      setEngine(localEngine);
+      unsubscribeEngineRef.current = () => {
+        unsubscribeState();
+        unsubscribeData();
+      };
       setUser(me.user);
       setSettings(me.settings);
       setStatus('authenticated');
@@ -265,7 +270,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setInitialized(
           (
             await withTimeout(
-              requestV1<{ initialized: boolean }>('/bootstrap/status'),
+              (signal) => requestV1<{ initialized: boolean }>('/bootstrap/status', { signal }),
               AUTH_NETWORK_TIMEOUT_MS,
             )
           ).initialized,
@@ -288,9 +293,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return;
     }
-    const refreshed = await withTimeout(refreshAccessToken(), AUTH_NETWORK_TIMEOUT_MS).catch(
-      () => false,
-    );
+    const refreshed = await withTimeout(
+      (signal) => refreshAccessToken(signal),
+      AUTH_NETWORK_TIMEOUT_MS,
+    ).catch(() => false);
     if (!refreshed) {
       if (operation !== authOperationRef.current) return;
       const failure = getLastRefreshFailure();
@@ -313,7 +319,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setInitialized(
           (
             await withTimeout(
-              requestV1<{ initialized: boolean }>('/bootstrap/status'),
+              (signal) => requestV1<{ initialized: boolean }>('/bootstrap/status', { signal }),
               AUTH_NETWORK_TIMEOUT_MS,
             )
           ).initialized,
@@ -367,7 +373,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     const onOnline = () => syncCurrent();
     const onOffline = () => setConnection('offline');
-    const onFocus = () => syncCurrent();
+    const onFocus = () => {
+      if (!document.hidden) syncCurrent();
+    };
     const removeNativeLifecycle = installNativeLifecycle({
       onForeground: () => syncCurrent(),
       onNetworkChange: (online) => {
@@ -376,15 +384,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
     window.addEventListener('online', onOnline);
+    window.addEventListener('devtodo:outbox-changed', onOnline);
     window.addEventListener('offline', onOffline);
     window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    let lastVerification = 0;
     const timer = window.setInterval(() => {
+      if (document.hidden || Date.now() - lastVerification < verificationInterval()) return;
+      lastVerification = Date.now();
       syncCurrent();
-    }, 30_000);
+    }, 10_000);
     return () => {
       window.removeEventListener('online', onOnline);
+      window.removeEventListener('devtodo:outbox-changed', onOnline);
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
       window.clearInterval(timer);
       removeNativeLifecycle();
       if (socketReconnectTimerRef.current !== null) {

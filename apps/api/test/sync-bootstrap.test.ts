@@ -46,6 +46,21 @@ async function boot() {
 }
 
 describe('immutable progressive bootstrap', () => {
+  it('reads Today without creating dates or advancing the account revision', async () => {
+    const { app, headers } = await boot();
+    const before = (await app.inject({ url: '/api/v2/sync/status', headers })).json();
+    const today = await app.inject({ url: '/api/v2/today?localDate=2026-10-20', headers });
+    expect(today.statusCode).toBe(200);
+    expect(today.json()).toEqual({ point: null, items: [] });
+    expect(today.headers['cache-control']).toBe('private, no-store');
+    expect((await app.inject({ url: '/api/v2/sync/status', headers })).json()).toEqual(before);
+    const snapshot = (await app.inject({ url: '/api/v2/sync/snapshot', headers })).json();
+    expect(snapshot.timePoints).toHaveLength(0);
+    expect((await app.inject({ url: '/api/v2/today?localDate=invalid', headers })).statusCode).toBe(
+      400,
+    );
+  });
+
   it('advertises capabilities, prioritizes preview, retains immutable pages and catches later changes', async () => {
     const { app, headers, hubId } = await boot();
     expect(hubId).toMatch(/^[a-f0-9-]{36}$/);

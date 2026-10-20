@@ -5,7 +5,6 @@ import com.devtodo.app.data.model.*
 import com.devtodo.app.data.security.SecureAuthManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asContextElement
@@ -14,11 +13,11 @@ import kotlinx.serialization.json.*
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.IOException
 import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.coroutines.resumeWithException
 
 enum class ApiFailureCategory {
     AUTH_REQUIRED,
@@ -44,26 +43,28 @@ class ApiClient(private val authManager: SecureAuthManager) {
         return withContext(Dispatchers.IO + requestSession.asContextElement(binding), block)
     }
     private val activeCalls = ConcurrentHashMap<Call, String>()
+    private val networkQuality = NetworkQuality()
+    val isConstrainedNetwork: Boolean get() = networkQuality.constrained
     fun cancelSessionCalls(session: String) {
         activeCalls.forEach { (call, key) -> if (key == session) call.cancel() }
     }
-    private suspend fun Call.awaitResponse(): Response = suspendCancellableCoroutine { continuation ->
-        activeCalls[this] = authManager.sessionKey
-        continuation.invokeOnCancellation { cancel(); activeCalls.remove(this) }
-        enqueue(object : Callback {
-            override fun onFailure(call: Call, error: IOException) {
-                activeCalls.remove(call)
-                if (continuation.isActive) continuation.resumeWithException(error)
-            }
-            override fun onResponse(call: Call, response: Response) {
-                activeCalls.remove(call)
-                continuation.resume(response, onCancellation = { _, value, _ -> value.close() })
-            }
-        })
+    private suspend fun Call.awaitResponse(): Response {
+        activeCalls[this] = request().tag(SessionRequest::class.java)?.key ?: authManager.sessionKey
+        return awaitBufferedResponse(
+            finished = { activeCalls.remove(this) },
+            measured = networkQuality::record,
+        )
     }
     private fun Call.executeTracked(): Response {
-        activeCalls[this] = authManager.sessionKey
-        return try { execute() } finally { activeCalls.remove(this) }
+        activeCalls[this] = requestSession.get()?.key ?: authManager.sessionKey
+        return try {
+            execute().use { response ->
+                val body = response.body
+                val type = body?.contentType()
+                val bytes = body?.bytes() ?: ByteArray(0)
+                response.newBuilder().body(bytes.toResponseBody(type)).build()
+            }
+        } finally { activeCalls.remove(this) }
     }
     val json = Json {
         ignoreUnknownKeys = true

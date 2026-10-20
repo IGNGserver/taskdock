@@ -315,6 +315,23 @@ export interface V2SyncTransport {
   }): Promise<PushResult>;
   pull(cursor: string, limit: number): Promise<PullResult>;
   snapshot(): Promise<V2SnapshotResult>;
+  preview?(): Promise<{ changes: PullResult['changes']; complete: false }>;
+  beginBootstrap?(): Promise<V2BootstrapManifest>;
+  bootstrapPage?(snapshotId: string, page: number): Promise<V2BootstrapPage>;
+}
+
+export interface V2BootstrapManifest {
+  snapshotId: string;
+  cursor: string;
+  pageCount: number;
+  expiresAt: string;
+  protocolVersion: 2;
+}
+
+export interface V2BootstrapPage extends V2BootstrapManifest {
+  page: number;
+  nextPage: number | null;
+  changes: PullResult['changes'];
 }
 
 export interface UpgradePendingMutation {
@@ -1252,6 +1269,16 @@ export class V2SyncEngine {
   private state: SyncState = 'idle';
   private syncPromise: Promise<void> | null = null;
   private readonly listeners = new Set<(state: SyncState) => void>();
+  private readonly dataListeners = new Set<() => void>();
+
+  subscribeData(listener: () => void): () => void {
+    this.dataListeners.add(listener);
+    return () => this.dataListeners.delete(listener);
+  }
+
+  private dataChanged(): void {
+    for (const listener of this.dataListeners) listener();
+  }
 
   constructor(
     private readonly db: DevTodoDatabase,
@@ -1310,32 +1337,39 @@ export class V2SyncEngine {
       let resynced = false;
 
       // P0-5: If no v2 cursor exists yet (initial sync or clean state), actively fetch and apply snapshot first
-      if (storedCursorMeta === undefined) {
-        const snapshot = await this.transport.snapshot();
-        await this.applySnapshot(snapshot);
-        cursor = snapshot.cursor;
-        await this.db.syncMeta.put({ key: cursorKey, value: cursor });
+      if (storedCursorMeta === undefined || (await this.db.syncMeta.get('v2:bootstrap'))) {
+        cursor = await this.bootstrap();
       }
 
-      await this.pushPendingV2();
       let hasMore = true;
+      let uploaded = false;
       while (hasMore) {
         try {
           const pulled = await this.transport.pull(cursor, 500);
-          await this.applyChanges(pulled.changes);
+          if (
+            !/^\d+$/.test(pulled.nextCursor) ||
+            BigInt(pulled.nextCursor) < BigInt(cursor) ||
+            (pulled.hasMore && pulled.nextCursor === cursor)
+          )
+            throw new Error('增量游标未正确前进');
+          await this.applyChanges(pulled.changes, pulled.nextCursor);
           cursor = pulled.nextCursor;
           hasMore = pulled.hasMore;
+          if (!hasMore && !uploaded) {
+            uploaded = true;
+            // Re-read acknowledged versions once so cached optimistic rows do
+            // not stay pending until the next polling interval.
+            hasMore = await this.pushPendingV2();
+          }
         } catch (error) {
           if (!isCursorExpired(error) || resynced) throw error;
-          const snapshot = await this.transport.snapshot();
-          await this.applySnapshot(snapshot);
-          cursor = snapshot.cursor;
-          await this.pushPendingV2();
+          cursor = await this.bootstrap();
           resynced = true;
           hasMore = true;
         }
       }
-      await this.db.syncMeta.put({ key: cursorKey, value: cursor });
+      // Let remote reads run before uploads. Each bounded batch gets a turn;
+      // later rounds/polling continue any remaining Outbox without giant POSTs.
       const conflicts = (await this.db.conflicts.toArray()).filter((row) => !row.resolvedAt).length;
       this.setState(conflicts ? 'conflict' : 'idle');
     } catch (error) {
@@ -1349,11 +1383,20 @@ export class V2SyncEngine {
     }
   }
 
-  private async pushPendingV2(): Promise<void> {
-    const pending = (await this.db.outbox.orderBy('id').toArray()).filter(
-      (item) => item.nextAttemptAt <= Date.now() && item.nextAttemptAt !== Number.MAX_SAFE_INTEGER,
+  private async pushPendingV2(): Promise<boolean> {
+    const ordered = (await this.db.outbox.orderBy('id').toArray()).filter(
+      (item) => item.nextAttemptAt !== Number.MAX_SAFE_INTEGER,
     );
-    if (!pending.length) return;
+    const pending: OutboxItem[] = [];
+    let bytes = 0;
+    for (const item of ordered) {
+      if (item.nextAttemptAt > Date.now()) break;
+      const size = new TextEncoder().encode(JSON.stringify(item.payload)).byteLength + 512;
+      if (pending.length && (pending.length >= 100 || bytes + size > 256_000)) break;
+      pending.push(item);
+      bytes += size;
+    }
+    if (!pending.length) return false;
     const response = await this.transport.push({
       protocolVersion: 2,
       clientId: this.clientId,
@@ -1392,6 +1435,7 @@ export class V2SyncEngine {
           lastError: result.error?.code ?? 'MUTATION_REJECTED',
         });
     }
+    return true;
   }
 
   private setState(next: SyncState): void {
@@ -1514,7 +1558,11 @@ export class V2SyncEngine {
     );
   }
 
-  private async applyChanges(changes: PullResult['changes']): Promise<void> {
+  private async applyChanges(
+    changes: PullResult['changes'],
+    nextCursor?: string,
+    notify = true,
+  ): Promise<void> {
     await this.db.transaction(
       'rw',
       [
@@ -1529,6 +1577,7 @@ export class V2SyncEngine {
         this.db.workflowTaskMemberships,
         this.db.settings,
         this.db.outbox,
+        this.db.syncMeta,
       ],
       async () => {
         const pending = await this.db.outbox.orderBy('id').toArray();
@@ -1562,8 +1611,122 @@ export class V2SyncEngine {
         for (const item of pending) {
           if (item.afterImage) await applyLocalStateImage(this.db, item.afterImage);
         }
+        if (nextCursor !== undefined)
+          await this.db.syncMeta.put({ key: 'v2:cursor', value: nextCursor });
       },
     );
+    if (notify && changes.length) this.dataChanged();
+  }
+
+  private async bootstrap(restarted = false): Promise<string> {
+    if (!this.transport.beginBootstrap || !this.transport.bootstrapPage) {
+      const snapshot = await this.transport.snapshot();
+      await this.applySnapshot(snapshot);
+      this.dataChanged();
+      return snapshot.cursor;
+    }
+    const saved = await this.db.syncMeta.get('v2:bootstrap');
+    let progress = saved
+      ? (JSON.parse(saved.value) as { manifest: V2BootstrapManifest; page: number })
+      : null;
+    if (!progress) {
+      let manifest: V2BootstrapManifest;
+      try {
+        if (this.transport.preview) {
+          const preview = await this.transport.preview();
+          if (preview.complete !== false) throw new Error('预览不能作为完整快照');
+          await this.applyChanges(preview.changes);
+        }
+        manifest = await this.transport.beginBootstrap();
+      } catch (error) {
+        // Only a positively missing route permits the older full snapshot.
+        // Network failures and malformed new-protocol replies keep their error.
+        if (!isRecord(error) || error['status'] !== 404) throw error;
+        const snapshot = await this.transport.snapshot();
+        await this.applySnapshot(snapshot);
+        this.dataChanged();
+        return snapshot.cursor;
+      }
+      if (
+        manifest.protocolVersion !== 2 ||
+        !/^\d+$/.test(manifest.cursor) ||
+        !Number.isInteger(manifest.pageCount) ||
+        manifest.pageCount < 1
+      )
+        throw new Error('快照清单无效');
+      progress = { manifest, page: 0 };
+      await this.db.syncMeta.put({ key: 'v2:bootstrap', value: JSON.stringify(progress) });
+    }
+    const { manifest } = progress;
+    try {
+      for (let page = progress.page; page < manifest.pageCount; page++) {
+        const batch = await this.transport.bootstrapPage(manifest.snapshotId, page);
+        if (
+          batch.snapshotId !== manifest.snapshotId ||
+          batch.cursor !== manifest.cursor ||
+          batch.page !== page ||
+          batch.pageCount !== manifest.pageCount ||
+          batch.protocolVersion !== 2 ||
+          batch.nextPage !== (page + 1 < manifest.pageCount ? page + 1 : null) ||
+          batch.changes.some(
+            (change) =>
+              change.operation !== 'upsert' ||
+              !isRecord(change.snapshot) ||
+              !v2EntityTable(this.db, change.entityType),
+          )
+        )
+          throw new Error('快照页面无效，已保留加载进度');
+        await this.db.transaction('rw', this.db.tables, async () => {
+          await this.applyChanges(batch.changes, undefined, false);
+          await this.db.syncMeta.put({
+            key: `v2:seen:${page}`,
+            value: JSON.stringify(
+              batch.changes.map((change) => `${change.entityType}:${change.entityId}`),
+            ),
+          });
+          await this.db.syncMeta.put({
+            key: 'v2:bootstrap',
+            value: JSON.stringify({ manifest, page: page + 1 }),
+          });
+        });
+        this.dataChanged();
+      }
+      await this.db.transaction('rw', this.db.tables, async () => {
+        const seen = new Set<string>();
+        const pages = await this.db.syncMeta.where('key').startsWith('v2:seen:').toArray();
+        for (const row of pages) for (const key of JSON.parse(row.value) as string[]) seen.add(key);
+        for (const type of [
+          'folder',
+          'task',
+          'note',
+          'taskStep',
+          'timePoint',
+          'placement',
+          'workflow',
+          'workflowStage',
+          'workflowTaskMembership',
+        ]) {
+          const table = v2EntityTable(this.db, type)!;
+          const rows = await table.toArray();
+          const removed = rows.filter((row) => !seen.has(`${type}:${(row as { id: string }).id}`));
+          await table.bulkDelete(removed.map((row) => (row as { id: string }).id));
+        }
+        for (const item of await this.db.outbox.toArray())
+          if (item.afterImage) await applyLocalStateImage(this.db, item.afterImage);
+        await this.db.projects.clear();
+        await this.db.syncMeta.put({ key: 'v2:cursor', value: manifest.cursor });
+        await this.db.syncMeta.bulkDelete(['v2:bootstrap', ...pages.map((row) => row.key)]);
+      });
+      this.dataChanged();
+      return manifest.cursor;
+    } catch (error) {
+      if (!restarted && isCursorExpired(error)) {
+        const keys = await this.db.syncMeta.where('key').startsWith('v2:seen:').primaryKeys();
+        await this.db.syncMeta.bulkDelete(['v2:bootstrap', ...keys]);
+        return this.bootstrap(true);
+      }
+      throw error;
+    }
   }
 
   /**

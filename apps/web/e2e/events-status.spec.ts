@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { missingProgressiveRoute } from './legacy-hub-fixture.js';
 
 /*
  * Status grouping, the reach toggle and the placement-menu stacking contract
@@ -160,6 +161,7 @@ async function mockSession(page: Page, handleV2: (route: Route, path: string) =>
 
   await page.route('**/api/v2/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (await missingProgressiveRoute(route, path)) return;
     if (path.endsWith('/sync/snapshot'))
       return json(route, {
         folders: [],

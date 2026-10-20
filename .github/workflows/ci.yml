@@ -48,6 +48,8 @@ jobs:
         env:
           DATABASE_URL: postgres://devtodo:devtodo_test_password@127.0.0.1:5432/devtodo_test
       - run: pnpm build
+      - name: Verify precompressed static delivery
+        run: pnpm exec tsx scripts/check-static-delivery.ts
       - name: PostgreSQL restart and mobile loading benchmark
         shell: bash
         run: |

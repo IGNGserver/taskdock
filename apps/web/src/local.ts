@@ -14,6 +14,7 @@ import { uuidSchema, uuidv7 } from '@devtodo/contracts';
 import { isValidIanaTimezone, validateLocalDate } from '@devtodo/domain';
 import { ApiError } from './api.js';
 import {
+  applyLocalStateImage,
   captureLocalStateImage,
   type DevTodoDatabase,
   type LocalFolder,
@@ -38,6 +39,11 @@ interface OfflineResult {
 }
 
 let activeContext: LocalContext | null = null;
+let cacheGeneration = 0;
+
+export function localCacheGeneration(): number {
+  return cacheGeneration;
+}
 
 const entityTables = (db: DevTodoDatabase) =>
   [
@@ -57,11 +63,15 @@ const entityTables = (db: DevTodoDatabase) =>
   ] as const;
 
 export function activateLocalCache(db: DevTodoDatabase, clientId: string): void {
+  cacheGeneration++;
   activeContext = { db, clientId };
 }
 
 export function deactivateLocalCache(db: DevTodoDatabase): void {
-  if (activeContext?.db === db) activeContext = null;
+  if (activeContext?.db === db) {
+    activeContext = null;
+    cacheGeneration++;
+  }
 }
 
 export async function cacheResponse(path: string, value: unknown): Promise<void> {
@@ -70,6 +80,8 @@ export async function cacheResponse(path: string, value: unknown): Promise<void>
   try {
     await context.db.transaction('rw', entityTables(context.db), async () => {
       await cacheResponseInTransaction(context.db, path, value);
+      for (const item of await context.db.outbox.toArray())
+        if (item.afterImage) await applyLocalStateImage(context.db, item.afterImage);
     });
   } catch {
     // A failed local cache write must not make an otherwise successful API call fail.
@@ -98,6 +110,32 @@ export async function readLocal(path: string): Promise<unknown | undefined> {
   return context.db.transaction('r', entityTables(context.db), () =>
     readLocalInTransaction(context.db, path),
   );
+}
+
+/** A missing row in a partial cache is not an authoritative empty response. */
+export async function readCachedV2(path: string): Promise<unknown | undefined> {
+  const context = activeContext;
+  if (!context) return undefined;
+  return context.db.transaction('r', entityTables(context.db), async () => {
+    const complete = await context.db.syncMeta.get('v2:cursor');
+    if (!complete || (await context.db.syncMeta.get('v2:bootstrap'))) return undefined;
+    const [pathname = '', query = ''] = path.split('?');
+    const params = new URLSearchParams(query);
+    // These query shapes are the ones the local projection implements. Search,
+    // cursor paging and unknown filters must not silently become unfiltered lists.
+    const allowed =
+      pathname === '/tree/children'
+        ? ['parentFolderId']
+        : pathname === '/time-points'
+          ? ['type', 'from', 'to']
+          : pathname === '/time-points/placement-counts'
+            ? ['type', 'from', 'to']
+            : pathname === '/today'
+              ? ['localDate']
+              : [];
+    if ([...params.keys()].some((key) => !allowed.includes(key))) return undefined;
+    return readLocalInTransaction(context.db, `/v2${path}`);
+  });
 }
 
 export async function applyOfflineWrite(
@@ -1849,7 +1887,14 @@ async function enqueue(
     nextAttemptAt: Date.now(),
   };
   const value = await context.db.transaction('rw', entityTables(context.db), async () => {
+    if (activeContext !== context) throw new DOMException('会话已变化', 'AbortError');
     const beforeImage = await captureLocalStateImage(context.db, command, entityId, payload);
+    if (command === 'task.update' || command === 'note.update') {
+      const table = command === 'task.update' ? 'tasks' : 'notes';
+      const row = beforeImage.rows.find((candidate) => candidate.table === table);
+      if (!isRecord(row?.value) || row.value['version'] !== baseVersion)
+        throw new ApiError('VERSION_CONFLICT', '本地数据已变化，请重新打开后编辑', null, 409);
+    }
     const result = await write();
     const afterImage = await captureLocalStateImage(context.db, command, entityId, payload);
     item.beforeImage = beforeImage;
@@ -2005,9 +2050,10 @@ async function cacheV2ResponseInTransaction(
         await db.folders.put(item['folder'] as unknown as LocalFolder);
       else if (item['kind'] === 'TASK' && isRecord(item['task']))
         await db.tasks.put(item['task'] as unknown as LocalTreeTask);
-      else if (typeof item['taskId'] === 'string' && typeof item['timePointId'] === 'string')
-        await db.placements.put(item as unknown as LocalPlacement);
-      else if (typeof item['id'] === 'string' && typeof item['type'] === 'string')
+      else if (typeof item['taskId'] === 'string' && typeof item['timePointId'] === 'string') {
+        await db.placements.put(stripTask(item) as unknown as LocalPlacement);
+        if (isRecord(item['task'])) await db.tasks.put(item['task'] as unknown as LocalTreeTask);
+      } else if (typeof item['id'] === 'string' && typeof item['type'] === 'string')
         await db.timePoints.put(item as unknown as LocalTimePoint);
       else if (
         typeof item['parentFolderId'] !== 'undefined' &&
@@ -2030,6 +2076,8 @@ async function cacheV2ResponseInTransaction(
     }
   }
   if (isRecord(value['task'])) await db.tasks.put(value['task'] as unknown as LocalTreeTask);
+  if (isRecord(value['point']))
+    await db.timePoints.put(value['point'] as unknown as LocalTimePoint);
   if (isRecord(value['note'])) await db.notes.put(value['note'] as unknown as LocalNote);
   if (Array.isArray(value['steps'])) await db.taskSteps.bulkPut(value['steps'] as LocalTaskStep[]);
   if (Array.isArray(value['placements']))
@@ -2443,6 +2491,11 @@ async function readV2LocalInTransaction(
       items: (await db.timePoints.toArray())
         .filter((point) => params.get('type') === null || point.type === params.get('type'))
         .filter((point) => !point.deletedAt)
+        .filter(
+          (point) =>
+            (!params.get('from') || (point.localDate ?? '') >= params.get('from')!) &&
+            (!params.get('to') || (point.localDate ?? '') <= params.get('to')!),
+        )
         .sort(timePointSort),
     };
   if (pathname === '/time-points/placement-counts') {
@@ -2474,6 +2527,21 @@ async function readV2LocalInTransaction(
     };
   }
   const pointPlacements = /^\/time-points\/([^/]+)\/placements$/.exec(pathname);
+  if (pathname === '/today') {
+    const point = await db.timePoints
+      .filter(
+        (row) => row.type === 'DATE' && row.localDate === params.get('localDate') && !row.deletedAt,
+      )
+      .first();
+    if (!point) return { point: null, items: [] };
+    const taskMap = new Map(tasks.filter(visibleTask).map((task) => [task.id, task]));
+    const items = sortByRank(
+      (await db.placements.where('timePointId').equals(point.id).toArray()).filter(
+        (placement) => !placement.deletedAt && taskMap.has(placement.taskId),
+      ),
+    ).map((placement) => ({ ...placement, task: taskMap.get(placement.taskId)! }));
+    return { point, items };
+  }
   if (pointPlacements) {
     const taskMap = new Map(tasks.map((task) => [task.id, task]));
     const items = (await db.placements.where('timePointId').equals(pointPlacements[1]!).toArray())

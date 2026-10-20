@@ -299,6 +299,18 @@ export async function buildServer(
       root: config.webRoot,
       prefix: '/',
       wildcard: false,
+      preCompressed: true,
+      cacheControl: false,
+      setHeaders(response, filePath) {
+        const hashedAsset =
+          /[/\\]assets[/\\][^/\\]+-[A-Za-z0-9_-]{8,}\.(?:js|css)(?:\.(?:br|gz))?$/.test(filePath);
+        response.setHeader(
+          'Cache-Control',
+          hashedAsset
+            ? 'public, max-age=31536000, immutable'
+            : 'public, max-age=0, must-revalidate',
+        );
+      },
     });
     webBuildAvailable = true;
   } catch {
@@ -951,6 +963,24 @@ export async function buildServer(
   registerV2Routes(app, auth, treeStoreFor(store));
 
   if (webBuildAvailable) {
+    app.addHook('onSend', async (request, reply, payload) => {
+      const pathname = request.url.split('?')[0] ?? request.url;
+      if (
+        pathname !== '/api' &&
+        !pathname.startsWith('/api/') &&
+        !pathname.startsWith('/health') &&
+        pathname !== '/version'
+      ) {
+        const vary = String(reply.getHeader('Vary') ?? '')
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean);
+        if (!vary.some((value) => value.toLowerCase() === 'accept-encoding'))
+          vary.push('Accept-Encoding');
+        reply.header('Vary', vary.join(', '));
+      }
+      return payload;
+    });
     app.setNotFoundHandler((request, reply) => {
       const pathname = request.url.split('?')[0] ?? request.url;
       const apiOrControlPath =
@@ -994,6 +1024,7 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
         if (
           request.auth &&
           !request.url.startsWith('/api/v2/sync/') &&
+          !(request.method === 'GET' && /^\/api\/v2\/today(?:\?.*)?$/.test(request.url)) &&
           !(request.method === 'GET' && /^\/api\/v2\/tasks\/[^/?]+(?:\?.*)?$/.test(request.url)) &&
           !(
             request.method === 'PATCH' &&
@@ -1232,6 +1263,10 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
         return {
           items: tree.listTimePoints(request.auth!.ownerId, query.type),
         };
+      });
+      api.get('/today', async (request) => {
+        const query = z.object({ localDate: localDateSchema }).parse(request.query);
+        return bootstrap.today(request.auth!.ownerId, query.localDate);
       });
       api.get('/time-points/placement-counts', async (request) => {
         const query = z

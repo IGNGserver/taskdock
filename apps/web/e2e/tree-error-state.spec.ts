@@ -1,4 +1,5 @@
 import { expect, test, type Route } from '@playwright/test';
+import { missingProgressiveRoute } from './legacy-hub-fixture.js';
 
 /*
  * This suite fabricates API failures with `page.route`, so it belongs to the
@@ -90,6 +91,8 @@ test('tree separates load errors from empty folders and recovers task detail in 
 
   await page.route('**/api/v2/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (await missingProgressiveRoute(route, path)) return;
+    if (path.endsWith('/sync/snapshot') && holdSyncPull) await syncPullGate;
     if (path.endsWith('/sync/snapshot'))
       return json(route, {
         folders: [],

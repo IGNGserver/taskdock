@@ -162,7 +162,6 @@ describe('Dexie v2 migration', () => {
       async push(request) {
         pushCount += 1;
         expect(request.protocolVersion).toBe(2);
-        if (pushCount === 1) return { results: [] };
         return {
           results: request.mutations.map((mutation) => ({
             mutationId: mutation.mutationId,
@@ -216,8 +215,9 @@ describe('Dexie v2 migration', () => {
       });
       expect(await db.projects.count()).toBe(1);
       await engine.sync();
-      expect(pushCount).toBe(2);
-      expect(pullCount).toBe(2);
+      // Reads (including cursor recovery) now precede the single bounded push.
+      expect(pushCount).toBe(1);
+      expect(pullCount).toBe(3);
       expect(snapshotCount).toBe(1);
       expect(await db.outbox.count()).toBe(0);
       expect(await db.syncMeta.get('v2:cursor')).toMatchObject({ value: '41' });
