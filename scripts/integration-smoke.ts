@@ -486,7 +486,13 @@ async function main(): Promise<void> {
       occurredAt: new Date().toISOString(),
       payload: { title: 'focused update' },
     };
+    const beforeEditPage = await directories.children(owner.id, null, 1);
+    assert(beforeEditPage.nextCursor, 'directory fixture must contain multiple root rows');
     const edited = await focusedStore.applyMutationIdempotent(owner.id, clientId, focusedEdit);
+    await expectDomainError(
+      () => directories.children(owner.id, null, 1, beforeEditPage.nextCursor!),
+      'SYNC_CURSOR_EXPIRED',
+    );
     assert((edited.result as { version: number }).version === 2, 'focused edit version incorrect');
     const replayed = await focusedStore.applyMutationIdempotent(owner.id, clientId, focusedEdit);
     assert(replayed.replayed, 'focused edit lost its idempotency receipt');

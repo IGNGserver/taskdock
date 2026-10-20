@@ -87,15 +87,22 @@ export class DirectoryReads {
         ), rows AS (
           SELECT f.id,f.rank AS r,0 AS k,
             CASE WHEN c.total=0 OR c.todo=c.total THEN 1 WHEN c.done=c.total THEN 2 ELSE 0 END AS g,
-            jsonb_build_object('kind','FOLDER','folder',to_jsonb(f) || jsonb_build_object('rank',f.rank::text),
-              'aggregate',jsonb_build_object('status',CASE WHEN c.total=0 OR c.todo=c.total THEN 'TODO' WHEN c.done=c.total THEN 'DONE' ELSE 'IN_PROGRESS' END,
-                'todoCount',c.todo,'inProgressCount',c.progress,'doneCount',c.done,'totalCount',c.total)) AS item
+            jsonb_build_object('status',CASE WHEN c.total=0 OR c.todo=c.total THEN 'TODO' WHEN c.done=c.total THEN 'DONE' ELSE 'IN_PROGRESS' END,
+                'todoCount',c.todo,'inProgressCount',c.progress,'doneCount',c.done,'totalCount',c.total) AS aggregate
           FROM folders f JOIN counts c ON c.root=f.id WHERE f.owner_id=$1 AND f.deleted_at IS NULL AND ${parentWhere}
           UNION ALL
           SELECT t.id,t.rank,1,CASE t.status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END,
-            jsonb_build_object('kind','TASK','task',to_jsonb(t) || jsonb_build_object('rank',t.rank::text))
+            NULL::jsonb
           FROM tasks t WHERE t.owner_id=$1 AND t.deleted_at IS NULL AND ${parentWhere}
-        ) SELECT item FROM rows ${seek} ORDER BY g,r,k,id ${take}`,
+        ), page AS MATERIALIZED (
+          SELECT * FROM rows ${seek} ORDER BY g,r,k,id ${take}
+        ) SELECT CASE p.k WHEN 0 THEN
+          jsonb_build_object('kind','FOLDER','folder',to_jsonb(f) || jsonb_build_object('rank',f.rank::text),'aggregate',p.aggregate)
+          ELSE jsonb_build_object('kind','TASK','task',to_jsonb(t) || jsonb_build_object('rank',t.rank::text)) END AS item
+        FROM page p
+        LEFT JOIN folders f ON p.k=0 AND f.owner_id=$1 AND f.id=p.id
+        LEFT JOIN tasks t ON p.k=1 AND t.owner_id=$1 AND t.id=p.id
+        ORDER BY p.g,p.r,p.k,p.id`,
           values,
         );
         const items = result.rows.map((row) => {

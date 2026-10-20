@@ -10,8 +10,31 @@ import { DirectoryReads } from '../src/directory-reads.js';
 import { MemoryTreeStore } from '../src/tree-store.js';
 import { buildServer } from '../src/server.js';
 import { MemoryStore } from '../src/store.js';
+import { PostgresTreeStore } from '../src/postgres-tree-store.js';
+import type { PostgresStore } from '../src/postgres-store.js';
 
 describe('directory keyset reads', () => {
+  it('bounds SQL candidate keys before constructing any task or folder payload', async () => {
+    const statements: string[] = [];
+    const postgres = {
+      v2ReadSnapshot: async <T>(operation: () => Promise<T>) => operation(),
+      v2Query: async (sql: string) => {
+        statements.push(sql);
+        return { rows: sql.includes('AS revision') ? [{ revision: '1' }] : [], rowCount: 0 };
+      },
+    } as unknown as PostgresStore;
+    const tree = new PostgresTreeStore(postgres);
+    tree.prepare = async () => {
+      throw new Error('unexpected full projection');
+    };
+    expect((await new DirectoryReads(tree).children(randomUUID(), null, 100)).items).toEqual([]);
+    const pageSql = statements[1]!;
+    expect(pageSql).toContain('page AS MATERIALIZED');
+    expect(pageSql.indexOf('LIMIT')).toBeLessThan(pageSql.indexOf('to_jsonb'));
+    expect(pageSql).not.toMatch(
+      /(?:FROM|JOIN)\s+(?:notes|task_steps|workflow_task_memberships)\b/i,
+    );
+  });
   it('keeps bigint precision and deterministic kind/id ties across page boundaries', () => {
     const owner = randomUUID();
     const tree = new MemoryTreeStore();

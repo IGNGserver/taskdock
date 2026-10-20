@@ -87,4 +87,4 @@ pnpm exec tsx scripts/loading-baseline.ts https://taskdock.lvziwang.top http://<
 - PostgreSQL 目录、文件夹选择器与面包屑走定向查询，不建立含备注的全账户投影。精确后代状态汇总仍有子树遍历成本；文件夹选择器仍返回文件夹全集，但不读取任务与备注。
 - 已读取目录页可在全局 bootstrap 中断时重开；仅保存精确页成员、目录汇总和续页游标（与路径合计最多 32 个缓存条目），投影当前本地行及待同步新建，不把 preview 行补成目录成员。部分缓存下的文件夹汇总标注为上次联网结果，未缓存续页必须联网。完整本地投影可离线分页；本地游标与服务端游标严格隔离。
 - 不改变在线保存的成功/失败语义，不引入大备注按需同步，不部署或发布。公网链路、安装 PWA 和 Android 真机 P95 仍待可追踪版本部署与设备条件。
-- 本地 scratch 验证：194 项单测、lint、格式、Web/API/scripts noEmit 类型检查与 OpenAPI 检查通过；Chromium 与手机视口的目录分页/失败恢复/定位任务/原有状态排序共 6 项通过。真实 PostgreSQL 对照与 10k 长备注分页基准、全仓构建及生产 PWA 交由 PR 的 CI。
+- 本地 scratch 验证：195 项单测、lint、格式、Web/API/scripts noEmit 类型检查与 OpenAPI 检查通过；Chromium 与手机视口的目录分页/失败恢复/定位任务/原有状态排序共 6 项通过。真实 PostgreSQL 对照与 10k 长备注分页基准、全仓构建及生产 PWA 交由 PR 的 CI。
