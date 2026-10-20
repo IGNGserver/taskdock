@@ -20,7 +20,63 @@ afterEach(async () => {
 });
 
 describe('v2 local-first reads', () => {
-  it('commits a versioned edit and its Outbox atomically without waiting on network', async () => {
+  it('invalidates derived reads after acknowledged deletion without moving the sync cursor', async () => {
+    const id = uuidv7();
+    await db.syncMeta.put({ key: 'v2:cursor', value: '9' });
+    await db.tasks.put({
+      id,
+      parentFolderId: null,
+      title: 'delete me',
+      status: 'TODO',
+      rank: '1',
+      version: 1,
+      createdAt: '2026-10-20T00:00:00.000Z',
+      updatedAt: '2026-10-20T00:00:00.000Z',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{"deleted":true}')),
+    );
+    await requestV2(`/tasks/${id}`, { method: 'DELETE', body: '{"baseVersion":1}' });
+    expect((await db.tasks.get(id))?.deletedAt).toBeTruthy();
+    expect((await db.syncMeta.get('v2:cursor'))?.value).toBe('9');
+    expect(await readCachedV2('/tree/children?parentFolderId=root')).toBeUndefined();
+    expect(await db.outbox.count()).toBe(0);
+  });
+
+  it('does not let a pre-mutation read overwrite the acknowledged version', async () => {
+    const id = uuidv7();
+    let finish!: (response: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: unknown, init: RequestInit) =>
+        init.method === 'PATCH'
+          ? Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  id,
+                  parentFolderId: null,
+                  title: 'new',
+                  status: 'TODO',
+                  rank: '1',
+                  version: 2,
+                }),
+              ),
+            )
+          : new Promise<Response>((resolve) => {
+              finish = resolve;
+            }),
+      ),
+    );
+    const pending = requestV2(`/tasks/${id}`);
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    await requestV2(`/tasks/${id}`, { method: 'PATCH', body: '{"title":"new","baseVersion":1}' });
+    finish(new Response(JSON.stringify({ task: { id, title: 'old', version: 1 } })));
+    await expect(pending).rejects.toThrow('读取期间数据已变化');
+    expect(await db.tasks.get(id)).toMatchObject({ title: 'new', version: 2 });
+  });
+
+  it('preserves authoritative online validation instead of falsely acknowledging a rejected edit', async () => {
     const id = uuidv7();
     await db.syncMeta.put({ key: 'v2:cursor', value: '1' });
     await db.settings.put({
@@ -46,21 +102,19 @@ describe('v2 local-first reads', () => {
       getItem: (key: string) => storage.get(key) ?? null,
       setItem: (key: string, value: string) => storage.set(key, value),
     });
-    const fetch = vi.fn();
+    const fetch = vi.fn(
+      async () => new Response('{"code":"VERSION_CONFLICT","message":"版本冲突"}', { status: 409 }),
+    );
     vi.stubGlobal('fetch', fetch);
-    expect(
-      await requestV2(`/tasks/${id}`, {
+    await expect(
+      requestV2(`/tasks/${id}`, {
         method: 'PATCH',
         body: '{"title":"edited","baseVersion":1}',
       }),
-    ).toMatchObject({ title: 'edited', version: 2 });
-    expect(fetch).not.toHaveBeenCalled();
-    expect(await db.outbox.count()).toBe(1);
-    expect((await db.outbox.toArray())[0]).toMatchObject({
-      command: 'task.update',
-      baseVersion: 1,
-    });
-    expect(await db.tasks.get(id)).toMatchObject({ title: 'edited', pendingSync: true });
+    ).rejects.toThrow('版本冲突');
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(await db.outbox.count()).toBe(0);
+    expect(await db.tasks.get(id)).toMatchObject({ title: 'before', version: 1 });
   });
 
   it('renders a complete cached empty list without waiting for blackholed network', async () => {

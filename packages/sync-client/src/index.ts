@@ -1323,6 +1323,7 @@ export class V2SyncEngine {
     this.setState('syncing');
     try {
       const upgradePending = await convertV1OutboxForV2(this.db);
+      const readInvalidation = await this.db.syncMeta.get('v2:read-invalidated');
       if (upgradePending.length)
         console.warn(
           JSON.stringify({
@@ -1355,6 +1356,15 @@ export class V2SyncEngine {
           await this.applyChanges(pulled.changes, pulled.nextCursor);
           cursor = pulled.nextCursor;
           hasMore = pulled.hasMore;
+          if (!hasMore && readInvalidation) {
+            await this.db.transaction('rw', this.db.syncMeta, async () => {
+              if (
+                (await this.db.syncMeta.get('v2:read-invalidated'))?.value ===
+                readInvalidation.value
+              )
+                await this.db.syncMeta.delete('v2:read-invalidated');
+            });
+          }
           if (!hasMore && !uploaded) {
             uploaded = true;
             // Re-read acknowledged versions once so cached optimistic rows do
@@ -1502,7 +1512,6 @@ export class V2SyncEngine {
   }
 
   async applySnapshot(snapshot: V2SnapshotResult): Promise<void> {
-    const pending = await this.db.outbox.toArray();
     await this.db.transaction(
       'rw',
       [
@@ -1523,6 +1532,7 @@ export class V2SyncEngine {
         this.db.syncMeta,
       ],
       async () => {
+        const pending = await this.db.outbox.orderBy('id').toArray();
         await Promise.all([
           this.db.folders.clear(),
           this.db.tasks.clear(),
@@ -1550,6 +1560,8 @@ export class V2SyncEngine {
         await this.db.workflowTaskMemberships.bulkPut(snapshot.workflowTaskMemberships);
         await this.db.settings.put(snapshot.settings);
         await this.db.syncMeta.put({ key: 'v2:cursor', value: snapshot.cursor });
+        const pageKeys = await this.db.syncMeta.where('key').startsWith('v2:seen:').primaryKeys();
+        await this.db.syncMeta.bulkDelete(['v2:bootstrap', ...pageKeys]);
         for (const item of pending) {
           if (item.id !== undefined) await this.db.outbox.put(item);
           if (item.afterImage) await applyLocalStateImage(this.db, item.afterImage);

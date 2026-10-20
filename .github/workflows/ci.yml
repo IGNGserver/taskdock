@@ -42,6 +42,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
       - run: pnpm lint
+      - name: Parse browser regression suites before heavy checks
+        run: pnpm exec playwright test --list
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm test:integration

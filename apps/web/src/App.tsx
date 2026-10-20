@@ -255,9 +255,7 @@ export function App() {
   return (
     <>
       {showPwaNotice && <PwaLifecycleNotice />}
-      <LazyPageBoundary key={location.pathname}>
-        <Suspense fallback={<LoadingScreen label="正在打开页面" />}>{content}</Suspense>
-      </LazyPageBoundary>
+      {content}
     </>
   );
 }
@@ -592,32 +590,39 @@ function AuthenticatedApp() {
         <div className="workspace-body">
           <div ref={pageWrapRef} className="page-wrap">
             <div key={topRoute} className="route-transition">
-              <Routes>
-                <Route path="/" element={<WorkspaceEntry />} />
-                <Route path="/today" element={<TodayPage onOpenTask={openTask} />} />
-                <Route path="/tree" element={<TreePage />} />
-                <Route path="/tree/:folderId" element={<TreePage />} />
-                <Route path="/tasks" element={<Navigate to="/tree" replace />} />
-                <Route path="/workflows" element={<WorkflowsPage />} />
-                <Route path="/projects" element={<Navigate to="/tree" replace />} />
-                <Route path="/projects/:projectId" element={<Navigate to="/tree" replace />} />
-                <Route path="/inbox" element={<Navigate to="/tree" replace />} />
-                <Route path="/misc" element={<Navigate to="/tree" replace />} />
-                <Route path="/time" element={<TimeHubPage />} />
-                <Route path="/time/calendar" element={<CalendarPage onOpenTask={openTask} />} />
-                <Route
-                  path="/time/calendar/:localDate"
-                  element={<CalendarPage onOpenTask={openTask} />}
-                />
-                <Route path="/time/events" element={<EventsPage />} />
-                <Route path="/time/events/:eventId" element={<EventPage onOpenTask={openTask} />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route
-                  path="/more"
-                  element={<MorePage onOpenSearch={() => setCommandOpen(true)} />}
-                />
-                <Route path="*" element={<Navigate to="/today" replace />} />
-              </Routes>
+              <LazyPageBoundary resetKey={location.pathname}>
+                <Suspense fallback={<LoadingScreen label="正在打开页面" />}>
+                  <Routes>
+                    <Route path="/" element={<WorkspaceEntry />} />
+                    <Route path="/today" element={<TodayPage onOpenTask={openTask} />} />
+                    <Route path="/tree" element={<TreePage />} />
+                    <Route path="/tree/:folderId" element={<TreePage />} />
+                    <Route path="/tasks" element={<Navigate to="/tree" replace />} />
+                    <Route path="/workflows" element={<WorkflowsPage />} />
+                    <Route path="/projects" element={<Navigate to="/tree" replace />} />
+                    <Route path="/projects/:projectId" element={<Navigate to="/tree" replace />} />
+                    <Route path="/inbox" element={<Navigate to="/tree" replace />} />
+                    <Route path="/misc" element={<Navigate to="/tree" replace />} />
+                    <Route path="/time" element={<TimeHubPage />} />
+                    <Route path="/time/calendar" element={<CalendarPage onOpenTask={openTask} />} />
+                    <Route
+                      path="/time/calendar/:localDate"
+                      element={<CalendarPage onOpenTask={openTask} />}
+                    />
+                    <Route path="/time/events" element={<EventsPage />} />
+                    <Route
+                      path="/time/events/:eventId"
+                      element={<EventPage onOpenTask={openTask} />}
+                    />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route
+                      path="/more"
+                      element={<MorePage onOpenSearch={() => setCommandOpen(true)} />}
+                    />
+                    <Route path="*" element={<Navigate to="/today" replace />} />
+                  </Routes>
+                </Suspense>
+              </LazyPageBoundary>
             </div>
           </div>
           <TaskDetailV2Overlay

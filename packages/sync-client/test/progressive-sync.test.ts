@@ -92,6 +92,49 @@ function transport(): V2SyncTransport {
 }
 
 describe('v2 progressive sync', () => {
+  it('restarts an expired immutable snapshot once and drops old seen rows, not local edits', async () => {
+    const db = database();
+    const tx = transport();
+    const old = task();
+    const replacement = task();
+    let current = manifest;
+    let creates = 0;
+    tx.beginBootstrap = async () => {
+      creates++;
+      current = { ...manifest, snapshotId: uuidv7(), cursor: String(40 + creates) };
+      return current;
+    };
+    tx.bootstrapPage = async (_id, page) => {
+      if (creates === 1 && page === 1) throw { code: 'SYNC_CURSOR_EXPIRED' };
+      return {
+        ...current,
+        page,
+        nextPage: page === 0 ? 1 : null,
+        changes: page === 0 ? [change(creates === 1 ? old : replacement)] : [],
+      };
+    };
+    await new V2SyncEngine(db, uuidv7(), tx).sync();
+    expect(creates).toBe(2);
+    expect(await db.tasks.get(old.id)).toBeUndefined();
+    expect(await db.tasks.get(replacement.id)).toBeDefined();
+    expect((await db.syncMeta.get('v2:cursor'))?.value).toBe('42');
+    expect(await db.syncMeta.where('key').startsWith('v2:seen:').count()).toBe(0);
+  });
+
+  it('bounds expiry restarts and keeps an interrupted checkpoint for the next round', async () => {
+    const db = database();
+    const tx = transport();
+    tx.bootstrapPage = async () => {
+      throw { code: 'SYNC_CURSOR_EXPIRED' };
+    };
+    await expect(new V2SyncEngine(db, uuidv7(), tx).sync()).rejects.toMatchObject({
+      code: 'SYNC_CURSOR_EXPIRED',
+    });
+    expect(tx.beginBootstrap).toHaveBeenCalledTimes(2);
+    expect(await db.syncMeta.get('v2:cursor')).toBeUndefined();
+    expect(await db.syncMeta.get('v2:bootstrap')).toBeDefined();
+  });
+
   it('resumes the committed page without advancing cursor or pruning on partial failure', async () => {
     const db = database();
     const stale = task();

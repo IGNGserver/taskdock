@@ -1,10 +1,17 @@
 import { Component, type ReactNode } from 'react';
 
 /** A missing/offline deployment chunk must not take the entire workspace down. */
-export class LazyPageBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+export class LazyPageBoundary extends Component<
+  { children: ReactNode; resetKey: string },
+  { failed: boolean }
+> {
   override state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
+  }
+  override componentDidUpdate(previous: Readonly<{ children: ReactNode; resetKey: string }>) {
+    if (this.state.failed && previous.resetKey !== this.props.resetKey)
+      this.setState({ failed: false });
   }
   override render() {
     if (!this.state.failed) return this.props.children;

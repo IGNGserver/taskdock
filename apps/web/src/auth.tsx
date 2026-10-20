@@ -89,6 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const unsubscribeEngineRef = useRef<(() => void) | null>(null);
   const sessionGenerationRef = useRef(0);
   const authOperationRef = useRef(0);
+  const localIdentityRef = useRef<string | null>(null);
+  const refreshFlightRef = useRef<Promise<void> | null>(null);
 
   const disposeLocalSession = useCallback(() => {
     sessionGenerationRef.current += 1;
@@ -112,12 +114,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     dbRef.current = null;
     engineRef.current = null;
+    localIdentityRef.current = null;
     setDb(null);
     setEngine(null);
   }, []);
 
   const initialize = useCallback(
     async (me: MeResponse, sync = true) => {
+      const operation = authOperationRef.current;
+      const identity = JSON.stringify([getHubOrigin(), me.user.id]);
+      const currentDb = dbRef.current;
+      const currentEngine = engineRef.current;
+      if (localIdentityRef.current === identity && currentDb && currentEngine) {
+        // Revalidating the same restored account is not an account switch.
+        // Keep its DB/engine generation so in-flight page reads stay valid.
+        const generation = sessionGenerationRef.current;
+        await currentDb.settings.put(me.settings);
+        await currentDb.syncMeta.put({ key: 'user', value: JSON.stringify(me.user) });
+        if (sessionGenerationRef.current !== generation || operation !== authOperationRef.current)
+          return;
+        setUser(me.user);
+        setSettings(me.settings);
+        if (sync && navigator.onLine) {
+          socketConnectRef.current?.();
+          void currentEngine.sync().catch(() => undefined);
+        }
+        return;
+      }
       disposeLocalSession();
       const generation = sessionGenerationRef.current;
       const localDb = new DevTodoDatabase(getHubOrigin(), me.user.id);
@@ -127,6 +150,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           { key: 'user', value: JSON.stringify(me.user) },
           { key: 'ownerId', value: me.user.id },
         ]);
+        if (sessionGenerationRef.current !== generation || operation !== authOperationRef.current) {
+          localDb.close();
+          return;
+        }
         try {
           localStorage.setItem('devtodo.owner-id', me.user.id);
         } catch {
@@ -154,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       dbRef.current = localDb;
       engineRef.current = localEngine;
+      localIdentityRef.current = identity;
       setDb(localDb);
       setEngine(localEngine);
       unsubscribeEngineRef.current = () => {
@@ -226,6 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const restoreOfflineSession = useCallback(async (): Promise<boolean> => {
+    const operation = authOperationRef.current;
     let ownerId: string | null = null;
     try {
       ownerId = localStorage.getItem('devtodo.owner-id');
@@ -243,6 +272,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!userMeta || !localSettings) return false;
       const localUser = JSON.parse(userMeta.value) as UserDto;
       if (localUser.id !== ownerId || !localUser.username) return false;
+      if (operation !== authOperationRef.current) return false;
       await initialize(
         {
           user: localUser,
@@ -263,7 +293,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [initialize]);
 
-  const refresh = useCallback(async () => {
+  const restoreAndVerifySession = useCallback(async () => {
     const operation = authOperationRef.current;
     if (isAuthLocallyLocked()) {
       try {
@@ -357,6 +387,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setInitialized(false);
     }
   }, [initialize, restoreOfflineSession]);
+
+  const refresh = useCallback(() => {
+    // StrictMode setup and simultaneous foreground callbacks must share the
+    // whole restore flow, not only the refresh-token HTTP exchange.
+    refreshFlightRef.current ??= restoreAndVerifySession().finally(() => {
+      refreshFlightRef.current = null;
+    });
+    return refreshFlightRef.current;
+  }, [restoreAndVerifySession]);
 
   useEffect(() => {
     void refresh();

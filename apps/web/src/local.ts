@@ -95,6 +95,34 @@ export async function cacheMutationSideEffects(path: string, method: string): Pr
     await context.db.transaction('rw', entityTables(context.db), async () => {
       const [pathname] = path.split('?');
       if (method === 'DELETE') {
+        if (pathname?.startsWith('/v2/')) {
+          const match =
+            /^\/v2\/(tasks|folders|time-points|placements|workflows|workflow-stages|workflow-task-memberships|task-steps)\/([^/]+)$/.exec(
+              pathname,
+            );
+          const tables = {
+            tasks: context.db.tasks,
+            folders: context.db.folders,
+            'time-points': context.db.timePoints,
+            placements: context.db.placements,
+            workflows: context.db.workflows,
+            'workflow-stages': context.db.workflowStages,
+            'workflow-task-memberships': context.db.workflowTaskMemberships,
+            'task-steps': context.db.taskSteps,
+          };
+          if (match) {
+            const table = tables[match[1] as keyof typeof tables];
+            const row = await table.get(match[2]!);
+            if (row) await table.put({ ...row, deletedAt: new Date().toISOString() } as never);
+          }
+          // Until the authoritative feed applies cascades, derived projections
+          // cannot claim a complete post-delete view. Keep the sync cursor.
+          if (
+            match &&
+            ['folders', 'tasks', 'time-points', 'workflows', 'workflow-stages'].includes(match[1]!)
+          )
+            await context.db.syncMeta.put({ key: 'v2:read-invalidated', value: uuidv7() });
+        }
         const placement = /^\/placements\/([^/]+)$/.exec(pathname ?? '');
         if (placement) await context.db.placements.delete(placement[1]!);
       }
@@ -118,7 +146,12 @@ export async function readCachedV2(path: string): Promise<unknown | undefined> {
   if (!context) return undefined;
   return context.db.transaction('r', entityTables(context.db), async () => {
     const complete = await context.db.syncMeta.get('v2:cursor');
-    if (!complete || (await context.db.syncMeta.get('v2:bootstrap'))) return undefined;
+    if (
+      !complete ||
+      (await context.db.syncMeta.get('v2:bootstrap')) ||
+      (await context.db.syncMeta.get('v2:read-invalidated'))
+    )
+      return undefined;
     const [pathname = '', query = ''] = path.split('?');
     const params = new URLSearchParams(query);
     // These query shapes are the ones the local projection implements. Search,

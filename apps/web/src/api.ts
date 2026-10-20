@@ -41,7 +41,7 @@ let refreshPromise: Promise<boolean> | null = null;
 let secureStorageSetup: Promise<void> | null = null;
 let lastRefreshFailure: RefreshFailureKind | null = null;
 const localRevalidations = new Map<string, Promise<unknown>>();
-const lastRevalidationValues = new Map<string, string>();
+let mutationRevision = 0;
 
 export class ApiError extends Error {
   constructor(
@@ -273,6 +273,9 @@ async function requestNetworkBound<T>(
   else headers.delete('Authorization');
   const method = (init.method ?? 'GET').toUpperCase();
   const cachePath = apiBase === API_V2_BASE ? `/v2${path}` : path;
+  const writing = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+  const readRevision = mutationRevision;
+  if (writing) mutationRevision++;
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     headers.set('Idempotency-Key', headers.get('Idempotency-Key') ?? uuidv7());
     headers.set('X-Client-Id', headers.get('X-Client-Id') ?? createBrowserSyncId());
@@ -325,12 +328,17 @@ async function requestNetworkBound<T>(
     );
   }
   if (response.status === 204) {
+    if (writing) mutationRevision++;
     await cacheMutationSideEffects(cachePath, method);
     return undefined as T;
   }
   const value = (await response.json()) as T;
   if (generation !== localCacheGeneration()) throw new DOMException('会话已变化', 'AbortError');
+  if (!writing && readRevision !== mutationRevision && !path.startsWith('/sync/'))
+    throw new DOMException('读取期间数据已变化', 'AbortError');
+  if (writing) mutationRevision++;
   if (!path.startsWith('/sync/')) await cacheResponse(cachePath, value);
+  if (method === 'DELETE') await cacheMutationSideEffects(cachePath, method);
   return value;
 }
 
@@ -618,24 +626,6 @@ async function ensureNativeStorage(): Promise<void> {
 
 export async function requestV2<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase();
-  // Only the tested, versioned edit surface is optimistic online. Destructive
-  // previews, move/reorder and unknown commands retain authoritative semantics.
-  if (method === 'PATCH' && /^\/tasks\/[^/?]+(?:\/note)?$/.test(path) && !isAuthLocallyLocked()) {
-    const generation = localCacheGeneration();
-    if (await readCachedV2('/settings').catch(() => undefined)) {
-      if (init.signal?.aborted) throw init.signal.reason;
-      if (generation !== localCacheGeneration()) throw new DOMException('会话已变化', 'AbortError');
-      const headers = new Headers(init.headers);
-      headers.set('Idempotency-Key', headers.get('Idempotency-Key') ?? uuidv7());
-      headers.set('X-Client-Id', createBrowserSyncId());
-      const local = await applyOfflineWrite(`/v2${path}`, method, init, headers);
-      if (local) {
-        if (typeof window !== 'undefined')
-          window.dispatchEvent(new Event('devtodo:outbox-changed'));
-        return local.value as T;
-      }
-    }
-  }
   // Mutation previews, sync and auth must always consult the authority.
   if (method === 'GET' && !path.startsWith('/sync/') && !path.includes('delete-preview')) {
     const generation = localCacheGeneration();
@@ -646,15 +636,11 @@ export async function requestV2<T>(path: string, init: RequestInit = {}): Promis
       const key = `${generation}:${path}`;
       if (navigator.onLine && !localRevalidations.has(key)) {
         const revalidation = requestNetwork<T>(path, init, true, undefined, false, API_V2_BASE)
-          .then((fresh) => {
-            const encoded = JSON.stringify(fresh);
-            const previous = lastRevalidationValues.get(key) ?? JSON.stringify(local);
-            lastRevalidationValues.set(key, encoded);
-            if (lastRevalidationValues.size > 128)
-              lastRevalidationValues.delete(lastRevalidationValues.keys().next().value!);
+          .then(async () => {
+            const updated = await readCachedV2(path);
             if (
               generation === localCacheGeneration() &&
-              previous !== encoded &&
+              JSON.stringify(local) !== JSON.stringify(updated) &&
               typeof window !== 'undefined'
             )
               window.dispatchEvent(new Event('devtodo:data-changed'));

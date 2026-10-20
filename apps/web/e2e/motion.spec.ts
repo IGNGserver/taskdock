@@ -89,7 +89,7 @@ async function installMockApi(page: Page): Promise<void> {
     return body({ items: [] });
   });
 
-  await page.route('**/api/v2/**', (route: Route) => {
+  await page.route('**/api/v2/**', async (route: Route) => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/time-points/date'))
       return route.fulfill({
