@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DevTodoDatabase } from '@devtodo/sync-client';
 import { uuidv7 } from '@devtodo/contracts';
 import { requestV2 } from '../src/api.js';
-import { activateLocalCache, deactivateLocalCache, readCachedV2 } from '../src/local.js';
+import {
+  activateLocalCache,
+  cacheResponse,
+  deactivateLocalCache,
+  readCachedV2,
+} from '../src/local.js';
 
 let db: DevTodoDatabase;
 beforeEach(() => {
@@ -20,6 +25,101 @@ afterEach(async () => {
 });
 
 describe('v2 local-first reads', () => {
+  it('reopens an authoritative Today page before global bootstrap has completed', async () => {
+    const date = '2026-10-20';
+    const pointId = uuidv7();
+    const taskId = uuidv7();
+    const placementId = uuidv7();
+    await db.syncMeta.put({ key: 'v2:bootstrap', value: '{"page":0}' });
+    await cacheResponse(`/v2/today?localDate=${date}`, {
+      point: { id: pointId, type: 'DATE', localDate: date, rank: '1', version: 1 },
+      items: [
+        {
+          id: placementId,
+          taskId,
+          timePointId: pointId,
+          rank: '1',
+          version: 1,
+          task: {
+            id: taskId,
+            parentFolderId: null,
+            title: 'cached',
+            status: 'TODO',
+            rank: '1',
+            version: 1,
+          },
+        },
+      ],
+    });
+    await db.tasks.update(taskId, { title: 'local edit' });
+    expect(await readCachedV2(`/today?localDate=${date}`)).toMatchObject({
+      point: { id: pointId },
+      items: [{ task: { title: 'local edit' } }],
+    });
+    expect(await db.syncMeta.get('v2:cursor')).toBeUndefined();
+    expect(await readCachedV2('/today?localDate=2026-10-21')).toBeUndefined();
+    expect(await readCachedV2('/tree/children?parentFolderId=root')).toBeUndefined();
+    await db.tasks.delete(taskId);
+    expect(await readCachedV2(`/today?localDate=${date}`)).toBeUndefined();
+  });
+
+  it('extends a covered empty Today with offline edits and survives reopening the database', async () => {
+    const date = '2026-10-20';
+    await cacheResponse(`/v2/today?localDate=${date}`, { point: null, items: [] });
+    expect(await readCachedV2(`/today?localDate=${date}`)).toEqual({ point: null, items: [] });
+    const storage = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('offline');
+      }),
+    );
+    const point = await requestV2<{ id: string }>('/time-points/date', {
+      method: 'POST',
+      body: JSON.stringify({ localDate: date }),
+    });
+    const result = await requestV2<{ task: { id: string } }>('/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ parentFolderId: null, title: 'offline capture' }),
+    });
+    await requestV2('/placements', {
+      method: 'POST',
+      body: JSON.stringify({ taskId: result.task.id, timePointId: point.id }),
+    });
+    db.close();
+    await db.open();
+    expect(await readCachedV2(`/today?localDate=${date}`)).toMatchObject({
+      items: [{ task: { title: 'offline capture' } }],
+    });
+    expect(await db.outbox.count()).toBe(3);
+    expect(await db.syncMeta.get('v2:cursor')).toBeUndefined();
+  });
+
+  it('does not mistake speculative preview rows for membership in the covered Today page', async () => {
+    const pointId = uuidv7();
+    const date = '2026-10-20';
+    await cacheResponse(`/v2/today?localDate=${date}`, {
+      point: { id: pointId, type: 'DATE', localDate: date, rank: '1', version: 1 },
+      items: [],
+    });
+    await db.placements.put({
+      id: uuidv7(),
+      timePointId: pointId,
+      taskId: uuidv7(),
+      rank: '1',
+      version: 1,
+      createdAt: '2026-10-20T00:00:00.000Z',
+      updatedAt: '2026-10-20T00:00:00.000Z',
+    });
+    expect(await readCachedV2(`/today?localDate=${date}`)).toMatchObject({ items: [] });
+    await db.syncMeta.put({ key: 'v2:read-invalidated', value: 'delete-in-progress' });
+    expect(await readCachedV2(`/today?localDate=${date}`)).toBeUndefined();
+  });
+
   it('does not invalidate a cold page read when immutable bootstrap begins in parallel', async () => {
     let finish!: (response: Response) => void;
     vi.stubGlobal(

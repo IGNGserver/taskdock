@@ -55,7 +55,8 @@ pnpm exec tsx scripts/loading-baseline.ts https://taskdock.lvziwang.top http://<
 
 - 已实现：只读公共基线工具；Tree/Workflow 懒加载与分块失败边界；
   最终构建字节的 gzip/Brotli 旁车与一致性检查；哈希长缓存、壳重新验证及 Vary 契约。
-- 已实现：Web 完整缓存先读，未知查询/部分缓存仍咨询服务端；离线写入继续使用原有
+- 已实现：Web 完整缓存先读；Today 按日期持久化独立页面覆盖状态，即使全局分页被中断，
+  已完整读取的日期仍可离线打开/编辑，不推进全局游标或推断其他列表完整。其他未知查询/部分缓存仍咨询服务端；离线写入继续使用原有
   原子 Outbox，在线保存保留服务端错误反馈，不抢先返回成功。旧账户响应不得写入新账户。
 - 已实现：Web preview + 固定分页快照续传，全部页面完成后才推进全局游标和清理缺失行；
   逐页增量游标原子提交、读取先于有界上传、确认上传后再次拉取。只有明确 404 才回退旧快照。
@@ -63,7 +64,7 @@ pnpm exec tsx scripts/loading-baseline.ts https://taskdock.lvziwang.top http://<
   Android 持续跟踪到正文完成，超时/取消会取消实际传输；基于多次实测降频，并在分页间让路可见页。
 - 已实现：Today 从串行写入加三路查询改为只读聚合；PostgreSQL 定向查询日期、安排与任务，
   不读备注、不建立账户全量投影。仅在用户添加任务时创建日期。
-- 本地快速验证：lint、Web/API/scripts noEmit typecheck、185 项单测通过；
+- 本地快速验证：lint、Web/API/scripts noEmit typecheck、188 项单测通过；
   Chromium 模拟接口回归 41 项通过（8 项真实后端/PWA 场景不适用而跳过）。
   专门验证预压缩插件运行了受影响的 Web 构建；不在 NAS 写依赖或产物。
   全仓构建、真实 PostgreSQL、生产 PWA 与 Android 验证以 PR 的 CI 结果为准。

@@ -197,6 +197,33 @@ test('production PWA caches assets and can reopen the workspace offline', async 
   await assertFits(page);
 });
 
+test('a loaded Today page reopens offline even when global bootstrap was interrupted', async ({
+  page,
+  context,
+}) => {
+  skipEnginesWithoutServiceWorker();
+  test.skip(process.env['E2E_PWA'] !== '1', 'requires a production service worker');
+  let blockedPages = 0;
+  await page.route('**/api/v2/sync/bootstrap/*', async (route) => {
+    blockedPages++;
+    await route.abort('failed');
+  });
+  await login(page);
+  await expect(page.getByRole('heading', { name: '今天要做' })).toBeVisible();
+  await expect.poll(() => blockedPages).toBeGreaterThan(0);
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
+  await expect(page.getByRole('heading', { name: '今天要做' })).toBeVisible();
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '今天要做' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: '移动导航' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '快速创建任务', exact: true })).toBeEnabled();
+});
+
 test('cached PWA reopens while API connections remain blackholed', async ({ page }) => {
   skipEnginesWithoutServiceWorker();
   test.skip(process.env['E2E_PWA'] !== '1', 'requires a production service worker');

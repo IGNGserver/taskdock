@@ -82,6 +82,32 @@ export async function cacheResponse(path: string, value: unknown): Promise<void>
       await cacheResponseInTransaction(context.db, path, value);
       for (const item of await context.db.outbox.toArray())
         if (item.afterImage) await applyLocalStateImage(context.db, item.afterImage);
+      const [pathname, query = ''] = path.split('?');
+      const date = new URLSearchParams(query).get('localDate');
+      if (
+        pathname === '/v2/today' &&
+        date &&
+        /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+        isRecord(value) &&
+        (value['point'] === null || isRecord(value['point'])) &&
+        Array.isArray(value['items'])
+      ) {
+        // Coverage is exact to this read, not the global snapshot. Retain IDs,
+        // not stale copies of tasks: local edits continue to project from IDB.
+        const key = `v2:today:${date}`;
+        await context.db.syncMeta.put({
+          key,
+          value: JSON.stringify({
+            pointId: isRecord(value['point']) ? value['point']['id'] : null,
+            placementIds: value['items'].map((item: { id: string }) => item.id),
+          }),
+        });
+        const keys = await context.db.syncMeta.where('key').startsWith('v2:today:').primaryKeys();
+        if (keys.length > 8)
+          await context.db.syncMeta.bulkDelete(
+            keys.filter((entry) => entry !== key).slice(0, keys.length - 8),
+          );
+      }
     });
   } catch {
     // A failed local cache write must not make an otherwise successful API call fail.
@@ -146,12 +172,7 @@ export async function readCachedV2(path: string): Promise<unknown | undefined> {
   if (!context) return undefined;
   return context.db.transaction('r', entityTables(context.db), async () => {
     const complete = await context.db.syncMeta.get('v2:cursor');
-    if (
-      !complete ||
-      (await context.db.syncMeta.get('v2:bootstrap')) ||
-      (await context.db.syncMeta.get('v2:read-invalidated'))
-    )
-      return undefined;
+    if (await context.db.syncMeta.get('v2:read-invalidated')) return undefined;
     const [pathname = '', query = ''] = path.split('?');
     const params = new URLSearchParams(query);
     // These query shapes are the ones the local projection implements. Search,
@@ -167,6 +188,46 @@ export async function readCachedV2(path: string): Promise<unknown | undefined> {
               ? ['localDate']
               : [];
     if ([...params.keys()].some((key) => !allowed.includes(key))) return undefined;
+    if (!complete || (await context.db.syncMeta.get('v2:bootstrap'))) {
+      if (pathname !== '/today') return undefined;
+      const date = params.get('localDate');
+      const stored = date ? await context.db.syncMeta.get(`v2:today:${date}`) : undefined;
+      if (!stored) return undefined;
+      const coverage = JSON.parse(stored.value) as {
+        pointId: string | null;
+        placementIds: string[];
+      };
+      // A successful local date/placement creation extends the covered page.
+      // An unrelated preview/snapshot row does not establish page membership.
+      const pendingPoint = await context.db.timePoints
+        .filter(
+          (row) =>
+            row.type === 'DATE' &&
+            row.localDate === date &&
+            row.pendingSync === true &&
+            !row.deletedAt,
+        )
+        .first();
+      const pointId = pendingPoint?.id ?? coverage.pointId;
+      if (!pointId) return { point: null, items: [] };
+      const point = pendingPoint ?? (await context.db.timePoints.get(pointId));
+      if (!point || point.deletedAt) return undefined;
+      const covered = new Set(coverage.placementIds);
+      const placements = await context.db.placements.where('timePointId').equals(pointId).toArray();
+      if (coverage.placementIds.some((id) => !placements.some((row) => row.id === id)))
+        return undefined;
+      const items = [];
+      for (const placement of sortByRank(
+        placements.filter(
+          (row) => !row.deletedAt && (covered.has(row.id) || row.pendingSync === true),
+        ),
+      )) {
+        const task = await context.db.tasks.get(placement.taskId);
+        if (!task) return undefined;
+        if (!task.deletedAt) items.push({ ...placement, task });
+      }
+      return { point, items };
+    }
     return readLocalInTransaction(context.db, `/v2${path}`);
   });
 }
