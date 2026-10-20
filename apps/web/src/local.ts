@@ -9,8 +9,9 @@ import type {
   TreeTaskDto,
   V2SettingsDto,
   UserDto,
+  TreeItemDto,
 } from '@devtodo/contracts';
-import { uuidSchema, uuidv7 } from '@devtodo/contracts';
+import { paginateDirectory, uuidSchema, uuidv7 } from '@devtodo/contracts';
 import { isValidIanaTimezone, validateLocalDate } from '@devtodo/domain';
 import { ApiError } from './api.js';
 import {
@@ -40,6 +41,17 @@ interface OfflineResult {
 
 let activeContext: LocalContext | null = null;
 let cacheGeneration = 0;
+
+function directoryPageKey(path: string): string | undefined {
+  const [pathname, query] = path.split('?');
+  if (pathname !== '/tree/children') return undefined;
+  const params = new URLSearchParams(query);
+  if ([...params.keys()].some((key) => !['parentFolderId', 'limit', 'cursor'].includes(key)))
+    return undefined;
+  const limit = Number(params.get('limit'));
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) return undefined;
+  return `v2:directory-page:${params.get('parentFolderId') ?? 'root'}:${limit}:${params.get('cursor') ?? ''}`;
+}
 
 export function localCacheGeneration(): number {
   return cacheGeneration;
@@ -84,6 +96,32 @@ export async function cacheResponse(path: string, value: unknown): Promise<void>
         if (item.afterImage) await applyLocalStateImage(context.db, item.afterImage);
       const [pathname, query = ''] = path.split('?');
       const date = new URLSearchParams(query).get('localDate');
+      const directoryKey = directoryPageKey(path.replace(/^\/v2/, ''));
+      const pathKey = /^\/v2\/folders\/[^/]+\/path$/.test(pathname ?? '')
+        ? `v2:directory-path:${pathname}`
+        : undefined;
+      const pageKey = directoryKey ?? pathKey;
+      if (pageKey && isRecord(value) && Array.isArray(value['items'])) {
+        const parent = new URLSearchParams(query).get('parentFolderId');
+        const page = directoryKey
+          ? {
+              ...value,
+              parentFolderId: parent === 'root' ? null : parent,
+              nextCursor: value['nextCursor'] ?? null,
+            }
+          : value;
+        await context.db.syncMeta.put({
+          key: pageKey,
+          value: JSON.stringify({ page, savedAt: Date.now() }),
+        });
+        const pages = await context.db.syncMeta.where('key').startsWith('v2:directory-').toArray();
+        if (pages.length > 32) {
+          pages.sort((a, b) => JSON.parse(a.value).savedAt - JSON.parse(b.value).savedAt);
+          await context.db.syncMeta.bulkDelete(
+            pages.slice(0, pages.length - 32).map((row) => row.key),
+          );
+        }
+      }
       if (
         pathname === '/v2/today' &&
         date &&
@@ -179,16 +217,69 @@ export async function readCachedV2(path: string): Promise<unknown | undefined> {
     // cursor paging and unknown filters must not silently become unfiltered lists.
     const allowed =
       pathname === '/tree/children'
-        ? ['parentFolderId']
+        ? ['parentFolderId', 'limit', 'cursor']
         : pathname === '/time-points'
           ? ['type', 'from', 'to']
           : pathname === '/time-points/placement-counts'
             ? ['type', 'from', 'to']
             : pathname === '/today'
               ? ['localDate']
-              : [];
+              : /^\/tasks\/[^/]+$/.test(pathname)
+                ? ['view']
+                : [];
     if ([...params.keys()].some((key) => !allowed.includes(key))) return undefined;
+    if (params.has('view') && params.get('view') !== 'summary') return undefined;
+    if (params.get('view') === 'summary' && /^\/tasks\/[^/]+$/.test(pathname)) {
+      const task = await context.db.tasks.get(pathname.slice(7));
+      return task && 'parentFolderId' in task && !task.deletedAt ? { task } : undefined;
+    }
     if (!complete || (await context.db.syncMeta.get('v2:bootstrap'))) {
+      const pageKey = directoryPageKey(path);
+      if (pageKey) {
+        const stored = await context.db.syncMeta.get(pageKey);
+        if (!stored) return undefined;
+        const { page } = JSON.parse(stored.value) as {
+          page: { items: TreeItemDto[]; parentFolderId: string | null; nextCursor: string | null };
+        };
+        const items: TreeItemDto[] = [];
+        for (const item of page.items) {
+          const row =
+            item.kind === 'FOLDER'
+              ? await context.db.folders.get(item.folder.id)
+              : await context.db.tasks.get(item.task.id);
+          if (!row) return undefined;
+          if (
+            row.deletedAt ||
+            !('parentFolderId' in row) ||
+            row.parentFolderId !== page.parentFolderId
+          )
+            continue;
+          items.push(
+            item.kind === 'FOLDER'
+              ? { ...item, folder: row as LocalFolder }
+              : { ...item, task: row as LocalTreeTask },
+          );
+        }
+        // Only local writes extend membership; preview/bootstrap rows do not.
+        if (!params.has('cursor')) {
+          const local = (await readLocalInTransaction(
+            context.db,
+            `/v2/tree/children?parentFolderId=${page.parentFolderId ?? 'root'}`,
+          )) as { items: TreeItemDto[] };
+          const seen = new Set(
+            items.map((item) => (item.kind === 'FOLDER' ? item.folder.id : item.task.id)),
+          );
+          for (const item of local.items) {
+            const row = item.kind === 'FOLDER' ? item.folder : item.task;
+            if ('pendingSync' in row && row.pendingSync && !seen.has(row.id)) items.push(item);
+          }
+        }
+        return { ...page, items, cached: true };
+      }
+      if (/^\/folders\/[^/]+\/path$/.test(pathname)) {
+        const stored = await context.db.syncMeta.get(`v2:directory-path:/v2${pathname}`);
+        return stored ? JSON.parse(stored.value).page : undefined;
+      }
       if (pathname !== '/today') return undefined;
       const date = params.get('localDate');
       const stored = date ? await context.db.syncMeta.get(`v2:today:${date}`) : undefined;
@@ -2515,6 +2606,43 @@ async function readV2LocalInTransaction(
         .filter((task) => visibleTask(task) && task.parentFolderId === parentFolderId)
         .map((task) => ({ kind: 'TASK' as const, task })),
     ];
+    if (params.has('limit')) {
+      const limit = Number(params.get('limit'));
+      if (!Number.isInteger(limit) || limit < 1 || limit > 200) return undefined;
+      // Local and server cursors must never cross authorities. Include the
+      // projected rows, so pending edits invalidate an in-progress local walk.
+      const signature = JSON.stringify(
+        items.map((item) => {
+          const row = item.kind === 'FOLDER' ? item.folder : item.task;
+          return [
+            row.id,
+            row.version,
+            row.rank,
+            item.kind === 'FOLDER' ? item.aggregate : item.task.status,
+          ];
+        }),
+      );
+      let first = 2166136261;
+      let second = 5381;
+      for (let index = 0; index < signature.length; index++) {
+        const code = signature.charCodeAt(index);
+        first = Math.imul(first ^ code, 16777619);
+        second = Math.imul(second, 33) ^ code;
+      }
+      const token = params.get('cursor');
+      if (token && !token.startsWith('local.')) return undefined;
+      const page = paginateDirectory(
+        items as TreeItemDto[],
+        {
+          owner: db.name.split(':').at(-1)!,
+          parent: parentFolderId,
+          revision: `${first >>> 0}:${second >>> 0}`,
+        },
+        limit,
+        token?.slice(6),
+      );
+      return { ...page, nextCursor: page.nextCursor ? `local.${page.nextCursor}` : null };
+    }
     return {
       items: items.sort((left, right) =>
         BigInt(left.kind === 'FOLDER' ? left.folder.rank : left.task.rank) <

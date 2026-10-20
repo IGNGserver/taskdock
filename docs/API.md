@@ -6,6 +6,12 @@
 
 v2 不再把 Project/Inbox/category/priority 作为产品模型。`GET /api/v2/tree/children` 返回 Folder 与 Task 的混合直接子项；Folder 的 `aggregate` 由后代 Task 派生，状态顺序为 `IN_PROGRESS → TODO → DONE`。`POST /api/v2/tree/items/move` 使用 `baseVersion`、状态快照和前后锚点保护循环、已归档目标以及并发排序冲突。
 
+目录分页：`GET /api/v2/tree/children?parentFolderId=root&limit=100`，`limit` 为 1–200；下一页携带响应的 `nextCursor`，末页为 `null`。游标绑定账户、父目录及账户版本；中途发生写入返回 HTTP 410 `SYNC_CURSOR_EXPIRED`，调用方应保留已展示内容并提供从第一页重新加载，不自动无限重试。排序键为状态组、整数 rank、类型（文件夹优先）、ID。未指定 `limit` 的旧客户端继续得到全部直接子项。
+
+`GET /api/v2/tasks/{id}?view=summary` 只返回 `{ task }`，用于状态切换后保持当前行的位置，不读取备注或关系；省略 `view` 继续返回原有详情。
+
+PostgreSQL 的目录、文件夹选择器及面包屑读取不调用全账户 `prepare()`，不读取备注、步骤或工作流关系；文件夹状态汇总仍需扫描该目录下的活动后代，不能将一级分页当成后代扫描恒定开销。面包屑与内容独立加载。分页不推进全局同步游标；客户端只缓存精确页面成员，未完整 bootstrap 时不能据此构造未读取页或宣称全目录完整。完整本地投影使用独立的 `local.` 游标，绝不发送给服务器。
+
 目录归档使用 `POST /api/v2/folders/:id/archive-tree`，响应 `ArchiveOperation`；恢复使用原 operationId，保证逐项精确恢复。归档中心通过 `GET /api/v2/archive-operations` 按顶层归档操作分组返回（含 `rootFolderTitle`、后代 Folder/Task 计数、原本已归档而恢复时需保留的计数，以及可展开的嵌套 Folder 列表）；`?includeRestored=true` 才包含已恢复操作，`GET /api/v2/archive-operations/:id` 额外返回该操作的归档 Task 明细与独立归档 Task。整树删除必须先 `POST /api/v2/folders/:id/delete-preview`，再把短时 `confirmationToken` 发送到 `DELETE /api/v2/folders/:id/tree`；预览 fingerprint 变化或令牌过期时拒绝，不物理删除关联 Note、TaskStep、Placement、Workflow Membership 或父级引用。整树删除必须在线执行；离线客户端 fail-closed 并返回 `OFFLINE_TREE_DELETE_FORBIDDEN` 与归档建议，不允许排队执行不可恢复的删除。
 
 批量顺延使用 `POST /api/v2/dates/:localDate/rollover`，只把该日期仍处于活动状态的 Placement 复制到次日，跳过已完成或已归档任务；响应 `{ createdIds, skippedTaskIds, targetDate }`。撤销使用 `POST /api/v2/rollovers/undo`，body 传 `{ placementIds }`。该操作无服务端状态，可跨进程与重启使用；离线时不排队，直接 fail-closed。

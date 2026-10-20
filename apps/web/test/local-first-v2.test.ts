@@ -25,6 +25,80 @@ afterEach(async () => {
 });
 
 describe('v2 local-first reads', () => {
+  it('reopens only exact covered directory pages during bootstrap and projects pending edits', async () => {
+    const id = uuidv7();
+    const speculative = uuidv7();
+    await db.syncMeta.put({ key: 'v2:bootstrap', value: '{"page":0}' });
+    const task = {
+      id,
+      parentFolderId: null,
+      title: 'covered',
+      status: 'TODO' as const,
+      rank: '1',
+      version: 1,
+      createdAt: '2026-10-20T00:00:00.000Z',
+      updatedAt: '2026-10-20T00:00:00.000Z',
+    };
+    await cacheResponse('/v2/tree/children?parentFolderId=root&limit=100', {
+      items: [{ kind: 'TASK', task }],
+      parentFolderId: null,
+      nextCursor: 'server-next',
+    });
+    await db.tasks.put({ ...task, id: speculative, title: 'preview only' });
+    await db.tasks.update(id, { title: 'pending edit', pendingSync: true });
+    db.close();
+    await db.open();
+    expect(await readCachedV2('/tree/children?limit=100&parentFolderId=root')).toMatchObject({
+      items: [{ task: { id, title: 'pending edit' } }],
+      nextCursor: 'server-next',
+    });
+    expect(
+      await readCachedV2('/tree/children?parentFolderId=root&limit=100&cursor=server-next'),
+    ).toBeUndefined();
+    expect(await readCachedV2('/tree/children?parentFolderId=root')).toBeUndefined();
+    expect(await db.syncMeta.get('v2:cursor')).toBeUndefined();
+    await db.tasks.delete(id);
+    expect(await readCachedV2('/tree/children?parentFolderId=root&limit=100')).toBeUndefined();
+  });
+
+  it('paginates complete local data and never sends local cursors to the server', async () => {
+    await db.syncMeta.put({ key: 'v2:cursor', value: '10' });
+    const now = '2026-10-20T00:00:00.000Z';
+    await db.tasks.bulkPut(
+      Array.from({ length: 3 }, (_, index) => ({
+        id: uuidv7(),
+        parentFolderId: null,
+        title: `task ${index}`,
+        status: 'TODO' as const,
+        rank: String(index + 1),
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+      })),
+    );
+    vi.stubGlobal('navigator', { onLine: false });
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const first = await requestV2<{ items: unknown[]; nextCursor: string }>(
+      '/tree/children?parentFolderId=root&limit=2',
+    );
+    expect(first.items).toHaveLength(2);
+    expect(first.nextCursor).toMatch(/^local\./);
+    const second = await requestV2<{ items: unknown[]; nextCursor: null }>(
+      `/tree/children?parentFolderId=root&limit=2&cursor=${encodeURIComponent(first.nextCursor)}`,
+    );
+    expect(second.items).toHaveLength(1);
+    expect(second.nextCursor).toBeNull();
+    const row = await db.tasks.toCollection().first();
+    await db.tasks.update(row!.id, { title: 'changed', version: 2 });
+    await expect(
+      requestV2(
+        `/tree/children?parentFolderId=root&limit=2&cursor=${encodeURIComponent(first.nextCursor)}`,
+      ),
+    ).rejects.toMatchObject({ code: 'SYNC_CURSOR_EXPIRED' });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('reopens an authoritative Today page before global bootstrap has completed', async () => {
     const date = '2026-10-20';
     const pointId = uuidv7();

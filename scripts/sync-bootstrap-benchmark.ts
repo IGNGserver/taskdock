@@ -3,6 +3,7 @@ import { createPool, runMigrations } from '../packages/database/src/index.js';
 import { PostgresStore } from '../apps/api/src/postgres-store.js';
 import { PostgresTreeStore } from '../apps/api/src/postgres-tree-store.js';
 import { BootstrapSnapshots } from '../apps/api/src/sync-bootstrap.js';
+import { DirectoryReads } from '../apps/api/src/directory-reads.js';
 
 // Only isolated test databases: never add benchmark data to a production Hub.
 const databaseUrl = process.env['DATABASE_URL'];
@@ -54,6 +55,18 @@ try {
   const full = await measure(() => new PostgresTreeStore(store).snapshot(owner.id));
   const preview = await measure(() => optimized.preview(owner.id, '2026-10-13', null));
   const today = await measure(() => optimized.today(owner.id, '2026-10-13'));
+  const directoryTree = new PostgresTreeStore(store);
+  directoryTree.prepare = async () => {
+    throw new Error('directory benchmark loaded full projection');
+  };
+  const directories = new DirectoryReads(directoryTree);
+  const directoryFirstPage = await measure(() => directories.children(owner.id, null, 100));
+  const firstDirectory = await directories.children(owner.id, null, 100);
+  if (firstDirectory.items.length !== 100 || !firstDirectory.nextCursor)
+    throw new Error('directory page was not bounded');
+  const directoryNextPage = await measure(() =>
+    directories.children(owner.id, null, 100, firstDirectory.nextCursor!),
+  );
   if ((await optimized.today(owner.id, '2026-10-13')).point !== null)
     throw new Error('read-only Today created an unexpected date');
   const started = performance.now();
@@ -94,6 +107,8 @@ try {
         fullSnapshot: full,
         firstPreview: preview,
         emptyTodayWithoutNotes: today,
+        directoryFirstPage,
+        directoryNextPage,
         bootstrapMs,
         unchangedBootstrapReuseMs: reuseMs,
         focusedEdit,
