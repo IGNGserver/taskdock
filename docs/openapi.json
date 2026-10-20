@@ -998,6 +998,14 @@
         }
       ],
       "get": {
+        "parameters": [
+          {
+            "name": "view",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["summary"] },
+            "description": "Optional summary returns only { task }, without notes or relations."
+          }
+        ],
         "responses": {
           "200": {
             "description": "TaskDock v2 GET /v2/tasks/{id}"
@@ -1294,9 +1302,35 @@
         }
       ],
       "get": {
+        "description": "Owner-scoped direct children, ordered by status group, numeric rank, kind (folder first), then id. Omit limit for legacy unpaged reads. Cursors are bound to owner, parent and revision; writes expire existing walks.",
+        "parameters": [
+          {
+            "name": "parentFolderId",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Folder UUID or root (default)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 200 }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 1024 },
+            "description": "Opaque nextCursor from the preceding page. Requires limit."
+          }
+        ],
         "responses": {
           "200": {
-            "description": "TaskDock v2 GET /v2/tree/children"
+            "description": "items, parentFolderId, nextCursor (null at end). Does not include notes or establish global sync coverage."
+          },
+          "400": {
+            "description": "Invalid page limit or cursor, including cross-owner/cross-directory cursors."
+          },
+          "410": {
+            "description": "SYNC_CURSOR_EXPIRED: account data changed; restart from the first page."
           }
         }
       }

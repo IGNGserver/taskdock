@@ -31,6 +31,7 @@ import {
 } from '@devtodo/contracts';
 import { createPool } from '@devtodo/database';
 import { DomainError } from '@devtodo/domain';
+import { DirectoryReads } from './directory-reads.js';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
@@ -1011,6 +1012,7 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
   app.register(
     async (api) => {
       const bootstrap = new BootstrapSnapshots(tree);
+      const directories = new DirectoryReads(tree);
       bootstrap.startMaintenance((error) =>
         api.log.error({ err: error, event: 'sync.bootstrap.cleanup' }),
       );
@@ -1025,6 +1027,12 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
           request.auth &&
           !request.url.startsWith('/api/v2/sync/') &&
           !(request.method === 'GET' && /^\/api\/v2\/today(?:\?.*)?$/.test(request.url)) &&
+          !(
+            request.method === 'GET' &&
+            /^\/api\/v2\/(?:tree\/children|folders|folders\/[^/?]+\/path)(?:\?.*)?$/.test(
+              request.url,
+            )
+          ) &&
           !(request.method === 'GET' && /^\/api\/v2\/tasks\/[^/?]+(?:\?.*)?$/.test(request.url)) &&
           !(
             request.method === 'PATCH' &&
@@ -1065,26 +1073,28 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
         const query = z
           .object({
             parentFolderId: z.union([uuidSchema, z.literal('root')]).optional(),
+            limit: z.coerce.number().int().min(1).max(200).optional(),
+            cursor: z.string().min(1).max(1024).optional(),
           })
+          .refine((value) => !value.cursor || value.limit !== undefined, '分页游标必须指定 limit')
           .parse(request.query);
-        return {
-          items: tree.listTreeChildren(
-            request.auth!.ownerId,
-            query.parentFolderId === undefined || query.parentFolderId === 'root'
-              ? null
-              : query.parentFolderId,
-          ),
-          parentFolderId: query.parentFolderId === 'root' ? null : (query.parentFolderId ?? null),
-        };
+        return directories.children(
+          request.auth!.ownerId,
+          query.parentFolderId === undefined || query.parentFolderId === 'root'
+            ? null
+            : query.parentFolderId,
+          query.limit,
+          query.cursor,
+        );
       });
       api.get('/folders/:id', async (request) =>
         tree.getFolder(request.auth!.ownerId, paramId(request)),
       );
       api.get('/folders', async (request) => ({
-        items: tree.listFolders(request.auth!.ownerId),
+        items: await directories.folders(request.auth!.ownerId),
       }));
       api.get('/folders/:id/path', async (request) => ({
-        items: tree.getFolderPath(request.auth!.ownerId, paramId(request)),
+        items: await directories.path(request.auth!.ownerId, paramId(request)),
       }));
 
       api.post('/folders', async (request, reply) => {
@@ -1177,9 +1187,12 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
         );
         return reply.code(201).send(result);
       });
-      api.get('/tasks/:id', async (request) =>
-        bootstrap.detail(request.auth!.ownerId, paramId(request)),
-      );
+      api.get('/tasks/:id', async (request) => {
+        const query = z.object({ view: z.literal('summary').optional() }).parse(request.query);
+        return query.view === 'summary'
+          ? directories.task(request.auth!.ownerId, paramId(request))
+          : bootstrap.detail(request.auth!.ownerId, paramId(request));
+      });
       api.patch('/tasks/:id', async (request) => {
         const body = z
           .object({

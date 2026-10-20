@@ -630,6 +630,9 @@ async function ensureNativeStorage(): Promise<void> {
 
 export async function requestV2<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase();
+  const localDirectoryCursor =
+    path.startsWith('/tree/children?') &&
+    new URLSearchParams(path.split('?')[1]).get('cursor')?.startsWith('local.');
   // Mutation previews, sync and auth must always consult the authority.
   if (method === 'GET' && !path.startsWith('/sync/') && !path.includes('delete-preview')) {
     const generation = localCacheGeneration();
@@ -638,7 +641,7 @@ export async function requestV2<T>(path: string, init: RequestInit = {}): Promis
     if (generation !== localCacheGeneration()) throw new DOMException('会话已变化', 'AbortError');
     if (local !== undefined) {
       const key = `${generation}:${path}`;
-      if (navigator.onLine && !localRevalidations.has(key)) {
+      if (navigator.onLine && !localDirectoryCursor && !localRevalidations.has(key)) {
         const revalidation = requestNetwork<T>(path, init, true, undefined, false, API_V2_BASE)
           .then(async () => {
             const updated = await readCachedV2(path);
@@ -656,6 +659,13 @@ export async function requestV2<T>(path: string, init: RequestInit = {}): Promis
       return local as T;
     }
   }
+  if (localDirectoryCursor)
+    throw new ApiError(
+      'SYNC_CURSOR_EXPIRED',
+      '本地目录已变化，请重新加载后继续',
+      { scope: 'directory' },
+      410,
+    );
   return requestNetwork<T>(path, init, true, undefined, true, API_V2_BASE);
 }
 

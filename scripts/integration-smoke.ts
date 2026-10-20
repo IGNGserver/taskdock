@@ -416,6 +416,55 @@ async function main(): Promise<void> {
       'preview loaded large notes',
     );
     const directDetail = await bootstrap.detail(owner.id, v2TaskId);
+    const { DirectoryReads } = await import('../apps/api/src/directory-reads.js');
+    const directoryStore = new PostgresTreeStore(restartStore);
+    directoryStore.prepare = async () => {
+      throw new Error('directory read loaded the full owner projection');
+    };
+    const directories = new DirectoryReads(directoryStore);
+    const sqlChildren = await directories.children(owner.id, v2FolderId, 1);
+    assert(
+      isDeepStrictEqual(
+        (await directories.task(owner.id, v2TaskId)).task,
+        reloadedV2Store.getTask(owner.id, v2TaskId),
+      ),
+      'SQL summary does not match the task DTO',
+    );
+    assert(
+      sqlChildren.items.length === 1 &&
+        sqlChildren.items[0]?.kind === 'TASK' &&
+        sqlChildren.items[0].task.id === v2TaskId,
+      'direct directory lost its task',
+    );
+    assert(
+      isDeepStrictEqual(sqlChildren.items, reloadedV2Store.listTreeChildren(owner.id, v2FolderId)),
+      'direct SQL DTO does not match the domain projection',
+    );
+    const sqlRoot = await directories.children(owner.id, null);
+    const domainRoot = reloadedV2Store.listTreeChildren(owner.id, null);
+    assert(
+      isDeepStrictEqual(sqlRoot.items, domainRoot),
+      'SQL mixed directory ordering or aggregates differ from domain',
+    );
+    const walked = [];
+    let directoryToken: string | undefined;
+    do {
+      const page = await directories.children(owner.id, null, 1, directoryToken);
+      walked.push(...page.items);
+      directoryToken = page.nextCursor ?? undefined;
+    } while (directoryToken);
+    assert(
+      isDeepStrictEqual(walked, domainRoot),
+      'SQL keyset pagination skipped or duplicated rows',
+    );
+    assert(
+      (await directories.path(owner.id, v2FolderId)).at(-1)?.id === v2FolderId,
+      'SQL breadcrumb missing',
+    );
+    assert(
+      (await directories.folders(owner.id)).some((row) => row.id === v2FolderId),
+      'SQL folder picker missing',
+    );
     assert(
       directDetail.task.id === v2TaskId && directDetail.note.contentMarkdown === '',
       'direct task detail did not match the authoritative task',
@@ -437,7 +486,13 @@ async function main(): Promise<void> {
       occurredAt: new Date().toISOString(),
       payload: { title: 'focused update' },
     };
+    const beforeEditPage = await directories.children(owner.id, null, 1);
+    assert(beforeEditPage.nextCursor, 'directory fixture must contain multiple root rows');
     const edited = await focusedStore.applyMutationIdempotent(owner.id, clientId, focusedEdit);
+    await expectDomainError(
+      () => directories.children(owner.id, null, 1, beforeEditPage.nextCursor!),
+      'SYNC_CURSOR_EXPIRED',
+    );
     assert((edited.result as { version: number }).version === 2, 'focused edit version incorrect');
     const replayed = await focusedStore.applyMutationIdempotent(owner.id, clientId, focusedEdit);
     assert(replayed.replayed, 'focused edit lost its idempotency receipt');
@@ -623,3 +678,4 @@ void main().catch((error: unknown) => {
   console.error(error);
   process.exitCode = 1;
 });
+import { isDeepStrictEqual } from 'node:util';

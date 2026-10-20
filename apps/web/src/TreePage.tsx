@@ -4,6 +4,7 @@ import type {
   TaskStatus,
   TreeItemDto,
   TreeTaskDto,
+  DirectoryPage,
 } from '@devtodo/contracts';
 import {
   Fragment,
@@ -182,6 +183,15 @@ export function TreePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [pathError, setPathError] = useState('');
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [moreBusy, setMoreBusy] = useState(false);
+  const [moreError, setMoreError] = useState('');
+  const [cursorExpired, setCursorExpired] = useState(false);
+  const [cachedPage, setCachedPage] = useState(false);
+  const pagesLoaded = useRef(1);
+  const moreLock = useRef(false);
+  const readController = useRef<AbortController | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newFolderTitle, setNewFolderTitle] = useState('');
   const [moveSession, setMoveSession] = useState<MoveSession | null>(null);
@@ -222,6 +232,7 @@ export function TreePage() {
   const [statusOverrides, setStatusOverrides] = useState<Record<string, TreeTaskDto>>({});
   const [groupPins, setGroupPins] = useState<Record<string, TaskStatus>>({});
   const [orderLock, setOrderLock] = useState<string[] | null>(null);
+  const pinnedTasks = useRef(new Map<string, TreeTaskDto>());
   const loadedFolder = useRef<string | null | undefined>(undefined);
   const loadSequence = useRef(0);
 
@@ -229,6 +240,21 @@ export function TreePage() {
     async (options: { keepPins?: boolean } = {}) => {
       const sequence = ++loadSequence.current;
       const entering = loadedFolder.current !== folderId;
+      readController.current?.abort();
+      const controller = new AbortController();
+      readController.current = controller;
+      moreLock.current = false;
+      setMoreBusy(false);
+      setMoreError('');
+      setPathError('');
+      setCursorExpired(false);
+      if (entering) {
+        pinnedTasks.current.clear();
+        pagesLoaded.current = 1;
+        setItems([]);
+        setPath([]);
+        setNextCursor(null);
+      }
       // Only the background sync triggered by our own status edit may keep the
       // row pinned; arriving in the directory always shows the fresh grouping.
       const keepPins = options.keepPins === true && !entering;
@@ -240,22 +266,65 @@ export function TreePage() {
         const query = folderId
           ? `?parentFolderId=${encodeURIComponent(folderId)}`
           : '?parentFolderId=root';
-        const [children, nextPath] = await Promise.all([
-          requestV2<{ items: TreeItemDto[] }>(`/tree/children${query}`),
+        // Breadcrumbs do not hold the first page hostage on a slow link.
+        void (
           folderId
             ? requestV2<{ items: Array<Pick<FolderDto, 'id' | 'title'>> }>(
                 `/folders/${folderId}/path`,
+                { signal: controller.signal },
               )
-            : Promise.resolve({ items: [] }),
-        ]);
+            : Promise.resolve({ items: [] })
+        )
+          .then((result) => {
+            if (sequence === loadSequence.current) setPath(result.items);
+          })
+          .catch((cause) => {
+            if (sequence === loadSequence.current && !controller.signal.aborted)
+              setPathError(errorMessage(cause, '目录路径加载失败'));
+          });
+        const targetPages = entering ? 1 : pagesLoaded.current;
+        let children = await requestV2<DirectoryPage>(`/tree/children${query}&limit=100`, {
+          signal: controller.signal,
+        });
+        const rows = [...children.items];
+        let count = 1;
+        while (count < targetPages && children.nextCursor) {
+          children = await requestV2<DirectoryPage>(
+            `/tree/children${query}&limit=100&cursor=${encodeURIComponent(children.nextCursor)}`,
+            { signal: controller.signal },
+          );
+          rows.push(...children.items);
+          count++;
+        }
+        // A status edit can move a pinned row beyond the loaded page boundary.
+        // Re-read just those edited tasks, never fetch every unseen page to find it.
+        if (keepPins) {
+          const present = new Set(rows.map(treeItemId));
+          for (const id of pinnedTasks.current.keys()) {
+            if (present.has(id)) continue;
+            try {
+              const detail = await requestV2<Pick<TaskDetailV2Dto, 'task'>>(
+                `/tasks/${id}?view=summary`,
+                { signal: controller.signal },
+              );
+              if (detail.task.parentFolderId === folderId && !detail.task.deletedAt)
+                rows.push({ kind: 'TASK', task: detail.task });
+            } catch (cause) {
+              if (!(cause instanceof ApiError && cause.status === 404)) throw cause;
+            }
+          }
+        }
         if (sequence !== loadSequence.current) return;
         loadedFolder.current = folderId;
-        setItems(children.items);
+        setItems(rows);
+        setNextCursor(children.nextCursor ?? null);
+        setCachedPage(children.cached === true);
+        pagesLoaded.current = count;
         // A fresh read is authoritative for the circle.
         setStatusOverrides({});
         if (keepPins) {
           // Drop rows that disappeared; anything still on screen keeps its place.
-          const alive = children.items.map(treeItemId);
+          const alive = rows.map(treeItemId);
           setGroupPins((pins) => {
             if (Object.keys(pins).length === 0) return pins;
             const survivors = new Set(alive);
@@ -270,10 +339,10 @@ export function TreePage() {
             return lock.filter((id) => survivors.has(id));
           });
         } else {
+          pinnedTasks.current.clear();
           setGroupPins({});
           setOrderLock(null);
         }
-        setPath(nextPath.items);
         // Remember the folder the user is actually browsing so later quick
         // captures can resolve "most recent valid folder".
         recordLastFolderId(folderId);
@@ -287,9 +356,44 @@ export function TreePage() {
     [folderId],
   );
 
+  const cancelReads = useCallback(() => {
+    ++loadSequence.current;
+    readController.current?.abort();
+  }, []);
   useEffect(() => {
     void load();
-  }, [load]);
+    return cancelReads;
+  }, [load, cancelReads]);
+  const loadMore = async () => {
+    if (!nextCursor || moreLock.current) return;
+    moreLock.current = true;
+    setMoreBusy(true);
+    setMoreError('');
+    const sequence = loadSequence.current;
+    try {
+      const page = await requestV2<DirectoryPage>(
+        `/tree/children?parentFolderId=${folderId ?? 'root'}&limit=100&cursor=${encodeURIComponent(nextCursor)}`,
+        { signal: readController.current?.signal },
+      );
+      if (sequence !== loadSequence.current) return;
+      setItems((current) => {
+        const seen = new Set(current.map(treeItemId));
+        return [...current, ...page.items.filter((item) => !seen.has(treeItemId(item)))];
+      });
+      setNextCursor(page.nextCursor ?? null);
+      if (page.cached) setCachedPage(true);
+      pagesLoaded.current++;
+    } catch (cause) {
+      if (sequence !== loadSequence.current) return;
+      setMoreError(errorMessage(cause, '下一页加载失败，已加载内容仍可使用'));
+      setCursorExpired(cause instanceof ApiError && cause.code === 'SYNC_CURSOR_EXPIRED');
+    } finally {
+      if (sequence === loadSequence.current) {
+        moreLock.current = false;
+        setMoreBusy(false);
+      }
+    }
+  };
   useEffect(() => {
     setFolderId(params.folderId ?? null);
   }, [params.folderId]);
@@ -300,6 +404,42 @@ export function TreePage() {
     [navigate],
   );
   const hasFocusedTask = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !focusTaskId ||
+      loading ||
+      loadedFolder.current !== folderId ||
+      items.some((item) => treeItemId(item) === focusTaskId)
+    )
+      return;
+    const sequence = loadSequence.current;
+    let cancelled = false;
+    // A search/deep link can target a task beyond the first page. Locate only
+    // that row instead of downloading every intervening page (or its note).
+    void requestV2<Pick<TaskDetailV2Dto, 'task'>>(
+      `/tasks/${encodeURIComponent(focusTaskId)}?view=summary`,
+      { signal: readController.current?.signal },
+    )
+      .then(({ task }) => {
+        if (
+          !cancelled &&
+          sequence === loadSequence.current &&
+          task.parentFolderId === folderId &&
+          !task.deletedAt
+        )
+          setItems((current) =>
+            current.some((item) => treeItemId(item) === task.id)
+              ? current
+              : [...current, { kind: 'TASK', task }],
+          );
+      })
+      .catch(() => {
+        /* Keep the directory usable when the target was deleted or moved. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [focusTaskId, folderId, items, loading]);
   useEffect(() => {
     if (focusTaskId && hasFocusedTask.current !== focusTaskId) {
       const element = document.getElementById(`task-${focusTaskId}`);
@@ -500,6 +640,13 @@ export function TreePage() {
         status,
         baseVersion: current.version,
       })) as Partial<TreeTaskDto> | null;
+      pinnedTasks.current.set(task.id, {
+        ...current,
+        ...response,
+        id: task.id,
+        status: response?.status ?? status,
+        version: response?.version ?? current.version + 1,
+      });
       // Keep the row exactly where it is: the circle, its label and the version
       // we send next update locally, while the grouping pin remembers the status
       // this directory was loaded with.
@@ -964,9 +1111,9 @@ export function TreePage() {
       </form>
       <div className="tree-list-toolbar">
         <TextField
-          label="筛选当前目录"
+          label={nextCursor ? '筛选已加载项' : '筛选当前目录'}
           hideLabel
-          placeholder="筛选当前目录…"
+          placeholder={nextCursor ? '筛选已加载项…' : '筛选当前目录…'}
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
           leadingIcon={<Search size={16} />}
@@ -1042,6 +1189,11 @@ export function TreePage() {
           {loadError}
         </Alert>
       )}
+      {pathError && (
+        <Alert tone="error" title="目录路径加载失败">
+          {pathError}
+        </Alert>
+      )}
       {loading ? (
         <LoadingState label="正在加载目录" />
       ) : loadError && loadedFolder.current !== folderId ? null : visibleGroups.length ? (
@@ -1072,6 +1224,42 @@ export function TreePage() {
           title={filter ? '没有匹配项' : '文件夹为空'}
           description={filter ? '换个关键词，或清空筛选。' : '在上方输入任务，或新建一个文件夹。'}
         />
+      )}
+      {!loading && cachedPage && (
+        <p role="status">当前为已缓存分页，文件夹汇总为上次联网结果；未加载页仍需联网。</p>
+      )}
+      {!loading && nextCursor && (
+        <div className="tree-list-toolbar">
+          <span role="status">已加载 {items.length} 项，筛选和全选仅作用于已加载项。</span>
+          <Button
+            variant="tonal"
+            disabled={moreBusy || cursorExpired}
+            onClick={() => void loadMore()}
+          >
+            {moreBusy ? '加载中…' : '加载更多'}
+          </Button>
+        </div>
+      )}
+      {moreError && (
+        <Alert
+          tone="error"
+          title="下一页加载失败"
+          action={
+            cursorExpired ? (
+              <Button
+                variant="text"
+                onClick={() => {
+                  pagesLoaded.current = 1;
+                  void load();
+                }}
+              >
+                重新加载目录
+              </Button>
+            ) : undefined
+          }
+        >
+          {moreError}
+        </Alert>
       )}
       {moveUndo && (
         <Snackbar
