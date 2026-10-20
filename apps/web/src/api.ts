@@ -273,7 +273,11 @@ async function requestNetworkBound<T>(
   else headers.delete('Authorization');
   const method = (init.method ?? 'GET').toUpperCase();
   const cachePath = apiBase === API_V2_BASE ? `/v2${path}` : path;
-  const writing = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+  // Authentication and immutable bootstrap use POST without editing product
+  // rows. They must not invalidate a cold page read running alongside them.
+  const controlPath =
+    path.startsWith('/sync/') || path.startsWith('/auth/') || path.startsWith('/bootstrap');
+  const writing = !['GET', 'HEAD', 'OPTIONS'].includes(method) && !controlPath;
   const readRevision = mutationRevision;
   if (writing) mutationRevision++;
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
@@ -334,7 +338,7 @@ async function requestNetworkBound<T>(
   }
   const value = (await response.json()) as T;
   if (generation !== localCacheGeneration()) throw new DOMException('会话已变化', 'AbortError');
-  if (!writing && readRevision !== mutationRevision && !path.startsWith('/sync/'))
+  if (!writing && readRevision !== mutationRevision && !controlPath)
     throw new DOMException('读取期间数据已变化', 'AbortError');
   if (writing) mutationRevision++;
   if (!path.startsWith('/sync/')) await cacheResponse(cachePath, value);

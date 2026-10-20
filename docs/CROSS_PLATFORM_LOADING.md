@@ -63,7 +63,7 @@ pnpm exec tsx scripts/loading-baseline.ts https://taskdock.lvziwang.top http://<
   Android 持续跟踪到正文完成，超时/取消会取消实际传输；基于多次实测降频，并在分页间让路可见页。
 - 已实现：Today 从串行写入加三路查询改为只读聚合；PostgreSQL 定向查询日期、安排与任务，
   不读备注、不建立账户全量投影。仅在用户添加任务时创建日期。
-- 本地快速验证：lint、Web/API/scripts noEmit typecheck、184 项单测通过；
+- 本地快速验证：lint、Web/API/scripts noEmit typecheck、185 项单测通过；
   Chromium 模拟接口回归 41 项通过（8 项真实后端/PWA 场景不适用而跳过）。
   专门验证预压缩插件运行了受影响的 Web 构建；不在 NAS 写依赖或产物。
   全仓构建、真实 PostgreSQL、生产 PWA 与 Android 验证以 PR 的 CI 结果为准。

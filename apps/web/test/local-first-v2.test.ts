@@ -20,6 +20,25 @@ afterEach(async () => {
 });
 
 describe('v2 local-first reads', () => {
+  it('does not invalidate a cold page read when immutable bootstrap begins in parallel', async () => {
+    let finish!: (response: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url.includes('/sync/bootstrap')
+          ? Promise.resolve(new Response('{"snapshotId":"immutable"}'))
+          : new Promise<Response>((resolve) => {
+              finish = resolve;
+            }),
+      ),
+    );
+    const pending = requestV2('/today?localDate=2026-10-20');
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    await requestV2('/sync/bootstrap', { method: 'POST', body: '{"localDate":"2026-10-20"}' });
+    finish(new Response('{"point":null,"items":[]}'));
+    expect(await pending).toEqual({ point: null, items: [] });
+  });
+
   it('invalidates derived reads after acknowledged deletion without moving the sync cursor', async () => {
     const id = uuidv7();
     await db.syncMeta.put({ key: 'v2:cursor', value: '9' });
