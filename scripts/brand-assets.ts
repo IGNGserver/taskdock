@@ -250,12 +250,23 @@ async function main(): Promise<void> {
   await writeBinary(join(webPublic, 'pwa-maskable-192.png'), resizedIcon(192, 192, 0.65));
   await writeBinary(join(webPublic, 'pwa-maskable-512.png'), resizedIcon(512, 512, 0.65));
 
-  // Apple touch icons with solid background
+  // Apple touch icons with solid background. Safari/iOS cache a web clip icon
+  // against its URL for the lifetime of the installed app, so the icons
+  // referenced by index.html live under /icons/ (a new URL space since the
+  // original installs). The root-level copies stay in place for Safari's
+  // automatic /apple-touch-icon.png probe and older service workers.
   await writeBinary(join(webPublic, 'apple-touch-icon.png'), resizedIcon(180, 180));
   await writeBinary(join(webPublic, 'apple-touch-icon-180x180.png'), resizedIcon(180, 180));
   await writeBinary(join(webPublic, 'apple-touch-icon-167x167.png'), resizedIcon(167, 167));
   await writeBinary(join(webPublic, 'apple-touch-icon-152x152.png'), resizedIcon(152, 152));
   await writeBinary(join(webPublic, 'apple-touch-icon-120x120.png'), resizedIcon(120, 120));
+
+  const appleTouchIcons = join(webPublic, 'icons');
+  await writeBinary(join(appleTouchIcons, 'apple-touch-icon.png'), resizedIcon(180, 180));
+  await writeBinary(join(appleTouchIcons, 'apple-touch-icon-180x180.png'), resizedIcon(180, 180));
+  await writeBinary(join(appleTouchIcons, 'apple-touch-icon-167x167.png'), resizedIcon(167, 167));
+  await writeBinary(join(appleTouchIcons, 'apple-touch-icon-152x152.png'), resizedIcon(152, 152));
+  await writeBinary(join(appleTouchIcons, 'apple-touch-icon-120x120.png'), resizedIcon(120, 120));
 
   await writeBinary(join(webPublic, 'brand', 'taskdock-icon.png'), resized(512, 512));
 
