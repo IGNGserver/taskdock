@@ -1,4 +1,4 @@
-import { Component, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 /** A missing/offline deployment chunk must not take the entire workspace down. */
 export class LazyPageBoundary extends Component<
@@ -8,6 +8,9 @@ export class LazyPageBoundary extends Component<
   override state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
+  }
+  override componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error('TaskDock page chunk failed', error, info.componentStack);
   }
   override componentDidUpdate(previous: Readonly<{ children: ReactNode; resetKey: string }>) {
     if (this.state.failed && previous.resetKey !== this.props.resetKey)

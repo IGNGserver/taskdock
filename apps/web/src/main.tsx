@@ -22,6 +22,7 @@ import './styles/responsive.css';
 import './styles/workspace.css';
 import { App } from './App.js';
 import { AuthProvider } from './auth.js';
+import { ErrorBoundary, RootErrorFallback } from './components/error-boundary.js';
 import { FolderProvider } from './folder-context.js';
 import { installTheme } from './theme.js';
 import { installMobileViewport } from './mobile-viewport.js';
@@ -32,12 +33,14 @@ if (import.meta.hot) import.meta.hot.dispose(disposeMobileViewport);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <FolderProvider>
-          <App />
-        </FolderProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary fallback={(error) => <RootErrorFallback error={error} />}>
+      <BrowserRouter>
+        <AuthProvider>
+          <FolderProvider>
+            <App />
+          </FolderProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

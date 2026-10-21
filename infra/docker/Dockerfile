@@ -13,6 +13,11 @@ RUN pnpm -r --if-present build
 FROM node:24.18.0-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+# Release builds inject these so /version can identify the exact bundle and
+# diagnose a stale index/chunk pair in the field. Local builds keep "local".
+ARG COMMIT_SHA=local
+ARG BUILD_TIME=
+ENV COMMIT_SHA=$COMMIT_SHA BUILD_TIME=$BUILD_TIME
 RUN corepack enable
 COPY --from=build /workspace/package.json /workspace/pnpm-lock.yaml /workspace/pnpm-workspace.yaml /workspace/.npmrc ./
 COPY --from=build /workspace/apps ./apps

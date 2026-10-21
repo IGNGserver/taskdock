@@ -88,7 +88,7 @@ export function paginateDirectory(
     parentFolderId: scope.parent,
     nextCursor:
       remaining.length > limit
-        ? encodeDirectoryCursor({ ...scope, ...directoryKey(page.at(-1)!) })
+        ? encodeDirectoryCursor({ ...scope, ...directoryKey(page[page.length - 1]!) })
         : null,
   };
 }

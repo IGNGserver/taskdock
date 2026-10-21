@@ -335,6 +335,12 @@ test('an open row menu is never painted under the following task rows', async ({
 
   await session.login();
   await page.goto(`/time/events/${event.id}`);
+  // Wait for the auth/route transition and the initial sync to settle before
+  // opening the row menu. CI can otherwise click a freshly mounted row while
+  // the shell is still swapping screens, or the menu is closed by the late
+  // `devtodo:data-changed` reload.
+  await expect(page.locator('.loading-screen')).toHaveCount(0);
+  await page.waitForLoadState('networkidle');
   await page.getByRole('button', { name: '安排操作' }).first().click();
   await expect(page.locator('.m3e-menu')).toBeVisible();
 

@@ -32,6 +32,16 @@ describe('static delivery cache contract', () => {
       expect((await app.inject('/')).headers['cache-control']).toContain('must-revalidate');
       expect((await app.inject('/sw.js')).headers['cache-control']).toContain('must-revalidate');
       expect((await app.inject('/today')).headers['cache-control']).toContain('must-revalidate');
+      // A missing hashed chunk must not silently become the SPA shell: Safari
+      // refuses to execute HTML as a module and the task detail chunk dies.
+      const missingAsset = await app.inject('/assets/missing-DEADBEEF.js');
+      expect(missingAsset.statusCode).toBe(404);
+      expect(missingAsset.headers['content-type']).toContain('application/json');
+      const missingImage = await app.inject('/brand/missing.png');
+      expect(missingImage.statusCode).toBe(404);
+      const spaRoute = await app.inject('/tree/some-folder');
+      expect(spaRoute.statusCode).toBe(200);
+      expect(spaRoute.body).toContain('<div>TaskDock</div>');
       const api = await app.inject('/api/v2/today?localDate=2026-10-20');
       expect(api.statusCode).toBe(401);
       expect(api.headers['cache-control']).toBe('private, no-store');
