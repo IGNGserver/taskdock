@@ -20,17 +20,30 @@ import com.devtodo.app.ui.components.LocalSyncStatus
 import com.devtodo.app.ui.navigation.Screen
 import com.devtodo.app.ui.screens.*
 import com.devtodo.app.ui.theme.TaskDockMotion
+import com.devtodo.app.widget.WidgetDestination
+import com.devtodo.app.widget.WidgetNavigation
+import com.devtodo.app.widget.WidgetUpdater
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.yield
 
 @Composable
 fun TaskDockApp(
     viewModel: MainViewModel,
     navController: NavHostController = rememberNavController(),
+    widgetNavigation: StateFlow<WidgetNavigation?>? = null,
+    onWidgetNavigationHandled: () -> Unit = {},
 ) {
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
     val loggedIn by viewModel.authenticated.collectAsStateWithLifecycle()
+    val navigationFlow = remember(widgetNavigation) {
+        widgetNavigation ?: MutableStateFlow<WidgetNavigation?>(null)
+    }
+    val widgetNav by navigationFlow.collectAsStateWithLifecycle()
+    var handledWidgetRequest by rememberSaveable { mutableLongStateOf(0L) }
     val pageKey = when (currentRoute) {
         Screen.Tree.route -> "directory:root"
         Screen.TreeFolder.route -> "directory:${backStack?.arguments?.getString("folderId")}"
@@ -127,6 +140,43 @@ fun TaskDockApp(
         } else if (!loggedIn && currentRoute != Screen.Login.route) {
             navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
         }
+    }
+
+    // A widget tap can arrive before the activity is authenticated. Keep the
+    // request pending until the login destination has settled, then navigate
+    // on top of the normal Tree start destination.
+    LaunchedEffect(loggedIn, currentRoute, widgetNav?.requestId) {
+        val request = widgetNav ?: return@LaunchedEffect
+        if (!loggedIn || currentRoute == null || currentRoute == Screen.Login.route) return@LaunchedEffect
+        if (request.requestId <= handledWidgetRequest) return@LaunchedEffect
+        yield()
+        when (request.destination) {
+            WidgetDestination.TODAY -> {
+                navController.navigate(Screen.Today.route) { launchSingleTop = true }
+            }
+            WidgetDestination.TASK -> {
+                val taskId = request.taskId
+                if (taskId.isNullOrBlank()) {
+                    navController.navigate(Screen.Today.route) { launchSingleTop = true }
+                } else {
+                    navController.navigate(Screen.TaskDetail.createRoute(taskId)) {
+                        launchSingleTop = true
+                    }
+                }
+            }
+            WidgetDestination.FOLDER -> {
+                val folderId = request.folderId
+                if (folderId.isNullOrBlank()) {
+                    navController.navigate(Screen.Tree.route) { launchSingleTop = true }
+                } else {
+                    navController.navigate(Screen.TreeFolder.createRoute(folderId)) {
+                        launchSingleTop = true
+                    }
+                }
+            }
+        }
+        handledWidgetRequest = request.requestId
+        onWidgetNavigationHandled()
     }
 
     CompositionLocalProvider(LocalSyncStatus provides {
@@ -322,6 +372,7 @@ fun TaskDockApp(
                         onLogout = {
                             viewModel.onLoggedOut()
                             viewModel.authManager.clearSession()
+                            WidgetUpdater.refreshAll(viewModel.authManager.appContext)
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(0) { inclusive = true }
                             }

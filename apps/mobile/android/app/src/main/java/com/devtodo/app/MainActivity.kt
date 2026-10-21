@@ -1,6 +1,7 @@
 package com.devtodo.app
 
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -16,11 +17,19 @@ import com.devtodo.app.ui.TaskDockApp
 import com.devtodo.app.ui.screens.MainViewModel
 import com.devtodo.app.ui.screens.MainViewModelFactory
 import com.devtodo.app.ui.theme.DevTodoTheme
+import com.devtodo.app.widget.WidgetIntents
+import com.devtodo.app.widget.WidgetNavigation
+import com.devtodo.app.widget.WidgetPreviewPublisher
+import com.devtodo.app.widget.WidgetScheduler
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels {
         MainViewModelFactory(applicationContext)
     }
+    private val widgetNavigation = MutableStateFlow<WidgetNavigation?>(null)
     private lateinit var connectivityManager: ConnectivityManager
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
@@ -40,6 +49,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         registerNetworkCallback()
+        publishWidgetNavigation(intent)
         setContent {
             val themeMode by viewModel.themeMode.collectAsState()
             val dynamicColor by viewModel.dynamicColor.collectAsState()
@@ -49,14 +59,36 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = dynamicColor,
                 pureBlack = pureBlack
             ) {
-                TaskDockApp(viewModel = viewModel)
+                TaskDockApp(
+                    viewModel = viewModel,
+                    widgetNavigation = widgetNavigation,
+                    onWidgetNavigationHandled = { widgetNavigation.value = null },
+                )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        publishWidgetNavigation(intent)
+    }
+
+    private fun publishWidgetNavigation(intent: Intent?) {
+        val navigation = WidgetIntents.navigationFrom(intent) ?: return
+        // Consume the action so an activity recreation for a configuration
+        // change does not replay a widget navigation the user already saw.
+        intent?.action = null
+        widgetNavigation.value = navigation
     }
 
     override fun onStart() {
         super.onStart()
         viewModel.onAppForeground()
+        lifecycleScope.launch {
+            WidgetScheduler.ensureScheduled(applicationContext)
+            WidgetPreviewPublisher.publishIfDue(applicationContext)
+        }
     }
 
     override fun onDestroy() {

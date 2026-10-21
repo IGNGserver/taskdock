@@ -1,6 +1,7 @@
 package com.devtodo.app.ui.screens
 
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -22,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,6 +36,8 @@ import com.devtodo.app.ui.components.RowAction
 import com.devtodo.app.ui.components.WorkspaceScaffold
 import com.devtodo.app.ui.theme.TaskDockShapes
 import com.devtodo.app.ui.theme.ThemeMode
+import com.devtodo.app.widget.WidgetPin
+import com.devtodo.app.widget.WidgetUpdater
 
 /**
  * Material 3 Expressive Settings Screen.
@@ -58,6 +62,16 @@ fun SettingsScreen(
     val pending by viewModel.pendingOutboxItems.collectAsStateWithLifecycle()
     val conflicts by viewModel.unresolvedConflicts.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val pinWidget: (Boolean) -> Unit = { requested ->
+        if (!requested) {
+            Toast.makeText(
+                context,
+                "当前启动器不支持从应用内添加，请长按桌面空白处添加 TaskDock 组件",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
 
     var showHub by rememberSaveable { mutableStateOf(false) }
     var hub by rememberSaveable { mutableStateOf(viewModel.authManager.hubOrigin) }
@@ -67,6 +81,9 @@ fun SettingsScreen(
     var selectedConflict by remember { mutableStateOf<ConflictEntity?>(null) }
     var queue by rememberSaveable { mutableStateOf(false) }
     var showTimezone by rememberSaveable { mutableStateOf(false) }
+    var hideWidgetTitles by rememberSaveable {
+        mutableStateOf(viewModel.authManager.widgetHideTitles)
+    }
     val legacyExport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri?.let(viewModel::exportLegacyCache)
     }
@@ -251,6 +268,58 @@ fun SettingsScreen(
                 subtitle = "在深色模式下使用纯黑背景降低能耗",
                 checked = black,
                 onCheckedChange = onPureBlackChange,
+            )
+        }
+
+        // Home-screen widgets
+        ExpressiveSettingsGroup(
+            title = "桌面小组件",
+            description = "把今天和待办放到主屏；组件操作先写本地，再自动同步。",
+        ) {
+            SettingsActionRow(
+                title = "今日",
+                subtitle = "4×2，可拉高到 4×4；日期、进度和今天任务",
+                actionLabel = "添加到桌面",
+            ) {
+                pinWidget(WidgetPin.today(context))
+            }
+            SettingsActionRow(
+                title = "待办",
+                subtitle = "4×4；未完成任务、目录和最近完成项",
+                actionLabel = "添加到桌面",
+            ) {
+                pinWidget(WidgetPin.open(context))
+            }
+            SettingsActionRow(
+                title = "下一步",
+                subtitle = "2×2；桌面只留一件最该做的事",
+                actionLabel = "添加到桌面",
+            ) {
+                pinWidget(WidgetPin.next(context))
+            }
+            SettingsActionRow(
+                title = "速记",
+                subtitle = "2×2；点一下打开键盘，记到今天就走",
+                actionLabel = "添加到桌面",
+            ) {
+                pinWidget(WidgetPin.capture(context))
+            }
+            SettingsActionRow(
+                title = "目录",
+                subtitle = "4×4；添加时选择一个目录，固定查看该目录",
+                actionLabel = "添加到桌面",
+            ) {
+                pinWidget(WidgetPin.folder(context))
+            }
+            ExpressiveSwitchRow(
+                title = "隐藏任务标题",
+                subtitle = "桌面只显示日期、数量与状态；任务内容仍可点开查看",
+                checked = hideWidgetTitles,
+                onCheckedChange = {
+                    hideWidgetTitles = it
+                    viewModel.authManager.widgetHideTitles = it
+                    WidgetUpdater.refreshAll(context)
+                },
             )
         }
 

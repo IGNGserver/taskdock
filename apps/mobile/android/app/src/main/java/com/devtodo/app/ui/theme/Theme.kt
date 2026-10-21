@@ -24,7 +24,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 
-private val LightColorScheme =
+internal val DevTodoLightColorScheme =
     lightColorScheme(
         primary = M3LightPrimary,
         onPrimary = M3LightOnPrimary,
@@ -63,7 +63,7 @@ private val LightColorScheme =
         onErrorContainer = M3LightOnErrorContainer,
     )
 
-private val DarkColorScheme =
+internal val DevTodoDarkColorScheme =
     darkColorScheme(
         primary = M3DarkPrimary,
         onPrimary = M3DarkOnPrimary,
@@ -141,8 +141,8 @@ fun DevTodoTheme(
             dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
                 if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             }
-            isDark -> DarkColorScheme
-            else -> LightColorScheme
+            isDark -> DevTodoDarkColorScheme
+            else -> DevTodoLightColorScheme
         }
 
     val finalScheme =
