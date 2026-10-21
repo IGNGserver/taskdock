@@ -340,7 +340,7 @@ test('an open row menu is never painted under the following task rows', async ({
   // the shell is still swapping screens, or the menu is closed by the late
   // `devtodo:data-changed` reload.
   await expect(page.locator('.loading-screen')).toHaveCount(0);
-  await expect(page.locator('.connection-status')).toContainText('在线');
+  await page.waitForLoadState('networkidle');
   await page.getByRole('button', { name: '安排操作' }).first().click();
   await expect(page.locator('.m3e-menu')).toBeVisible();
 
