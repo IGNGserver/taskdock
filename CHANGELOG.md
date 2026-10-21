@@ -5,6 +5,8 @@
 - 桌面客户端已停止维护，完整源码归档至 `archive/desktop-client/`；当前活动客户端为响应式 Web/PWA 和 Android。
 - 后续 GitHub Release 只上传 `TaskDock-<版本号>-android.apk`；GitHub 自动提供 `Source code (zip)` 和 `Source code (tar.gz)`，不生成或上传 SHA/校验和文件。
 - 从旧版本升级时，如果 `.env` 的 `NATIVE_ALLOWED_ORIGINS` 包含 `devtodo://app`，请删除该项后再启动中枢。
+- 修复 Android 同步横幅把后台校验误报为“显示缓存”：前台校验改为 60 秒增量同步，不再每轮强制页面预览；新鲜度窗口调整为 120 秒，正常校验显示紧凑的“上次核验”状态。
+- 修复会话或中枢切换取消同步时，Android 同步状态可能永久停在 `SYNCING` 的问题。
 
 ## 2.0.0-rc.28 · 2026-09-27
 

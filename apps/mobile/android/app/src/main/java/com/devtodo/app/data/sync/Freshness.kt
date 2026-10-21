@@ -1,6 +1,10 @@
 package com.devtodo.app.data.sync
 
-const val FRESHNESS_WINDOW_MS = 60_000L
+/**
+ * Two foreground verification intervals. A single slow round must not make
+ * fresh data look stale while the next incremental pull is still running.
+ */
+const val FRESHNESS_WINDOW_MS = 120_000L
 
 /** A preview is useful content, never proof that the entire cache is current. */
 data class PageLoadState(
