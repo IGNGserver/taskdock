@@ -18,18 +18,16 @@ import {
   type ReactNode,
 } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronRight, Folder, FolderPlus, MoreHorizontal, Plus, Search, X } from 'lucide-react';
+import { ChevronRight, Folder, FolderPlus, MoreHorizontal, Plus, Search } from 'lucide-react';
 import { ApiError, mutationV2, requestV2 } from './api.js';
 import { useDevice } from './device.js';
 import {
   Alert,
-  BottomSheet,
   Button,
   ConfirmDialog,
   Dialog,
   Disclosure,
   Snackbar,
-  useWindowSizeClass,
   EmptyState,
   IconButton,
   List,
@@ -45,9 +43,7 @@ import {
 import { recordLastFolderId } from './folder-preference.js';
 import { blockedDirectoryTargets } from './directory-paths.js';
 import { FolderPicker } from './components/folder-picker.js';
-import { TaskDetailEditor } from './components/task-detail-editor.js';
 import { TaskHoverPreviewRow, type TaskHoverAnchorProps } from './components/task-hover-preview.js';
-import type { TaskEditorDraft } from './task-editor-draft.js';
 
 /** Stable identity for a directory row, whichever kind it holds. */
 function treeItemId(item: TreeItemDto): string {
@@ -1064,7 +1060,7 @@ export function TreePage() {
         ))}
       </nav>
       <div className="page-header tree-page-header">
-        <h1 id="tree-title">{path.at(-1)?.title ?? '根目录'}</h1>
+        <h1 id="tree-title">{path[path.length - 1]?.title ?? '根目录'}</h1>
         <div className="tree-header-actions">
           <Button
             variant="text"
@@ -1354,98 +1350,5 @@ export function TreePage() {
         />
       )}
     </section>
-  );
-}
-
-export function TaskDetailV2Overlay({
-  taskId,
-  onClose,
-  onChanged,
-  focusTitle = false,
-}: {
-  taskId: string | null;
-  onClose: () => void;
-  onChanged: () => void;
-  focusTitle?: boolean;
-}) {
-  const [detail, setDetail] = useState<TaskDetailV2Dto | null>(null);
-  const [error, setError] = useState('');
-  const sequence = useRef(0);
-  const drafts = useRef(new Map<string, TaskEditorDraft>());
-  const load = useCallback(async () => {
-    if (!taskId) return;
-    const requestSequence = ++sequence.current;
-    try {
-      const nextDetail = await requestV2<TaskDetailV2Dto>(`/tasks/${taskId}`);
-      if (requestSequence === sequence.current) {
-        setDetail(nextDetail);
-        setError('');
-      }
-    } catch (cause) {
-      if (requestSequence === sequence.current) setError(errorMessage(cause, '任务详情加载失败'));
-    }
-  }, [taskId]);
-  useEffect(() => {
-    setDetail(null);
-    setError('');
-    void load();
-    const changed = () => void load();
-    window.addEventListener('devtodo:data-changed', changed);
-    return () => {
-      sequence.current += 1;
-      window.removeEventListener('devtodo:data-changed', changed);
-    };
-  }, [load]);
-  if (!taskId) return null;
-  const current = detail?.task.id === taskId ? detail : null;
-  return (
-    <TaskDetailSurface onClose={onClose}>
-      {error && (
-        <Alert
-          tone="error"
-          title="任务详情加载失败"
-          action={
-            <Button variant="text" size="s" onClick={() => void load()}>
-              重试
-            </Button>
-          }
-        >
-          {error}
-        </Alert>
-      )}
-      {current ? (
-        <TaskDetailEditor
-          key={taskId}
-          detail={current}
-          drafts={drafts.current}
-          focusTitle={focusTitle}
-          onClose={onClose}
-          onChanged={onChanged}
-        />
-      ) : (
-        !error && <LoadingState label="正在加载任务详情" />
-      )}
-    </TaskDetailSurface>
-  );
-}
-function TaskDetailSurface({ onClose, children }: { onClose: () => void; children: ReactNode }) {
-  const { isPhone } = useDevice();
-  const sizeClass = useWindowSizeClass();
-  if (isPhone || sizeClass === 'compact')
-    return (
-      <BottomSheet open onClose={onClose} title="任务详情" size="full">
-        {children}
-      </BottomSheet>
-    );
-  return (
-    <aside className="workspace-task-detail" aria-label="任务详情">
-      <div className="workspace-detail-header">
-        <span>任务详情</span>
-        <IconButton size="s" label="关闭任务详情" onClick={onClose}>
-          <X size={18} />
-        </IconButton>
-      </div>
-      <div className="workspace-detail-scroll">{children}</div>
-    </aside>
   );
 }

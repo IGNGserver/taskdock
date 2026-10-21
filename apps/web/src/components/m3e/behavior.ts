@@ -235,7 +235,7 @@ export function useFocusTrap(
     first?.focus({ preventScroll: true });
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || focusTrapStack.at(-1) !== container) return;
+      if (event.defaultPrevented || focusTrapStack[focusTrapStack.length - 1] !== container) return;
       if (event.key === 'Escape' && escapeRef.current) {
         event.preventDefault();
         escapeRef.current();

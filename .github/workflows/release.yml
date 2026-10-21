@@ -186,6 +186,9 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 记录构建元数据
+        id: buildmeta
+        run: echo "time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
       - name: 生成镜像标签
         id: meta
         env:
@@ -208,6 +211,9 @@ jobs:
           file: infra/docker/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+            BUILD_TIME=${{ steps.buildmeta.outputs.time }}
           labels: |
             org.opencontainers.image.title=TaskDock
             org.opencontainers.image.version=${{ inputs.version }}

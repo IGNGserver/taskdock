@@ -20,11 +20,11 @@ export function createTaskEditorDraft(detail: TaskDetailV2Dto): TaskEditorDraft 
   return {
     record: detail,
     title: detail.task.title,
-    note: detail.note.contentMarkdown,
+    note: detail.note?.contentMarkdown ?? '',
     newStep: '',
     status: detail.task.status,
     steps: Object.fromEntries(
-      detail.steps.map((step) => [
+      (detail.steps ?? []).map((step) => [
         step.id,
         { title: step.title, noteMarkdown: step.noteMarkdown, status: step.status },
       ]),
@@ -53,13 +53,13 @@ export function mergeTaskEditorDraft(draft: TaskEditorDraft, detail: TaskDetailV
   if (!draft.pending) {
     draft.record = {
       ...draft.record,
-      steps: detail.steps.map((step) => {
+      steps: (detail.steps ?? []).map((step) => {
         const saved = previous.steps.find((candidate) => candidate.id === step.id);
         return saved && saved.version > step.version ? saved : step;
       }),
-      placements: detail.placements,
-      workflowMemberships: detail.workflowMemberships,
-      folderPath: detail.folderPath,
+      placements: detail.placements ?? [],
+      workflowMemberships: detail.workflowMemberships ?? [],
+      folderPath: detail.folderPath ?? [],
     };
     for (const step of draft.record.steps) {
       const saved = previous.steps.find((candidate) => candidate.id === step.id);

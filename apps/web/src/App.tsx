@@ -128,13 +128,23 @@ import {
 import { useDevice } from './device.js';
 import { useDismissibleMenu } from './components/m3e/behavior.js';
 import { PwaLifecycleNotice } from './pwa.js';
+import { ErrorBoundary, TaskDetailErrorFallback } from './components/error-boundary.js';
 import { LazyPageBoundary } from './components/lazy-page-boundary.js';
+import { TaskDetailV2Overlay } from './components/task-detail-overlay.js';
+import {
+  calendarDays,
+  formatDate,
+  formatMonth,
+  formatTime,
+  isLocalDate,
+  shiftLocalDate,
+  shiftMonth,
+  todayInTimezone,
+  weekdayLabels,
+} from './date-utils.js';
 import { getNetworkMode, setNetworkMode, type NetworkMode } from './network-policy.js';
 import { TaskHoverPreviewRow, useTaskHoverPreview } from './components/task-hover-preview.js';
 const TreePage = lazy(() => import('./TreePage.js').then((page) => ({ default: page.TreePage })));
-const TaskDetailV2Overlay = lazy(() =>
-  import('./TreePage.js').then((page) => ({ default: page.TaskDetailV2Overlay })),
-);
 const WorkflowsPage = lazy(() =>
   import('./WorkflowsPage.js').then((page) => ({ default: page.WorkflowsPage })),
 );
@@ -625,12 +635,20 @@ function AuthenticatedApp() {
               </LazyPageBoundary>
             </div>
           </div>
-          <TaskDetailV2Overlay
-            taskId={selectedTask.get('task')}
-            focusTitle={selectedTask.get('editTitle') === '1'}
-            onClose={closeTask}
-            onChanged={() => window.dispatchEvent(new Event('devtodo:data-changed'))}
-          />
+          <ErrorBoundary
+            fallback={(error, reset) =>
+              selectedTask.get('task') ? (
+                <TaskDetailErrorFallback error={error} onRetry={reset} />
+              ) : null
+            }
+          >
+            <TaskDetailV2Overlay
+              taskId={selectedTask.get('task')}
+              focusTitle={selectedTask.get('editTitle') === '1'}
+              onClose={closeTask}
+              onChanged={() => window.dispatchEvent(new Event('devtodo:data-changed'))}
+            />
+          </ErrorBoundary>
         </div>
       </main>
       {isCompactShell(sizeClass) && (
@@ -3259,9 +3277,12 @@ function AddTaskModal({
 function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const { settings } = useAuth();
   const params = useParams();
-  const initial = params.localDate ?? todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
+  const fallbackDate = todayInTimezone(settings?.timezone);
+  // A bookmark or notification may carry a stale/invalid date. Fall back to
+  // today instead of letting calendarDays()/Intl throw during render.
+  const initial = isLocalDate(params.localDate) ? params.localDate : fallbackDate;
   const [month, setMonth] = useState(initial.slice(0, 7));
-  const [selected, setSelected] = useState(params.localDate ?? initial);
+  const [selected, setSelected] = useState(initial);
   const [items, setItems] = useState<PlacementWithTask[]>([]);
   const [point, setPoint] = useState<TimePointDto | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -3959,74 +3980,4 @@ function breadcrumb(pathname: string): string {
   if (pathname === '/time' || pathname.startsWith('/time/')) return '计划';
   if (pathname.startsWith('/settings')) return '设置';
   return 'TaskDock';
-}
-function todayInTimezone(timezone: string): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values['year']}-${values['month']}-${values['day']}`;
-}
-function formatDate(localDate: string): string {
-  const date = new Date(`${localDate}T12:00:00`);
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: 'long',
-    day: 'numeric',
-    weekday: 'long',
-  }).format(date);
-}
-function formatMonth(month: string): string {
-  const date = new Date(`${month}-01T12:00:00`);
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long' }).format(date);
-}
-function formatTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
-}
-function shiftMonth(month: string, delta: number): string {
-  const [year, monthNumber] = month.split('-').map(Number);
-  const date = new Date(Date.UTC(year!, monthNumber! - 1 + delta, 1));
-  return date.toISOString().slice(0, 7);
-}
-function shiftLocalDate(localDate: string, delta: number): string {
-  const date = new Date(`${localDate}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + delta);
-  return date.toISOString().slice(0, 10);
-}
-function weekdayLabels(weekStartsOn: 0 | 1): string[] {
-  const mondayFirst = ['一', '二', '三', '四', '五', '六', '日'];
-  return weekStartsOn === 1 ? mondayFirst : ['日', ...mondayFirst.slice(0, 6)];
-}
-interface CalendarDay {
-  date: string;
-  label: number;
-  inMonth: boolean;
-  taskCount: number;
-}
-function calendarDays(month: string, weekStartsOn: 0 | 1 = 1): CalendarDay[] {
-  const [year, monthNumber] = month.split('-').map(Number);
-  const first = new Date(Date.UTC(year!, monthNumber! - 1, 1));
-  const offset = weekStartsOn === 1 ? (first.getUTCDay() + 6) % 7 : first.getUTCDay();
-  const daysInMonth = new Date(Date.UTC(year!, monthNumber!, 0)).getUTCDate();
-  const previousDays = new Date(Date.UTC(year!, monthNumber! - 1, 0)).getUTCDate();
-  return Array.from({ length: 42 }, (_, index) => {
-    const dayIndex = index - offset + 1;
-    const date = new Date(Date.UTC(year!, monthNumber! - 1, dayIndex));
-    const inMonth = dayIndex >= 1 && dayIndex <= daysInMonth;
-    return {
-      date: date.toISOString().slice(0, 10),
-      label: inMonth ? dayIndex : dayIndex < 1 ? previousDays + dayIndex : dayIndex - daysInMonth,
-      inMonth,
-      taskCount: 0,
-    };
-  });
 }

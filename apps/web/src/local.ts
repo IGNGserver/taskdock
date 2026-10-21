@@ -2634,7 +2634,7 @@ async function readV2LocalInTransaction(
       const page = paginateDirectory(
         items as TreeItemDto[],
         {
-          owner: db.name.split(':').at(-1)!,
+          owner: db.name.split(':').slice(-1)[0]!,
           parent: parentFolderId,
           revision: `${first >>> 0}:${second >>> 0}`,
         },

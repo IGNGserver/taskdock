@@ -115,6 +115,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png}'],
+        cleanupOutdatedCaches: true,
         // Core routes stay available offline; large optional surfaces are cached
         // when visited rather than competing with the first useful screen.
         globIgnores: ['**/WorkflowsPage-*.js'],
@@ -130,7 +131,12 @@ export default defineConfig({
           },
         ],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api(?:\/|$)/, /^\/health(?:\/|$)/, /^\/version$/],
+        navigateFallbackDenylist: [
+          /^\/api(?:\/|$)/,
+          /^\/health(?:\/|$)/,
+          /^\/version$/,
+          /^\/assets(?:\/|$)/,
+        ],
       },
     }),
   ],
@@ -145,7 +151,11 @@ export default defineConfig({
   },
   build: {
     manifest: true,
-    target: 'es2022',
+    // Safari 15.4+ / iOS 15.4+ is the supported browser baseline. Keeping the
+    // target explicit prevents new ES2022 syntax from silently breaking older
+    // iPhones, which cannot recover from a parse error (the whole app stays
+    // blank before React starts).
+    target: 'safari15',
     sourcemap: true,
     chunkSizeWarningLimit: 600,
     rollupOptions: {
