@@ -45,7 +45,7 @@ class SyncEngine(
     private val api: ApiClient,
     private val authManager: SecureAuthManager,
     private val syncBudgetMs: Long = 45_000L,
-    private val verificationIntervalMs: Long = 30_000L,
+    private val verificationIntervalMs: Long = 60_000L,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _syncState = MutableStateFlow(SyncState.IDLE)
@@ -178,10 +178,13 @@ class SyncEngine(
         scope.launch {
             while (isActive) {
                 delay(if (api.isConstrainedNetwork) verificationIntervalMs * 3 else verificationIntervalMs)
-                if (foreground && networkAvailable && authManager.isLoggedIn) {
-                    val page = activePage
-                    if (page != null) prioritizePage(page, force = true) else triggerSync()
-                }
+                if (!foreground || !networkAvailable || !authManager.isLoggedIn) continue
+                // The visible page is rendered from Room, so the incremental
+                // feed already refreshes it. A periodic page preview would send
+                // the same entities twice and make the status banner look like
+                // stale cache during every check.
+                if (_syncState.value == SyncState.SYNCING) continue
+                triggerSync()
             }
         }
     }
@@ -569,7 +572,15 @@ class SyncEngine(
                     _syncState.value = if (networkAvailable) SyncState.IDLE else SyncState.OFFLINE
                     SyncOutcome.Success
                 }
-            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (cancelled: CancellationException) {
+                // A timeout is handled by triggerSync, which marks ERROR. A
+                // session/hub change instead cancels this flight while the
+                // coroutine is still active; never leave the UI in SYNCING.
+                if (currentCoroutineContext().isActive && _syncState.value == SyncState.SYNCING) {
+                    _syncState.value =
+                        if (authManager.isLoggedIn) SyncState.IDLE else SyncState.AUTH_REQUIRED
+                }
+                throw cancelled
             } catch (error: Exception) {
                 ensureSession()
                 _syncState.value = classifyError(error)

@@ -336,4 +336,69 @@ class SyncEngineTest {
         assertEquals("hub-date", db.placementDao().getById("local-placement", owner)!!.timePointId)
         assertTrue(db.outboxDao().getPendingItems(owner).isEmpty())
     }
+
+    @Test fun foregroundVerificationPullsWithoutReloadingThePage() = runBlocking {
+        engine.stop()
+        engine = SyncEngine(db, api, auth, verificationIntervalMs = 200)
+        db.syncMetaDao().set(SyncMetaEntity("v2:sync_cursor:$owner", "1"))
+        val previews = java.util.concurrent.atomic.AtomicInteger(0)
+        val pulls = java.util.concurrent.atomic.AtomicInteger(0)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/api/v2/sync/preview") == true -> {
+                    previews.incrementAndGet()
+                    response("""{"changes":[],"complete":false}""")
+                }
+                request.path?.startsWith("/api/v2/sync/pull") == true -> {
+                    pulls.incrementAndGet()
+                    response("""{"nextCursor":"7","changes":[],"hasMore":false}""")
+                }
+                request.path == "/api/v2/sync/capabilities" ->
+                    response("""{"protocolVersion":2,"pagedSnapshot":true}""")
+                else -> response("{}", 404)
+            }
+        }
+        engine.setForeground(true)
+        engine.start()
+        withTimeout(5_000) { db.syncMetaDao().observe("confirmed:$owner").first { it != null } }
+        withTimeout(5_000) { engine.syncState.first { it == SyncState.IDLE } }
+
+        // A page entry still previews once; only the periodic verification
+        // after it must stay on the incremental feed.
+        engine.prioritizePage("directory:root", force = true)
+        withTimeout(5_000) {
+            engine.pageLoads.first { states -> (states["directory:root"]?.loadedAt ?: 0L) > 0L }
+        }
+        delay(250)
+        val previewsAfterPage = previews.get()
+        val pullsAfterPage = pulls.get()
+        assertEquals(1, previewsAfterPage)
+
+        delay(900)
+        assertEquals(previewsAfterPage, previews.get())
+        assertTrue(pulls.get() > pullsAfterPage)
+        engine.setForeground(false)
+    }
+
+    @Test fun sessionChangeCancellationDoesNotLeaveTheEngineSyncing() = runBlocking {
+        db.syncMetaDao().set(SyncMetaEntity("v2:sync_cursor:$owner", "1"))
+        val pullStarted = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/api/v2/sync/pull") == true -> {
+                    pullStarted.countDown()
+                    release.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                    response("""{"nextCursor":"7","changes":[],"hasMore":false}""")
+                }
+                else -> response("{}", 404)
+            }
+        }
+        val flight = async { engine.triggerSync() }
+        assertTrue(pullStarted.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        auth.advanceSession()
+        release.countDown()
+        runCatching { withTimeout(5_000) { flight.await() } }
+        assertEquals(SyncState.IDLE, engine.syncState.value)
+    }
 }
