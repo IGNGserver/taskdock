@@ -394,7 +394,9 @@ class SyncEngineTest {
                 else -> response("{}", 404)
             }
         }
-        val flight = async { engine.triggerSync() }
+        // UNDISPATCHED is required: blocking on the latch must not starve the
+        // test event loop before triggerSync has started its engine flight.
+        val flight = async(start = CoroutineStart.UNDISPATCHED) { engine.triggerSync() }
         assertTrue(pullStarted.await(5, java.util.concurrent.TimeUnit.SECONDS))
         auth.advanceSession()
         release.countDown()
