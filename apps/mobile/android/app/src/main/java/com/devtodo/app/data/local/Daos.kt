@@ -98,6 +98,21 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER) ASC, id ASC")
     fun getTreeTasksFlow(ownerId: String): Flow<List<TaskEntity>>
 
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND status != 'DONE' ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER) ASC, id ASC LIMIT :limit")
+    suspend fun getOpenTasks(ownerId: String, limit: Int): List<TaskEntity>
+
+    @Query("SELECT COUNT(*) FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND status != 'DONE'")
+    suspend fun countOpenTasks(ownerId: String): Int
+
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND status = 'DONE' AND completedAt IS NOT NULL AND completedAt >= :since ORDER BY completedAt DESC, id ASC LIMIT :limit")
+    suspend fun getRecentlyCompleted(ownerId: String, since: String, limit: Int): List<TaskEntity>
+
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND status != 'DONE' AND ((:parentFolderId IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parentFolderId) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER) ASC, id ASC LIMIT :limit")
+    suspend fun getOpenTasksInFolder(ownerId: String, parentFolderId: String?, limit: Int): List<TaskEntity>
+
+    @Query("SELECT COUNT(*) FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND status != 'DONE' AND ((:parentFolderId IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parentFolderId)")
+    suspend fun countOpenTasksInFolder(ownerId: String, parentFolderId: String?): Int
+
     @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND deletedAt IS NULL")
     suspend fun getAllTreeTasks(ownerId: String): List<TaskEntity>
 
@@ -305,6 +320,9 @@ interface PlacementDao {
     @Query("SELECT tasks.*, placements.id AS placement_id, placements.ownerId AS placement_ownerId, placements.taskId AS placement_taskId, placements.timePointId AS placement_timePointId, placements.rank AS placement_rank, placements.version AS placement_version, placements.createdAt AS placement_createdAt, placements.updatedAt AS placement_updatedAt, placements.deletedAt AS placement_deletedAt, placements.pendingSync AS placement_pendingSync FROM placements JOIN time_points ON time_points.id = placements.timePointId AND time_points.ownerId = placements.ownerId JOIN tasks ON tasks.id = placements.taskId AND tasks.ownerId = placements.ownerId WHERE placements.ownerId = :ownerId AND time_points.type = 'DATE' AND time_points.localDate = :date AND time_points.deletedAt IS NULL AND time_points.archivedAt IS NULL AND placements.deletedAt IS NULL AND tasks.deletedAt IS NULL AND tasks.archivedAt IS NULL ORDER BY CAST(placements.rank AS INTEGER), placements.id")
     fun scheduledTasksFlow(ownerId: String, date: String): Flow<List<ScheduledTaskRow>>
 
+    @Query("SELECT tasks.*, placements.id AS placement_id, placements.ownerId AS placement_ownerId, placements.taskId AS placement_taskId, placements.timePointId AS placement_timePointId, placements.rank AS placement_rank, placements.version AS placement_version, placements.createdAt AS placement_createdAt, placements.updatedAt AS placement_updatedAt, placements.deletedAt AS placement_deletedAt, placements.pendingSync AS placement_pendingSync FROM placements JOIN time_points ON time_points.id = placements.timePointId AND time_points.ownerId = placements.ownerId JOIN tasks ON tasks.id = placements.taskId AND tasks.ownerId = placements.ownerId WHERE placements.ownerId = :ownerId AND time_points.type = 'DATE' AND time_points.localDate = :date AND time_points.deletedAt IS NULL AND time_points.archivedAt IS NULL AND placements.deletedAt IS NULL AND tasks.deletedAt IS NULL AND tasks.archivedAt IS NULL ORDER BY CAST(placements.rank AS INTEGER), placements.id")
+    suspend fun scheduledTasks(ownerId: String, date: String): List<ScheduledTaskRow>
+
     @Query("UPDATE placements SET timePointId = :target WHERE ownerId = :ownerId AND timePointId = :source")
     suspend fun remapDate(ownerId: String, source: String, target: String)
     @Query("SELECT * FROM placements WHERE ownerId = :ownerId AND deletedAt IS NULL ORDER BY timePointId ASC, CAST(rank AS INTEGER) ASC")
@@ -380,6 +398,9 @@ interface OutboxDao {
 
     @Query("SELECT * FROM outbox WHERE ownerId = :ownerId ORDER BY id ASC")
     fun getPendingItemsFlow(ownerId: String): Flow<List<OutboxEntity>>
+
+    @Query("SELECT COUNT(*) FROM outbox WHERE ownerId = :ownerId")
+    suspend fun countPending(ownerId: String): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(item: OutboxEntity): Long

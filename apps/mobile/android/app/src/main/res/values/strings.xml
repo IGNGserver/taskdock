@@ -2,4 +2,15 @@
 <resources>
     <string name="app_name">TaskDock</string>
     <string name="title_activity_main">TaskDock</string>
+
+    <string name="widget_today_label">今天</string>
+    <string name="widget_today_description">今天安排、完成进度与快速查看</string>
+    <string name="widget_open_label">待办</string>
+    <string name="widget_open_description">接下来要做的任务与目录</string>
+    <string name="widget_next_label">下一步</string>
+    <string name="widget_next_description">桌面只留一件最该做的事</string>
+    <string name="widget_capture_label">速记</string>
+    <string name="widget_capture_description">点一下就把一件事记到 TaskDock</string>
+    <string name="widget_folder_label">目录</string>
+    <string name="widget_folder_description">固定查看一个目录里的待办</string>
 </resources>

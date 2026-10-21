@@ -10,6 +10,9 @@ class SecureAuthManager(private val context: Context) {
     private val plainPrefs = context.applicationContext
         .getSharedPreferences("devtodo_config", Context.MODE_PRIVATE)
 
+    /** Long-lived application context for background/widget helpers. */
+    val appContext: Context get() = context.applicationContext
+
     companion object {
         private const val KEY_HUB_ORIGIN = "hub_origin"
         private const val KEY_OWNER_ID = "owner_id"
@@ -18,6 +21,7 @@ class SecureAuthManager(private val context: Context) {
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_DYNAMIC_COLOR = "dynamic_color"
         private const val KEY_PURE_BLACK = "pure_black"
+        private const val KEY_WIDGET_HIDE_TITLES = "widget_hide_titles"
     }
 
     var accessToken: String?
@@ -108,6 +112,11 @@ class SecureAuthManager(private val context: Context) {
     var pureBlack: Boolean
         get() = plainPrefs.getBoolean(KEY_PURE_BLACK, false)
         set(value) = plainPrefs.edit { putBoolean(KEY_PURE_BLACK, value) }
+
+    /** Desktop widgets can show counts/status without exposing task titles. */
+    var widgetHideTitles: Boolean
+        get() = plainPrefs.getBoolean(KEY_WIDGET_HIDE_TITLES, false)
+        set(value) = plainPrefs.edit { putBoolean(KEY_WIDGET_HIDE_TITLES, value) }
 
     val isLoggedIn: Boolean
         get() = hasUsableAccessToken || !refreshToken.isNullOrEmpty()

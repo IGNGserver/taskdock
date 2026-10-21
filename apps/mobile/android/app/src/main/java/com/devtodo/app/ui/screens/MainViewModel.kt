@@ -15,6 +15,8 @@ import com.devtodo.app.data.sync.SyncOutcome
 import com.devtodo.app.data.sync.SyncState
 import com.devtodo.app.data.sync.LoadProgress
 import com.devtodo.app.ui.theme.ThemeMode
+import com.devtodo.app.widget.WidgetPreviewPublisher
+import com.devtodo.app.widget.WidgetUpdater
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -291,6 +293,10 @@ class MainViewModel(
         syncEngine.start()
         syncEngine.setForeground(foreground)
         activePageKey?.let { syncEngine.prioritizePage(it) }
+        WidgetUpdater.refreshAll(authManager.appContext)
+        viewModelScope.launch {
+            WidgetPreviewPublisher.publishIfDue(authManager.appContext)
+        }
     }
 
     fun onNetworkStateChanged(available: Boolean) {
@@ -303,6 +309,7 @@ class MainViewModel(
     fun onAppForeground() {
         foreground = true
         syncEngine.setForeground(true)
+        WidgetUpdater.refreshAll(authManager.appContext)
         if (authManager.isLoggedIn) {
             restorePersistedSession(showOfflineMessage = false)
         }
@@ -361,6 +368,7 @@ class MainViewModel(
                     TaskStatusChange(current.id, ownerId, current.title, current.status, nextStatus, updated.version)
                 }
                 loadTodayData()
+                WidgetUpdater.refreshAll(authManager.appContext)
                 change?.let { _statusChanges.emit(it) }
             } catch (error: CancellationException) {
                 throw error
@@ -561,6 +569,7 @@ class MainViewModel(
                     require(authManager.ownerId == ownerId) { "当前账户已变化" }
                 }
                 loadTodayData()
+                WidgetUpdater.refreshAll(authManager.appContext)
                 onComplete(null)
                 _messages.tryEmit("已保存到本地")
             } catch (error: CancellationException) {
@@ -2317,7 +2326,10 @@ class MainViewModel(
                 activePageKey?.let { syncEngine.prioritizePage(it, force = true) }
                 when (val outcome = withTimeoutOrNull(15_000L) { syncEngine.triggerSync() }) {
                     null -> _messages.tryEmit("刷新仍在后台继续，已保留当前内容")
-                    SyncOutcome.Success -> loadTodayData()
+                    SyncOutcome.Success -> {
+                        loadTodayData()
+                        WidgetUpdater.refreshAll(authManager.appContext)
+                    }
                     is SyncOutcome.Failure -> _messages.tryEmit("同步失败：${outcome.message}")
                 }
             } catch (error: Exception) {
@@ -2336,6 +2348,7 @@ class MainViewModel(
                 when (val outcome = syncEngine.triggerSync()) {
                     SyncOutcome.Success -> {
                         loadTodayData()
+                        WidgetUpdater.refreshAll(authManager.appContext)
                         _messages.tryEmit("同步成功")
                     }
                     is SyncOutcome.Failure -> _messages.tryEmit("同步失败：${outcome.message}")
@@ -2357,6 +2370,10 @@ class MainViewModel(
         _dataReady.value = false
         loadTodayData()
         syncEngine.start()
+        WidgetUpdater.refreshAll(authManager.appContext)
+        viewModelScope.launch {
+            WidgetPreviewPublisher.publishIfDue(authManager.appContext)
+        }
         syncNow()
     }
 
@@ -2370,6 +2387,7 @@ class MainViewModel(
         midnightRefreshJob?.cancel()
         _todayTasks.value = emptyList()
         _dataReady.value = true
+        WidgetUpdater.refreshAll(authManager.appContext)
     }
 
     fun observeTask(taskId: String): Flow<TaskEntity?> = currentOwnerId.flatMapLatest { ownerId ->
@@ -2482,16 +2500,19 @@ class MainViewModel(
     fun setThemeMode(mode: ThemeMode) {
         authManager.themeMode = mode.name
         _themeMode.value = mode
+        WidgetUpdater.refreshAll(authManager.appContext)
     }
 
     fun setDynamicColor(enabled: Boolean) {
         authManager.dynamicColor = enabled
         _dynamicColor.value = enabled
+        WidgetUpdater.refreshAll(authManager.appContext)
     }
 
     fun setPureBlack(enabled: Boolean) {
         authManager.pureBlack = enabled
         _pureBlack.value = enabled
+        WidgetUpdater.refreshAll(authManager.appContext)
     }
 
     private suspend fun getOrCreateDatePoint(ownerId: String, localDate: String): TimePointEntity {

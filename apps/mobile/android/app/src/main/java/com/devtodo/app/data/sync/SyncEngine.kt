@@ -61,7 +61,6 @@ class SyncEngine(
     @Volatile private var activePage: String? = null
     private val pageFlights = mutableMapOf<String, Deferred<SyncOutcome>>()
     private val priorityReads = Semaphore(2)
-    private val syncMutex = Mutex()
     private val flightLock = Any()
     private var syncFlight: Deferred<SyncOutcome>? = null
     private var syncRequested = 0L
@@ -145,6 +144,13 @@ class SyncEngine(
         private const val MAX_PUSH_MUTATIONS = 100
         private const val MAX_PUSH_BYTES = 900_000
         private const val TARGET_PUSH_BYTES = 256_000
+
+        /**
+         * The activity and the widget worker can both hold a SyncEngine in the
+         * same process. A process-wide gate prevents two push/pull flights from
+         * racing the same outbox and entity versions.
+         */
+        private val PROCESS_SYNC_MUTEX = Mutex()
 
         fun v2SyncCursorKey(ownerId: String): String = "v2:$SYNC_CURSOR_KEY:$ownerId"
     }
@@ -503,7 +509,7 @@ class SyncEngine(
         }
     }
 
-    private suspend fun runSync(): SyncOutcome = syncMutex.withLock {
+    private suspend fun runSync(): SyncOutcome = PROCESS_SYNC_MUTEX.withLock {
         withContext(Dispatchers.IO) {
             ensureSession()
             if (!authManager.isLoggedIn) {
