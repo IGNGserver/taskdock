@@ -1,7 +1,6 @@
 package com.devtodo.app.ui.screens
 
 import android.os.Build
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -30,7 +29,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.devtodo.app.data.local.ConflictEntity
 import com.devtodo.app.data.local.OutboxEntity
-import com.devtodo.app.data.model.DeviceDto
 import com.devtodo.app.data.sync.SyncState
 import com.devtodo.app.ui.components.ActionMenu
 import com.devtodo.app.ui.components.RowAction
@@ -38,7 +36,6 @@ import com.devtodo.app.ui.components.WorkspaceScaffold
 import com.devtodo.app.ui.theme.LocalAdaptiveInfo
 import com.devtodo.app.ui.theme.TaskDockShapes
 import com.devtodo.app.ui.theme.ThemeMode
-import com.devtodo.app.widget.WidgetPin
 import com.devtodo.app.widget.WidgetUpdater
 
 /**
@@ -65,19 +62,7 @@ fun SettingsScreen(
     val conflicts by viewModel.unresolvedConflicts.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val updateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
-    val devices by viewModel.devices.collectAsStateWithLifecycle()
-    val devicesLoading by viewModel.devicesLoading.collectAsStateWithLifecycle()
-    val devicesError by viewModel.devicesError.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val pinWidget: (Boolean) -> Unit = { requested ->
-        if (!requested) {
-            Toast.makeText(
-                context,
-                "当前启动器不支持从应用内添加，请长按桌面空白处添加 TaskDock 组件",
-                Toast.LENGTH_LONG,
-            ).show()
-        }
-    }
 
     var showHub by rememberSaveable { mutableStateOf(false) }
     var hub by rememberSaveable { mutableStateOf(viewModel.authManager.hubOrigin) }
@@ -87,7 +72,6 @@ fun SettingsScreen(
     var selectedConflict by remember { mutableStateOf<ConflictEntity?>(null) }
     var queue by rememberSaveable { mutableStateOf(false) }
     var showTimezone by rememberSaveable { mutableStateOf(false) }
-    var revokeTarget by remember { mutableStateOf<DeviceDto?>(null) }
     var hideWidgetTitles by rememberSaveable {
         mutableStateOf(viewModel.authManager.widgetHideTitles)
     }
@@ -99,7 +83,6 @@ fun SettingsScreen(
         // Silent unless the user taps 检查更新; the manager throttles this to
         // one request per six hours so opening settings stays cheap.
         viewModel.checkForUpdate(silent = true)
-        viewModel.loadDevices()
     }
 
     val adaptive = LocalAdaptiveInfo.current
@@ -153,48 +136,6 @@ fun SettingsScreen(
                 ) {
                     hub = viewModel.authManager.hubOrigin
                     showHub = true
-                }
-            }
-
-            ExpressiveSettingsGroup(
-                title = "已登录设备",
-                description = "常用设备会一直保持登录；默认连续 365 天未使用才会失效。",
-            ) {
-                if (devicesLoading && devices.isEmpty()) {
-                    Text(
-                        text = "正在加载设备…",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else if (devicesError != null) {
-                    Text(
-                        text = devicesError.orEmpty(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                } else if (devices.isEmpty()) {
-                    Text(
-                        text = "没有可显示的设备。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    devices.forEach { device ->
-                        SettingsActionRow(
-                            title = device.name,
-                            subtitle = buildString {
-                                append(device.platform)
-                                append(" · 最近使用 ")
-                                append(formatDeviceLastSeen(device.lastSeenAt))
-                                if (device.current) append(" · 当前设备")
-                            },
-                            actionLabel = if (device.current) "当前设备" else "撤销",
-                            destructive = !device.current,
-                            enabled = !device.current && !devicesLoading,
-                        ) {
-                            revokeTarget = device
-                        }
-                    }
                 }
             }
 
@@ -349,43 +290,8 @@ fun SettingsScreen(
             // Home-screen widgets
             ExpressiveSettingsGroup(
                 title = "桌面小组件",
-                description = "把今天和待办放到主屏；组件操作先写本地，再自动同步。",
+                description = "小组件可在桌面长按空白处添加；这里只控制标题隐私。",
             ) {
-                SettingsActionRow(
-                    title = "今日",
-                    subtitle = "4×2，可拉高到 4×4；日期、进度和今天任务",
-                    actionLabel = "添加到桌面",
-                ) {
-                    pinWidget(WidgetPin.today(context))
-                }
-                SettingsActionRow(
-                    title = "待办",
-                    subtitle = "4×4；未完成任务、目录和最近完成项",
-                    actionLabel = "添加到桌面",
-                ) {
-                    pinWidget(WidgetPin.open(context))
-                }
-                SettingsActionRow(
-                    title = "下一步",
-                    subtitle = "2×2；桌面只留一件最该做的事",
-                    actionLabel = "添加到桌面",
-                ) {
-                    pinWidget(WidgetPin.next(context))
-                }
-                SettingsActionRow(
-                    title = "速记",
-                    subtitle = "2×2；点一下打开键盘，记到今天就走",
-                    actionLabel = "添加到桌面",
-                ) {
-                    pinWidget(WidgetPin.capture(context))
-                }
-                SettingsActionRow(
-                    title = "目录",
-                    subtitle = "4×4；添加时选择一个目录，固定查看该目录",
-                    actionLabel = "添加到桌面",
-                ) {
-                    pinWidget(WidgetPin.folder(context))
-                }
                 ExpressiveSwitchRow(
                     title = "隐藏任务标题",
                     subtitle = "桌面只显示日期、数量与状态；任务内容仍可点开查看",
@@ -553,25 +459,6 @@ fun SettingsScreen(
     )
     }
 
-    revokeTarget?.let { device ->
-        AlertDialog(
-            onDismissRequest = { revokeTarget = null },
-            title = { Text("撤销设备？") },
-            text = { Text("“${device.name}”将立即退出登录，需要重新输入密码才能访问。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.revokeDevice(device.id)
-                        revokeTarget = null
-                    }
-                ) {
-                    Text("撤销", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = { TextButton(onClick = { revokeTarget = null }) { Text("取消") } },
-        )
-    }
-
     discard?.let { item ->
     AlertDialog(
         onDismissRequest = { discard = null },
@@ -603,15 +490,6 @@ fun SettingsScreen(
             },
         )
     }
-}
-
-private fun formatDeviceLastSeen(value: String): String {
-    return runCatching {
-        val parser = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", java.util.Locale.US)
-        val parsed = parser.parse(value)
-        if (parsed == null) value
-        else java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(parsed)
-    }.getOrDefault(value)
 }
 
 @OptIn(ExperimentalLayoutApi::class)

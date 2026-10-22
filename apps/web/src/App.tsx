@@ -36,6 +36,7 @@ import {
   Plus,
   Search,
   Settings,
+  ShieldCheck,
   Sparkles,
   Target,
   Trash2,
@@ -3518,6 +3519,7 @@ function SettingsPage() {
   );
   const [saved, setSaved] = useState('');
   const [error, setError] = useState('');
+  const [accountSecurityOpened, setAccountSecurityOpened] = useState(false);
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!auth.settings) return;
@@ -3540,7 +3542,6 @@ function SettingsPage() {
     <div className="page narrow-page">
       <PageHeader eyebrow="PREFERENCES" title="设置" />
       {isNativeClient() && <HubSettingsSection />}
-      <DeviceSettingsSection />
       <form className="settings-form" onSubmit={save}>
         <div className="settings-section">
           <h2>本机网络策略</h2>
@@ -3623,6 +3624,17 @@ function SettingsPage() {
           )}
         </div>
       </form>
+      <Disclosure
+        className="m3e-disclosure--settings-account"
+        title="账户与安全"
+        description="仅在需要撤销某台设备时展开"
+        leading={<ShieldCheck size={18} />}
+        onOpenChange={(open) => {
+          if (open) setAccountSecurityOpened(true);
+        }}
+      >
+        {accountSecurityOpened ? <DeviceSettingsSection /> : null}
+      </Disclosure>
     </div>
   );
 }

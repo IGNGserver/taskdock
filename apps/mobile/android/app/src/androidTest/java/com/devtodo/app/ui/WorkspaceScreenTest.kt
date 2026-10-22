@@ -600,6 +600,9 @@ class WorkspaceScreenTest {
         }
         waitForText("当前账户")
         screenshot("settings-dark")
+        compose.onNodeWithText("已登录设备").assertDoesNotExist()
+        compose.onNodeWithText("添加到桌面").assertDoesNotExist()
+        compose.onNodeWithText("隐藏任务标题").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Material You 动态配色").performScrollTo()
         compose.onNodeWithText("浅色").performScrollTo().assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals(ThemeMode.LIGHT, selectedTheme) }

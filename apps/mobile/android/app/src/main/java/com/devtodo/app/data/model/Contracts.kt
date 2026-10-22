@@ -374,17 +374,6 @@ data class BootstrapPage(val snapshotId: String, val cursor: String, val page: I
 data class SyncPreview(val changes: List<ChangeItem>, val complete: Boolean)
 
 @Serializable
-data class DeviceDto(
-    val id: String,
-    val name: String,
-    val platform: String,
-    val lastSeenAt: String,
-    val createdAt: String? = null,
-    val revokedAt: String? = null,
-    val current: Boolean = false,
-)
-
-@Serializable
 data class HubStatusResponse(
     val initialized: Boolean,
     val version: String? = null,
