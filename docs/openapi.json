@@ -222,7 +222,27 @@
       "get": {
         "responses": {
           "200": {
-            "description": "devices"
+            "description": "devices with a current-device marker"
+          }
+        }
+      }
+    },
+    "/devices/{id}": {
+      "delete": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "device session revoked"
           }
         }
       }

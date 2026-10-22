@@ -41,6 +41,7 @@ describe('Fastify API', () => {
     const refreshCookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
     expect(refreshCookie).toContain('devtodo_refresh=');
     expect(refreshCookie).toContain('HttpOnly');
+    expect(refreshCookie).toContain('Max-Age=31536000');
     expect(refreshCookie).not.toContain('Secure');
     const httpShellHeaders = await app.inject({ method: 'GET', url: '/health/live' });
     expect(httpShellHeaders.headers['content-security-policy']).not.toContain(
@@ -162,11 +163,80 @@ describe('Fastify API', () => {
     expect(refreshCookie).toContain('devtodo_refresh=');
     expect(refreshCookie).toContain('HttpOnly');
     expect(refreshCookie).toContain('Secure');
+    expect(refreshCookie).toContain('Max-Age=31536000');
     const httpsShellHeaders = await app.inject({ method: 'GET', url: '/health/live' });
     expect(httpsShellHeaders.headers['content-security-policy']).toContain(
       'upgrade-insecure-requests',
     );
     expect(httpsShellHeaders.headers['strict-transport-security']).toContain('max-age=');
+    await app.close();
+  });
+
+  it('marks the current device and revokes another device session', async () => {
+    const token = 'test-bootstrap-token-that-is-long-enough-device-revoke';
+    const { app } = await buildServer({
+      store: new MemoryStore(),
+      config: { webRoot: '/tmp/devtodo-no-web', bootstrapToken: token },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/bootstrap',
+      payload: { token, username: 'device-owner', password: '100728' },
+    });
+    const deviceA = uuidv7();
+    const deviceB = uuidv7();
+    const loginA = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: {
+        username: 'device-owner',
+        password: '100728',
+        deviceId: deviceA,
+        deviceName: '当前设备',
+        platform: 'web',
+      },
+    });
+    const loginB = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: {
+        username: 'device-owner',
+        password: '100728',
+        deviceId: deviceB,
+        deviceName: '旧设备',
+        platform: 'web',
+      },
+    });
+    expect(loginA.statusCode).toBe(200);
+    expect(loginB.statusCode).toBe(200);
+    const accessA = (loginA.json() as { accessToken: string }).accessToken;
+    const accessB = (loginB.json() as { accessToken: string }).accessToken;
+
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/api/v1/devices',
+      headers: { authorization: `Bearer ${accessA}` },
+    });
+    expect(listed.statusCode).toBe(200);
+    const devices = listed.json() as Array<{ id: string; current: boolean }>;
+    expect(devices.find((device) => device.id === deviceA)?.current).toBe(true);
+    expect(devices.find((device) => device.id === deviceB)?.current).toBe(false);
+
+    const revoked = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/devices/${deviceB}`,
+      headers: { authorization: `Bearer ${accessA}` },
+    });
+    expect(revoked.statusCode).toBe(200);
+    expect(revoked.json()).toEqual({ ok: true });
+
+    const revokedMe = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me',
+      headers: { authorization: `Bearer ${accessB}` },
+    });
+    expect(revokedMe.statusCode).toBe(401);
+    expect(revokedMe.json()).toMatchObject({ code: 'AUTH_SESSION_REVOKED' });
     await app.close();
   });
 

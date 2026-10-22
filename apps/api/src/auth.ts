@@ -10,8 +10,14 @@ export interface AuthConfig {
   accessTokenSecret: string;
   refreshTokenPepper: string;
   accessTokenTtlSeconds: number;
-  refreshTokenTtlDays: number;
+  /**
+   * Sliding inactivity window for refresh sessions. Every successful refresh
+   * starts a new window. `0` keeps the historical "until revoked" behavior.
+   */
+  refreshTokenIdleTtlDays: number;
 }
+
+const NEVER_EXPIRES_MS = 100 * 365 * 86_400_000;
 
 export interface AuthResult {
   accessToken: string;
@@ -26,11 +32,18 @@ export class AuthService {
   constructor(
     private readonly store: Store,
     private readonly config: AuthConfig,
+    private readonly now: () => number = Date.now,
   ) {
     if (config.bootstrapToken.length < 32)
       throw new Error('BOOTSTRAP_TOKEN must contain at least 32 characters');
     if (config.accessTokenSecret.length < 32 || config.refreshTokenPepper.length < 32)
       throw new Error('token secrets are too short');
+    if (
+      !Number.isInteger(config.refreshTokenIdleTtlDays) ||
+      config.refreshTokenIdleTtlDays < 0 ||
+      config.refreshTokenIdleTtlDays > 3_650
+    )
+      throw new Error('REFRESH_TOKEN_IDLE_TTL_DAYS must be an integer between 0 and 3650');
     this.secret = new TextEncoder().encode(config.accessTokenSecret);
   }
 
@@ -65,8 +78,10 @@ export class AuthService {
     const platform = input.platform ?? 'web';
     return this.store.withMutation(async () => {
       const device = await this.store.createDevice(user.id, input.deviceId, deviceName, platform);
-      // Refresh session does not expire by time; valid until explicit logout or chain revocation.
-      const expiresAt = new Date(Date.now() + 100 * 365 * 86_400_000).toISOString();
+      // The refresh session uses a sliding inactivity window. A device that
+      // keeps using the app never needs to sign in again; a long-dormant
+      // credential expires instead of staying valid forever.
+      const expiresAt = this.nextRefreshExpiry();
       await this.store.createSession(
         user.id,
         device.id,
@@ -99,6 +114,10 @@ export class AuthService {
       const session = await this.store.findSessionByHash(presentedHash);
       if (!session || session.revokedAt)
         throw new DomainError('AUTH_SESSION_REVOKED', '会话不存在或已撤销');
+      if (this.isExpired(session.expiresAt)) {
+        await this.store.revokeSessionChain(session);
+        return { status: 'expired' as const };
+      }
       if (session.usedAt || session.replacedById) {
         const successor = nextRefreshToken
           ? await this.store.findSessionByHash(nextHash)
@@ -106,32 +125,35 @@ export class AuthService {
         if (
           !successor ||
           successor.revokedAt ||
+          this.isExpired(successor.expiresAt) ||
           successor.ownerId !== session.ownerId ||
           successor.deviceId !== session.deviceId
         ) {
           await this.store.revokeSessionChain(session);
-          return { replayDetected: true as const };
+          return { status: 'replay' as const };
         }
         const resumedDevice = await this.store.getDevice(successor.ownerId, successor.deviceId);
         if (resumedDevice.revokedAt)
           throw new DomainError('AUTH_SESSION_REVOKED', '设备会话已撤销');
         const resumedUser = await this.store.getUserRecord(successor.ownerId);
         return {
-          replayDetected: false as const,
+          status: 'ok' as const,
           result: await this.buildAuthResult(resumedUser, resumedDevice, nextToken),
         };
       }
       const device = await this.store.getDevice(session.ownerId, session.deviceId);
       if (device.revokedAt) throw new DomainError('AUTH_SESSION_REVOKED', '设备会话已撤销');
       const user = await this.store.getUserRecord(session.ownerId);
-      await this.store.rotateSession(session.id, nextHash, session.expiresAt);
+      await this.store.rotateSession(session.id, nextHash, this.nextRefreshExpiry());
       return {
-        replayDetected: false as const,
+        status: 'ok' as const,
         result: await this.buildAuthResult(user, device, nextToken),
       };
     });
-    if (outcome.replayDetected)
+    if (outcome.status === 'replay')
       throw new DomainError('AUTH_SESSION_REVOKED', '检测到 refresh token 重放，会话链已撤销');
+    if (outcome.status === 'expired')
+      throw new DomainError('AUTH_SESSION_REVOKED', '会话已过期，请重新登录');
     return outcome.result;
   }
 
@@ -188,6 +210,19 @@ export class AuthService {
     if (device.revokedAt) throw new DomainError('AUTH_SESSION_REVOKED', '设备会话已撤销');
     await this.store.getUserRecord(payload.sub);
     return { ownerId: payload.sub, deviceId: payload.deviceId };
+  }
+
+  private nextRefreshExpiry(): string {
+    const windowMs =
+      this.config.refreshTokenIdleTtlDays > 0
+        ? this.config.refreshTokenIdleTtlDays * 86_400_000
+        : NEVER_EXPIRES_MS;
+    return new Date(this.now() + windowMs).toISOString();
+  }
+
+  private isExpired(expiresAt: string): boolean {
+    const deadline = Date.parse(expiresAt);
+    return !Number.isFinite(deadline) || deadline <= this.now();
   }
 
   private hashRefreshToken(value: string): string {

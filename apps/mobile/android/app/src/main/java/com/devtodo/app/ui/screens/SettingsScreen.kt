@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.devtodo.app.data.local.ConflictEntity
 import com.devtodo.app.data.local.OutboxEntity
+import com.devtodo.app.data.model.DeviceDto
 import com.devtodo.app.data.sync.SyncState
 import com.devtodo.app.ui.components.ActionMenu
 import com.devtodo.app.ui.components.RowAction
@@ -64,6 +65,9 @@ fun SettingsScreen(
     val conflicts by viewModel.unresolvedConflicts.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val updateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
+    val devices by viewModel.devices.collectAsStateWithLifecycle()
+    val devicesLoading by viewModel.devicesLoading.collectAsStateWithLifecycle()
+    val devicesError by viewModel.devicesError.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val pinWidget: (Boolean) -> Unit = { requested ->
         if (!requested) {
@@ -83,6 +87,7 @@ fun SettingsScreen(
     var selectedConflict by remember { mutableStateOf<ConflictEntity?>(null) }
     var queue by rememberSaveable { mutableStateOf(false) }
     var showTimezone by rememberSaveable { mutableStateOf(false) }
+    var revokeTarget by remember { mutableStateOf<DeviceDto?>(null) }
     var hideWidgetTitles by rememberSaveable {
         mutableStateOf(viewModel.authManager.widgetHideTitles)
     }
@@ -94,6 +99,7 @@ fun SettingsScreen(
         // Silent unless the user taps 检查更新; the manager throttles this to
         // one request per six hours so opening settings stays cheap.
         viewModel.checkForUpdate(silent = true)
+        viewModel.loadDevices()
     }
 
     val adaptive = LocalAdaptiveInfo.current
@@ -147,6 +153,48 @@ fun SettingsScreen(
                 ) {
                     hub = viewModel.authManager.hubOrigin
                     showHub = true
+                }
+            }
+
+            ExpressiveSettingsGroup(
+                title = "已登录设备",
+                description = "常用设备会一直保持登录；默认连续 365 天未使用才会失效。",
+            ) {
+                if (devicesLoading && devices.isEmpty()) {
+                    Text(
+                        text = "正在加载设备…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else if (devicesError != null) {
+                    Text(
+                        text = devicesError.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                } else if (devices.isEmpty()) {
+                    Text(
+                        text = "没有可显示的设备。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    devices.forEach { device ->
+                        SettingsActionRow(
+                            title = device.name,
+                            subtitle = buildString {
+                                append(device.platform)
+                                append(" · 最近使用 ")
+                                append(formatDeviceLastSeen(device.lastSeenAt))
+                                if (device.current) append(" · 当前设备")
+                            },
+                            actionLabel = if (device.current) "当前设备" else "撤销",
+                            destructive = !device.current,
+                            enabled = !device.current && !devicesLoading,
+                        ) {
+                            revokeTarget = device
+                        }
+                    }
                 }
             }
 
@@ -505,6 +553,25 @@ fun SettingsScreen(
     )
     }
 
+    revokeTarget?.let { device ->
+        AlertDialog(
+            onDismissRequest = { revokeTarget = null },
+            title = { Text("撤销设备？") },
+            text = { Text("“${device.name}”将立即退出登录，需要重新输入密码才能访问。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.revokeDevice(device.id)
+                        revokeTarget = null
+                    }
+                ) {
+                    Text("撤销", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { revokeTarget = null }) { Text("取消") } },
+        )
+    }
+
     discard?.let { item ->
     AlertDialog(
         onDismissRequest = { discard = null },
@@ -536,6 +603,15 @@ fun SettingsScreen(
             },
         )
     }
+}
+
+private fun formatDeviceLastSeen(value: String): String {
+    return runCatching {
+        val parser = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", java.util.Locale.US)
+        val parsed = parser.parse(value)
+        if (parsed == null) value
+        else java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(parsed)
+    }.getOrDefault(value)
 }
 
 @OptIn(ExperimentalLayoutApi::class)

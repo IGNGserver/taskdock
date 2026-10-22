@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 登录会话改为 365 天滑动不活动窗口：每次 refresh 都会续期，常用设备不会因时间掉登录，连续一年未使用才会失效；新增 `REFRESH_TOKEN_IDLE_TTL_DAYS`（0 表示不按时间过期）。Web Cookie 同步按该窗口重设，并受浏览器约 400 天的持久 Cookie 上限约束。存量会话不做一次性清退，在下一次 refresh 时开始按新窗口滑动。
+- 设置页新增“已登录设备”列表与撤销入口；`DELETE /api/v1/devices/:id` 会立即撤销该设备的全部 refresh session。Web 与 Android 登录现在会复用稳定的设备 ID，避免每次登录都生成一台新设备记录。
 - 桌面客户端已停止维护，完整源码归档至 `archive/desktop-client/`；当前活动客户端为响应式 Web/PWA 和 Android。
 - 后续 GitHub Release 只上传 `TaskDock-<版本号>-android.apk`；GitHub 自动提供 `Source code (zip)` 和 `Source code (tar.gz)`，不生成或上传 SHA/校验和文件。
 - 从旧版本升级时，如果 `.env` 的 `NATIVE_ALLOWED_ORIGINS` 包含 `devtodo://app`，请删除该项后再启动中枢。

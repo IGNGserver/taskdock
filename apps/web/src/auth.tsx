@@ -1,6 +1,6 @@
 import type { SettingsDto, UserDto } from '@devtodo/contracts';
 import type { V2SyncEngine } from '@devtodo/sync-client';
-import { DevTodoDatabase } from '@devtodo/sync-client';
+import { createBrowserSyncId, DevTodoDatabase } from '@devtodo/sync-client';
 import {
   createContext,
   useCallback,
@@ -463,6 +463,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({
           username,
           password,
+          deviceId: createBrowserSyncId(),
           deviceName: deviceName ?? '浏览器',
           platform: 'web',
           ...(nativeChallenge ? { nativeChallenge } : {}),
