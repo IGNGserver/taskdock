@@ -62,6 +62,7 @@ fun SettingsScreen(
     val pending by viewModel.pendingOutboxItems.collectAsStateWithLifecycle()
     val conflicts by viewModel.unresolvedConflicts.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val updateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val pinWidget: (Boolean) -> Unit = { requested ->
         if (!requested) {
@@ -86,6 +87,12 @@ fun SettingsScreen(
     }
     val legacyExport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri?.let(viewModel::exportLegacyCache)
+    }
+
+    LaunchedEffect(Unit) {
+        // Silent unless the user taps 检查更新; the manager throttles this to
+        // one request per six hours so opening settings stays cheap.
+        viewModel.checkForUpdate(silent = true)
     }
 
     WorkspaceScaffold(
@@ -322,6 +329,15 @@ fun SettingsScreen(
                 },
             )
         }
+
+        // About & Updates Group
+        AppUpdateSettingsSection(
+            state = updateState,
+            onCheck = { viewModel.checkForUpdate(silent = false) },
+            onDownload = viewModel::downloadUpdate,
+            onCancelDownload = viewModel::cancelUpdateDownload,
+            onInstall = viewModel::requestInstallDownloadedUpdate,
+        )
 
         // Data & Actions Group
         ExpressiveSettingsGroup(title = "数据与账户") {
@@ -640,7 +656,7 @@ private fun ExpressiveSyncSummaryCard(
 }
 
 @Composable
-private fun ExpressiveSettingsGroup(
+internal fun ExpressiveSettingsGroup(
     title: String,
     description: String? = null,
     content: @Composable ColumnScope.() -> Unit,
@@ -676,11 +692,12 @@ private fun ExpressiveSettingsGroup(
 }
 
 @Composable
-private fun SettingsActionRow(
+internal fun SettingsActionRow(
     title: String,
     subtitle: String,
     actionLabel: String,
     destructive: Boolean = false,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     Row(
@@ -706,6 +723,7 @@ private fun SettingsActionRow(
 
         FilledTonalButton(
             onClick = onClick,
+            enabled = enabled,
             shape = TaskDockShapes.FullPill,
             colors = if (destructive) {
                 ButtonDefaults.filledTonalButtonColors(
