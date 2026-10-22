@@ -2,4 +2,6 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <external-path name="my_images" path="." />
     <cache-path name="my_cache_images" path="." />
+    <!-- Only verified update APKs are shared with the system installer. -->
+    <cache-path name="app_updates" path="updates/" />
 </paths>

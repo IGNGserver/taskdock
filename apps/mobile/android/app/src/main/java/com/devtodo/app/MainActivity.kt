@@ -5,7 +5,11 @@ import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -13,6 +17,8 @@ import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.devtodo.app.ui.TaskDockApp
 import com.devtodo.app.ui.screens.MainViewModel
 import com.devtodo.app.ui.screens.MainViewModelFactory
@@ -64,6 +70,11 @@ class MainActivity : ComponentActivity() {
                     widgetNavigation = widgetNavigation,
                     onWidgetNavigationHandled = { widgetNavigation.value = null },
                 )
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.updateInstallEvents.collect { uri -> launchUpdateInstaller(uri) }
             }
         }
     }
@@ -134,5 +145,44 @@ class MainActivity : ComponentActivity() {
         // Do not require NET_CAPABILITY_VALIDATED: a reachable LAN/public HTTP
         // Hub can be usable even when Android has not validated the network.
         return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    private fun launchUpdateInstaller(uriString: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !packageManager.canRequestPackageInstalls()
+        ) {
+            Toast.makeText(
+                this,
+                "请允许 TaskDock 安装未知应用，返回后再点「安装更新」",
+                Toast.LENGTH_LONG,
+            ).show()
+            val settingsIntent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:$packageName"),
+            )
+            runCatching { startActivity(settingsIntent) }
+                .onFailure {
+                    Toast.makeText(
+                        this,
+                        "无法打开安装权限设置，请在系统设置中允许安装未知应用",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            return
+        }
+
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(Uri.parse(uriString), "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { startActivity(intent) }
+            .onFailure {
+                Toast.makeText(
+                    this,
+                    "无法打开系统安装器：${it.message ?: "未知错误"}",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
     }
 }

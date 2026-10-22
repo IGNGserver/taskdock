@@ -10,6 +10,8 @@ import com.devtodo.app.data.local.*
 import com.devtodo.app.data.model.*
 import com.devtodo.app.data.remote.ApiClient
 import com.devtodo.app.data.security.SecureAuthManager
+import com.devtodo.app.data.update.AppUpdateManager
+import com.devtodo.app.data.update.AppUpdateState
 import com.devtodo.app.data.sync.SyncEngine
 import com.devtodo.app.data.sync.SyncOutcome
 import com.devtodo.app.data.sync.SyncState
@@ -81,6 +83,10 @@ class MainViewModel(
     val lastConfirmedAt = currentOwnerId.flatMapLatest { owner ->
         owner?.let { db.syncMetaDao().observe("confirmed:$it").map { value -> value?.toLongOrNull() ?: 0L } } ?: flowOf(0L)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+
+    private val appUpdateManager = AppUpdateManager(authManager.appContext)
+    val appUpdateState: StateFlow<AppUpdateState> = appUpdateManager.state
+    val updateInstallEvents = appUpdateManager.installEvents
 
     private fun bindAccount() {
         if (isolateAccounts && (boundNamespace != authManager.databaseNamespace || boundSession != authManager.sessionKey)) {
@@ -314,6 +320,14 @@ class MainViewModel(
             restorePersistedSession(showOfflineMessage = false)
         }
     }
+
+    fun checkForUpdate(silent: Boolean = false) = appUpdateManager.check(silent)
+
+    fun downloadUpdate() = appUpdateManager.download()
+
+    fun cancelUpdateDownload() = appUpdateManager.cancelDownload()
+
+    fun requestInstallDownloadedUpdate() = appUpdateManager.requestInstall()
 
     fun loadTodayData() {
         // Room observation is independent of the network refresh state.
@@ -2586,6 +2600,7 @@ class MainViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        appUpdateManager.close()
         todayLoadJob?.cancel()
         midnightRefreshJob?.cancel()
         syncEngine.stop()

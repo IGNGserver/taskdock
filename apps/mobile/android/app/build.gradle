@@ -23,11 +23,29 @@ if (releaseTaskRequested && !releaseSigningAvailable) {
     throw new GradleException('缺少 Android Release 签名配置。请准备 signing/taskdock-release.properties 或 TASKDOCK_ANDROID_* 环境变量。')
 }
 def taskdockVersion = System.getenv("TASKDOCK_VERSION") ?: "0.1.0"
-def taskdockBaseVersion = taskdockVersion.replaceFirst(/-.*/, '')
-def taskdockVersionParts = taskdockBaseVersion.tokenize('.').collect { it as Integer }
-def taskdockVersionCode = taskdockVersionParts[0] * 1_000_000 +
-        taskdockVersionParts[1] * 1_000 +
-        taskdockVersionParts[2]
+def taskdockVersionMatch = (taskdockVersion =~ /^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)\.(\d+))?$/)
+if (!taskdockVersionMatch.matches()) {
+    throw new GradleException("TASKDOCK_VERSION 必须是 major.minor.patch 或 major.minor.patch-(alpha|beta|rc).N，实际: ${taskdockVersion}")
+}
+def taskdockMajor = taskdockVersionMatch.group(1).toInteger()
+def taskdockMinor = taskdockVersionMatch.group(2).toInteger()
+def taskdockPatch = taskdockVersionMatch.group(3).toInteger()
+// Stable releases sort above every prerelease of the same base version.
+def taskdockPrereleaseText = taskdockVersionMatch.group(5)
+def taskdockPrerelease = taskdockPrereleaseText?.toInteger() ?: 999
+if (taskdockPrereleaseText != null && taskdockPrerelease > 998) {
+    throw new GradleException("预发布序号必须在 0..998 之间")
+}
+// Android's versionCode cannot contain dots. Keep each release strictly
+// increasing so rc.53 -> rc.54 is accepted by the package installer.
+def taskdockVersionCode = taskdockMajor * 100_000_000 +
+        taskdockMinor * 1_000_000 +
+        taskdockPatch * 1_000 +
+        taskdockPrerelease
+if (taskdockVersionCode > 2_100_000_000) {
+    throw new GradleException("versionCode 超出 Android 上限: ${taskdockVersionCode}")
+}
+println "TaskDock ${taskdockVersion} -> versionCode ${taskdockVersionCode}"
 
 android {
     namespace = "com.devtodo.app"
