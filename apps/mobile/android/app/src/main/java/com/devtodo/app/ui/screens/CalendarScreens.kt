@@ -36,6 +36,7 @@ import com.devtodo.app.data.local.TimePointEntity
 import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.data.model.TimePointType
 import com.devtodo.app.ui.components.ActionMenu
+import com.devtodo.app.ui.components.AdaptiveTwoPaneLayout
 import com.devtodo.app.ui.components.DirectoryTaskPickerDialog
 import com.devtodo.app.ui.components.EmptyState
 import com.devtodo.app.ui.components.ExpressiveTaskCard
@@ -45,6 +46,7 @@ import com.devtodo.app.ui.components.TaskCaptureIsland
 import com.devtodo.app.ui.components.WorkspaceScaffold
 import com.devtodo.app.ui.components.folderPath
 import com.devtodo.app.ui.components.taskStatusLabel
+import com.devtodo.app.ui.theme.LocalAdaptiveInfo
 import com.devtodo.app.ui.theme.TaskDockShapes
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -59,6 +61,8 @@ fun CalendarScreen(
     viewModel: MainViewModel,
     onNavigateToDay: (String) -> Unit,
     onNavigateToEvents: () -> Unit,
+    onNavigateToDetail: ((String) -> Unit)? = null,
+    onNavigateToTree: ((String?, String?) -> Unit)? = null,
     onBack: (() -> Unit)? = null,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -68,6 +72,9 @@ fun CalendarScreen(
     val todayParts = remember(today) { localDateParts(today) }
     var year by rememberSaveable { mutableIntStateOf(todayParts.first) }
     var month by rememberSaveable { mutableIntStateOf(todayParts.second) }
+    var selectedDate by rememberSaveable { mutableStateOf(today) }
+    val adaptive = LocalAdaptiveInfo.current
+    val useSplitCalendar = adaptive.useTwoPane && onNavigateToDetail != null
     val rangeStart = String.format(Locale.US, "%04d-%02d-01", year, month)
     val rangeEnd = String.format(Locale.US, "%04d-%02d-31", year, month)
     val points by remember(rangeStart, rangeEnd) { viewModel.observeMonthPoints(rangeStart, rangeEnd) }
@@ -104,7 +111,7 @@ fun CalendarScreen(
         bottomBar = {
             TaskCaptureIsland(
                 viewModel = viewModel,
-                initialDate = today,
+                initialDate = if (useSplitCalendar) selectedDate else today,
                 primaryLabel = "记一件事",
                 useCapturePreference = true,
             )
@@ -115,78 +122,111 @@ fun CalendarScreen(
             onRefresh = viewModel::pullRefresh,
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().testTag("calendar-month"),
-                contentPadding = PaddingValues(bottom = 28.dp),
-            ) {
-                item(key = "calendar-controls") {
-                    CalendarMonthHeader(
-                        year = year,
-                        month = month,
-                        onPrevious = {
-                            if (month == Calendar.JANUARY) {
-                                month = Calendar.DECEMBER
-                                year -= 1
-                            } else month -= 1
-                        },
-                        onNext = {
-                            if (month == Calendar.DECEMBER) {
-                                month = Calendar.JANUARY
-                                year += 1
-                            } else month += 1
-                        },
-                        onToday = {
-                            year = todayParts.first
-                            month = todayParts.second
-                        },
-                    )
-                }
-                item(key = "calendar-weekdays") {
-                    WeekdayHeader(weekStartsOn)
-                }
-                item(key = "calendar-grid") {
-                    CalendarGrid(
-                        cells = cells,
-                        currentMonth = month,
-                        today = today,
-                        countByDate = countByDate,
-                        onDateClick = onNavigateToDay,
-                    )
-                }
-                item(key = "calendar-events-link") {
-                    Surface(
-                        onClick = onNavigateToEvents,
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        shape = TaskDockShapes.Large,
-                        color = MaterialTheme.colorScheme.tertiaryContainer,
-                    ) {
-                        Row(
+            @Composable
+            fun MonthPaneContent() {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().testTag("calendar-month"),
+                    contentPadding = PaddingValues(bottom = 28.dp),
+                ) {
+                    item(key = "calendar-controls") {
+                        CalendarMonthHeader(
+                            year = year,
+                            month = month,
+                            onPrevious = {
+                                if (month == Calendar.JANUARY) {
+                                    month = Calendar.DECEMBER
+                                    year -= 1
+                                } else month -= 1
+                            },
+                            onNext = {
+                                if (month == Calendar.DECEMBER) {
+                                    month = Calendar.JANUARY
+                                    year += 1
+                                } else month += 1
+                            },
+                            onToday = {
+                                year = todayParts.first
+                                month = todayParts.second
+                                selectedDate = today
+                            },
+                            compact = adaptive.isCompactLandscape,
+                        )
+                    }
+                    item(key = "calendar-weekdays") {
+                        WeekdayHeader(weekStartsOn)
+                    }
+                    item(key = "calendar-grid") {
+                        CalendarGrid(
+                            cells = cells,
+                            currentMonth = month,
+                            today = today,
+                            selectedDate = if (useSplitCalendar) selectedDate else null,
+                            countByDate = countByDate,
+                            compactCells = adaptive.isCompactLandscape || useSplitCalendar,
+                            onDateClick = { clickedDate ->
+                                selectedDate = clickedDate
+                                if (!useSplitCalendar) {
+                                    onNavigateToDay(clickedDate)
+                                }
+                            },
+                        )
+                    }
+                    item(key = "calendar-events-link") {
+                        Surface(
+                            onClick = onNavigateToEvents,
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            shape = TaskDockShapes.Large,
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
                         ) {
-                            Icon(Icons.Default.EventAvailable, null)
-                            Column(Modifier.weight(1f)) {
-                                Text("事件", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    if (events.isEmpty()) "创建事件并为它安排任务" else "${events.size} 个事件 · 查看事件安排",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Icon(Icons.Default.EventAvailable, null)
+                                Column(Modifier.weight(1f)) {
+                                    Text("事件", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        if (events.isEmpty()) "创建事件并为它安排任务" else "${events.size} 个事件 · 查看事件安排",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    )
+                                }
+                                Icon(Icons.AutoMirrored.Filled.ArrowForward, "打开事件")
                             }
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, "打开事件")
+                        }
+                    }
+                    if (datePoints.isEmpty()) {
+                        item(key = "calendar-empty") {
+                            EmptyState(
+                                icon = Icons.Default.CalendarMonth,
+                                title = "这个月还没有日期安排",
+                                description = "点击任意日期查看当天安排，或从底部记下一件事。",
+                            )
                         }
                     }
                 }
-                if (datePoints.isEmpty()) {
-                    item(key = "calendar-empty") {
-                        EmptyState(
-                            icon = Icons.Default.CalendarMonth,
-                            title = "这个月还没有日期安排",
-                            description = "点击任意日期查看当天安排，或从底部记下一件事。",
-                        )
-                    }
-                }
+            }
+
+            if (useSplitCalendar) {
+                AdaptiveTwoPaneLayout(
+                    primaryPane = { MonthPaneContent() },
+                    secondaryPane = {
+                        key(selectedDate) {
+                            DayScheduleScreen(
+                                localDate = selectedDate,
+                                viewModel = viewModel,
+                                onNavigateToDetail = onNavigateToDetail!!,
+                                onNavigateToTree = onNavigateToTree ?: { _, _ -> },
+                                onNavigateToEvents = onNavigateToEvents,
+                                onBack = {},
+                                isEmbedded = true,
+                            )
+                        }
+                    },
+                )
+            } else {
+                MonthPaneContent()
             }
         }
     }
@@ -199,13 +239,14 @@ private fun CalendarMonthHeader(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onToday: () -> Unit,
+    compact: Boolean = false,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (compact) 6.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text("${year}年${month + 1}月", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+            Text("${year}年${month + 1}月", style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
             Text("点击日期查看当天安排", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         IconButton(onClick = onToday) { Icon(Icons.Default.CalendarToday, "回到今天") }
@@ -235,7 +276,9 @@ private fun CalendarGrid(
     cells: List<CalendarCell>,
     currentMonth: Int,
     today: String,
+    selectedDate: String? = null,
     countByDate: Map<String, Int>,
+    compactCells: Boolean = false,
     onDateClick: (String) -> Unit,
 ) {
     Column(
@@ -249,7 +292,9 @@ private fun CalendarGrid(
                         cell = cell,
                         currentMonth = currentMonth,
                         today = today,
+                        isSelected = cell.localDate != null && cell.localDate == selectedDate,
                         count = cell.localDate?.let { countByDate[it] ?: 0 } ?: 0,
+                        compact = compactCells,
                         modifier = Modifier.weight(1f).testTag(cell.localDate?.let { "calendar-day-$it" } ?: "calendar-day-empty-$rowIndex-$columnIndex"),
                         onClick = { cell.localDate?.let(onDateClick) },
                     )
@@ -264,7 +309,9 @@ private fun CalendarDayCell(
     cell: CalendarCell,
     currentMonth: Int,
     today: String,
+    isSelected: Boolean = false,
     count: Int,
+    compact: Boolean = false,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
@@ -274,24 +321,29 @@ private fun CalendarDayCell(
     Surface(
         onClick = onClick,
         enabled = date != null,
-        modifier = modifier.heightIn(min = 64.dp),
+        modifier = modifier.heightIn(min = if (compact) 48.dp else 64.dp),
         shape = TaskDockShapes.Medium,
         color = when {
+            isSelected -> MaterialTheme.colorScheme.secondaryContainer
             isToday -> MaterialTheme.colorScheme.primaryContainer
             isCurrentMonth -> MaterialTheme.colorScheme.surfaceContainerLow
             else -> MaterialTheme.colorScheme.surfaceContainerLowest
         },
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = if (compact) 4.dp else 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp),
         ) {
             Text(
                 text = cell.day?.toString().orEmpty(),
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                color = if (isCurrentMonth) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
+                color = when {
+                    isSelected -> MaterialTheme.colorScheme.onSecondaryContainer
+                    isCurrentMonth -> MaterialTheme.colorScheme.onSurface
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                },
             )
             if (count > 0) {
                 Surface(shape = TaskDockShapes.FullPill, color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary) {
@@ -303,7 +355,7 @@ private fun CalendarDayCell(
                     )
                 }
             } else {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(if (compact) 12.dp else 16.dp))
             }
         }
     }
@@ -318,6 +370,7 @@ fun DayScheduleScreen(
     onNavigateToTree: (String?, String?) -> Unit,
     onNavigateToEvents: () -> Unit,
     onBack: () -> Unit,
+    isEmbedded: Boolean = false,
 ) {
     val points by viewModel.activeTimePoints.collectAsStateWithLifecycle()
     val placements by viewModel.activeTimePointPlacements.collectAsStateWithLifecycle()
@@ -377,92 +430,101 @@ fun DayScheduleScreen(
         }
     }
 
-    WorkspaceScaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(formatLocalDate(localDate, timezone)) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回日历") } },
-                actions = {
-                    IconButton(onClick = onNavigateToEvents) { Icon(Icons.Default.Event, "事件") }
-                    IconButton(onClick = ::openPicker) { Icon(Icons.Default.Add, "从已有任务安排") }
-                },
-            )
-        },
-        bottomBar = {
-            TaskCaptureIsland(viewModel = viewModel, initialDate = localDate, primaryLabel = "记一件事")
-        },
-    ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = refreshing,
-            onRefresh = viewModel::pullRefresh,
-            modifier = Modifier.fillMaxSize().padding(padding),
+    @Composable
+    fun DayScheduleList(padding: PaddingValues) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding).testTag("day-schedule-$localDate"),
+            contentPadding = PaddingValues(bottom = 28.dp),
         ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().testTag("day-schedule-$localDate"),
-                contentPadding = PaddingValues(bottom = 28.dp),
-            ) {
-                item(key = "day-summary") {
-                    DaySummaryCard(localDate, scheduled.size, timezone, ::openPicker)
+            item(key = "day-summary") {
+                DaySummaryCard(localDate, scheduled.size, timezone, ::openPicker)
+            }
+            if (scheduled.isEmpty()) {
+                item(key = "day-empty") {
+                    EmptyState(
+                        icon = Icons.Default.CalendarToday,
+                        title = "这一天还没有安排",
+                        description = "记下一件事，或从已有任务中选择。",
+                        action = {
+                            FilledTonalButton(onClick = ::openPicker, shape = TaskDockShapes.FullPill) {
+                                Icon(Icons.Default.Add, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("添加已有任务")
+                            }
+                        },
+                    )
                 }
-                if (scheduled.isEmpty()) {
-                    item(key = "day-empty") {
-                        EmptyState(
-                            icon = Icons.Default.CalendarToday,
-                            title = "这一天还没有安排",
-                            description = "记下一件事，或从已有任务中选择。",
-                            action = {
-                                FilledTonalButton(onClick = ::openPicker, shape = TaskDockShapes.FullPill) {
-                                    Icon(Icons.Default.Add, null)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("添加已有任务")
-                                }
-                            },
+            } else {
+                item(key = "day-heading") { SectionHeading("当天安排 · ${scheduled.size}") }
+                statusGroups.forEach { group ->
+                    if (group.items.isEmpty()) return@forEach
+                    item(key = "day-group-${group.status}") {
+                        PlacementGroupHeading(
+                            status = group.status,
+                            count = group.items.size,
+                            collapsed = group.status == TaskStatus.DONE && !doneOpen,
+                            onToggle =
+                                if (group.status == TaskStatus.DONE) {
+                                    { doneOpen = !doneOpen }
+                                } else {
+                                    null
+                                },
                         )
                     }
-                } else {
-                    item(key = "day-heading") { SectionHeading("当天安排 · ${scheduled.size}") }
-                    statusGroups.forEach { group ->
-                        if (group.items.isEmpty()) return@forEach
-                        item(key = "day-group-${group.status}") {
-                            PlacementGroupHeading(
-                                status = group.status,
-                                count = group.items.size,
-                                collapsed = group.status == TaskStatus.DONE && !doneOpen,
-                                onToggle =
-                                    if (group.status == TaskStatus.DONE) {
-                                        { doneOpen = !doneOpen }
-                                    } else {
-                                        null
-                                    },
-                            )
-                        }
-                        if (group.status == TaskStatus.DONE && !doneOpen) return@forEach
-                        itemsIndexed(group.items, key = { _, pair -> pair.second.id }) { index, (task, placement) ->
-                            ExpressiveTaskCard(
-                                task = task,
-                                onClick = { onNavigateToDetail(task.id) },
-                                onStatusToggle = { viewModel.updateTaskStatus(task, it) },
-                                projectName = folderPath(task.parentFolderId, folders),
-                                actions = listOf(
-                                    RowAction("上移", enabled = index > 0) { moveScheduled(placement.id, -1) },
-                                    RowAction("下移", enabled = index < group.items.lastIndex) { moveScheduled(placement.id, 1) },
-                                    RowAction("移动到其他位置") {
-                                        targetPlacement = placement
-                                        targetCopy = false
-                                    },
-                                    RowAction("复制到其他位置") {
-                                        targetPlacement = placement
-                                        targetCopy = true
-                                    },
-                                    RowAction("从当天移除", destructive = true) { viewModel.removePlacement(placement) },
-                                    RowAction("在目录中定位") { onNavigateToTree(task.parentFolderId, task.id) },
-                                ),
-                                rowShape = TaskDockShapes.groupedRow(index, group.items.size),
-                                modifier = Modifier.animateItem(),
-                            )
-                        }
+                    if (group.status == TaskStatus.DONE && !doneOpen) return@forEach
+                    itemsIndexed(group.items, key = { _, pair -> pair.second.id }) { index, (task, placement) ->
+                        ExpressiveTaskCard(
+                            task = task,
+                            onClick = { onNavigateToDetail(task.id) },
+                            onStatusToggle = { viewModel.updateTaskStatus(task, it) },
+                            projectName = folderPath(task.parentFolderId, folders),
+                            actions = listOf(
+                                RowAction("上移", enabled = index > 0) { moveScheduled(placement.id, -1) },
+                                RowAction("下移", enabled = index < group.items.lastIndex) { moveScheduled(placement.id, 1) },
+                                RowAction("移动到其他位置") {
+                                    targetPlacement = placement
+                                    targetCopy = false
+                                },
+                                RowAction("复制到其他位置") {
+                                    targetPlacement = placement
+                                    targetCopy = true
+                                },
+                                RowAction("从当天移除", destructive = true) { viewModel.removePlacement(placement) },
+                                RowAction("在目录中定位") { onNavigateToTree(task.parentFolderId, task.id) },
+                            ),
+                            rowShape = TaskDockShapes.groupedRow(index, group.items.size),
+                            modifier = Modifier.animateItem(),
+                        )
                     }
                 }
+            }
+        }
+    }
+
+    if (isEmbedded) {
+        DayScheduleList(PaddingValues(0.dp))
+    } else {
+        WorkspaceScaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(formatLocalDate(localDate, timezone)) },
+                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回日历") } },
+                    actions = {
+                        IconButton(onClick = onNavigateToEvents) { Icon(Icons.Default.Event, "事件") }
+                        IconButton(onClick = ::openPicker) { Icon(Icons.Default.Add, "从已有任务安排") }
+                    },
+                )
+            },
+            bottomBar = {
+                TaskCaptureIsland(viewModel = viewModel, initialDate = localDate, primaryLabel = "记一件事")
+            },
+        ) { padding ->
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = viewModel::pullRefresh,
+                modifier = Modifier.fillMaxSize().padding(padding),
+            ) {
+                DayScheduleList(PaddingValues(0.dp))
             }
         }
     }
@@ -522,11 +584,17 @@ private fun DaySummaryCard(localDate: String, count: Int, timezone: String, onAd
 fun EventsScreen(
     viewModel: MainViewModel,
     onNavigateToEvent: (String) -> Unit,
+    onNavigateToDetail: ((String) -> Unit)? = null,
+    onNavigateToTree: ((String?, String?) -> Unit)? = null,
     onBack: () -> Unit,
 ) {
     val events by viewModel.activeEvents.collectAsStateWithLifecycle()
     val placements by viewModel.activeTimePointPlacements.collectAsStateWithLifecycle()
     val refreshing by viewModel.pullRefreshing.collectAsStateWithLifecycle()
+    val adaptive = LocalAdaptiveInfo.current
+    val useSplitEvents = adaptive.useTwoPane && onNavigateToDetail != null
+    var selectedEventId by rememberSaveable { mutableStateOf<String?>(null) }
+    val activeSelectedEventId = (selectedEventId ?: events.firstOrNull()?.id)?.takeIf { id -> events.any { it.id == id } }
     var showCreate by rememberSaveable { mutableStateOf(false) }
 
     WorkspaceScaffold(
@@ -550,47 +618,89 @@ fun EventsScreen(
             onRefresh = viewModel::pullRefresh,
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().testTag("events-list"),
-                contentPadding = PaddingValues(bottom = 96.dp),
-            ) {
-                item(key = "events-intro") {
-                    Text(
-                        "事件是可重复使用的里程碑位置；任务本体不会因为事件删除而消失。",
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (events.isEmpty()) {
-                    item(key = "events-empty") {
-                        EmptyState(
-                            icon = Icons.Default.Event,
-                            title = "还没有事件",
-                            description = "创建一个里程碑，再把已有任务加入其中。",
-                            action = {
-                                FilledTonalButton(onClick = { showCreate = true }, shape = TaskDockShapes.FullPill) {
-                                    Icon(Icons.Default.Add, null)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("创建事件")
-                                }
-                            },
+            @Composable
+            fun EventsListPane() {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().testTag("events-list"),
+                    contentPadding = PaddingValues(bottom = 96.dp),
+                ) {
+                    item(key = "events-intro") {
+                        Text(
+                            "事件是可重复使用的里程碑位置；任务本体不会因为事件删除而消失。",
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                } else {
-                    item(key = "events-heading") { SectionHeading("事件列表 · ${events.size}") }
-                    itemsIndexed(events, key = { _, event -> event.id }) { index, event ->
-                        EventListRow(
-                            event = event,
-                            count = placements.count { it.timePointId == event.id },
-                            onClick = { onNavigateToEvent(event.id) },
-                            onMoveUp = { viewModel.reorderEvents(events.map { it.id }.moveItem(index, index - 1)) },
-                            onMoveDown = { viewModel.reorderEvents(events.map { it.id }.moveItem(index, index + 1)) },
-                            canMoveUp = index > 0,
-                            canMoveDown = index < events.lastIndex,
-                        )
+                    if (events.isEmpty()) {
+                        item(key = "events-empty") {
+                            EmptyState(
+                                icon = Icons.Default.Event,
+                                title = "还没有事件",
+                                description = "创建一个里程碑，再把已有任务加入其中。",
+                                action = {
+                                    FilledTonalButton(onClick = { showCreate = true }, shape = TaskDockShapes.FullPill) {
+                                        Icon(Icons.Default.Add, null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("创建事件")
+                                    }
+                                },
+                            )
+                        }
+                    } else {
+                        item(key = "events-heading") { SectionHeading("事件列表 · ${events.size}") }
+                        itemsIndexed(events, key = { _, event -> event.id }) { index, event ->
+                            EventListRow(
+                                event = event,
+                                count = placements.count { it.timePointId == event.id },
+                                isSelected = useSplitEvents && event.id == activeSelectedEventId,
+                                onClick = {
+                                    selectedEventId = event.id
+                                    if (!useSplitEvents) {
+                                        onNavigateToEvent(event.id)
+                                    }
+                                },
+                                onMoveUp = { viewModel.reorderEvents(events.map { it.id }.moveItem(index, index - 1)) },
+                                onMoveDown = { viewModel.reorderEvents(events.map { it.id }.moveItem(index, index + 1)) },
+                                canMoveUp = index > 0,
+                                canMoveDown = index < events.lastIndex,
+                            )
+                        }
                     }
                 }
+            }
+
+            if (useSplitEvents) {
+                AdaptiveTwoPaneLayout(
+                    primaryPane = { EventsListPane() },
+                    secondaryPane = {
+                        if (activeSelectedEventId != null) {
+                            key(activeSelectedEventId) {
+                                EventDetailScreen(
+                                    eventId = activeSelectedEventId,
+                                    viewModel = viewModel,
+                                    onNavigateToDetail = onNavigateToDetail!!,
+                                    onNavigateToTree = onNavigateToTree ?: { _, _ -> },
+                                    onBack = { selectedEventId = null },
+                                    isEmbedded = true,
+                                )
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize().padding(24.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                EmptyState(
+                                    icon = Icons.Default.Event,
+                                    title = "选择或创建一个事件",
+                                    description = "点击左侧事件查看里程碑进度与关联任务安排。",
+                                )
+                            }
+                        }
+                    },
+                )
+            } else {
+                EventsListPane()
             }
         }
     }
@@ -601,7 +711,14 @@ fun EventsScreen(
             initialValue = "",
             confirmLabel = "创建",
             onDismiss = { showCreate = false },
-            onConfirm = { name -> viewModel.createEvent(name) { id -> if (id != null) showCreate = false } },
+            onConfirm = { name ->
+                viewModel.createEvent(name) { id ->
+                    if (id != null) {
+                        selectedEventId = id
+                        showCreate = false
+                    }
+                }
+            },
         )
     }
 }
@@ -610,6 +727,7 @@ fun EventsScreen(
 private fun EventListRow(
     event: TimePointEntity,
     count: Int,
+    isSelected: Boolean = false,
     onClick: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
@@ -620,7 +738,7 @@ private fun EventListRow(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         shape = TaskDockShapes.Large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
@@ -656,6 +774,7 @@ fun EventDetailScreen(
     onNavigateToDetail: (String) -> Unit,
     onNavigateToTree: (String?, String?) -> Unit,
     onBack: () -> Unit,
+    isEmbedded: Boolean = false,
 ) {
     val events by viewModel.activeEvents.collectAsStateWithLifecycle()
     val placements by viewModel.activeTimePointPlacements.collectAsStateWithLifecycle()
@@ -692,11 +811,17 @@ fun EventDetailScreen(
         }
 
     if (event == null) {
-        WorkspaceScaffold(
-            topBar = { TopAppBar(title = { Text("事件详情") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) },
-        ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+        if (isEmbedded) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 EmptyState(Icons.Default.Event, "事件不存在", "它可能已被删除或尚未同步。")
+            }
+        } else {
+            WorkspaceScaffold(
+                topBar = { TopAppBar(title = { Text("事件详情") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) },
+            ) { padding ->
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    EmptyState(Icons.Default.Event, "事件不存在", "它可能已被删除或尚未同步。")
+                }
             }
         }
         return
@@ -711,26 +836,8 @@ fun EventDetailScreen(
         viewModel.reorderPlacements(event.id, next.map { it.second.id })
     }
 
-    WorkspaceScaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(event.title ?: "事件详情", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回事件列表") } },
-                actions = {
-                    IconButton(onClick = { showEdit = true }) { Icon(Icons.Default.Edit, "编辑事件") }
-                    IconButton(onClick = { showDelete = true }) { Icon(Icons.Default.Delete, "删除事件") }
-                },
-            )
-        },
-        bottomBar = {
-            TaskCaptureIsland(
-                viewModel = viewModel,
-                eventId = event.id,
-                eventTitle = event.title,
-                primaryLabel = "在事件中记一件事",
-            )
-        },
-    ) { padding ->
+    @Composable
+    fun EventDetailList(padding: PaddingValues) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding).testTag("event-detail-${event.id}"),
             contentPadding = PaddingValues(bottom = 28.dp),
@@ -742,6 +849,8 @@ fun EventDetailScreen(
                     onReach = { viewModel.reachEvent(event) },
                     onUnreach = { viewModel.unreachEvent(event) },
                     onAdd = { showPicker = true },
+                    onEdit = if (isEmbedded) ({ showEdit = true }) else null,
+                    onDelete = if (isEmbedded) ({ showDelete = true }) else null,
                 )
             }
             if (scheduled.isEmpty()) {
@@ -803,6 +912,47 @@ fun EventDetailScreen(
                     }
                 }
             }
+        }
+    }
+
+    if (isEmbedded) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            bottomBar = {
+                TaskCaptureIsland(
+                    viewModel = viewModel,
+                    eventId = event.id,
+                    eventTitle = event.title,
+                    primaryLabel = "在事件中记一件事",
+                )
+            },
+        ) { padding ->
+            EventDetailList(padding)
+        }
+    } else {
+        WorkspaceScaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(event.title ?: "事件详情", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回事件列表") } },
+                    actions = {
+                        IconButton(onClick = { showEdit = true }) { Icon(Icons.Default.Edit, "编辑事件") }
+                        IconButton(onClick = { showDelete = true }) { Icon(Icons.Default.Delete, "删除事件") }
+                    },
+                )
+            },
+            bottomBar = {
+                TaskCaptureIsland(
+                    viewModel = viewModel,
+                    eventId = event.id,
+                    eventTitle = event.title,
+                    primaryLabel = "在事件中记一件事",
+                )
+            },
+        ) { padding ->
+            EventDetailList(padding)
         }
     }
 
@@ -870,6 +1020,8 @@ private fun EventSummaryCard(
     onReach: () -> Unit,
     onUnreach: () -> Unit,
     onAdd: () -> Unit,
+    onEdit: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -881,6 +1033,16 @@ private fun EventSummaryCard(
                 Column(Modifier.weight(1f)) {
                     Text(event.title ?: "未命名事件", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                     Text(if (event.reachedAt == null) "未到达 · $count 个安排" else "已到达 · $count 个安排", color = MaterialTheme.colorScheme.onTertiaryContainer)
+                }
+                if (onEdit != null) {
+                    IconButton(onClick = onEdit) {
+                        Icon(Icons.Default.Edit, "编辑事件", tint = MaterialTheme.colorScheme.onTertiaryContainer)
+                    }
+                }
+                if (onDelete != null) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, "删除事件", tint = MaterialTheme.colorScheme.onTertiaryContainer)
+                    }
                 }
                 Icon(Icons.Default.Event, null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
             }

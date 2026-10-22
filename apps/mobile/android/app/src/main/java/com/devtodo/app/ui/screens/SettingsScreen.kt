@@ -34,6 +34,7 @@ import com.devtodo.app.data.sync.SyncState
 import com.devtodo.app.ui.components.ActionMenu
 import com.devtodo.app.ui.components.RowAction
 import com.devtodo.app.ui.components.WorkspaceScaffold
+import com.devtodo.app.ui.theme.LocalAdaptiveInfo
 import com.devtodo.app.ui.theme.TaskDockShapes
 import com.devtodo.app.ui.theme.ThemeMode
 import com.devtodo.app.widget.WidgetPin
@@ -95,262 +96,297 @@ fun SettingsScreen(
         viewModel.checkForUpdate(silent = true)
     }
 
+    val adaptive = LocalAdaptiveInfo.current
     WorkspaceScaffold(
-    topBar = {
-        TopAppBar(
-            title = { Text("设置", fontWeight = FontWeight.Medium) },
-            navigationIcon = {
-                if (onBack != null) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+        topBar = {
+            TopAppBar(
+                title = { Text("设置", fontWeight = FontWeight.Medium) },
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                        }
                     }
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-            )
-        )
-    }
-    ) { padding ->
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 48.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        // Expressive Sync & Account Card
-        ExpressiveSyncSummaryCard(
-            username = viewModel.authManager.username ?: "当前账户",
-            state = sync,
-            pendingCount = pending.size,
-            conflictCount = conflicts.size,
-            error = error,
-            onSync = viewModel::syncNow,
-            onReauthenticate = { logout = true },
-        )
-
-        // Server Connection Group
-        if (viewModel.authManager.hasLegacyCache) {
-            ExpressiveSettingsGroup(title = "旧版缓存已保留", description = "旧数据库没有中枢身份，离线队列不会自动上传到当前中枢。") {
-                SettingsActionRow(title = "导出旧缓存与离线队列", subtitle = "包含个人任务数据，请妥善保管；不包含登录凭据", actionLabel = "导出") {
-                    legacyExport.launch("taskdock-legacy-cache.json")
-                }
-            }
-        }
-        // Server Connection Group
-        ExpressiveSettingsGroup(
-            title = "连接",
-            description = serverSummary(viewModel.authManager.hubOrigin),
-        ) {
-            SettingsActionRow(
-                title = "中枢服务地址",
-                subtitle = "完整地址只在编辑时显示",
-                actionLabel = "更改",
-            ) {
-                hub = viewModel.authManager.hubOrigin
-                showHub = true
-            }
-        }
-
-        // Sync Queue Group
-        ExpressiveSettingsGroup(
-            title = "离线同步队列",
-            description = "${pending.size} 项本地待提交 · ${conflicts.size} 项冲突",
-        ) {
-            SettingsActionRow(
-                title = "本地待处理队列",
-                subtitle = if (pending.isEmpty() && conflicts.isEmpty()) "队列畅通，无积压操作" else "查看、重试或丢弃离线队列",
-                actionLabel = if (queue) "收起" else "查看",
-            ) {
-                queue = !queue
-            }
-
-            AnimatedVisibility(
-                visible = queue,
-                enter = fadeIn(com.devtodo.app.ui.theme.TaskDockMotion.springEffectsFast()) +
-                    expandVertically(com.devtodo.app.ui.theme.TaskDockMotion.springSpatial()),
-                exit = fadeOut(com.devtodo.app.ui.theme.TaskDockMotion.springEffectsFast()) +
-                    shrinkVertically(com.devtodo.app.ui.theme.TaskDockMotion.springSpatial()),
-            ) {
-                Column(Modifier.padding(bottom = 8.dp)) {
-                    if (conflicts.isNotEmpty()) {
-                        Text(
-                            text = "存在待解决的版本冲突。点击冲突条目可选择采纳服务器、保留本地或编辑合并。",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    conflicts.forEach { conflict ->
-                        ListItem(
-                            headlineContent = { Text(conflict.command ?: conflict.entityType) },
-                            supportingContent = { Text("记录 ID: ${conflict.entityId.take(8)} · 点击处理冲突") },
-                            trailingContent = {
-                                TextButton(onClick = { selectedConflict = conflict }) {
-                                    Text("解决")
-                                }
-                            },
-                            modifier = Modifier.clickable { selectedConflict = conflict },
-                            colors = transparentListItemColors(),
-                        )
-                    }
-                    pending.forEach { item ->
-                        ListItem(
-                            headlineContent = { Text(item.command) },
-                            supportingContent = { Text(item.lastError ?: "等待同步") },
-                            trailingContent = {
-                                ActionMenu(
-                                    "待提交操作",
-                                    listOf(
-                                        RowAction("立即重试") { viewModel.retryOutboxItem(item) },
-                                        RowAction("丢弃操作", destructive = true) { discard = item },
-                                    ),
-                                )
-                            },
-                            colors = transparentListItemColors(),
-                        )
-                    }
-                }
-            }
-        }
-
-        // Date & Regional Group
-        ExpressiveSettingsGroup(
-            title = "日期与安排设置",
-            description = "日期规划与今日视图的时间准则。",
-        ) {
-            SettingsActionRow(
-                title = "工作区时区",
-                subtitle = timezoneLabel(settings?.timezone ?: "Asia/Shanghai"),
-                actionLabel = "更改",
-            ) {
-                showTimezone = true
-            }
-
-            ExpressiveChoiceRow(
-                title = "每周起始日",
-                options = listOf(1 to "周一", 0 to "周日"),
-                selected = settings?.weekStartsOn ?: 1,
-                onSelect = { viewModel.updateSettings(weekStartsOn = it) },
-            )
-
-            ExpressiveChoiceRow(
-                title = "新记录默认存入",
-                options = listOf("ROOT" to "根目录", "RECENT_FOLDER" to "最近文件夹"),
-                selected = settings?.defaultCaptureTarget ?: "ROOT",
-                onSelect = { viewModel.updateSettings(defaultCaptureTarget = it) },
-            )
-        }
-
-        // Appearance & Themes Group
-        ExpressiveSettingsGroup(
-            title = "外观与主题",
-            description = "采用 Material 3 Expressive 色阶与动效。",
-        ) {
-            ExpressiveChoiceRow(
-                title = "色彩模式",
-                options = listOf(
-                    ThemeMode.SYSTEM to "跟随系统",
-                    ThemeMode.LIGHT to "浅色",
-                    ThemeMode.DARK to "深色",
-                ),
-                selected = theme,
-                onSelect = onThemeModeChange,
-            )
-
-            ExpressiveSwitchRow(
-                title = "Material You 动态配色",
-                subtitle = if (Build.VERSION.SDK_INT >= 31) "提取系统壁纸颜色呈现" else "需要 Android 12 或更新版本",
-                checked = dynamic,
-                onCheckedChange = onDynamicColorChange,
-                enabled = Build.VERSION.SDK_INT >= 31,
-            )
-
-            ExpressiveSwitchRow(
-                title = "AMOLED 纯黑底色",
-                subtitle = "在深色模式下使用纯黑背景降低能耗",
-                checked = black,
-                onCheckedChange = onPureBlackChange,
-            )
-        }
-
-        // Home-screen widgets
-        ExpressiveSettingsGroup(
-            title = "桌面小组件",
-            description = "把今天和待办放到主屏；组件操作先写本地，再自动同步。",
-        ) {
-            SettingsActionRow(
-                title = "今日",
-                subtitle = "4×2，可拉高到 4×4；日期、进度和今天任务",
-                actionLabel = "添加到桌面",
-            ) {
-                pinWidget(WidgetPin.today(context))
-            }
-            SettingsActionRow(
-                title = "待办",
-                subtitle = "4×4；未完成任务、目录和最近完成项",
-                actionLabel = "添加到桌面",
-            ) {
-                pinWidget(WidgetPin.open(context))
-            }
-            SettingsActionRow(
-                title = "下一步",
-                subtitle = "2×2；桌面只留一件最该做的事",
-                actionLabel = "添加到桌面",
-            ) {
-                pinWidget(WidgetPin.next(context))
-            }
-            SettingsActionRow(
-                title = "速记",
-                subtitle = "2×2；点一下打开键盘，记到今天就走",
-                actionLabel = "添加到桌面",
-            ) {
-                pinWidget(WidgetPin.capture(context))
-            }
-            SettingsActionRow(
-                title = "目录",
-                subtitle = "4×4；添加时选择一个目录，固定查看该目录",
-                actionLabel = "添加到桌面",
-            ) {
-                pinWidget(WidgetPin.folder(context))
-            }
-            ExpressiveSwitchRow(
-                title = "隐藏任务标题",
-                subtitle = "桌面只显示日期、数量与状态；任务内容仍可点开查看",
-                checked = hideWidgetTitles,
-                onCheckedChange = {
-                    hideWidgetTitles = it
-                    viewModel.authManager.widgetHideTitles = it
-                    WidgetUpdater.refreshAll(context)
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
             )
-        }
+        },
+    ) { padding ->
+        @Composable
+        fun AccountAndSyncSection() {
+            // Expressive Sync & Account Card
+            ExpressiveSyncSummaryCard(
+                username = viewModel.authManager.username ?: "当前账户",
+                state = sync,
+                pendingCount = pending.size,
+                conflictCount = conflicts.size,
+                error = error,
+                onSync = viewModel::syncNow,
+                onReauthenticate = { logout = true },
+            )
 
-        // About & Updates Group
-        AppUpdateSettingsSection(
-            state = updateState,
-            onCheck = { viewModel.checkForUpdate(silent = false) },
-            onDownload = viewModel::downloadUpdate,
-            onCancelDownload = viewModel::cancelUpdateDownload,
-            onInstall = viewModel::requestInstallDownloadedUpdate,
-        )
-
-        // Data & Actions Group
-        ExpressiveSettingsGroup(title = "数据与账户") {
-            SettingsActionRow(
-                title = "退出当前账户",
-                subtitle = "本地任务将安全保留；未提交操作需重新登录原账户同步。",
-                actionLabel = "退出",
-                destructive = true,
+            // Server Connection Group
+            if (viewModel.authManager.hasLegacyCache) {
+                ExpressiveSettingsGroup(title = "旧版缓存已保留", description = "旧数据库没有中枢身份，离线队列不会自动上传到当前中枢。") {
+                    SettingsActionRow(title = "导出旧缓存与离线队列", subtitle = "包含个人任务数据，请妥善保管；不包含登录凭据", actionLabel = "导出") {
+                        legacyExport.launch("taskdock-legacy-cache.json")
+                    }
+                }
+            }
+            // Server Connection Group
+            ExpressiveSettingsGroup(
+                title = "连接",
+                description = serverSummary(viewModel.authManager.hubOrigin),
             ) {
-                logout = true
+                SettingsActionRow(
+                    title = "中枢服务地址",
+                    subtitle = "完整地址只在编辑时显示",
+                    actionLabel = "更改",
+                ) {
+                    hub = viewModel.authManager.hubOrigin
+                    showHub = true
+                }
+            }
+
+            // Sync Queue Group
+            ExpressiveSettingsGroup(
+                title = "离线同步队列",
+                description = "${pending.size} 项本地待提交 · ${conflicts.size} 项冲突",
+            ) {
+                SettingsActionRow(
+                    title = "本地待处理队列",
+                    subtitle = if (pending.isEmpty() && conflicts.isEmpty()) "队列畅通，无积压操作" else "查看、重试或丢弃离线队列",
+                    actionLabel = if (queue) "收起" else "查看",
+                ) {
+                    queue = !queue
+                }
+
+                AnimatedVisibility(
+                    visible = queue,
+                    enter = fadeIn(com.devtodo.app.ui.theme.TaskDockMotion.springEffectsFast()) +
+                        expandVertically(com.devtodo.app.ui.theme.TaskDockMotion.springSpatial()),
+                    exit = fadeOut(com.devtodo.app.ui.theme.TaskDockMotion.springEffectsFast()) +
+                        shrinkVertically(com.devtodo.app.ui.theme.TaskDockMotion.springSpatial()),
+                ) {
+                    Column(Modifier.padding(bottom = 8.dp)) {
+                        if (conflicts.isNotEmpty()) {
+                            Text(
+                                text = "存在待解决的版本冲突。点击冲突条目可选择采纳服务器、保留本地或编辑合并。",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        conflicts.forEach { conflict ->
+                            ListItem(
+                                headlineContent = { Text(conflict.command ?: conflict.entityType) },
+                                supportingContent = { Text("记录 ID: ${conflict.entityId.take(8)} · 点击处理冲突") },
+                                trailingContent = {
+                                    TextButton(onClick = { selectedConflict = conflict }) {
+                                        Text("解决")
+                                    }
+                                },
+                                modifier = Modifier.clickable { selectedConflict = conflict },
+                                colors = transparentListItemColors(),
+                            )
+                        }
+                        pending.forEach { item ->
+                            ListItem(
+                                headlineContent = { Text(item.command) },
+                                supportingContent = { Text(item.lastError ?: "等待同步") },
+                                trailingContent = {
+                                    ActionMenu(
+                                        "待提交操作",
+                                        listOf(
+                                            RowAction("立即重试") { viewModel.retryOutboxItem(item) },
+                                            RowAction("丢弃操作", destructive = true) { discard = item },
+                                        ),
+                                    )
+                                },
+                                colors = transparentListItemColors(),
+                            )
+                        }
+                    }
+                }
+            }
+
+            // About & Updates Group
+            AppUpdateSettingsSection(
+                state = updateState,
+                onCheck = { viewModel.checkForUpdate(silent = false) },
+                onDownload = viewModel::downloadUpdate,
+                onCancelDownload = viewModel::cancelUpdateDownload,
+                onInstall = viewModel::requestInstallDownloadedUpdate,
+            )
+
+            // Data & Actions Group
+            ExpressiveSettingsGroup(title = "数据与账户") {
+                SettingsActionRow(
+                    title = "退出当前账户",
+                    subtitle = "本地任务将安全保留；未提交操作需重新登录原账户同步。",
+                    actionLabel = "退出",
+                    destructive = true,
+                ) {
+                    logout = true
+                }
             }
         }
-    }
+
+        @Composable
+        fun PreferencesAndWidgetsSection() {
+            // Date & Regional Group
+            ExpressiveSettingsGroup(
+                title = "日期与安排设置",
+                description = "日期规划与今日视图的时间准则。",
+            ) {
+                SettingsActionRow(
+                    title = "工作区时区",
+                    subtitle = timezoneLabel(settings?.timezone ?: "Asia/Shanghai"),
+                    actionLabel = "更改",
+                ) {
+                    showTimezone = true
+                }
+
+                ExpressiveChoiceRow(
+                    title = "每周起始日",
+                    options = listOf(1 to "周一", 0 to "周日"),
+                    selected = settings?.weekStartsOn ?: 1,
+                    onSelect = { viewModel.updateSettings(weekStartsOn = it) },
+                )
+
+                ExpressiveChoiceRow(
+                    title = "新记录默认存入",
+                    options = listOf("ROOT" to "根目录", "RECENT_FOLDER" to "最近文件夹"),
+                    selected = settings?.defaultCaptureTarget ?: "ROOT",
+                    onSelect = { viewModel.updateSettings(defaultCaptureTarget = it) },
+                )
+            }
+
+            // Appearance & Themes Group
+            ExpressiveSettingsGroup(
+                title = "外观与主题",
+                description = "采用 Material 3 Expressive 色阶与动效。",
+            ) {
+                ExpressiveChoiceRow(
+                    title = "色彩模式",
+                    options = listOf(
+                        ThemeMode.SYSTEM to "跟随系统",
+                        ThemeMode.LIGHT to "浅色",
+                        ThemeMode.DARK to "深色",
+                    ),
+                    selected = theme,
+                    onSelect = onThemeModeChange,
+                )
+
+                ExpressiveSwitchRow(
+                    title = "Material You 动态配色",
+                    subtitle = if (Build.VERSION.SDK_INT >= 31) "提取系统壁纸颜色呈现" else "需要 Android 12 或更新版本",
+                    checked = dynamic,
+                    onCheckedChange = onDynamicColorChange,
+                    enabled = Build.VERSION.SDK_INT >= 31,
+                )
+
+                ExpressiveSwitchRow(
+                    title = "AMOLED 纯黑底色",
+                    subtitle = "在深色模式下使用纯黑背景降低能耗",
+                    checked = black,
+                    onCheckedChange = onPureBlackChange,
+                )
+            }
+
+            // Home-screen widgets
+            ExpressiveSettingsGroup(
+                title = "桌面小组件",
+                description = "把今天和待办放到主屏；组件操作先写本地，再自动同步。",
+            ) {
+                SettingsActionRow(
+                    title = "今日",
+                    subtitle = "4×2，可拉高到 4×4；日期、进度和今天任务",
+                    actionLabel = "添加到桌面",
+                ) {
+                    pinWidget(WidgetPin.today(context))
+                }
+                SettingsActionRow(
+                    title = "待办",
+                    subtitle = "4×4；未完成任务、目录和最近完成项",
+                    actionLabel = "添加到桌面",
+                ) {
+                    pinWidget(WidgetPin.open(context))
+                }
+                SettingsActionRow(
+                    title = "下一步",
+                    subtitle = "2×2；桌面只留一件最该做的事",
+                    actionLabel = "添加到桌面",
+                ) {
+                    pinWidget(WidgetPin.next(context))
+                }
+                SettingsActionRow(
+                    title = "速记",
+                    subtitle = "2×2；点一下打开键盘，记到今天就走",
+                    actionLabel = "添加到桌面",
+                ) {
+                    pinWidget(WidgetPin.capture(context))
+                }
+                SettingsActionRow(
+                    title = "目录",
+                    subtitle = "4×4；添加时选择一个目录，固定查看该目录",
+                    actionLabel = "添加到桌面",
+                ) {
+                    pinWidget(WidgetPin.folder(context))
+                }
+                ExpressiveSwitchRow(
+                    title = "隐藏任务标题",
+                    subtitle = "桌面只显示日期、数量与状态；任务内容仍可点开查看",
+                    checked = hideWidgetTitles,
+                    onCheckedChange = {
+                        hideWidgetTitles = it
+                        viewModel.authManager.widgetHideTitles = it
+                        WidgetUpdater.refreshAll(context)
+                    },
+                )
+            }
+        }
+
+        if (adaptive.useTwoPane) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .padding(bottom = 48.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Column(
+                    modifier = Modifier.weight(0.45f),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    AccountAndSyncSection()
+                }
+                Column(
+                    modifier = Modifier.weight(0.55f),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    PreferencesAndWidgetsSection()
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 48.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                AccountAndSyncSection()
+                PreferencesAndWidgetsSection()
+            }
+        }
     }
 
     if (showTimezone) {

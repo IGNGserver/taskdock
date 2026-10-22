@@ -867,4 +867,88 @@ class WorkspaceScreenTest {
         screenshot("capture-folder-saved")
     }
 
+    @Test
+    fun tabletLandscapeShowsTwoPaneDirectoryAndInlineTaskDetailWithoutLosingListContext() {
+        val tabletInfo = calculateAdaptiveInfo(widthDp = 1280, heightDp = 800, isLandscape = true)
+        var navigatedAwayTaskId: String? = null
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density * 0.25f, density.fontScale)) {
+                DevTodoTheme(themeMode = ThemeMode.LIGHT, dynamicColor = false) {
+                    CompositionLocalProvider(LocalAdaptiveInfo provides tabletInfo) {
+                        TreeScreen(
+                            viewModel = vm,
+                            onNavigateToDetail = { navigatedAwayTaskId = it },
+                        )
+                    }
+                }
+            }
+        }
+        waitForText("快捷视图")
+        // Before selecting a task, the right pane displays the directory placeholder.
+        compose.onNodeWithTag("directory-detail-placeholder").assertIsDisplayed()
+        compose.onNodeWithTag("directory-tree-list").performScrollToNode(hasText(task.title))
+        waitForText(task.title)
+        compose.onNodeWithText(task.title).performClick()
+        // In tablet two-pane mode, tapping a task opens the inline detail pane on the right
+        // without navigating away from the directory list.
+        compose.runOnIdle { assertNull(navigatedAwayTaskId) }
+        compose.onNodeWithTag("embedded-task-detail-pane").assertIsDisplayed()
+        compose.waitUntil(10_000) {
+            runCatching { compose.onNodeWithText("保留原始备注").assertExists(); true }.getOrDefault(false)
+        }
+        compose.onNodeWithTag("directory-tree-list").performScrollToNode(hasText("IGNG站点"))
+        waitForText("IGNG站点")
+        compose.onNodeWithContentDescription("关闭详情").performClick()
+        compose.onNodeWithTag("directory-detail-placeholder").assertIsDisplayed()
+    }
+
+    @Test
+    fun tabletLandscapeCalendarShowsSplitDayScheduleInline() {
+        val zone = TimeZone.getTimeZone("Asia/Shanghai")
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { timeZone = zone }
+        val today = formatter.format(Date())
+        val todayPoint = timePoint("tablet-today", TimePointType.DATE, today)
+        runBlocking {
+            db.timePointDao().upsertTimePoint(todayPoint)
+            db.placementDao().upsertPlacement(
+                PlacementEntity(
+                    id = "tablet-today-placement",
+                    ownerId = "fixture-owner",
+                    taskId = task.id,
+                    timePointId = todayPoint.id,
+                    rank = "1024",
+                    version = 1,
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+        }
+        val tabletInfo = calculateAdaptiveInfo(widthDp = 1280, heightDp = 800, isLandscape = true)
+        var fullScreenNavigatedDate: String? = null
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density * 0.25f, density.fontScale)) {
+                DevTodoTheme(themeMode = ThemeMode.LIGHT, dynamicColor = false) {
+                    CompositionLocalProvider(LocalAdaptiveInfo provides tabletInfo) {
+                        CalendarScreen(
+                            viewModel = vm,
+                            onNavigateToDay = { fullScreenNavigatedDate = it },
+                            onNavigateToEvents = {},
+                            onNavigateToDetail = {},
+                            onNavigateToTree = { _, _ -> },
+                        )
+                    }
+                }
+            }
+        }
+        waitForText("日历")
+        // Both the monthly calendar grid and today's day schedule pane exist side-by-side.
+        compose.onNodeWithTag("calendar-month").assertIsDisplayed()
+        compose.onNodeWithTag("day-schedule-$today").assertIsDisplayed()
+        waitForText(task.title)
+        compose.onNodeWithTag("calendar-day-$today").performClick()
+        compose.runOnIdle { assertNull(fullScreenNavigatedDate) }
+    }
+
 }

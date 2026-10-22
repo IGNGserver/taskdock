@@ -13,12 +13,19 @@ import androidx.compose.ui.unit.dp
 object TaskDockSpacing {
     val Page = 16.dp
     val PageWide = 24.dp
+    val PageExpanded = 28.dp
     val Section = 24.dp
+    val SectionCompact = 16.dp
     val Group = 16.dp
+    val PaneGapMedium = 16.dp
+    val PaneGapExpanded = 24.dp
     val Row = 12.dp
     val Compact = 8.dp
     val Control = 48.dp
     val IconTile = 40.dp
     val SmallIconTile = 32.dp
     val BottomAction = 12.dp
+    val BottomActionCompact = 8.dp
+    val MaxSinglePaneWidth = 840.dp
+    val MaxTwoPaneWidth = 1440.dp
 }

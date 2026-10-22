@@ -15,12 +15,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.devtodo.app.ui.theme.LocalAdaptiveInfo
 import com.devtodo.app.ui.theme.TaskDockShapes
 import com.devtodo.app.ui.theme.TaskDockSpacing
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** Supplied by the app shell; each destination renders it below its own safe top bar. */
@@ -35,10 +37,19 @@ fun WorkspaceScaffold(
     floatingActionButtonPosition: FabPosition = FabPosition.End,
     snackbarHost: @Composable () -> Unit = {},
     contentWindowInsets: WindowInsets = WindowInsets.safeDrawing,
+    maxContentWidth: Dp? = null,
     content: @Composable (PaddingValues) -> Unit,
 ) {
+    val adaptive = LocalAdaptiveInfo.current
+    val resolvedMaxWidth = maxContentWidth ?: adaptive.scaffoldMaxWidth
+    val resolvedInsets =
+        if (adaptive.useNavigationRail) {
+            contentWindowInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Bottom + WindowInsetsSides.End)
+        } else {
+            contentWindowInsets
+        }
     Scaffold(
-        contentWindowInsets = contentWindowInsets,
+        contentWindowInsets = resolvedInsets,
         topBar = { Column { topBar(); LocalSyncStatus.current() } },
         bottomBar = bottomBar,
         floatingActionButton = floatingActionButton,
@@ -49,18 +60,61 @@ fun WorkspaceScaffold(
             Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
             contentAlignment = Alignment.TopCenter,
         ) {
-            Box(Modifier.widthIn(max = 840.dp).fillMaxSize()) { content(PaddingValues(0.dp)) }
+            Box(Modifier.widthIn(max = resolvedMaxWidth).fillMaxSize()) { content(PaddingValues(0.dp)) }
+        }
+    }
+}
+
+/**
+ * Shared two-pane container for tablet and landscape master-detail views.
+ * Both panes keep independent scroll states and M3 Expressive surface containment.
+ */
+@Composable
+fun AdaptiveTwoPaneLayout(
+    primaryPane: @Composable BoxScope.() -> Unit,
+    secondaryPane: @Composable BoxScope.() -> Unit,
+    modifier: Modifier = Modifier,
+    primaryWeight: Float = LocalAdaptiveInfo.current.primaryPaneWeight,
+    secondaryWeight: Float = LocalAdaptiveInfo.current.secondaryPaneWeight,
+    paneSpacing: Dp = LocalAdaptiveInfo.current.paneSpacing,
+) {
+    val adaptive = LocalAdaptiveInfo.current
+    Row(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = adaptive.pageHorizontalPadding, vertical = if (adaptive.isCompactLandscape) 4.dp else 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(paneSpacing),
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(primaryWeight)
+                .fillMaxHeight(),
+            content = primaryPane,
+        )
+        Surface(
+            modifier = Modifier
+                .weight(secondaryWeight)
+                .fillMaxHeight(),
+            shape = TaskDockShapes.LargeIncreased,
+            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            tonalElevation = 1.dp,
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                content = secondaryPane,
+            )
         }
     }
 }
 
 @Composable
 fun SectionHeading(title: String, modifier: Modifier = Modifier) {
+    val adaptive = LocalAdaptiveInfo.current
     Text(
         title,
         modifier.padding(
                 start = TaskDockSpacing.Page,
-                top = TaskDockSpacing.Section,
+                top = if (adaptive.isCompactLandscape) TaskDockSpacing.SectionCompact else TaskDockSpacing.Section,
                 end = TaskDockSpacing.Page,
                 bottom = TaskDockSpacing.Compact,
             )
