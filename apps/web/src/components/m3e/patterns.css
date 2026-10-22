@@ -844,7 +844,8 @@
   min-block-size: 180px;
 }
 
-.m3e-disclosure--settings-advanced {
+.m3e-disclosure--settings-advanced,
+.m3e-disclosure--settings-account {
   margin-block-start: 12px;
 }
 

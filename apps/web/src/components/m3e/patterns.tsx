@@ -173,6 +173,7 @@ export function Disclosure({
   children,
   className,
   defaultOpen = false,
+  onOpenChange,
 }: {
   title: ReactNode;
   description?: ReactNode;
@@ -180,9 +181,20 @@ export function Disclosure({
   children: ReactNode;
   className?: string;
   defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <details className={joinClasses('m3e-disclosure', className)} open={defaultOpen}>
+    <details
+      className={joinClasses('m3e-disclosure', className)}
+      open={open}
+      onToggle={(event) => {
+        const next = event.currentTarget.open;
+        if (next === open) return;
+        setOpen(next);
+        onOpenChange?.(next);
+      }}
+    >
       <summary className="m3e-disclosure__summary">
         {leading && <span className="m3e-disclosure__leading">{leading}</span>}
         <span className="m3e-disclosure__copy">

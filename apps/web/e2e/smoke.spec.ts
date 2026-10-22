@@ -61,6 +61,7 @@ test('opens the authenticated command palette and exposes mobile navigation', as
     updatedAt: user.createdAt,
   };
   let authenticated = false;
+  let deviceRequests = 0;
   await page.route('**/api/v1/**', async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
@@ -105,7 +106,8 @@ test('opens the authenticated command palette and exposes mobile navigation', as
           capabilities: { syncProtocolVersion: 2, websocket: true, offline: true },
         }),
       });
-    if (path.endsWith('/devices'))
+    if (path.endsWith('/devices')) {
+      deviceRequests += 1;
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -121,6 +123,7 @@ test('opens the authenticated command palette and exposes mobile navigation', as
           },
         ]),
       });
+    }
     if (path.endsWith('/sync/pull'))
       return route.fulfill({
         status: 200,
@@ -231,6 +234,13 @@ test('opens the authenticated command palette and exposes mobile navigation', as
     await drawer.getByRole('link', { name: '设置', exact: true }).click();
     await expect(page).toHaveURL(/\/settings$/);
     await expect(drawer).toBeHidden();
+    await expect(page.getByText('账户与安全', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '已登录设备' })).toHaveCount(0);
+    expect(deviceRequests).toBe(0);
+    await page.getByText('账户与安全', { exact: true }).click();
+    await expect(page.getByRole('heading', { name: '已登录设备' })).toBeVisible();
+    await expect(page.getByText('浏览器', { exact: true })).toBeVisible();
+    expect(deviceRequests).toBe(1);
     await page
       .getByRole('navigation', { name: '移动导航' })
       .getByRole('link', { name: '目录' })

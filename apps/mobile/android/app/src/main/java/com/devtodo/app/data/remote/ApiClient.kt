@@ -139,41 +139,6 @@ class ApiClient(private val authManager: SecureAuthManager) {
         }
     }
 
-    suspend fun listDevices(): Result<List<DeviceDto>> = inSession {
-        try {
-            val req = Request.Builder()
-                .url("${baseUrl()}/devices")
-                .get()
-                .build()
-            authenticatedCall(req).awaitResponse().use { resp ->
-                val bodyStr = resp.body?.string() ?: ""
-                if (resp.isSuccessful) {
-                    Result.success(json.decodeFromString<List<DeviceDto>>(bodyStr))
-                } else {
-                    Result.failure(apiFailure("devices", resp, bodyStr))
-                }
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun revokeDevice(id: String): Result<Unit> = inSession {
-        try {
-            val req = Request.Builder()
-                .url("${baseUrl()}/devices/$id")
-                .delete()
-                .build()
-            authenticatedCall(req).awaitResponse().use { resp ->
-                val bodyStr = resp.body?.string() ?: ""
-                if (resp.isSuccessful) Result.success(Unit)
-                else Result.failure(apiFailure("revoke device", resp, bodyStr))
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
     suspend fun login(username: String, password: String): Result<LoginResponse> = inSession {
         try {
             val session = authManager.sessionKey
