@@ -105,6 +105,22 @@ test('opens the authenticated command palette and exposes mobile navigation', as
           capabilities: { syncProtocolVersion: 2, websocket: true, offline: true },
         }),
       });
+    if (path.endsWith('/devices'))
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: '00000000-0000-7000-8000-000000000003',
+            name: '浏览器',
+            platform: 'web',
+            lastSeenAt: user.createdAt,
+            createdAt: user.createdAt,
+            revokedAt: null,
+            current: true,
+          },
+        ]),
+      });
     if (path.endsWith('/sync/pull'))
       return route.fulfill({
         status: 200,

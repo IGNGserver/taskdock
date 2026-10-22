@@ -55,6 +55,7 @@ cp .env.example .env
 - `OWNER_USERNAME` / `OWNER_PASSWORD`：部署中枢首次初始化 Owner 时使用；密码至少 6 位，6 位纯数字也可以
 - `ACCESS_TOKEN_SECRET`：访问令牌密钥
 - `REFRESH_TOKEN_PEPPER`：刷新令牌保护密钥
+- `REFRESH_TOKEN_IDLE_TTL_DAYS`：refresh session 的滑动不活动窗口，默认 `365` 天；每次 refresh 会续期。设为 `0` 表示不按时间过期（仅退出、设备撤销或重放检测会让会话失效）
 - `CORS_ALLOWED_ORIGINS`：允许访问的前端地址，通常与 `APP_ORIGIN` 相同
 
 首次初始化 Owner 时，用户密码至少 6 位，不限制数字、字母或其他字符，也没有最大长度限制。

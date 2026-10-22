@@ -86,6 +86,18 @@ async function installMockApi(page: Page): Promise<void> {
         settings,
         capabilities: { syncProtocolVersion: 1, websocket: true, offline: true },
       });
+    if (path.endsWith('/devices'))
+      return body([
+        {
+          id: '00000000-0000-7000-8000-000000000013',
+          name: '浏览器',
+          platform: 'web',
+          lastSeenAt: user.createdAt,
+          createdAt: user.createdAt,
+          revokedAt: null,
+          current: true,
+        },
+      ]);
     return body({ items: [] });
   });
 

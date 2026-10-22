@@ -71,12 +71,15 @@ import {
   getConfiguredHubOrigin,
   isNativeClient,
   isNativeMobileClient,
+  listDevices,
   loadConfiguredHubOrigin,
   normalizeHubOrigin,
   mutationV2,
   requestV2,
+  revokeDevice,
   setHubOrigin,
   testHubConnection,
+  type DeviceSummary,
 } from './api.js';
 import { DirectoryNavigation } from './components/directory-navigation.js';
 import { TaskFolderBreadcrumb } from './components/task-folder-breadcrumb.js';
@@ -3537,6 +3540,7 @@ function SettingsPage() {
     <div className="page narrow-page">
       <PageHeader eyebrow="PREFERENCES" title="设置" />
       {isNativeClient() && <HubSettingsSection />}
+      <DeviceSettingsSection />
       <form className="settings-form" onSubmit={save}>
         <div className="settings-section">
           <h2>本机网络策略</h2>
@@ -3621,6 +3625,84 @@ function SettingsPage() {
       </form>
     </div>
   );
+}
+
+function DeviceSettingsSection() {
+  const [devices, setDevices] = useState<DeviceSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [deviceToRevoke, setDeviceToRevoke] = useState<DeviceSummary | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setDevices(await listDevices());
+      setError('');
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : '无法加载已登录设备');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const activeDevices = devices.filter((device) => !device.revokedAt);
+  return (
+    <div className="settings-section">
+      <h2>已登录设备</h2>
+      <p className="field-help">
+        常用设备会一直保持登录；默认连续 365 天未使用才会失效。撤销后该设备需要重新登录。
+      </p>
+      {error && <Alert tone="error">{error}</Alert>}
+      {loading ? (
+        <LoadingState label="正在加载设备…" />
+      ) : activeDevices.length === 0 ? (
+        <p className="field-help">没有可显示的设备。</p>
+      ) : (
+        <div className="settings-device-list">
+          {activeDevices.map((device) => (
+            <div className="settings-device-row" key={device.id}>
+              <div className="settings-device-row__identity">
+                <strong>{device.name}</strong>
+                <span className="field-help">
+                  {device.platform} · 最近使用 {formatDeviceTime(device.lastSeenAt)}
+                </span>
+              </div>
+              {device.current ? (
+                <Chip kind="assist" label="当前设备" />
+              ) : (
+                <Button variant="text" onClick={() => setDeviceToRevoke(device)}>
+                  撤销
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <ConfirmDialog
+        open={deviceToRevoke !== null}
+        title="撤销设备"
+        description={
+          deviceToRevoke ? `“${deviceToRevoke.name}”将立即退出登录，需要重新输入密码才能访问。` : ''
+        }
+        confirmLabel="撤销"
+        onClose={() => setDeviceToRevoke(null)}
+        onConfirm={async () => {
+          if (!deviceToRevoke) return;
+          await revokeDevice(deviceToRevoke.id);
+          setDevices((current) => current.filter((device) => device.id !== deviceToRevoke.id));
+        }}
+      />
+    </div>
+  );
+}
+
+function formatDeviceTime(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 }
 
 function HubSettingsSection() {

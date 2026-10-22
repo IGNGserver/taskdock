@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.devtodo.app.data.local.*
 import com.devtodo.app.data.model.*
 import com.devtodo.app.data.remote.ApiClient
+import com.devtodo.app.data.remote.ApiClientException
 import com.devtodo.app.data.security.SecureAuthManager
 import com.devtodo.app.data.update.AppUpdateManager
 import com.devtodo.app.data.update.AppUpdateState
@@ -65,6 +66,12 @@ class MainViewModel(
     val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
     private val _lastSyncError = MutableStateFlow<String?>(null)
     val lastSyncError: StateFlow<String?> = _lastSyncError.asStateFlow()
+    private val _devices = MutableStateFlow<List<DeviceDto>>(emptyList())
+    val devices: StateFlow<List<DeviceDto>> = _devices.asStateFlow()
+    private val _devicesLoading = MutableStateFlow(false)
+    val devicesLoading: StateFlow<Boolean> = _devicesLoading.asStateFlow()
+    private val _devicesError = MutableStateFlow<String?>(null)
+    val devicesError: StateFlow<String?> = _devicesError.asStateFlow()
     private val _loadProgress = MutableStateFlow(LoadProgress())
     val loadProgress: StateFlow<LoadProgress> = _loadProgress.asStateFlow()
     private val _pageLoads = MutableStateFlow<Map<String, com.devtodo.app.data.sync.PageLoadState>>(emptyMap())
@@ -2350,6 +2357,48 @@ class MainViewModel(
                 _messages.tryEmit(error.userMessage("同步失败"))
             } finally {
                 _pullRefreshing.value = false
+            }
+        }
+    }
+
+    fun loadDevices() {
+        if (_devicesLoading.value || !authManager.isLoggedIn) return
+        viewModelScope.launch {
+            _devicesLoading.value = true
+            _devicesError.value = null
+            try {
+                api.listDevices()
+                    .onSuccess { list ->
+                        _devices.value = list.filter { device -> device.revokedAt == null }
+                    }
+                    .onFailure { error ->
+                        _devicesError.value =
+                            (error as? ApiClientException)?.serverMessage
+                                ?: error.userMessage("加载设备失败")
+                    }
+            } finally {
+                _devicesLoading.value = false
+            }
+        }
+    }
+
+    fun revokeDevice(id: String) {
+        if (_devicesLoading.value || !authManager.isLoggedIn) return
+        viewModelScope.launch {
+            _devicesLoading.value = true
+            _devicesError.value = null
+            try {
+                api.revokeDevice(id)
+                    .onSuccess {
+                        _devices.value = _devices.value.filterNot { device -> device.id == id }
+                    }
+                    .onFailure { error ->
+                        _devicesError.value =
+                            (error as? ApiClientException)?.serverMessage
+                                ?: error.userMessage("撤销设备失败")
+                    }
+            } finally {
+                _devicesLoading.value = false
             }
         }
     }

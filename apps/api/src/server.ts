@@ -125,7 +125,7 @@ const defaultConfig: AppConfig = {
   refreshTokenPepper:
     process.env['REFRESH_TOKEN_PEPPER'] ?? 'devtodo-local-refresh-pepper-change-me-now',
   accessTokenTtlSeconds: 900,
-  refreshTokenTtlDays: 30,
+  refreshTokenIdleTtlDays: Number(process.env['REFRESH_TOKEN_IDLE_TTL_DAYS'] || 365),
   corsAllowedOrigins: (
     process.env['CORS_ALLOWED_ORIGINS'] ?? 'http://localhost:5173,http://localhost:3000'
   )
@@ -481,7 +481,18 @@ export async function buildServer(
           },
         };
       });
-      api.get('/devices', async (request) => store.listDevices(request.auth!.ownerId));
+      api.get('/devices', async (request) => {
+        const devices = await store.listDevices(request.auth!.ownerId);
+        return devices.map((device) => ({
+          ...device,
+          current: device.id === request.auth!.deviceId,
+        }));
+      });
+      api.delete('/devices/:id', async (request) => {
+        const id = uuidSchema.parse((request.params as { id: string }).id);
+        await store.revokeDevice(request.auth!.ownerId, id);
+        return { ok: true };
+      });
 
       api.get('/settings', async (request) => store.getSettings(request.auth!.ownerId));
       api.patch('/settings', async (request) => {
@@ -1990,6 +2001,12 @@ function validateRuntimeConfig(config: AppConfig): void {
     throw new Error('retention windows and timeout values must be integers between 1 and 120000');
   if (!Number.isInteger(config.authLoginRateLimit) || config.authLoginRateLimit < 1)
     throw new Error('AUTH_LOGIN_RATE_LIMIT must be an integer of at least 1');
+  if (
+    !Number.isInteger(config.refreshTokenIdleTtlDays) ||
+    config.refreshTokenIdleTtlDays < 0 ||
+    config.refreshTokenIdleTtlDays > 3_650
+  )
+    throw new Error('REFRESH_TOKEN_IDLE_TTL_DAYS must be an integer between 0 and 3650');
   // The window is fixed, so this is the only knob — keep it from becoming a way
   // to switch brute-force protection off in production.
   if (config.nodeEnv === 'production' && config.authLoginRateLimit > 1_000)
@@ -2345,13 +2362,18 @@ function protocolForOrigin(value: string): 'http:' | 'https:' {
   }
 }
 
+/** Chrome caps persistent cookies at 400 days from the moment they are set. */
+const MAX_REFRESH_COOKIE_DAYS = 400;
+
 function setRefreshCookie(reply: FastifyReply, value: string, config: AppConfig): void {
+  const configuredDays =
+    config.refreshTokenIdleTtlDays > 0 ? config.refreshTokenIdleTtlDays : MAX_REFRESH_COOKIE_DAYS;
   reply.setCookie('devtodo_refresh', value, {
     httpOnly: true,
     secure: refreshCookieShouldBeSecure(config),
     sameSite: 'lax',
     path: '/api/v1/auth',
-    maxAge: 100 * 365 * 86_400,
+    maxAge: Math.min(configuredDays, MAX_REFRESH_COOKIE_DAYS) * 86_400,
   });
 }
 function clearRefreshCookie(reply: FastifyReply, config: AppConfig): void {

@@ -447,6 +447,36 @@
   font-weight: 650;
 }
 
+.settings-device-list {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-device-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: var(--m3-shape-md);
+  background: var(--m3-surface-container-low);
+}
+
+.settings-device-row__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-device-row__identity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
 .settings-advanced {
   border: 1px solid var(--m3-outline-variant);
   border-radius: var(--m3-shape-lg);

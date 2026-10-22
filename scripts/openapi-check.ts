@@ -19,6 +19,7 @@ async function main(): Promise<void> {
     '/auth/native/challenge',
     '/me',
     '/devices',
+    '/devices/{id}',
     '/settings',
     '/projects',
     '/projects/task-counts',

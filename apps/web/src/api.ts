@@ -2,6 +2,7 @@ import { SecureStorage } from '@aparajita/capacitor-secure-storage';
 import { Capacitor } from '@capacitor/core';
 import { uuidv7 } from '@devtodo/contracts';
 import type {
+  DeviceDto,
   NoteDto,
   PlacementDto,
   ProjectDto,
@@ -353,6 +354,7 @@ function canReadFromLocalFirst(path: string, method: string): boolean {
     pathname === '/projects/task-counts' || pathname === '/time-points/placement-counts';
   return (
     pathname !== '/me' &&
+    pathname !== '/devices' &&
     !pathname.startsWith('/auth/') &&
     !pathname.startsWith('/sync/') &&
     pathname !== '/bootstrap/status' &&
@@ -675,6 +677,21 @@ export function mutationV2<T extends Record<string, unknown>>(
   body: T,
 ): Promise<unknown> {
   return requestV2(path, { method, body: JSON.stringify(body) });
+}
+
+export interface DeviceSummary extends DeviceDto {
+  current: boolean;
+}
+
+export async function listDevices(): Promise<DeviceSummary[]> {
+  const devices = await requestV1<unknown>('/devices');
+  if (!Array.isArray(devices))
+    throw new ApiError('INVALID_RESPONSE', '设备列表响应格式无效', null, 502);
+  return devices as DeviceSummary[];
+}
+
+export function revokeDevice(id: string): Promise<{ ok: true }> {
+  return requestV1<{ ok: true }>(`/devices/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export { isHttpOrigin, normalizeHubOrigin } from './hub-origin.js';

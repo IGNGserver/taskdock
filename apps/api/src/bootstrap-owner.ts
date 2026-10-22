@@ -33,7 +33,7 @@ async function main(): Promise<void> {
       accessTokenSecret,
       refreshTokenPepper,
       accessTokenTtlSeconds: 900,
-      refreshTokenTtlDays: 30,
+      refreshTokenIdleTtlDays: Number(process.env['REFRESH_TOKEN_IDLE_TTL_DAYS'] || 365),
     });
     await auth.bootstrap(bootstrapToken, input.username, input.password);
     console.log(`PASS: 已在部署中枢完成 Owner 初始化（用户名：${input.username}）。`);

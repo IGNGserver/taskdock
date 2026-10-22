@@ -1,7 +1,8 @@
 # 安全说明
 
 - 密码使用 Argon2id；access token 只在内存，refresh token 只保存哈希或平台安全存储。
-- 原生客户端（Android/Capacitor）的 refresh token 会长期保留，只在用户主动退出、中枢明确回 `AUTH_SESSION_REVOKED`，或换中枢地址时清除；挑战校验失败、限流、超时等一律保留凭证并在下次启动重试。Android 同时维护 AndroidX 加密文件与 Keystore 副本两份密文，任一份损坏或暂不可读都不等于丢失登录。
+- refresh session 使用 365 天滑动不活动窗口：每次 refresh 都会续期，常用设备不会因为时间掉登录；连续 365 天未使用才会失效。可通过 `REFRESH_TOKEN_IDLE_TTL_DAYS` 调整，设为 `0` 表示恢复“只靠退出或撤销终止”的行为。升级前的存量会话不做一次性清退，在下一次 refresh 时开始按新窗口滑动。Web Cookie 也按该窗口重设，但浏览器对持久 Cookie 有约 400 天上限，服务端无法突破；Web 端超过上限未访问时需要重新登录。
+- 原生客户端（Android/Capacitor）的 refresh token 会长期保留，只在用户主动退出、设置页撤销设备、中枢明确回 `AUTH_SESSION_REVOKED`，或换中枢地址时清除；挑战校验失败、限流、超时等一律保留凭证并在下次启动重试。Android 同时维护 AndroidX 加密文件与 Keystore 副本两份密文，任一份损坏或暂不可读都不等于丢失登录。
 - refresh token 单次使用并重放即撤销整条链；客户端在请求前先落盘自己生成的后继密钥，因此「中枢已轮转但响应丢失」可以用同一对 token 幂等恢复，而不必依赖宽限期，也不会让不知道后继密钥的重放者受益。
 - Web 使用 HttpOnly refresh Cookie、显式 CORS、CSP/安全响应头、请求体限制和 Owner 范围查询。支持 HTTP 或 HTTPS 入口；HTTP 登录页会显示安全警告，但密码和会话信息仍会明文传输，公网应使用 HTTPS。
 - 认证接口按「客户端地址（按 `TRUST_PROXY` 还原）+ 用户名」限流，超限返回 `RATE_LIMITED`（HTTP 429，带 `retryAfterSeconds`）：`/auth/login` 默认 15 分钟 10 次，`/bootstrap` 15 分钟 5 次，`/auth/refresh` 与原生客户端挑战每 60 秒 30 次。登录上限可由 `AUTH_LOGIN_RATE_LIMIT` 调整，供大量用户共享同一出口地址（NAT、企业代理）的部署放宽；生产环境取值大于 1000 时中枢拒绝启动，避免把它变成关闭暴破防护的开关。

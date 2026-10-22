@@ -30,6 +30,7 @@ services:
       BOOTSTRAP_TOKEN: dev-only-bootstrap-token-change-before-use
       ACCESS_TOKEN_SECRET: dev-only-access-secret-change-before-use
       REFRESH_TOKEN_PEPPER: dev-only-refresh-pepper-change-before-use
+      REFRESH_TOKEN_IDLE_TTL_DAYS: ${REFRESH_TOKEN_IDLE_TTL_DAYS:-365}
       CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
       DEV_MEMORY_STORE: 'false'
     ports: ['127.0.0.1:3000:3000']
