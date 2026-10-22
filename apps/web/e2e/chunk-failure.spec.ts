@@ -79,6 +79,18 @@ async function mockSession(page: Page) {
         settings,
         capabilities: { syncProtocolVersion: 2, websocket: true, offline: true },
       });
+    if (path.endsWith('/devices'))
+      return json(route, [
+        {
+          id: '00000000-0000-7000-8000-000000000099',
+          name: '浏览器',
+          platform: 'web',
+          lastSeenAt: user.createdAt,
+          createdAt: user.createdAt,
+          revokedAt: null,
+          current: true,
+        },
+      ]);
     return json(route, {});
   });
   await page.route('**/api/v2/**', async (route) => {

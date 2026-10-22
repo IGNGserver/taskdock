@@ -683,8 +683,11 @@ export interface DeviceSummary extends DeviceDto {
   current: boolean;
 }
 
-export function listDevices(): Promise<DeviceSummary[]> {
-  return requestV1<DeviceSummary[]>('/devices');
+export async function listDevices(): Promise<DeviceSummary[]> {
+  const devices = await requestV1<unknown>('/devices');
+  if (!Array.isArray(devices))
+    throw new ApiError('INVALID_RESPONSE', '设备列表响应格式无效', null, 502);
+  return devices as DeviceSummary[];
 }
 
 export function revokeDevice(id: string): Promise<{ ok: true }> {
