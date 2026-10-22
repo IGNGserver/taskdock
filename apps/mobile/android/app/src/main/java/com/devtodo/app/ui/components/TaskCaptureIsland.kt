@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.devtodo.app.data.local.FolderEntity
 import com.devtodo.app.ui.screens.MainViewModel
+import com.devtodo.app.ui.theme.LocalAdaptiveInfo
 import com.devtodo.app.ui.theme.TaskDockShapes
 import java.text.SimpleDateFormat
 import java.util.*
@@ -63,22 +64,52 @@ fun TaskCaptureIsland(
                 }
             },
             contextFields = { saving ->
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { folderPicker = true }, enabled = !saving,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = TaskDockShapes.FullPill,
+                val adaptive = LocalAdaptiveInfo.current
+                val dateLabel = if (eventId != null) "关联事件 · ${eventTitle ?: "所选事件"}" else "安排 · ${if (date == todayDate) "今天" else date ?: "暂不安排"}"
+                if (adaptive.isLandscape) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Icon(Icons.Default.FolderOpen, null, Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("存入 · $path", maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        OutlinedButton(
+                            onClick = { folderPicker = true },
+                            enabled = !saving,
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            shape = TaskDockShapes.FullPill,
+                        ) {
+                            Icon(Icons.Default.FolderOpen, null, Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("存入 · $path", maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                        OutlinedButton(
+                            onClick = { datePicker = true },
+                            enabled = !saving && eventId == null,
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            shape = TaskDockShapes.FullPill,
+                        ) {
+                            Icon(Icons.Default.Event, null, Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(dateLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
                     }
-                    OutlinedButton(
-                        onClick = { datePicker = true }, enabled = !saving && eventId == null,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = TaskDockShapes.FullPill,
-                    ) {
-                        Icon(Icons.Default.Event, null, Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (eventId != null) "关联事件 · ${eventTitle ?: "所选事件"}" else "安排 · ${if (date == todayDate) "今天" else date ?: "暂不安排"}")
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { folderPicker = true }, enabled = !saving,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = TaskDockShapes.FullPill,
+                        ) {
+                            Icon(Icons.Default.FolderOpen, null, Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("存入 · $path", maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        }
+                        OutlinedButton(
+                            onClick = { datePicker = true }, enabled = !saving && eventId == null,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = TaskDockShapes.FullPill,
+                        ) {
+                            Icon(Icons.Default.Event, null, Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(dateLabel)
+                        }
                     }
                 }
             },

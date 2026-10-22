@@ -1,6 +1,7 @@
 package com.devtodo.app.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Event
@@ -31,7 +32,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
         fun createRoute(eventId: String) = "event/$eventId"
     }
 
-    data object Workflows : Screen("workflows", "流程")
+    data object Workflows : Screen("workflows", "流程", Icons.Default.AccountTree)
 
     data object More : Screen("more", "设置", Icons.Default.Settings)
 

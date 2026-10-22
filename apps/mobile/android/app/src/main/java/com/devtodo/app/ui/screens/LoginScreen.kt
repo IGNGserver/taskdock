@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.devtodo.app.R
 import com.devtodo.app.data.remote.ApiClientException
 import com.devtodo.app.data.remote.ApiFailureCategory
+import com.devtodo.app.ui.theme.LocalAdaptiveInfo
 import com.devtodo.app.ui.theme.TaskDockShapes
 import kotlinx.coroutines.launch
 
@@ -97,6 +98,186 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
         }
     }
 
+    val adaptive = LocalAdaptiveInfo.current
+    val useHorizontalCard = adaptive.useTwoPane || adaptive.isCompactLandscape
+
+    @Composable
+    fun BrandHeader(vertical: Boolean) {
+        if (vertical) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.taskdock_launch_mark),
+                    contentDescription = "TaskDock",
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(TaskDockShapes.Medium),
+                )
+                Text(
+                    text = "TaskDock",
+                    style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = "个人任务自托管工作台",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "离线优先 · 局域网/公网双向同步 · 平板与手机无缝协同",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                )
+            }
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.taskdock_launch_mark),
+                    contentDescription = "TaskDock",
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(TaskDockShapes.Medium),
+                )
+                Column {
+                    Text(
+                        text = "TaskDock",
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = "个人任务自托管工作台",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun LoginFields() {
+        // Server origin input
+        OutlinedTextField(
+            enabled = !isLoading,
+            value = hubUrl,
+            onValueChange = { hubUrl = it },
+            label = { Text("服务器中枢地址") },
+            placeholder = { Text("http://192.168.x.x:48731") },
+            singleLine = true,
+            shape = TaskDockShapes.Medium,
+            leadingIcon = {
+                Icon(
+                    Icons.Default.Dns,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Uri,
+                imeAction = ImeAction.Next,
+            ),
+            keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+            isError = errorMessage != null,
+            supportingText = if (isHttpHub) {
+                { Text("当前使用 HTTP，账号和密码会以明文传输，局域网外请优先使用 HTTPS") }
+            } else null,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        // Username Input
+        OutlinedTextField(
+            enabled = !isLoading,
+            value = username,
+            onValueChange = { username = it },
+            label = { Text("用户名") },
+            singleLine = true,
+            shape = TaskDockShapes.Medium,
+            leadingIcon = {
+                Icon(
+                    Icons.Default.Person,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Text,
+                imeAction = ImeAction.Next,
+            ),
+            keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+            isError = errorMessage != null,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        // Password Input with Native Password Keyboard
+        OutlinedTextField(
+            enabled = !isLoading,
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("密码") },
+            singleLine = true,
+            shape = TaskDockShapes.Medium,
+            leadingIcon = {
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+            trailingIcon = {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
+                    )
+                }
+            },
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { submit() }),
+            isError = errorMessage != null,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        if (errorMessage != null) {
+            Text(
+                text = errorMessage ?: "",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+
+        Button(
+            onClick = ::submit,
+            enabled = !isLoading && username.isNotBlank() && password.isNotBlank() && hubUrl.isNotBlank(),
+            shape = TaskDockShapes.FullPill,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Text(
+                    text = "连接并登录",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -112,159 +293,39 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
             color = MaterialTheme.colorScheme.surfaceContainerLow,
             tonalElevation = 2.dp,
             modifier = Modifier
-                .widthIn(max = 480.dp)
+                .widthIn(max = if (useHorizontalCard) 820.dp else 480.dp)
                 .fillMaxWidth()
-                .padding(vertical = 24.dp),
+                .padding(vertical = if (adaptive.isCompactLandscape) 12.dp else 24.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 28.dp),
-                horizontalAlignment = Alignment.Start,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
+            if (useHorizontalCard) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.taskdock_launch_mark),
-                        contentDescription = "TaskDock",
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(TaskDockShapes.Medium),
-                    )
-                    Column {
-                        Text(
-                            text = "TaskDock",
-                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            text = "个人任务自托管工作台",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Server origin input
-                OutlinedTextField(
-                    enabled = !isLoading,
-                    value = hubUrl,
-                    onValueChange = { hubUrl = it },
-                    label = { Text("服务器中枢地址") },
-                    placeholder = { Text("http://192.168.x.x:48731") },
-                    singleLine = true,
-                    shape = TaskDockShapes.Medium,
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Dns,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Uri,
-                        imeAction = ImeAction.Next,
-                    ),
-                    keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
-                    isError = errorMessage != null,
-                    supportingText = if (isHttpHub) {
-                        { Text("当前使用 HTTP，账号和密码会以明文传输，局域网外请优先使用 HTTPS") }
-                    } else null,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                // Username Input
-                OutlinedTextField(
-                    enabled = !isLoading,
-                    value = username,
-                    onValueChange = { username = it },
-                    label = { Text("用户名") },
-                    singleLine = true,
-                    shape = TaskDockShapes.Medium,
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Next,
-                    ),
-                    keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
-                    isError = errorMessage != null,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                // Password Input with Native Password Keyboard
-                OutlinedTextField(
-                    enabled = !isLoading,
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("密码") },
-                    singleLine = true,
-                    shape = TaskDockShapes.Medium,
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Lock,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    },
-                    trailingIcon = {
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Icon(
-                                if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
-                            )
-                        }
-                    },
-                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password,
-                        imeAction = ImeAction.Done,
-                    ),
-                    keyboardActions = KeyboardActions(onDone = { submit() }),
-                    isError = errorMessage != null,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                if (errorMessage != null) {
-                    Text(
-                        text = errorMessage ?: "",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-
-                Button(
-                    onClick = ::submit,
-                    enabled = !isLoading && username.isNotBlank() && password.isNotBlank() && hubUrl.isNotBlank(),
-                    shape = TaskDockShapes.FullPill,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp),
+                        .padding(horizontal = 28.dp, vertical = if (adaptive.isCompactLandscape) 18.dp else 28.dp),
+                    horizontalArrangement = Arrangement.spacedBy(28.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Text(
-                            text = "连接并登录",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
+                    Box(modifier = Modifier.weight(0.42f)) {
+                        BrandHeader(vertical = true)
                     }
+                    Column(
+                        modifier = Modifier.weight(0.58f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        LoginFields()
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 28.dp),
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    BrandHeader(vertical = false)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LoginFields()
                 }
             }
         }

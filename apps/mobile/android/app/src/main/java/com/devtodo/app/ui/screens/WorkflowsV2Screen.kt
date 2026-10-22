@@ -5,7 +5,9 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -20,6 +22,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -31,6 +34,7 @@ import com.devtodo.app.data.local.WorkflowStageEntity
 import com.devtodo.app.data.local.WorkflowTaskMembershipEntity
 import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.ui.components.*
+import com.devtodo.app.ui.theme.LocalAdaptiveInfo
 import com.devtodo.app.ui.theme.TaskDockMotion
 import com.devtodo.app.ui.theme.TaskDockShapes
 
@@ -63,6 +67,7 @@ fun WorkflowsV2Screen(
     var deleteWorkflow by remember { mutableStateOf<WorkflowEntity?>(null) }
     var deleteStage by remember { mutableStateOf<WorkflowStageEntity?>(null) }
 
+    val adaptive = LocalAdaptiveInfo.current
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     val selected = workflows.find { it.id == selectedId }
 
@@ -71,140 +76,54 @@ fun WorkflowsV2Screen(
     BackHandler(enabled = selected != null) { selectedId = null }
 
     WorkspaceScaffold(
-    topBar = {
-        TopAppBar(
-            title = {
-                Text(
-                    text = selected?.name ?: "流程看板",
-                    fontWeight = FontWeight.Medium,
-                )
-            },
-            navigationIcon = {
-                IconButton(onClick = {
-                    if (selected != null) selectedId = null else onBack?.invoke()
-                }) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        if (selected != null) "返回流程列表" else "返回目录",
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = selected?.name ?: "流程看板",
+                        fontWeight = FontWeight.Medium,
                     )
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-            )
-        )
-    },
-    bottomBar = {
-        if (selected == null) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                FloatingActionIsland(
-                    onQuickCreate = { title, result ->
-                        viewModel.createWorkflowV2(title, result)
-                    },
-                    placeholder = "输入新流程名称…",
-                    primaryLabel = "新建流程",
-                    fieldLabel = "流程名称",
-                    supportingText = "把相关任务放进同一个流程",
-                )
-            }
-        }
-    }
-    ) { padding ->
-    PullToRefreshBox(
-        isRefreshing = refreshing,
-        onRefresh = viewModel::pullRefresh,
-        modifier = Modifier.fillMaxSize().padding(padding),
-    ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp),
-    ) {
-        if (selected == null) {
-            // Workflow List Overview
-            items(workflows, key = { it.id }) { workflow ->
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .animateItem()
-                        .clip(TaskDockShapes.Large)
-                        .clickable { selectedId = workflow.id },
-                    shape = TaskDockShapes.Large,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Surface(
-                            shape = TaskDockShapes.Medium,
-                            color = MaterialTheme.colorScheme.tertiaryContainer,
-                            modifier = Modifier.size(42.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.AccountTree,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.width(14.dp))
-
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text(
-                                text = workflow.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = if (workflow.archivedAt == null) "查看阶段与任务状态" else "已归档",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-
+                },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        if (selected != null) selectedId = null else onBack?.invoke()
+                    }) {
                         Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            if (selected != null) "返回流程列表" else "返回目录",
                         )
                     }
-                }
-            }
-
-            if (workflows.isEmpty()) {
-                item {
-                    EmptyState(
-                        icon = Icons.Default.AccountTree,
-                        title = "将任务按阶段组织为流程",
-                        description = "例如“需求设计 → 开发中 → 验收测试”，任务状态在各处实时保持同步。",
-                        action = {
-                            FilledTonalButton(
-                                onClick = { showCreate = true },
-                                shape = TaskDockShapes.FullPill,
-                            ) {
-                                Icon(Icons.Default.Add, null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("新建流程")
-                            }
-                        }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            )
+        },
+        bottomBar = {
+            if (selected == null) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    FloatingActionIsland(
+                        onQuickCreate = { title, result ->
+                            viewModel.createWorkflowV2(title, result)
+                        },
+                        placeholder = "输入新流程名称…",
+                        primaryLabel = "新建流程",
+                        fieldLabel = "流程名称",
+                        supportingText = "把相关任务放进同一个流程",
                     )
                 }
             }
-        } else {
-            // Workflow Detail & Stages View
-            item(key = selected.id) {
+        },
+    ) { padding ->
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = viewModel::pullRefresh,
+            modifier = Modifier.fillMaxSize().padding(padding),
+        ) {
+            if (selected != null && adaptive.useTwoPane) {
                 val workflow = selected
                 val stages by remember(workflow.id) {
                     viewModel.observeWorkflowStages(workflow.id)
@@ -213,101 +132,304 @@ fun WorkflowsV2Screen(
                     viewModel.observeWorkflowMemberships(workflow.id)
                 }.collectAsStateWithLifecycle(initialValue = emptyList())
 
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = TaskDockShapes.LargeIncreased,
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                ) {
-                    Row(
+                Column(Modifier.fillMaxSize()) {
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                            .padding(horizontal = adaptive.pageHorizontalPadding, vertical = 6.dp),
+                        shape = TaskDockShapes.LargeIncreased,
+                        color = MaterialTheme.colorScheme.surfaceContainer,
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(
-                                text = workflow.name,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Medium,
-                            )
-                            Text(
-                                text = "${stages.size} 个阶段 · ${memberships.size} 项任务流转中",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = workflow.name,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                Text(
+                                    text = "${stages.size} 个阶段 · ${memberships.size} 项任务流转中",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
 
-                        ActionMenu(
-                            "流程操作",
-                            listOf(
-                                RowAction("修改名称") {
-                                    editWorkflow = workflow
-                                    editName = workflow.name
-                                },
-                                RowAction("新增阶段", enabled = workflow.archivedAt == null) {
-                                    stageWorkflow = workflow
-                                },
-                                RowAction("删除流程", destructive = true) {
-                                    deleteWorkflow = workflow
-                                },
-                            ),
-                        )
-                    }
-                }
-
-                stages.forEachIndexed { index, stage ->
-                    ExpressiveStageBlock(
-                        workflow = workflow,
-                        stage = stage,
-                        stageIndex = index,
-                        stages = stages,
-                        memberships = memberships.filter { it.stageId == stage.id },
-                        allTasks = tasks,
-                        folders = folders,
-                        onMoveStage = { viewModel.moveWorkflowStageV2(stage, stages, it) },
-                        onAddTask = { addTarget = AddTarget(workflow, stage) },
-                        onCreateTask = { createTaskStage = AddTarget(workflow, stage) },
-                        onEditStage = {
-                            editStage = it
-                            editName = it.name
-                        },
-                        onDeleteStage = { deleteStage = it },
-                        enabled = workflow.archivedAt == null,
-                        onMoveTask = { member, target, before, after ->
-                            viewModel.moveWorkflowMembershipV2(member, target, before, after)
-                        },
-                        onRemoveTask = { viewModel.removeWorkflowMembershipV2(it) },
-                        onToggleStatus = { task, status ->
-                            viewModel.updateTaskStatus(task, status)
-                        },
-                        onNavigateToDetail = onNavigateToDetail,
-                    )
-                }
-
-                if (stages.isEmpty()) {
-                    EmptyState(
-                        icon = Icons.Default.AccountTree,
-                        title = "当前流程暂无阶段",
-                        description = "点击下方添加第一个阶段（如：待开始、进行中）。",
-                        action = {
-                            FilledTonalButton(
-                                onClick = { stageWorkflow = workflow },
-                                shape = TaskDockShapes.FullPill,
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                Icon(Icons.Default.Add, null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("添加阶段")
+                                if (workflow.archivedAt == null) {
+                                    FilledTonalButton(
+                                        onClick = { stageWorkflow = workflow },
+                                        shape = TaskDockShapes.FullPill,
+                                    ) {
+                                        Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("新增阶段")
+                                    }
+                                }
+                                ActionMenu(
+                                    "流程操作",
+                                    listOf(
+                                        RowAction("修改名称") {
+                                            editWorkflow = workflow
+                                            editName = workflow.name
+                                        },
+                                        RowAction("新增阶段", enabled = workflow.archivedAt == null) {
+                                            stageWorkflow = workflow
+                                        },
+                                        RowAction("删除流程", destructive = true) {
+                                            deleteWorkflow = workflow
+                                        },
+                                    ),
+                                )
                             }
                         }
-                    )
+                    }
+
+                    if (stages.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            EmptyState(
+                                icon = Icons.Default.AccountTree,
+                                title = "当前流程暂无阶段",
+                                description = "点击下方添加第一个阶段（如：待开始、进行中）。",
+                                action = {
+                                    FilledTonalButton(
+                                        onClick = { stageWorkflow = workflow },
+                                        shape = TaskDockShapes.FullPill,
+                                    ) {
+                                        Icon(Icons.Default.Add, null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("添加阶段")
+                                    }
+                                },
+                            )
+                        }
+                    } else {
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .testTag("workflow-kanban-row"),
+                            contentPadding = PaddingValues(
+                                start = adaptive.pageHorizontalPadding,
+                                end = adaptive.pageHorizontalPadding,
+                                top = 6.dp,
+                                bottom = 24.dp,
+                            ),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            itemsIndexed(stages, key = { _, stage -> stage.id }) { index, stage ->
+                                Box(
+                                    modifier = Modifier
+                                        .width(340.dp)
+                                        .fillMaxHeight()
+                                        .verticalScroll(rememberScrollState()),
+                                ) {
+                                    ExpressiveStageBlock(
+                                        workflow = workflow,
+                                        stage = stage,
+                                        stageIndex = index,
+                                        stages = stages,
+                                        memberships = memberships.filter { it.stageId == stage.id },
+                                        allTasks = tasks,
+                                        folders = folders,
+                                        onMoveStage = { viewModel.moveWorkflowStageV2(stage, stages, it) },
+                                        onAddTask = { addTarget = AddTarget(workflow, stage) },
+                                        onCreateTask = { createTaskStage = AddTarget(workflow, stage) },
+                                        onEditStage = {
+                                            editStage = it
+                                            editName = it.name
+                                        },
+                                        onDeleteStage = { deleteStage = it },
+                                        enabled = workflow.archivedAt == null,
+                                        onMoveTask = { member, target, before, after ->
+                                            viewModel.moveWorkflowMembershipV2(member, target, before, after)
+                                        },
+                                        onRemoveTask = { viewModel.removeWorkflowMembershipV2(it) },
+                                        onToggleStatus = { task, status ->
+                                            viewModel.updateTaskStatus(task, status)
+                                        },
+                                        onNavigateToDetail = onNavigateToDetail,
+                                        isKanbanColumn = true,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                ) {
+                    if (selected == null) {
+                        // Workflow List Overview
+                        val useGridWorkflows = adaptive.useTwoPane && workflows.size > 1
+                        if (useGridWorkflows) {
+                            items(workflows.chunked(2), key = { pair -> pair.first().id }) { rowItems ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = adaptive.pageHorizontalPadding, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                ) {
+                                    rowItems.forEach { workflow ->
+                                        WorkflowOverviewCard(
+                                            workflow = workflow,
+                                            onClick = { selectedId = workflow.id },
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                    }
+                                    if (rowItems.size == 1) {
+                                        Spacer(Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        } else {
+                            items(workflows, key = { it.id }) { workflow ->
+                                WorkflowOverviewCard(
+                                    workflow = workflow,
+                                    onClick = { selectedId = workflow.id },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                                        .animateItem(),
+                                )
+                            }
+                        }
+
+                        if (workflows.isEmpty()) {
+                            item {
+                                EmptyState(
+                                    icon = Icons.Default.AccountTree,
+                                    title = "将任务按阶段组织为流程",
+                                    description = "例如“需求设计 → 开发中 → 验收测试”，任务状态在各处实时保持同步。",
+                                    action = {
+                                        FilledTonalButton(
+                                            onClick = { showCreate = true },
+                                            shape = TaskDockShapes.FullPill,
+                                        ) {
+                                            Icon(Icons.Default.Add, null)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("新建流程")
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    } else {
+                        // Workflow Detail & Stages View
+                        item(key = selected.id) {
+                            val workflow = selected
+                            val stages by remember(workflow.id) {
+                                viewModel.observeWorkflowStages(workflow.id)
+                            }.collectAsStateWithLifecycle(initialValue = emptyList())
+                            val memberships by remember(workflow.id) {
+                                viewModel.observeWorkflowMemberships(workflow.id)
+                            }.collectAsStateWithLifecycle(initialValue = emptyList())
+
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                shape = TaskDockShapes.LargeIncreased,
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = workflow.name,
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Medium,
+                                        )
+                                        Text(
+                                            text = "${stages.size} 个阶段 · ${memberships.size} 项任务流转中",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+
+                                    ActionMenu(
+                                        "流程操作",
+                                        listOf(
+                                            RowAction("修改名称") {
+                                                editWorkflow = workflow
+                                                editName = workflow.name
+                                            },
+                                            RowAction("新增阶段", enabled = workflow.archivedAt == null) {
+                                                stageWorkflow = workflow
+                                            },
+                                            RowAction("删除流程", destructive = true) {
+                                                deleteWorkflow = workflow
+                                            },
+                                        ),
+                                    )
+                                }
+                            }
+
+                            stages.forEachIndexed { index, stage ->
+                                ExpressiveStageBlock(
+                                    workflow = workflow,
+                                    stage = stage,
+                                    stageIndex = index,
+                                    stages = stages,
+                                    memberships = memberships.filter { it.stageId == stage.id },
+                                    allTasks = tasks,
+                                    folders = folders,
+                                    onMoveStage = { viewModel.moveWorkflowStageV2(stage, stages, it) },
+                                    onAddTask = { addTarget = AddTarget(workflow, stage) },
+                                    onCreateTask = { createTaskStage = AddTarget(workflow, stage) },
+                                    onEditStage = {
+                                        editStage = it
+                                        editName = it.name
+                                    },
+                                    onDeleteStage = { deleteStage = it },
+                                    enabled = workflow.archivedAt == null,
+                                    onMoveTask = { member, target, before, after ->
+                                        viewModel.moveWorkflowMembershipV2(member, target, before, after)
+                                    },
+                                    onRemoveTask = { viewModel.removeWorkflowMembershipV2(it) },
+                                    onToggleStatus = { task, status ->
+                                        viewModel.updateTaskStatus(task, status)
+                                    },
+                                    onNavigateToDetail = onNavigateToDetail,
+                                )
+                            }
+
+                            if (stages.isEmpty()) {
+                                EmptyState(
+                                    icon = Icons.Default.AccountTree,
+                                    title = "当前流程暂无阶段",
+                                    description = "点击下方添加第一个阶段（如：待开始、进行中）。",
+                                    action = {
+                                        FilledTonalButton(
+                                            onClick = { stageWorkflow = workflow },
+                                            shape = TaskDockShapes.FullPill,
+                                        ) {
+                                            Icon(Icons.Default.Add, null)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("添加阶段")
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
-    }
-    }
     }
 
     deleteStage?.let { stage ->
@@ -505,6 +627,67 @@ fun WorkflowsV2Screen(
 }
 
 @Composable
+private fun WorkflowOverviewCard(
+    workflow: WorkflowEntity,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
+            .clip(TaskDockShapes.Large)
+            .clickable(onClick = onClick),
+        shape = TaskDockShapes.Large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                shape = TaskDockShapes.Medium,
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                modifier = Modifier.size(42.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.AccountTree,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(14.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = workflow.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = if (workflow.archivedAt == null) "查看阶段与任务状态" else "已归档",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            )
+        }
+    }
+}
+
+@Composable
 private fun ExpressiveStageBlock(
     workflow: WorkflowEntity,
     stage: WorkflowStageEntity,
@@ -523,6 +706,7 @@ private fun ExpressiveStageBlock(
     onRemoveTask: (WorkflowTaskMembershipEntity) -> Unit,
     onToggleStatus: (TaskEntity, TaskStatus) -> Unit,
     onNavigateToDetail: (String) -> Unit,
+    isKanbanColumn: Boolean = false,
 ) {
     val sortedMemberships = remember(memberships) {
         memberships.sortedWith(compareBy<WorkflowTaskMembershipEntity> { it.rank.toLongOrNull() ?: 0L }.thenBy { it.id })
@@ -538,7 +722,7 @@ private fun ExpressiveStageBlock(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .padding(horizontal = if (isKanbanColumn) 0.dp else 16.dp, vertical = if (isKanbanColumn) 0.dp else 6.dp)
             .animateContentSize(animationSpec = TaskDockMotion.springSpatial()),
         shape = TaskDockShapes.LargeIncreased,
         color = MaterialTheme.colorScheme.surfaceContainerLow,

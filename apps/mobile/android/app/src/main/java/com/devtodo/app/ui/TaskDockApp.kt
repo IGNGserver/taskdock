@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -19,6 +20,7 @@ import com.devtodo.app.ui.components.SyncStatusBanner
 import com.devtodo.app.ui.components.LocalSyncStatus
 import com.devtodo.app.ui.navigation.Screen
 import com.devtodo.app.ui.screens.*
+import com.devtodo.app.ui.theme.LocalAdaptiveInfo
 import com.devtodo.app.ui.theme.TaskDockMotion
 import com.devtodo.app.widget.WidgetDestination
 import com.devtodo.app.widget.WidgetNavigation
@@ -179,6 +181,9 @@ fun TaskDockApp(
         onWidgetNavigationHandled()
     }
 
+    val adaptive = LocalAdaptiveInfo.current
+    val showNavigationRail = loggedIn && currentRoute != Screen.Login.route && adaptive.useNavigationRail
+
     CompositionLocalProvider(LocalSyncStatus provides {
         if (loggedIn) SyncStatusBanner(viewModel, pageKey)
     }) {
@@ -200,13 +205,21 @@ fun TaskDockApp(
                 )
             },
         ) { padding ->
-            Column(Modifier.fillMaxSize().padding(padding)) {
-            NavHost(
-                navController = navController,
-                startDestination = if (loggedIn) Screen.Tree.route else Screen.Login.route,
-                modifier = Modifier
-                    .weight(1f)
-                    .consumeWindowInsets(padding),
+            Row(Modifier.fillMaxSize().padding(padding)) {
+                if (showNavigationRail) {
+                    TaskDockNavigationRail(
+                        currentRoute = currentRoute,
+                        onReturnToDirectory = ::returnToDirectory,
+                        onNavigateShortcut = ::navigateShortcut,
+                    )
+                }
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    NavHost(
+                        navController = navController,
+                        startDestination = if (loggedIn) Screen.Tree.route else Screen.Login.route,
+                        modifier = Modifier
+                            .weight(1f)
+                            .consumeWindowInsets(padding),
                 // Material 3 Expressive motion. Forward navigation is a shared
                 // axis slide + fade; the back stack uses the M3 full-screen
                 // surface spec (exit 100% -> 90%, enter 110% -> 100%), which
@@ -295,18 +308,22 @@ fun TaskDockApp(
                     )
                 }
 
-                composable(Screen.Time.route) {
-                    CalendarScreen(
-                        viewModel = viewModel,
-                        onNavigateToDay = { localDate ->
-                            navController.navigate(Screen.DaySchedule.createRoute(localDate))
-                        },
-                        onNavigateToEvents = {
-                            navController.navigate(Screen.Events.route) { launchSingleTop = true }
-                        },
-                        onBack = ::returnToDirectory,
-                    )
-                }
+                    composable(Screen.Time.route) {
+                        CalendarScreen(
+                            viewModel = viewModel,
+                            onNavigateToDay = { localDate ->
+                                navController.navigate(Screen.DaySchedule.createRoute(localDate))
+                            },
+                            onNavigateToEvents = {
+                                navController.navigate(Screen.Events.route) { launchSingleTop = true }
+                            },
+                            onNavigateToDetail = { taskId ->
+                                navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                            },
+                            onNavigateToTree = ::locate,
+                            onBack = ::returnToDirectory,
+                        )
+                    }
 
                 composable(
                     route = Screen.DaySchedule.route,
@@ -327,15 +344,19 @@ fun TaskDockApp(
                     )
                 }
 
-                composable(Screen.Events.route) {
-                    EventsScreen(
-                        viewModel = viewModel,
-                        onNavigateToEvent = { eventId ->
-                            navController.navigate(Screen.EventDetail.createRoute(eventId))
-                        },
-                        onBack = { navController.popBackStack() },
-                    )
-                }
+                    composable(Screen.Events.route) {
+                        EventsScreen(
+                            viewModel = viewModel,
+                            onNavigateToEvent = { eventId ->
+                                navController.navigate(Screen.EventDetail.createRoute(eventId))
+                            },
+                            onNavigateToDetail = { taskId ->
+                                navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                            },
+                            onNavigateToTree = ::locate,
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
 
                 composable(
                     route = Screen.EventDetail.route,
@@ -381,20 +402,83 @@ fun TaskDockApp(
                     )
                 }
 
-                composable(
-                    route = Screen.TaskDetail.route,
-                    arguments = listOf(navArgument("taskId") { type = NavType.StringType }),
-                ) { backStackEntry ->
-                    val taskId = backStackEntry.arguments?.getString("taskId") ?: ""
-                    TaskDetailScreen(
-                        taskId = taskId,
-                        viewModel = viewModel,
-                        onBack = { navController.popBackStack() },
-                    )
+                    composable(
+                        route = Screen.TaskDetail.route,
+                        arguments = listOf(navArgument("taskId") { type = NavType.StringType }),
+                    ) { backStackEntry ->
+                        val taskId = backStackEntry.arguments?.getString("taskId") ?: ""
+                        TaskDetailScreen(
+                            taskId = taskId,
+                            viewModel = viewModel,
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
                 }
-            }
+                }
             }
         }
     }
+    }
+}
+
+@Composable
+private fun TaskDockNavigationRail(
+    currentRoute: String?,
+    onReturnToDirectory: () -> Unit,
+    onNavigateShortcut: (String) -> Unit,
+) {
+    val primaryDestinations = remember {
+        listOf(
+            Screen.Tree,
+            Screen.Today,
+            Screen.Time,
+            Screen.Workflows,
+            Screen.Events,
+        )
+    }
+    NavigationRail(
+        modifier = Modifier
+            .fillMaxHeight()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start))
+            .testTag("adaptive-navigation-rail"),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Spacer(Modifier.height(8.dp))
+        primaryDestinations.forEach { screen ->
+            val selected = when (screen) {
+                Screen.Tree -> currentRoute == Screen.Tree.route || currentRoute == Screen.TreeFolder.route
+                Screen.Time -> currentRoute == Screen.Time.route || currentRoute == Screen.DaySchedule.route
+                Screen.Events -> currentRoute == Screen.Events.route || currentRoute == Screen.EventDetail.route
+                else -> currentRoute == screen.route
+            }
+            val icon = screen.icon ?: return@forEach
+            NavigationRailItem(
+                selected = selected,
+                onClick = {
+                    if (screen == Screen.Tree) {
+                        onReturnToDirectory()
+                    } else {
+                        onNavigateShortcut(screen.route)
+                    }
+                },
+                icon = { Icon(icon, contentDescription = null) },
+                label = { Text(screen.title) },
+                alwaysShowLabel = true,
+                modifier = Modifier.testTag("rail-item-${screen.route}"),
+            )
+        }
+        Spacer(Modifier.weight(1f))
+        val settingsIcon = Screen.More.icon
+        if (settingsIcon != null) {
+            NavigationRailItem(
+                selected = currentRoute == Screen.More.route,
+                onClick = { onNavigateShortcut(Screen.More.route) },
+                icon = { Icon(settingsIcon, contentDescription = null) },
+                label = { Text(Screen.More.title) },
+                alwaysShowLabel = true,
+                modifier = Modifier.testTag("rail-item-${Screen.More.route}"),
+            )
+        }
+        Spacer(Modifier.height(8.dp))
     }
 }

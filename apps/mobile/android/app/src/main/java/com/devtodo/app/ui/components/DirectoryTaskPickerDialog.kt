@@ -21,8 +21,10 @@ import androidx.compose.ui.unit.dp
 import com.devtodo.app.data.local.FolderEntity
 import com.devtodo.app.data.local.TaskEntity
 import com.devtodo.app.data.model.TaskStatus
+import com.devtodo.app.ui.theme.LocalAdaptiveInfo
 import com.devtodo.app.ui.theme.TaskDockShapes
 import com.devtodo.app.ui.theme.TaskDockSpacing
+import androidx.compose.ui.window.DialogProperties
 
 /**
  * Builds the folder breadcrumb path list from root to [currentFolderId].
@@ -132,10 +134,16 @@ fun DirectoryTaskPickerDialog(
     }
 
     val isSearchMode = query.trim().isNotEmpty()
+    val adaptive = LocalAdaptiveInfo.current
+    val useSplitPicker = adaptive.useTwoPane && !isSearchMode && currentSubFolders.isNotEmpty()
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.fillMaxWidth().testTag("directory-task-picker-dialog"),
+        properties = DialogProperties(usePlatformDefaultWidth = !adaptive.useTwoPane),
+        modifier = Modifier
+            .widthIn(max = if (adaptive.useTwoPane) 760.dp else 560.dp)
+            .fillMaxWidth(if (adaptive.useTwoPane) 0.92f else 1f)
+            .testTag("directory-task-picker-dialog"),
         title = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -159,7 +167,7 @@ fun DirectoryTaskPickerDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 280.dp, max = 520.dp),
+                    .heightIn(min = if (adaptive.isCompactLandscape) 200.dp else 280.dp, max = if (adaptive.isCompactLandscape) 340.dp else 520.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // Search bar
@@ -268,6 +276,76 @@ fun DirectoryTaskPickerDialog(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                    } else if (useSplitPicker) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .testTag("picker-directory-list"),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            LazyColumn(
+                                modifier = Modifier.weight(0.45f).fillMaxHeight(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                item(key = "subfolders-header") {
+                                    Text(
+                                        "子目录 (${currentSubFolders.size})",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                                    )
+                                }
+                                items(currentSubFolders, key = { "folder-${it.id}" }) { folder ->
+                                    val count = folderAggregates[folder.id]?.second ?: 0
+                                    ExpressiveFolderCard(
+                                        folder = folder,
+                                        itemCount = count,
+                                        onClick = { currentFolderId = folder.id },
+                                    )
+                                }
+                            }
+                            LazyColumn(
+                                modifier = Modifier.weight(0.55f).fillMaxHeight(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                item(key = "tasks-header") {
+                                    Text(
+                                        "任务 (${currentTasks.size})",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                                    )
+                                }
+                                if (currentTasks.isEmpty()) {
+                                    item(key = "tasks-empty") {
+                                        Text(
+                                            "当前目录暂无直属任务，可点选左侧子目录",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(vertical = 12.dp),
+                                        )
+                                    }
+                                } else {
+                                    items(currentTasks, key = { "task-${it.id}" }) { task ->
+                                        val alreadyScheduled = task.id in alreadyScheduledTaskIds
+                                        val isSelected = task.id in selectedTaskIds
+                                        PickerTaskRow(
+                                            task = task,
+                                            subtitle = null,
+                                            isSelected = isSelected,
+                                            alreadyScheduled = alreadyScheduled,
+                                            onToggle = {
+                                                if (!alreadyScheduled) {
+                                                    if (isSelected) selectedTaskIds.remove(task.id)
+                                                    else selectedTaskIds.add(task.id)
+                                                }
+                                            },
+                                        )
+                                    }
+                                }
+                            }
                         }
                     } else {
                         LazyColumn(

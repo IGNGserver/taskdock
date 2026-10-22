@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.devtodo.app.ui.theme.LocalAdaptiveInfo
 import com.devtodo.app.ui.theme.TaskDockShapes
 import com.devtodo.app.ui.theme.TaskDockSpacing
 
@@ -74,6 +75,9 @@ fun FloatingActionIsland(
         label = "captureButtonScale",
     )
 
+    val adaptive = LocalAdaptiveInfo.current
+    val compactLandscape = adaptive.isCompactLandscape
+
     fun submit() {
         if (title.isBlank() || saving) return
         saving = true
@@ -98,20 +102,26 @@ fun FloatingActionIsland(
     Box(
         modifier.fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(TaskDockSpacing.BottomAction),
-        contentAlignment = Alignment.Center,
+            .padding(
+                horizontal = if (adaptive.useTwoPane) adaptive.pageHorizontalPadding else TaskDockSpacing.BottomAction,
+                vertical = if (compactLandscape) TaskDockSpacing.BottomActionCompact else TaskDockSpacing.BottomAction,
+            ),
+        contentAlignment = if (adaptive.useTwoPane) Alignment.CenterEnd else Alignment.Center,
     ) {
         Button(
             onClick = { onOpen(title.isNotBlank()); expanded = true },
             shape = RoundedCornerShape(corner),
             interactionSource = interaction,
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(
+                horizontal = if (compactLandscape) 20.dp else 24.dp,
+                vertical = if (compactLandscape) 12.dp else 16.dp,
+            ),
             elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
             modifier = Modifier
                 .scale(buttonScale)
                 .animateContentSize(animationSpec = TaskDockMotion.springSpatial())
                 .testTag("tree-create-action")
-                .heightIn(min = 56.dp),
+                .heightIn(min = if (compactLandscape) 48.dp else 56.dp),
         ) {
             Icon(Icons.Default.Add, null, Modifier.size(22.dp))
             Spacer(Modifier.width(10.dp))
@@ -129,6 +139,7 @@ fun FloatingActionIsland(
         ModalBottomSheet(
             onDismissRequest = { if (!saving) expanded = false },
             sheetState = sheetState,
+            sheetMaxWidth = 600.dp,
             shape = TaskDockShapes.BottomSheetShape,
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ) {
@@ -139,14 +150,19 @@ fun FloatingActionIsland(
                 inputVisibility.bringIntoView()
             }
             Column(
-                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                Modifier.fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = if (compactLandscape) 12.dp else 20.dp),
+                verticalArrangement = Arrangement.spacedBy(if (compactLandscape) 10.dp else 16.dp),
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(primaryLabel, style = MaterialTheme.typography.titleLarge)
-                        Text(supportingText, style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(primaryLabel, style = if (compactLandscape) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge)
+                        if (!compactLandscape) {
+                            Text(supportingText, style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                     IconButton(onClick = { expanded = false }, enabled = !saving, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Default.Close, "收起并保留草稿")
@@ -179,7 +195,7 @@ fun FloatingActionIsland(
                 Button(
                     onClick = ::submit,
                     enabled = title.isNotBlank() && !saving,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("capture-save"),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = if (compactLandscape) 48.dp else 56.dp).testTag("capture-save"),
                     shape = TaskDockShapes.FullPill,
                 ) {
                     if (saving) {

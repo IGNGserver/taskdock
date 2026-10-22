@@ -35,6 +35,7 @@ import com.devtodo.app.data.model.DeletePreviewDto
 import com.devtodo.app.data.model.TaskStatus
 import com.devtodo.app.ui.components.*
 import com.devtodo.app.ui.navigation.Screen
+import com.devtodo.app.ui.theme.LocalAdaptiveInfo
 import com.devtodo.app.ui.theme.TaskDockMotion
 import com.devtodo.app.ui.theme.TaskDockShapes
 import kotlinx.coroutines.launch
@@ -137,7 +138,24 @@ fun TreeScreen(
     var pendingPreview by remember { mutableStateOf<DeletePreviewDto?>(null) }
     var pendingDeleteFolder by remember { mutableStateOf<FolderEntity?>(null) }
     var pendingMoveRow by remember { mutableStateOf<TreeRow?>(null) }
+    val adaptive = LocalAdaptiveInfo.current
+    var inlineTaskId by rememberSaveable(folderId) { mutableStateOf<String?>(null) }
+    val activeInlineTaskId = inlineTaskId?.takeIf { id -> rows.any { it.task?.id == id } }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(highlightedTaskId, locateRequest, adaptive.useTwoPane) {
+        if (adaptive.useTwoPane && !highlightedTaskId.isNullOrBlank()) {
+            inlineTaskId = highlightedTaskId
+        }
+    }
+
+    fun selectTask(taskId: String) {
+        if (adaptive.useTwoPane) {
+            inlineTaskId = taskId
+        } else {
+            onNavigateToDetail(taskId)
+        }
+    }
 
     WorkspaceScaffold(
         topBar = {
@@ -233,144 +251,175 @@ fun TreeScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .testTag("directory-tree-list"),
-                state = listState,
-                contentPadding = PaddingValues(bottom = 24.dp),
-            ) {
-                if (folderId == null) {
-                    // Expressive Smart View Dashboard
-                    item(key = "expressive-smart-dashboard") {
-                        ExpressiveSmartDashboard(
-                            todayCount = todayTasks.count { it.first.status != TaskStatus.DONE },
-                            todayTotal = todayTasks.size,
-                            onNavigate = onNavigateToShortcut,
-                        )
-                    }
+            @Composable
+            fun DirectoryListPane(modifier: Modifier = Modifier) {
+                LazyColumn(
+                    modifier = modifier
+                        .fillMaxSize()
+                        .testTag("directory-tree-list"),
+                    state = listState,
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                ) {
+                    if (folderId == null) {
+                        // Expressive Smart View Dashboard
+                        item(key = "expressive-smart-dashboard") {
+                            ExpressiveSmartDashboard(
+                                todayCount = todayTasks.count { it.first.status != TaskStatus.DONE },
+                                todayTotal = todayTasks.size,
+                                onNavigate = onNavigateToShortcut,
+                                compactLandscape = adaptive.isCompactLandscape,
+                            )
+                        }
 
-                    // Directory Section Header
-                    item(key = "directory-heading") {
-                        DirectorySectionHeader(
-                            folderCount = folders.size,
-                            rootTaskCount = counts.total,
-                            onCreateFolder = { showFolderDialog = true },
-                        )
-                    }
-                } else {
-                    item(key = "directory-overview") {
-                        DirectoryOverview(
-                            folderCount = folders.size,
-                            taskCount = counts.total,
-                            pendingCount = tasks.count { it.status != TaskStatus.DONE },
-                        )
-                    }
-                }
-
-                if (counts.total > pageSize) {
-                    item(key = "load-directory-page") {
-                        TextButton(onClick = { pageSize += 100 }, modifier = Modifier.fillMaxWidth()) {
-                            Text("加载更多任务 · 已加载 ${tasks.size} / ${counts.total}")
+                        // Directory Section Header
+                        item(key = "directory-heading") {
+                            DirectorySectionHeader(
+                                folderCount = folders.size,
+                                rootTaskCount = counts.total,
+                                onCreateFolder = { showFolderDialog = true },
+                            )
+                        }
+                    } else {
+                        item(key = "directory-overview") {
+                            DirectoryOverview(
+                                folderCount = folders.size,
+                                taskCount = counts.total,
+                                pendingCount = tasks.count { it.status != TaskStatus.DONE },
+                            )
                         }
                     }
-                }
-                // Directory rows
-                itemsIndexed(rows, key = { _, row -> "${row.kind}:${row.id}" }) { rowIndex, row ->
-                    val status = groupingStatus(row)
-                    val siblings = rows.filter { groupingStatus(it) == status }
-                    val index = siblings.indexOfFirst { it.id == row.id }
-                    val actions = listOf(
-                        RowAction("上移", enabled = index > 0) { moveAdjacent(row, -1) },
-                        RowAction("下移", enabled = index < siblings.lastIndex) { moveAdjacent(row, 1) },
-                        RowAction("移动到目录") { pendingMoveRow = row },
-                    )
 
-                    AnimatedVisibility(
-                        visible = row.folder != null || status != TaskStatus.DONE || showCompleted,
-                        modifier = Modifier.animateItem(),
-                        enter = fadeIn(TaskDockMotion.springEffectsFast()) + expandVertically(TaskDockMotion.springSpatial()),
-                        exit = fadeOut(TaskDockMotion.springEffectsFast()) + shrinkVertically(TaskDockMotion.springSpatial()),
-                    ) {
-                        Column {
-                            val startsStatusGroup = rowIndex == 0 || groupingStatus(rows[rowIndex - 1]) != status
-                            if (folderId != null && startsStatusGroup) {
-                                SectionHeading("${taskStatusLabel(status)} · ${siblings.size}")
-                            }
-
-                            if (row.folder != null) {
-                                val folder = row.folder
-
-                                ExpressiveFolderCard(
-                                    folder = folder,
-                                    itemCount = row.taskCount,
-                                    onClick = { onOpenFolder(folder.id) },
-                                    actions = actions + listOf(
-                                        RowAction("重命名") { editingFolder = folder },
-                                        RowAction("删除目录树", destructive = true) {
-                                            pendingDeleteFolder = folder
-                                        },
-                                    ),
-                                    rowShape = TaskDockShapes.groupedRow(
-                                        visibleRows.indexOfFirst { it.id == row.id }.coerceAtLeast(0),
-                                        visibleRows.size,
-                                    ),
-                                    modifier = Modifier.testTag("tree-row-${row.id}"),
-                                )
-                            } else {
-                                val task = displayTask(row)!!
-                                ExpressiveTaskCard(
-                                    task = task,
-                                    onClick = { onNavigateToDetail(task.id) },
-                                    onStatusToggle = { changeStatus(row, it) },
-                                    actions = actions,
-                                    showStatus = folderId == null,
-                                    highlighted = task.id == highlightedTaskId,
-                                    rowShape = TaskDockShapes.groupedRow(
-                                        visibleRows.indexOfFirst { it.id == row.id }.coerceAtLeast(0),
-                                        visibleRows.size,
-                                    ),
-                                    modifier = Modifier.testTag("tree-row-${row.id}"),
-                                )
+                    if (counts.total > pageSize) {
+                        item(key = "load-directory-page") {
+                            TextButton(onClick = { pageSize += 100 }, modifier = Modifier.fillMaxWidth()) {
+                                Text("加载更多任务 · 已加载 ${tasks.size} / ${counts.total}")
                             }
                         }
                     }
-                }
-                if (completedCount > 0) {
-                    item(key = "completed-toggle") {
-                        TextButton(onClick = { showCompleted = !showCompleted }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 48.dp)) {
-                            Text("已完成任务 · $completedCount", modifier = Modifier.weight(1f))
-                            Icon(if (showCompleted) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                if (showCompleted) "收起已完成任务" else "展开已完成任务")
-                        }
-                    }
-                }
+                    // Directory rows
+                    itemsIndexed(rows, key = { _, row -> "${row.kind}:${row.id}" }) { rowIndex, row ->
+                        val status = groupingStatus(row)
+                        val siblings = rows.filter { groupingStatus(it) == status }
+                        val index = siblings.indexOfFirst { it.id == row.id }
+                        val actions = listOf(
+                            RowAction("上移", enabled = index > 0) { moveAdjacent(row, -1) },
+                            RowAction("下移", enabled = index < siblings.lastIndex) { moveAdjacent(row, 1) },
+                            RowAction("移动到目录") { pendingMoveRow = row },
+                        )
 
-                if (rows.isEmpty() && !loadProgress.complete) {
-                    item { Text("正在恢复目录数据，加载失败时将自动重试。", Modifier.padding(16.dp)) }
-                } else if (rows.isEmpty()) {
-                    item {
-                        EmptyState(
-                            icon = Icons.Default.Folder,
-                            title = if (folderId == null) "目录为空" else "当前目录暂无任务",
-                            description = if (folderId == null)
-                                "点下方“记一件事”开始，或先建一个目录。"
-                            else "点下方“记一件事”，任务会保存在这个目录。",
-                            action = {
-                                if (folderId == null) {
-                                    FilledTonalButton(
-                                        onClick = { showFolderDialog = true },
-                                        shape = TaskDockShapes.FullPill,
-                                    ) {
-                                        Icon(Icons.Default.CreateNewFolder, null)
-                                        Spacer(Modifier.width(8.dp))
-                                        Text("新建目录")
-                                    }
+                        AnimatedVisibility(
+                            visible = row.folder != null || status != TaskStatus.DONE || showCompleted,
+                            modifier = Modifier.animateItem(),
+                            enter = fadeIn(TaskDockMotion.springEffectsFast()) + expandVertically(TaskDockMotion.springSpatial()),
+                            exit = fadeOut(TaskDockMotion.springEffectsFast()) + shrinkVertically(TaskDockMotion.springSpatial()),
+                        ) {
+                            Column {
+                                val startsStatusGroup = rowIndex == 0 || groupingStatus(rows[rowIndex - 1]) != status
+                                if (folderId != null && startsStatusGroup) {
+                                    SectionHeading("${taskStatusLabel(status)} · ${siblings.size}")
                                 }
-                            },
-                        )
+
+                                if (row.folder != null) {
+                                    val folder = row.folder
+
+                                    ExpressiveFolderCard(
+                                        folder = folder,
+                                        itemCount = row.taskCount,
+                                        onClick = { onOpenFolder(folder.id) },
+                                        actions = actions + listOf(
+                                            RowAction("重命名") { editingFolder = folder },
+                                            RowAction("删除目录树", destructive = true) {
+                                                pendingDeleteFolder = folder
+                                            },
+                                        ),
+                                        rowShape = TaskDockShapes.groupedRow(
+                                            visibleRows.indexOfFirst { it.id == row.id }.coerceAtLeast(0),
+                                            visibleRows.size,
+                                        ),
+                                        modifier = Modifier.testTag("tree-row-${row.id}"),
+                                    )
+                                } else {
+                                    val task = displayTask(row)!!
+                                    ExpressiveTaskCard(
+                                        task = task,
+                                        onClick = { selectTask(task.id) },
+                                        onStatusToggle = { changeStatus(row, it) },
+                                        actions = actions,
+                                        showStatus = folderId == null,
+                                        highlighted = task.id == highlightedTaskId || task.id == activeInlineTaskId,
+                                        rowShape = TaskDockShapes.groupedRow(
+                                            visibleRows.indexOfFirst { it.id == row.id }.coerceAtLeast(0),
+                                            visibleRows.size,
+                                        ),
+                                        modifier = Modifier.testTag("tree-row-${row.id}"),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (completedCount > 0) {
+                        item(key = "completed-toggle") {
+                            TextButton(onClick = { showCompleted = !showCompleted }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 48.dp)) {
+                                Text("已完成任务 · $completedCount", modifier = Modifier.weight(1f))
+                                Icon(if (showCompleted) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    if (showCompleted) "收起已完成任务" else "展开已完成任务")
+                            }
+                        }
+                    }
+
+                    if (rows.isEmpty() && !loadProgress.complete) {
+                        item { Text("正在恢复目录数据，加载失败时将自动重试。", Modifier.padding(16.dp)) }
+                    } else if (rows.isEmpty()) {
+                        item {
+                            EmptyState(
+                                icon = Icons.Default.Folder,
+                                title = if (folderId == null) "目录为空" else "当前目录暂无任务",
+                                description = if (folderId == null)
+                                    "点下方“记一件事”开始，或先建一个目录。"
+                                else "点下方“记一件事”，任务会保存在这个目录。",
+                                action = {
+                                    if (folderId == null) {
+                                        FilledTonalButton(
+                                            onClick = { showFolderDialog = true },
+                                            shape = TaskDockShapes.FullPill,
+                                        ) {
+                                            Icon(Icons.Default.CreateNewFolder, null)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("新建目录")
+                                        }
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
+            }
+
+            if (adaptive.useTwoPane) {
+                AdaptiveTwoPaneLayout(
+                    primaryPane = { DirectoryListPane() },
+                    secondaryPane = {
+                        if (activeInlineTaskId != null) {
+                            key(activeInlineTaskId) {
+                                TaskDetailScreen(
+                                    taskId = activeInlineTaskId,
+                                    viewModel = viewModel,
+                                    onBack = { inlineTaskId = null },
+                                    isEmbedded = true,
+                                )
+                            }
+                        } else {
+                            DirectoryDetailPlaceholder(
+                                folderTitle = folderId?.let { folderTitle(it, allFolders) } ?: "根目录",
+                                folderCount = folders.size,
+                                taskCount = counts.total,
+                                doneCount = counts.done,
+                            )
+                        }
+                    },
+                )
+            } else {
+                DirectoryListPane()
             }
         }
     }
@@ -526,54 +575,158 @@ private fun ExpressiveSmartDashboard(
     todayCount: Int,
     todayTotal: Int,
     onNavigate: (String) -> Unit,
+    compactLandscape: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     val largeText = LocalDensity.current.fontScale >= 1.4f
     val completion = if (todayTotal == 0) "暂无安排" else "${todayTotal - todayCount} / $todayTotal 完成"
-    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("快捷视图", style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp).semantics { heading() })
-        Surface(
-            onClick = { onNavigate(Screen.Today.route) },
-            shape = TaskDockShapes.LargeIncreased, color = scheme.primaryContainer,
-        ) {
-            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("今天", style = MaterialTheme.typography.titleMedium, color = scheme.onPrimaryContainer)
-                    Text("$todayCount 件待办", style = MaterialTheme.typography.titleLarge,
-                        color = scheme.onPrimaryContainer, modifier = Modifier.weight(1f))
-                    if (!largeText) Text(completion, style = MaterialTheme.typography.bodySmall, color = scheme.onPrimaryContainer)
+    val shortcuts = listOf(
+        Triple("日历", Icons.Default.CalendarToday, Screen.Time.route),
+        Triple("流程", Icons.Default.AccountTree, Screen.Workflows.route),
+        Triple("事件", Icons.Default.Event, Screen.Events.route),
+    )
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = if (compactLandscape) 4.dp else 8.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compactLandscape) 4.dp else 8.dp),
+    ) {
+        Text(
+            "快捷视图",
+            style = MaterialTheme.typography.labelLarge,
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp).semantics { heading() },
+        )
+        if (compactLandscape && !largeText) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    onClick = { onNavigate(Screen.Today.route) },
+                    modifier = Modifier.weight(1f),
+                    shape = TaskDockShapes.Large,
+                    color = scheme.primaryContainer,
+                ) {
+                    Row(
+                        Modifier.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("今天", style = MaterialTheme.typography.titleSmall, color = scheme.onPrimaryContainer)
+                        Text(
+                            "$todayCount 件待办",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = scheme.onPrimaryContainer,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(completion, style = MaterialTheme.typography.labelSmall, color = scheme.onPrimaryContainer)
+                    }
                 }
-                if (largeText) Text(completion, style = MaterialTheme.typography.bodySmall, color = scheme.onPrimaryContainer)
-                if (todayTotal > 0) {
-                    LinearProgressIndicator(progress = { (todayTotal - todayCount).toFloat() / todayTotal },
-                        modifier = Modifier.fillMaxWidth().height(4.dp), color = scheme.primary,
-                        trackColor = scheme.onPrimaryContainer.copy(alpha = 0.12f))
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = TaskDockShapes.Large,
+                    color = scheme.surfaceContainerLow,
+                ) {
+                    Row(Modifier.fillMaxWidth()) {
+                        shortcuts.forEach { (label, icon, route) ->
+                            QuietShortcut(label, icon, { onNavigate(route) }, Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        } else {
+            Surface(
+                onClick = { onNavigate(Screen.Today.route) },
+                shape = TaskDockShapes.LargeIncreased,
+                color = scheme.primaryContainer,
+            ) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("今天", style = MaterialTheme.typography.titleMedium, color = scheme.onPrimaryContainer)
+                        Text("$todayCount 件待办", style = MaterialTheme.typography.titleLarge,
+                            color = scheme.onPrimaryContainer, modifier = Modifier.weight(1f))
+                        if (!largeText) Text(completion, style = MaterialTheme.typography.bodySmall, color = scheme.onPrimaryContainer)
+                    }
+                    if (largeText) Text(completion, style = MaterialTheme.typography.bodySmall, color = scheme.onPrimaryContainer)
+                    if (todayTotal > 0) {
+                        LinearProgressIndicator(progress = { (todayTotal - todayCount).toFloat() / todayTotal },
+                            modifier = Modifier.fillMaxWidth().height(4.dp), color = scheme.primary,
+                            trackColor = scheme.onPrimaryContainer.copy(alpha = 0.12f))
+                    }
+                }
+            }
+            Surface(
+                modifier = Modifier.animateContentSize(animationSpec = TaskDockMotion.springSpatial()),
+                shape = TaskDockShapes.Large,
+                color = scheme.surfaceContainerLow,
+            ) {
+                if (largeText) {
+                    Column(Modifier.fillMaxWidth()) {
+                        shortcuts.forEach { (label, icon, route) ->
+                            QuietShortcut(label, icon, { onNavigate(route) }, Modifier.fillMaxWidth())
+                        }
+                    }
+                } else {
+                    Row(Modifier.fillMaxWidth()) {
+                        shortcuts.forEach { (label, icon, route) ->
+                            QuietShortcut(label, icon, { onNavigate(route) }, Modifier.weight(1f))
+                        }
+                    }
                 }
             }
         }
-        val shortcuts = listOf(
-            Triple("日历", Icons.Default.CalendarToday, Screen.Time.route),
-            Triple("流程", Icons.Default.AccountTree, Screen.Workflows.route),
-            Triple("事件", Icons.Default.Event, Screen.Events.route),
-        )
-        Surface(
-            modifier = Modifier.animateContentSize(animationSpec = TaskDockMotion.springSpatial()),
-            shape = TaskDockShapes.Large,
-            color = scheme.surfaceContainerLow,
+    }
+}
+
+@Composable
+private fun DirectoryDetailPlaceholder(
+    folderTitle: String,
+    folderCount: Int,
+    taskCount: Int,
+    doneCount: Int,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+            .testTag("directory-detail-placeholder"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (largeText) {
-                Column(Modifier.fillMaxWidth()) {
-                    shortcuts.forEach { (label, icon, route) ->
-                        QuietShortcut(label, icon, { onNavigate(route) }, Modifier.fillMaxWidth())
-                    }
-                }
-            } else {
-                Row(Modifier.fillMaxWidth()) {
-                    shortcuts.forEach { (label, icon, route) ->
-                        QuietShortcut(label, icon, { onNavigate(route) }, Modifier.weight(1f))
-                    }
-                }
+            Surface(
+                shape = TaskDockShapes.HeroShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.FolderOpen,
+                    contentDescription = null,
+                    modifier = Modifier.padding(20.dp).size(28.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Text(
+                text = folderTitle,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = "点击左侧任务即可在此处查看或编辑详情、子步骤与日程安排",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Surface(
+                shape = TaskDockShapes.FullPill,
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+            ) {
+                Text(
+                    text = "$folderCount 个目录 · $taskCount 项任务 · $doneCount 项已完成",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                )
             }
         }
     }
