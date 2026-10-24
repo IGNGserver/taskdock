@@ -21,6 +21,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronRight, Folder, FolderPlus, MoreHorizontal, Plus, Search } from 'lucide-react';
 import { ApiError, mutationV2, requestV2 } from './api.js';
 import { useDevice } from './device.js';
+import { notifyDataChanged, shouldReloadTaskList } from './data-changes.js';
 import {
   Alert,
   Button,
@@ -448,7 +449,9 @@ export function TreePage() {
   useEffect(() => {
     // Announced from our own status edit and from the sync engine that follows
     // it, so this refresh must not undo the pins that keep the row in place.
-    const handler = () => void load({ keepPins: true });
+    const handler = (event: Event) => {
+      if (shouldReloadTaskList(event, load)) void load({ keepPins: true });
+    };
     window.addEventListener('devtodo:data-changed', handler);
     return () => window.removeEventListener('devtodo:data-changed', handler);
   }, [load]);
@@ -559,7 +562,7 @@ export function TreePage() {
         if (captureRevision.current === submittedRevision) setNewTitle('');
         await load({ keepPins: true });
       }
-      window.dispatchEvent(new Event('devtodo:data-changed'));
+      notifyDataChanged(load);
     } catch (cause) {
       setError(errorMessage(cause, '创建任务失败，请重试'));
     } finally {
@@ -589,7 +592,7 @@ export function TreePage() {
       setNewFolderTitle('');
       setFolderDialog(null);
       await load();
-      window.dispatchEvent(new Event('devtodo:data-changed'));
+      notifyDataChanged(load);
     } catch (cause) {
       setFolderError(errorMessage(cause, '文件夹保存失败，请重试'));
     } finally {
@@ -616,7 +619,7 @@ export function TreePage() {
             baseVersion: item.task.version,
           });
           await load();
-          window.dispatchEvent(new Event('devtodo:data-changed'));
+          notifyDataChanged(load);
           return true;
         } catch (cause) {
           throw cause instanceof Error ? cause : new Error('删除任务失败，请重试');
@@ -700,7 +703,7 @@ export function TreePage() {
               confirmationToken: preview.confirmationToken,
             });
             await load();
-            window.dispatchEvent(new Event('devtodo:data-changed'));
+            notifyDataChanged(load);
             return true;
           } catch (cause) {
             if (cause instanceof ApiError && cause.code === 'OFFLINE_TREE_DELETE_FORBIDDEN') {
@@ -843,7 +846,7 @@ export function TreePage() {
     }
     setMoveSession(failed.length ? { ...moveSession, items: failed } : null);
     await load();
-    window.dispatchEvent(new Event('devtodo:data-changed'));
+    notifyDataChanged(load);
     if (failed.length)
       setMoveError(
         `${moved.length ? `已移动 ${moved.length} 项；` : ''}${failed.length} 项失败，内容仍在原目录。${messages.join('；')}`,
@@ -871,7 +874,7 @@ export function TreePage() {
     setMoveUndo(failed.length ? { ...moveUndo, items: failed } : null);
     await load();
     if (failed.length) setError(`撤销失败：${messages.join('；')}`);
-    window.dispatchEvent(new Event('devtodo:data-changed'));
+    notifyDataChanged(load);
     setMoveBusy(false);
   };
   const deleteSelected = async () => {
@@ -921,7 +924,7 @@ export function TreePage() {
           remaining = failed;
           setSelected(new Set(failed.map(treeItemId)));
           await load();
-          window.dispatchEvent(new Event('devtodo:data-changed'));
+          notifyDataChanged(load);
           if (failed.length)
             throw new Error(`${failed.length} 项未删除：${messages.join('；')}。成功项已移除。`);
           return true;

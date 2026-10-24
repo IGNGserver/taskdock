@@ -148,6 +148,7 @@ import {
 } from './date-utils.js';
 import { getNetworkMode, setNetworkMode, type NetworkMode } from './network-policy.js';
 import { TaskHoverPreviewRow, useTaskHoverPreview } from './components/task-hover-preview.js';
+import { notifyDataChanged, shouldReloadTaskList } from './data-changes.js';
 const TreePage = lazy(() => import('./TreePage.js').then((page) => ({ default: page.TreePage })));
 const WorkflowsPage = lazy(() =>
   import('./WorkflowsPage.js').then((page) => ({ default: page.WorkflowsPage })),
@@ -1146,7 +1147,9 @@ function useReloadable<T>(loader: () => Promise<T>, initial: T) {
   }, [loader]);
   useEffect(() => {
     void reload();
-    const listener = () => void reload();
+    const listener = (event: Event) => {
+      if (shouldReloadTaskList(event, reload)) void reload();
+    };
     window.addEventListener('devtodo:data-changed', listener);
     return () => {
       reloadSequence.current += 1;
@@ -1474,7 +1477,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       ids: next.map((item) => item.id),
     });
     await reload();
-    window.dispatchEvent(new Event('devtodo:data-changed'));
+    notifyDataChanged(reload);
   };
   return (
     <div className="page page--today">
@@ -1600,8 +1603,6 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           onClose={() => setShowTaskPicker(false)}
           onAdded={() => {
             setShowTaskPicker(false);
-            void reload();
-            window.dispatchEvent(new Event('devtodo:data-changed'));
           }}
         />
       )}
@@ -1636,7 +1637,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             timePointId: point.id,
           });
           await reload();
-          window.dispatchEvent(new Event('devtodo:data-changed'));
+          notifyDataChanged(reload);
         }}
       />
     </div>
@@ -1681,7 +1682,7 @@ function EventsPage() {
         ids: next.map((point) => point.id),
       });
       await reload();
-      window.dispatchEvent(new Event('devtodo:data-changed'));
+      notifyDataChanged(reload);
     } catch (cause) {
       setActionError(cause instanceof ApiError ? cause.message : '事件排序失败，请重试');
     }
@@ -1941,7 +1942,9 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   }, [eventId]);
   useEffect(() => {
     void load();
-    const listener = () => void load();
+    const listener = (event: Event) => {
+      if (shouldReloadTaskList(event, load)) void load();
+    };
     window.addEventListener('devtodo:data-changed', listener);
     return () => {
       loadSequence.current += 1;
@@ -1983,7 +1986,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         ids: next.map((item) => item.id),
       });
       await load();
-      window.dispatchEvent(new Event('devtodo:data-changed'));
+      notifyDataChanged(load);
     } catch (cause) {
       setActionError(cause instanceof ApiError ? cause.message : '安排排序失败，请重试');
     }
@@ -1999,7 +2002,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         { baseVersion: point.version },
       );
       await load();
-      window.dispatchEvent(new Event('devtodo:data-changed'));
+      notifyDataChanged(load);
     } catch (cause) {
       setActionError(cause instanceof ApiError ? cause.message : '操作失败');
     } finally {
@@ -2007,7 +2010,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
     }
   };
   return (
-    <div className="page">
+    <div className="page" aria-busy={loading || undefined}>
       <PageHeader
         eyebrow="EVENT"
         title={point.title ?? ''}
@@ -2062,7 +2065,6 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           {actionError}
         </Alert>
       )}
-      {loading && <LoadingState label="正在更新事件安排" />}
       <SectionTitle
         title="安排在这里"
         count={items.length}
@@ -2099,8 +2101,6 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           onClose={() => setShowAdd(false)}
           onAdded={() => {
             setShowAdd(false);
-            void load();
-            window.dispatchEvent(new Event('devtodo:data-changed'));
           }}
         />
       )}
@@ -2188,7 +2188,7 @@ function PlacementRow({
     try {
       await mutationV2('DELETE', `/placements/${placement.id}`, { baseVersion: placement.version });
       await onChanged();
-      window.dispatchEvent(new Event('devtodo:data-changed'));
+      notifyDataChanged(onChanged);
       setMenu(false);
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '移除安排失败');
@@ -2218,7 +2218,7 @@ function PlacementRow({
         baseVersion: task.version,
       });
       await onChanged();
-      window.dispatchEvent(new Event('devtodo:data-changed'));
+      notifyDataChanged(onChanged);
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '更新任务失败');
     } finally {
@@ -2363,6 +2363,7 @@ function PlacementRow({
           onDone={async () => {
             setTargetMode(null);
             await onChanged();
+            notifyDataChanged(onChanged);
           }}
         />
       )}
@@ -2452,7 +2453,7 @@ function PlacementList({
             ids: next.map((item) => item.id),
           });
           await onChanged();
-          window.dispatchEvent(new Event('devtodo:data-changed'));
+          notifyDataChanged(onChanged);
         } catch (cause) {
           setDropError(cause instanceof ApiError ? cause.message : '安排排序失败，请重试');
         } finally {
@@ -2466,6 +2467,7 @@ function PlacementList({
     try {
       await moveDraggedPlacement(event, pointId);
       await onChanged();
+      notifyDataChanged(onChanged);
     } catch (cause) {
       setDropError(cause instanceof ApiError ? cause.message : '安排操作失败，请重试');
     } finally {
@@ -2813,7 +2815,6 @@ async function moveDraggedPlacement(event: ReactDragEvent<HTMLElement>, targetTi
   if (!taskId) return;
   if (!placementId) {
     await mutationV2('POST', '/placements', { taskId, timePointId: targetTimePointId });
-    window.dispatchEvent(new Event('devtodo:data-changed'));
     return;
   }
   const detail = await requestV2<{ placements: PlacementDto[] }>(`/tasks/${taskId}`);
@@ -2823,7 +2824,6 @@ async function moveDraggedPlacement(event: ReactDragEvent<HTMLElement>, targetTi
     timePointId: targetTimePointId,
     baseVersion: placement.version,
   });
-  window.dispatchEvent(new Event('devtodo:data-changed'));
 }
 
 function AddTaskModal({
@@ -2907,8 +2907,9 @@ function AddTaskModal({
   useEffect(() => {
     void loadPicker();
     void loadExistingPlacements();
-    const listener = () => {
-      setSearchIndex(null);
+    const listener = (event: Event) => {
+      if (!shouldReloadTaskList(event)) return;
+      // Keep the last search results mounted while the index revalidates.
       setSearchError('');
       setSearchRetry((count) => count + 1);
       void loadPicker();
@@ -2918,9 +2919,9 @@ function AddTaskModal({
     return () => window.removeEventListener('devtodo:data-changed', listener);
   }, [loadExistingPlacements, loadPicker]);
 
+  const hasSearchQuery = Boolean(query.trim());
   useEffect(() => {
-    const searchText = query.trim();
-    if (!searchText || searchIndex) return;
+    if (!hasSearchQuery) return;
     let cancelled = false;
     const sequence = ++searchLoadSequence.current;
     const timeout = window.setTimeout(() => {
@@ -2943,7 +2944,7 @@ function AddTaskModal({
       window.clearTimeout(timeout);
       if (sequence === searchLoadSequence.current) searchLoadSequence.current += 1;
     };
-  }, [query, searchIndex, searchRetry]);
+  }, [hasSearchQuery, searchRetry]);
 
   const activeItems = useMemo(
     () =>
@@ -3192,7 +3193,7 @@ function AddTaskModal({
         <div className="task-picker-scroll" role="region" aria-label="任务搜索结果">
           {searchLoading ? (
             <LoadingState label="正在搜索任务目录" />
-          ) : searchError ? null : matchingTasks.length ? (
+          ) : searchError && !searchIndex ? null : matchingTasks.length ? (
             <List className="m3e-list--picker m3e-list--tree-group" gap>
               {matchingTasks.map((task) => renderTaskRow(task, true))}
             </List>
@@ -3374,8 +3375,8 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       setLoadedSelectedDate(selected);
     } catch (cause) {
       if (loadId !== selectedLoadId.current) return;
-      setPoint(null);
-      setItems([]);
+      // A failed background read must not discard the day already being used.
+      // Real date switches clear the previous data in selectDate().
       setDetailError(cause instanceof ApiError ? cause.message : '日期任务加载失败');
     } finally {
       if (loadId === selectedLoadId.current) setLoadingSelected(false);
@@ -3383,7 +3384,9 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   }, [selected]);
   useEffect(() => {
     void loadSelected();
-    const listener = () => void loadSelected();
+    const listener = (event: Event) => {
+      if (shouldReloadTaskList(event, loadSelected)) void loadSelected();
+    };
     window.addEventListener('devtodo:data-changed', listener);
     return () => {
       selectedLoadId.current += 1;
@@ -3399,7 +3402,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       ids: next.map((item) => item.id),
     });
     await loadSelected();
-    window.dispatchEvent(new Event('devtodo:data-changed'));
+    notifyDataChanged(loadSelected);
   };
   return (
     <div className="page">
@@ -3476,9 +3479,9 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               加入任务
             </Button>
           </div>
-          {detailError ? (
-            <ErrorState error={detailError} onRetry={() => void loadSelected()} />
-          ) : loadingSelected && loadedSelectedDate !== selected ? (
+          {detailError && <ErrorState error={detailError} onRetry={() => void loadSelected()} />}
+          {detailError && loadedSelectedDate !== selected ? null : loadingSelected &&
+            loadedSelectedDate !== selected ? (
             <LoadingState label="正在加载日期安排" />
           ) : (
             <PlacementList
@@ -3499,7 +3502,6 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               onClose={() => setShowAdd(false)}
               onAdded={() => {
                 setShowAdd(false);
-                window.dispatchEvent(new Event('devtodo:data-changed'));
               }}
             />
           )}

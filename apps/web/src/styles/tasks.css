@@ -29,8 +29,7 @@
   transition:
     background-color var(--m3-motion-short3) var(--m3-easing-standard),
     border-color var(--m3-motion-short3) var(--m3-easing-standard),
-    box-shadow var(--m3-motion-short3) var(--m3-easing-standard),
-    scale var(--m3-spring-spatial-fast-duration) var(--m3-spring-spatial-fast);
+    box-shadow var(--m3-motion-short3) var(--m3-easing-standard);
 }
 
 .task-row:hover {
@@ -40,7 +39,7 @@
 }
 
 .task-row:active {
-  scale: 0.998;
+  background-color: var(--m3-surface-container-highest);
 }
 
 .task-row[draggable='true'] {

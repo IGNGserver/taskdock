@@ -773,6 +773,8 @@
 
 .m3e-task-row-action:active:not(:disabled) {
   background-image: linear-gradient(var(--m3-state-pressed), var(--m3-state-pressed));
+  /* A list's primary hit target must not move between pointer down and up. */
+  scale: 1;
 }
 
 .m3e-task-row-action.is-busy {
