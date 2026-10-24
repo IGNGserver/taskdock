@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Archive
@@ -32,6 +33,8 @@ fun ArchiveCenterV2Screen(viewModel: MainViewModel, onBack: () -> Unit) {
     val archivedTasks by viewModel.archivedTasks.collectAsStateWithLifecycle()
     val refreshing by viewModel.pullRefreshing.collectAsStateWithLifecycle()
     val standalone = archivedTasks.filter { it.archivedByOperationId == null }
+    // Kept outside the Scaffold content so the navigation back stack restores it.
+    val listState = rememberLazyListState()
 
     WorkspaceScaffold(
     topBar = {
@@ -54,6 +57,7 @@ fun ArchiveCenterV2Screen(viewModel: MainViewModel, onBack: () -> Unit) {
         modifier = Modifier.fillMaxSize().padding(padding),
     ) {
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 32.dp),
     ) {

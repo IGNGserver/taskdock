@@ -78,6 +78,8 @@ fun SettingsScreen(
     val legacyExport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri?.let(viewModel::exportLegacyCache)
     }
+    // Hoisted out of the Scaffold content so Navigation Compose restores it.
+    val settingsScroll = rememberScrollState()
 
     LaunchedEffect(Unit) {
         // Silent unless the user taps 检查更新; the manager throttles this to
@@ -310,7 +312,7 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(settingsScroll)
                     .padding(horizontal = 8.dp, vertical = 8.dp)
                     .padding(bottom = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -333,7 +335,7 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(settingsScroll)
                     .padding(bottom = 48.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {

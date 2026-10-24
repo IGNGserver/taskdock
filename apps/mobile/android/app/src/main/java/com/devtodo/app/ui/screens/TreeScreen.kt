@@ -38,7 +38,9 @@ import com.devtodo.app.ui.navigation.Screen
 import com.devtodo.app.ui.theme.LocalAdaptiveInfo
 import com.devtodo.app.ui.theme.TaskDockMotion
 import com.devtodo.app.ui.theme.TaskDockShapes
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * A single directory page. Every folder is a navigation destination, so opening
@@ -75,7 +77,7 @@ fun TreeScreen(
     LaunchedEffect(folderId) { viewModel.prioritizeDirectory(folderId) }
 
     val folders by remember(folderId) { viewModel.observeDirectoryFolders(folderId) }
-        .collectAsStateWithLifecycle(initialValue = emptyList())
+        .collectAsStateWithLifecycle(initialValue = viewModel.cachedDirectoryFolders(folderId))
 
     // `groupPins` remembers the status a row was loaded with so it stays in its
     // group; `statusOverrides` is what the circle paints right now. Both mirror
@@ -86,9 +88,11 @@ fun TreeScreen(
     var cacheLimit by rememberSaveable(folderId) { mutableIntStateOf(100) }
     val pinned = statusOverrides.keys.toList()
     val tasks by remember(folderId, pinned, cacheLimit) { viewModel.observeDirectoryMembers(folderId, pinned, cacheLimit) }
-        .collectAsStateWithLifecycle(initialValue = emptyList())
+        .collectAsStateWithLifecycle(initialValue = viewModel.cachedDirectoryMembers(folderId))
     val counts by remember(folderId) { viewModel.observeDirectoryCounts(folderId) }
-        .collectAsStateWithLifecycle(initialValue = com.devtodo.app.data.local.DirectoryCounts())
+        .collectAsStateWithLifecycle(
+            initialValue = viewModel.cachedDirectoryCounts(folderId) ?: com.devtodo.app.data.local.DirectoryCounts(),
+        )
     val visibleCounts = if (directory?.initialized == true)
         com.devtodo.app.data.local.DirectoryCounts(tasks.size, tasks.count { it.status == TaskStatus.DONE }) else counts
 
@@ -160,10 +164,44 @@ fun TreeScreen(
     val activeInlineTaskId = inlineTaskId?.takeIf { id -> rows.any { it.task?.id == id } }
     val scope = rememberCoroutineScope()
 
+    // The scroll state must live in the destination's main composition, not in
+    // the Scaffold content slot: Navigation Compose restores the former from
+    // the back stack entry, while the latter is a subcomposition that can be
+    // torn down before the destination state is saved.
+    val listState = rememberLazyListState()
+    var showCompleted by rememberSaveable { mutableStateOf(false) }
+    var handledLocateRequest by rememberSaveable { mutableIntStateOf(0) }
+    val latestRows by rememberUpdatedState(rows)
+
+    // Consume every locate request once. A stale highlight must not pull the
+    // list back to that row when the page is re-entered or Room re-emits.
     LaunchedEffect(highlightedTaskId, locateRequest, adaptive.useTwoPane) {
-        if (adaptive.useTwoPane && !highlightedTaskId.isNullOrBlank()) {
-            inlineTaskId = highlightedTaskId
+        if (locateRequest <= handledLocateRequest) return@LaunchedEffect
+        val targetId = highlightedTaskId
+        if (targetId.isNullOrBlank()) {
+            handledLocateRequest = locateRequest
+            return@LaunchedEffect
         }
+        if (adaptive.useTwoPane) {
+            inlineTaskId = targetId
+            handledLocateRequest = locateRequest
+            return@LaunchedEffect
+        }
+        val index = withTimeoutOrNull(3_000) {
+            snapshotFlow { latestRows.indexOfFirst { it.id == targetId } }.first { it >= 0 }
+        }
+        handledLocateRequest = locateRequest
+        if (index == null || index < 0) return@LaunchedEffect
+        val row = latestRows.getOrNull(index) ?: return@LaunchedEffect
+        if (row.task != null && groupingStatus(row) == TaskStatus.DONE) {
+            showCompleted = true
+            withFrameNanos { }
+        }
+        val headerItems =
+            (if (folderId == null) 2 else 1) +
+                (if (directory?.nextCursor != null) 1 else 0) +
+                (if (directory?.initialized != true && counts.total > cacheLimit) 1 else 0)
+        listState.animateScrollToItem(index + headerItems)
     }
 
     fun selectTask(taskId: String) {
@@ -243,23 +281,10 @@ fun TreeScreen(
             }
         },
     ) { padding ->
-        val listState = rememberLazyListState()
-        var showCompleted by rememberSaveable { mutableStateOf(false) }
         val visibleRows = rows.filter {
             it.folder != null || groupingStatus(it) != TaskStatus.DONE || showCompleted
         }
         val completedCount = counts.done
-
-        LaunchedEffect(highlightedTaskId, rows, locateRequest) {
-            val index = rows.indexOfFirst { it.id == highlightedTaskId }
-            if (index >= 0) {
-                if (rows[index].task != null && groupingStatus(rows[index]) == TaskStatus.DONE) {
-                    showCompleted = true
-                    withFrameNanos { }
-                }
-                listState.animateScrollToItem(index + if (folderId == null) 2 else 1)
-            }
-        }
 
         PullToRefreshBox(
             isRefreshing = refreshing,
