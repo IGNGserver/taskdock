@@ -131,6 +131,13 @@ data class TreeItemDto(
 )
 
 @Serializable
+data class DirectoryPageDto(
+    val parentFolderId: String? = null,
+    val items: List<TreeItemDto>,
+    val nextCursor: String? = null,
+)
+
+@Serializable
 data class TaskStepDto(
     val id: String,
     val ownerId: String? = null,
@@ -371,7 +378,11 @@ data class BootstrapManifest(val snapshotId: String, val cursor: String, val exp
 data class BootstrapPage(val snapshotId: String, val cursor: String, val page: Int,
     val pageCount: Int, val changes: List<ChangeItem>, val nextPage: Int?, val protocolVersion: Int)
 @Serializable
-data class SyncPreview(val changes: List<ChangeItem>, val complete: Boolean)
+data class SyncPreview(val changes: List<ChangeItem>, val complete: Boolean,
+    val cursor: String? = null, val checkedAt: String? = null, val coverage: PreviewCoverage? = null)
+@Serializable
+data class PreviewCoverage(val parentFolderId: String? = null, val localDate: String,
+    val limit: Int, val foldersHasMore: Boolean, val tasksHasMore: Boolean, val placementsHasMore: Boolean)
 
 @Serializable
 data class HubStatusResponse(

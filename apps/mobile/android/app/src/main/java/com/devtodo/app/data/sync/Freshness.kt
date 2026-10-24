@@ -13,5 +13,5 @@ data class PageLoadState(
     val error: String? = null,
 )
 
-fun isRecentlyConfirmed(confirmedAt: Long, now: Long): Boolean =
-    confirmedAt > 0 && now >= confirmedAt && now - confirmedAt < FRESHNESS_WINDOW_MS
+fun isRecentlyConfirmed(confirmedAt: Long, now: Long, windowMs: Long = FRESHNESS_WINDOW_MS): Boolean =
+    confirmedAt > 0 && now >= confirmedAt && now - confirmedAt < windowMs

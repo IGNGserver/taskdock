@@ -28,8 +28,14 @@ internal fun resolveSyncBanner(
     pendingCount: Int,
     lastSyncError: String?,
     checkedLabel: String,
+    pageVerified: Boolean = false,
+    pendingIssue: String? = null,
 ): SyncBannerContent {
-    val fresh = recent && progress.complete
+    val fresh = pageVerified || (recent && progress.complete)
+
+    fun compact(message: String, progress: Boolean = false) = SyncBannerContent(
+        mode = SyncBannerMode.COMPACT, message = message, detail = null, showProgress = progress,
+    )
 
     fun error(message: String) = SyncBannerContent(
         mode = SyncBannerMode.ERROR,
@@ -56,6 +62,11 @@ internal fun resolveSyncBanner(
 
         state == SyncState.AUTH_REQUIRED -> error("登录需要恢复 · 本地缓存已保留")
         state == SyncState.INCOMPATIBLE -> error("中枢协议不兼容 · 本地缓存已保留")
+        pendingIssue != null -> SyncBannerContent(
+            mode = SyncBannerMode.ERROR,
+            message = pendingIssue,
+            detail = "本地内容已保留，可在设置中查看待处理操作",
+        )
         state == SyncState.SERVER_UNAVAILABLE -> error("中枢服务暂不可用 · 已保留缓存")
         state == SyncState.ERROR ->
             error(if (cached) "更新失败 · 已保留缓存，稍后自动重试" else "首次加载失败 · 稍后自动重试")
@@ -67,16 +78,14 @@ internal fun resolveSyncBanner(
             warning("当前页面更新失败 · 已保留缓存", retry = !checking)
 
         progress.totalPages > 0 ->
-            warning(
+            if (cached || pageVerified) compact(
                 "后台加载 ${progress.completedPages}/${progress.totalPages} 批 · 已有数据可用",
-                showProgress = true,
-            )
+                progress = true,
+            ) else warning("正在加载中枢数据…", showProgress = true)
 
         !fresh && checking ->
-            warning(
-                if (cached) "显示缓存 · 正在检查中枢更新" else "正在加载中枢数据…",
-                showProgress = true,
-            )
+            if (cached) compact("显示缓存 · 正在检查中枢更新", progress = true)
+            else warning("正在加载中枢数据…", showProgress = true)
 
         !fresh ->
             warning(
@@ -86,7 +95,7 @@ internal fun resolveSyncBanner(
             )
 
         pendingCount > 0 ->
-            warning("已核验中枢数据 · $pendingCount 项本地操作待处理")
+            compact("$checkedLabel · $pendingCount 项待同步", progress = checking)
 
         else -> SyncBannerContent(
             mode = SyncBannerMode.COMPACT,

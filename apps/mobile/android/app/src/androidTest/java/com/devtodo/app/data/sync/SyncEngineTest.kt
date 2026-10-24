@@ -56,6 +56,250 @@ class SyncEngineTest {
     private fun snapshot(id: String = "hub-task") = """{"folders":[],"tasks":[{"id":"$id","referenceId":"TEST-1","title":"$id","status":"TODO","rank":"1024","version":1}],"notes":[],"taskSteps":[],"timePoints":[],"placements":[],"workflows":[],"workflowStages":[],"workflowTaskMemberships":[],"settings":{"ownerId":"$owner","timezone":"Asia/Shanghai"},"cursor":"7"}"""
     private fun taskChange(id: String) = """{"seq":"7","entityType":"task","entityId":"$id","entityVersion":1,"operation":"upsert","snapshot":{"id":"$id","referenceId":"TEST-1","title":"$id","status":"TODO","rank":"1024","version":1}}"""
 
+    private fun directory(id: String, cursor: String? = null) = """{"parentFolderId":null,"items":[{"kind":"TASK","task":{"id":"$id","referenceId":"TEST-1","title":"$id","rank":"1024","version":1}}],"nextCursor":${cursor?.let { JsonPrimitive(it).toString() } ?: "null"}}"""
+
+    @Test fun directoryPagingUsesAnOpaqueCursorAndNeverAdvancesGlobalSync() = runBlocking {
+        val cursor = "d1.%7B%22cursor%22%3A%22opaque%22%7D"
+        db.taskDao().upsertTask(task("unloaded-cache"))
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                assertEquals("/api/v2/tree/children", request.requestUrl!!.encodedPath)
+                assertEquals("100", request.requestUrl!!.queryParameter("limit"))
+                return if (request.requestUrl!!.queryParameter("cursor") == null) response(directory("first", cursor))
+                else {
+                    assertEquals(cursor, request.requestUrl!!.queryParameter("cursor"))
+                    response(directory("second"))
+                }
+            }
+        }
+        assertEquals(SyncOutcome.Success, engine.loadDirectoryPage(null))
+        assertEquals(setOf("first"), engine.directoryPages.value["directory:root"]!!.taskIds)
+        assertEquals(SyncOutcome.Success, engine.loadDirectoryPage(null, append = true))
+        val state = engine.directoryPages.value["directory:root"]!!
+        assertEquals(setOf("first", "second"), state.taskIds)
+        assertNull(state.nextCursor)
+        assertNotNull(db.taskDao().getTaskById("unloaded-cache", owner))
+        assertNull(db.syncMetaDao().get("v2:sync_cursor:$owner"))
+        assertNull(db.syncMetaDao().get("confirmed:$owner"))
+    }
+
+    @Test fun expiredDirectoryCursorRestartsMembershipWithoutDeletingCache() = runBlocking {
+        var firstPages = 0
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.requestUrl!!.queryParameter("cursor") != null)
+                    response("""{"code":"SYNC_CURSOR_EXPIRED","message":"directory revision changed"}""", 410)
+                else response(directory(if (++firstPages == 1) "old-page" else "new-page", if (firstPages == 1) "expired" else null))
+        }
+        assertEquals(SyncOutcome.Success, engine.loadDirectoryPage(null))
+        assertEquals(SyncOutcome.Success, engine.loadDirectoryPage(null, append = true))
+        assertEquals(setOf("new-page"), engine.directoryPages.value["directory:root"]!!.taskIds)
+        assertNotNull(db.taskDao().getTaskById("old-page", owner))
+        assertEquals(2, firstPages)
+    }
+
+    @Test fun failedNextDirectoryPageKeepsCursorAndPendingEdits() = runBlocking {
+        db.withTransaction {
+            db.taskDao().upsertTask(task("first", true).copy(title = "local draft"))
+            engine.recordLocalMutation("task.update", "first", 1, mapOf("title" to "local draft"))
+        }
+        server.enqueue(response(directory("first", "next")))
+        assertEquals(SyncOutcome.Success, engine.loadDirectoryPage(null))
+        server.enqueue(response("{}", 503))
+        assertTrue(engine.loadDirectoryPage(null, append = true) is SyncOutcome.Failure)
+        assertEquals("next", engine.directoryPages.value["directory:root"]!!.nextCursor)
+        assertEquals("local draft", db.taskDao().getTaskById("first", owner)!!.title)
+        server.enqueue(response(directory("second")))
+        assertEquals(SyncOutcome.Success, engine.loadDirectoryPage(null, append = true))
+        assertEquals(setOf("first", "second"), engine.directoryPages.value["directory:root"]!!.taskIds)
+    }
+
+    @Test fun staleDirectoryResponseCannotResurrectRowsAfterSnapshotReconciliation() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        val release = java.util.concurrent.CountDownLatch(1)
+        var requests = 0
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = if (++requests == 1) {
+                entered.complete(Unit)
+                release.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                response(directory("already-deleted"))
+            } else response("""{"parentFolderId":null,"items":[],"nextCursor":null}""")
+        }
+        val flight = async { engine.loadDirectoryPage(null) }
+        try {
+            withTimeout(3000) { entered.await() }
+            db.syncMetaDao().set(SyncMetaEntity("reconciled:$owner", "new-snapshot-generation"))
+        } finally { release.countDown() }
+        assertEquals(SyncOutcome.Success, flight.await())
+        assertNull(db.taskDao().getTaskById("already-deleted", owner))
+        assertTrue(engine.directoryPages.value["directory:root"]!!.taskIds.isEmpty())
+        assertEquals(2, requests)
+    }
+
+    @Test fun anotherEngineAdvancingTheSharedCursorRevalidatesTheVisibleDirectory() = runBlocking {
+        db.syncMetaDao().set(SyncMetaEntity("v2:sync_cursor:$owner", "1"))
+        val publish = java.util.concurrent.atomic.AtomicBoolean(false)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/api/v2/tree/children") == true -> if (publish.get()) response(directory("worker-received"))
+                    else response("""{"parentFolderId":null,"items":[],"nextCursor":null}""")
+                request.path?.startsWith("/api/v2/sync/pull") == true -> if (publish.get() && request.requestUrl!!.queryParameter("cursor") == "1")
+                    response("""{"nextCursor":"7","changes":[${taskChange("worker-received")}],"hasMore":false}""")
+                    else response("""{"nextCursor":"${if (publish.get()) "7" else "1"}","changes":[],"hasMore":false}""")
+                else -> response("{}", 404)
+            }
+        }
+        engine.prioritizeDirectory(null)
+        withTimeout(3000) { engine.pageLoads.first { (it["directory:root"]?.loadedAt ?: 0) > 0 } }
+        // Wait for the page's trailing sync before the worker takes over.
+        engine.triggerSync()
+        val workerEngine = SyncEngine(db, ApiClient(auth), auth)
+        try {
+            publish.set(true)
+            assertEquals(SyncOutcome.Success, workerEngine.triggerSync())
+            withTimeout(5000) { engine.directoryPages.first { "worker-received" in it["directory:root"]!!.taskIds } }
+            assertTrue("worker-received" in engine.directoryPages.value["directory:root"]!!.taskIds)
+        } finally { workerEngine.stop() }
+    }
+
+    @Test fun externalCursorChangeQueuesAFreshReadAfterAnOlderPageFlight() = runBlocking {
+        db.syncMetaDao().set(SyncMetaEntity("v2:sync_cursor:$owner", "1"))
+        val entered = CompletableDeferred<Unit>()
+        val release = java.util.concurrent.CountDownLatch(1)
+        val pages = java.util.concurrent.atomic.AtomicInteger()
+        val published = java.util.concurrent.atomic.AtomicBoolean(false)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/api/v2/tree/children") == true -> if (pages.incrementAndGet() == 1) {
+                    entered.complete(Unit)
+                    release.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                    response("""{"parentFolderId":null,"items":[],"nextCursor":null}""")
+                } else response(directory("created-during-page"))
+                request.path?.startsWith("/api/v2/sync/pull") == true -> if (published.get() && request.requestUrl!!.queryParameter("cursor") == "1")
+                    response("""{"nextCursor":"7","changes":[${taskChange("created-during-page")}],"hasMore":false}""")
+                    else response("""{"nextCursor":"${if (published.get()) "7" else "1"}","changes":[],"hasMore":false}""")
+                else -> response("{}", 404)
+            }
+        }
+        val workerEngine = SyncEngine(db, ApiClient(auth), auth)
+        engine.prioritizeDirectory(null)
+        try {
+            withTimeout(3000) { entered.await() }
+            published.set(true)
+            assertEquals(SyncOutcome.Success, workerEngine.triggerSync())
+            release.countDown()
+            withTimeout(5000) { engine.directoryPages.first { "created-during-page" in it["directory:root"]?.taskIds.orEmpty() } }
+            assertTrue(pages.get() >= 2)
+        } finally { release.countDown(); workerEngine.stop() }
+    }
+
+    @Test fun cancellingAuthenticationRecoveryClosesTheActualChallengeRequest() = runBlocking {
+        auth.accessToken = "expired.fixture"
+        auth.refreshToken = "synthetic-refresh-fixture"
+        server.enqueue(response("""{"challenge":"fixture"}""").setBodyDelay(5, java.util.concurrent.TimeUnit.SECONDS))
+        val recovery = async(Dispatchers.IO) { api.restoreSessionAsync() }
+        withContext(Dispatchers.IO) { assertNotNull(server.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)) }
+        withTimeout(1000) { recovery.cancelAndJoin() }
+        assertTrue(auth.isLoggedIn)
+        assertEquals("synthetic-refresh-fixture", auth.refreshToken)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test fun authenticationChallengeAndRefreshShareOneDeadline() = runBlocking {
+        auth.accessToken = "expired.fixture"
+        auth.refreshToken = "synthetic-refresh-fixture"
+        val shortBudgetApi = ApiClient(auth, authRecoveryBudgetMs = 500)
+        server.enqueue(response("""{"challenge":"fixture"}""").setBodyDelay(300, java.util.concurrent.TimeUnit.MILLISECONDS))
+        server.enqueue(response("{}").setBodyDelay(3, java.util.concurrent.TimeUnit.SECONDS))
+        val began = System.nanoTime()
+        assertFalse(withTimeout(2000) { shortBudgetApi.restoreSessionAsync() })
+        assertTrue((System.nanoTime() - began) / 1_000_000 < 1500)
+        assertTrue(auth.isLoggedIn)
+        assertNotNull(auth.pendingRefreshToken)
+    }
+
+    @Test fun serverInitiatedWebSocketCloseReconnectsAndReceivesTheNextChange() = runBlocking {
+        db.syncMetaDao().set(SyncMetaEntity("v2:sync_cursor:$owner", "1"))
+        val sockets = java.util.concurrent.atomic.AtomicInteger()
+        val publish = java.util.concurrent.atomic.AtomicBoolean(false)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path == "/api/v2/ws" -> {
+                    val number = sockets.incrementAndGet()
+                    MockResponse().withWebSocketUpgrade(object : okhttp3.WebSocketListener() {
+                        override fun onMessage(webSocket: okhttp3.WebSocket, text: String) {
+                            webSocket.send("""{"type":"ready"}""")
+                            if (number == 1) webSocket.close(1000, "rotate")
+                            else { publish.set(true); webSocket.send("""{"type":"sync.required"}""") }
+                        }
+                        override fun onClosing(webSocket: okhttp3.WebSocket, code: Int, reason: String) { webSocket.close(code, null) }
+                    })
+                }
+                request.path?.startsWith("/api/v2/sync/pull") == true -> if (publish.get())
+                    response("""{"nextCursor":"7","changes":[${taskChange("after-reconnect")}],"hasMore":false}""")
+                    else response("""{"nextCursor":"1","changes":[],"hasMore":false}""")
+                else -> response("{}", 404)
+            }
+        }
+        engine.start()
+        withTimeout(10_000) { db.taskDao().getTaskByIdFlow("after-reconnect", owner).first { it != null } }
+        assertTrue(sockets.get() >= 2)
+    }
+
+    @Test fun acknowledgedSingleBatchDoesNotMakeARedundantFinalPull() = runBlocking {
+        db.syncMetaDao().set(SyncMetaEntity("v2:sync_cursor:$owner", "1"))
+        db.withTransaction {
+            db.taskDao().upsertTask(task("local-edit", true))
+            engine.recordLocalMutation("task.update", "local-edit", 1, mapOf("title" to "draft"))
+        }
+        var pulls = 0
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/api/v2/sync/pull") == true -> {
+                    pulls++
+                    response("""{"nextCursor":"7","changes":[],"hasMore":false}""")
+                }
+                request.path == "/api/v2/sync/push" -> {
+                    val mutation = api.json.parseToJsonElement(request.body.readUtf8()).jsonObject.getValue("mutations").jsonArray.single().jsonObject
+                    val id = mutation.getValue("mutationId").jsonPrimitive.content
+                    response("""{"results":[{"mutationId":"$id","status":"applied","result":null}]}""")
+                }
+                else -> response("{}", 404)
+            }
+        }
+        assertEquals(SyncOutcome.Success, engine.triggerSync())
+        assertEquals(2, pulls)
+    }
+
+    @Test fun largeBootstrapYieldsCommittedProgressWithoutReportingANetworkError() = runBlocking {
+        engine.stop()
+        engine = SyncEngine(db, api, auth, bootstrapSliceMs = 0)
+        val id = UUID.randomUUID().toString()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path == "/api/v2/sync/capabilities" -> response("""{"protocolVersion":2,"pagedSnapshot":true}""")
+                request.path?.startsWith("/api/v2/sync/preview") == true -> response("""{"changes":[],"complete":false}""")
+                request.path == "/api/v2/sync/bootstrap" -> response("""{"snapshotId":"$id","cursor":"7","expiresAt":"2099-01-01T00:00:00Z","pageCount":2,"protocolVersion":2}""")
+                request.path?.endsWith("page=0") == true -> response("""{"snapshotId":"$id","cursor":"7","page":0,"pageCount":2,"nextPage":1,"protocolVersion":2,"changes":[${taskChange("first-slice")}]}""")
+                request.path?.endsWith("page=1") == true -> response("""{"snapshotId":"$id","cursor":"7","page":1,"pageCount":2,"nextPage":null,"protocolVersion":2,"changes":[${taskChange("second-slice")}]}""")
+                request.path?.startsWith("/api/v2/sync/pull") == true -> response("""{"nextCursor":"7","changes":[],"hasMore":false}""")
+                else -> response("{}", 404)
+            }
+        }
+        assertEquals(SyncOutcome.Continuing, engine.triggerSync())
+        assertEquals(SyncState.IDLE, engine.syncState.value)
+        assertNull(engine.lastSyncError.value)
+        assertEquals(1, engine.loadProgress.value.completedPages)
+        assertNull(db.syncMetaDao().get("v2:sync_cursor:$owner"))
+        // Reconciliation can also be required while an older global cursor
+        // remains valid (e.g. a terminal rejected optimistic creation).
+        db.syncMetaDao().set(SyncMetaEntity("v2:sync_cursor:$owner", "1"))
+        assertEquals(SyncOutcome.Success, engine.triggerSync())
+        assertNotNull(db.taskDao().getTaskById("first-slice", owner))
+        assertNotNull(db.taskDao().getTaskById("second-slice", owner))
+        assertEquals("7", db.syncMetaDao().get("v2:sync_cursor:$owner"))
+    }
+
     @Test fun initialHttpFailureRetriesWithoutRefreshOrRestart() = runBlocking {
         var snapshots = 0
         server.dispatcher = object : Dispatcher() {
@@ -345,9 +589,9 @@ class SyncEngineTest {
         val pulls = java.util.concurrent.atomic.AtomicInteger(0)
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when {
-                request.path?.startsWith("/api/v2/sync/preview") == true -> {
+                request.path?.startsWith("/api/v2/tree/children") == true -> {
                     previews.incrementAndGet()
-                    response("""{"changes":[],"complete":false}""")
+                    response("""{"parentFolderId":null,"items":[],"nextCursor":null}""")
                 }
                 request.path?.startsWith("/api/v2/sync/pull") == true -> {
                     pulls.incrementAndGet()
@@ -363,7 +607,7 @@ class SyncEngineTest {
         withTimeout(5_000) { db.syncMetaDao().observe("confirmed:$owner").first { it != null } }
         withTimeout(5_000) { engine.syncState.first { it == SyncState.IDLE } }
 
-        // A page entry still previews once; only the periodic verification
+        // A page entry reads its directory once; only the periodic verification
         // after it must stay on the incremental feed.
         engine.prioritizePage("directory:root", force = true)
         withTimeout(5_000) {

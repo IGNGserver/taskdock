@@ -10,4 +10,8 @@ class FreshnessTest {
         assertFalse(isRecentlyConfirmed(1_000, 121_000))
         assertTrue(isRecentlyConfirmed(1_000, 120_999))
     }
+    @Test fun constrainedVerificationDoesNotOscillateBeforeTheNextScheduledCheck() {
+        assertTrue(isRecentlyConfirmed(1_000, 181_000, windowMs = 360_000))
+        assertFalse(isRecentlyConfirmed(1_000, 361_000, windowMs = 360_000))
+    }
 }

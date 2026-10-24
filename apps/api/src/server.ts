@@ -45,6 +45,7 @@ import { PostgresTreeStore } from './postgres-tree-store.js';
 import { MemoryStore, type Store } from './store.js';
 import { MemoryTreeStore, type V2TreeStore } from './tree-store.js';
 import { BootstrapSnapshots } from './sync-bootstrap.js';
+import { budgetSyncPull } from './sync-byte-budget.js';
 
 const pageLimitSchema = z.coerce.number().int().min(1).max(500).default(100);
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
@@ -229,6 +230,8 @@ export async function buildServer(
   app.addHook('onRequest', async (request) => {
     if (
       request.url.startsWith('/api/v2/sync/') ||
+      request.url.startsWith('/api/v2/tree/children') ||
+      request.url.startsWith('/api/v2/today') ||
       /^\/api\/v2\/tasks\/[^/?]+(?:\?.*)?$/.test(request.url)
     )
       request.syncStartedAt = performance.now();
@@ -1748,15 +1751,20 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
           .object({
             cursor: z.string().regex(/^\d+$/).default('0'),
             limit: z.coerce.number().int().min(1).max(500).default(500),
+            maxBytes: z.coerce.number().int().min(16_384).max(1_048_576).default(524_288),
           })
           .parse(request.query);
         const result = await tree.pull(request.auth!.ownerId, query.cursor, query.limit);
-        return {
-          changes: result.changes.map(changeDto),
-          nextCursor: result.nextCursor,
-          hasMore: result.hasMore,
-          protocolVersion: 2,
-        };
+        return budgetSyncPull(
+          {
+            ...result,
+            changes: result.changes.map((change) => ({
+              ...changeDto(change),
+              seq: change.seq.toString(),
+            })),
+          },
+          query.maxBytes,
+        );
       });
       api.get('/sync/status', async (request) => await tree.status(request.auth!.ownerId));
       api.post('/sync/push', async (request) => {

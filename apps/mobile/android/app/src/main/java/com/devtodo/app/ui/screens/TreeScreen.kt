@@ -66,13 +66,16 @@ fun TreeScreen(
     val allFolders by viewModel.foldersV2.collectAsStateWithLifecycle()
     val aggregates by viewModel.folderAggregates.collectAsStateWithLifecycle()
     val loadProgress by viewModel.loadProgress.collectAsStateWithLifecycle()
+    val directoryPages by viewModel.directoryPages.collectAsStateWithLifecycle()
+    val pageLoads by viewModel.pageLoads.collectAsStateWithLifecycle()
+    val directory = directoryPages["directory:${folderId ?: "root"}"]
+    val pageLoad = pageLoads["directory:${folderId ?: "root"}"]
     val todayTasks by viewModel.todayTasks.collectAsStateWithLifecycle()
     val refreshing by viewModel.pullRefreshing.collectAsStateWithLifecycle()
     LaunchedEffect(folderId) { viewModel.prioritizeDirectory(folderId) }
 
-    val folders = allFolders.filter {
-        it.parentFolderId == folderId && it.archivedAt == null && it.deletedAt == null
-    }
+    val folders by remember(folderId) { viewModel.observeDirectoryFolders(folderId) }
+        .collectAsStateWithLifecycle(initialValue = emptyList())
 
     // `groupPins` remembers the status a row was loaded with so it stays in its
     // group; `statusOverrides` is what the circle paints right now. Both mirror
@@ -80,12 +83,14 @@ fun TreeScreen(
     val statusOverrides = remember { mutableStateMapOf<String, TaskStatus>() }
     val groupPins = remember { mutableStateMapOf<String, TaskStatus>() }
     var orderLock by remember { mutableStateOf<List<String>?>(null) }
-    var pageSize by rememberSaveable(folderId) { mutableIntStateOf(100) }
+    var cacheLimit by rememberSaveable(folderId) { mutableIntStateOf(100) }
     val pinned = statusOverrides.keys.toList()
-    val tasks by remember(folderId, pageSize, pinned) { viewModel.observeDirectory(folderId, pageSize, pinned) }
+    val tasks by remember(folderId, pinned, cacheLimit) { viewModel.observeDirectoryMembers(folderId, pinned, cacheLimit) }
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val counts by remember(folderId) { viewModel.observeDirectoryCounts(folderId) }
         .collectAsStateWithLifecycle(initialValue = com.devtodo.app.data.local.DirectoryCounts())
+    val visibleCounts = if (directory?.initialized == true)
+        com.devtodo.app.data.local.DirectoryCounts(tasks.size, tasks.count { it.status == TaskStatus.DONE }) else counts
 
     fun groupingStatus(row: TreeRow): TaskStatus = treeGroupingStatus(row, groupPins)
 
@@ -98,14 +103,26 @@ fun TreeScreen(
         orderLock = null
     }
 
-    val baseRows = remember(folders, tasks, aggregates) {
-        buildTreeRows(folders, tasks, aggregates)
+    val baseRows = remember(folders, tasks, aggregates, directory, loadProgress.complete) {
+        val serverAggregates = directory?.aggregates.orEmpty().mapValues { (_, value) ->
+            TaskStatus.valueOf(value.status.name) to value.totalCount
+        }
+        buildTreeRows(folders, tasks, if (loadProgress.complete) serverAggregates + aggregates else aggregates + serverAggregates)
     }
     // While a status edit is pending the locked order wins, so a background sync
     // that follows the edit cannot slide the row to a new position. Rows that
     // appeared after the lock was taken are appended rather than dropped.
     val rows = remember(baseRows, orderLock, statusOverrides.toMap(), groupPins.toMap()) {
         resolveTreeRows(baseRows, groupPins, orderLock)
+    }
+    val enteredAt = remember(folderId) { System.nanoTime() }
+    var firstContentRecorded by remember(folderId) { mutableStateOf(false) }
+    LaunchedEffect(rows.isNotEmpty(), directory?.initialized) {
+        if (!firstContentRecorded && (rows.isNotEmpty() || directory?.initialized == true)) {
+            withFrameNanos { }
+            firstContentRecorded = true
+            android.util.Log.d("TaskDockSync", "frame=directory elapsedMs=${(System.nanoTime() - enteredAt) / 1_000_000} rows=${rows.size} networkPage=${directory?.initialized == true}")
+        }
     }
 
     fun changeStatus(row: TreeRow, nextStatus: TaskStatus) {
@@ -275,7 +292,7 @@ fun TreeScreen(
                         item(key = "directory-heading") {
                             DirectorySectionHeader(
                                 folderCount = folders.size,
-                                rootTaskCount = counts.total,
+                                rootTaskCount = visibleCounts.total,
                                 onCreateFolder = { showFolderDialog = true },
                             )
                         }
@@ -283,16 +300,24 @@ fun TreeScreen(
                         item(key = "directory-overview") {
                             DirectoryOverview(
                                 folderCount = folders.size,
-                                taskCount = counts.total,
+                                taskCount = visibleCounts.total,
                                 pendingCount = tasks.count { it.status != TaskStatus.DONE },
                             )
                         }
                     }
 
-                    if (counts.total > pageSize) {
+                    if (directory?.nextCursor != null) {
                         item(key = "load-directory-page") {
-                            TextButton(onClick = { pageSize += 100 }, modifier = Modifier.fillMaxWidth()) {
-                                Text("加载更多任务 · 已加载 ${tasks.size} / ${counts.total}")
+                            TextButton(onClick = { viewModel.loadMoreDirectory(folderId) },
+                                enabled = pageLoad?.loading != true, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (pageLoad?.loading == true) "正在加载…" else if (pageLoad?.error != null) "加载失败，重试下一页" else "加载更多目录项")
+                            }
+                        }
+                    }
+                    if (directory?.initialized != true && counts.total > cacheLimit) {
+                        item(key = "load-cached-directory-page") {
+                            TextButton(onClick = { cacheLimit += 100 }, modifier = Modifier.fillMaxWidth()) {
+                                Text("显示更多已缓存任务")
                             }
                         }
                     }
@@ -367,8 +392,8 @@ fun TreeScreen(
                         }
                     }
 
-                    if (rows.isEmpty() && !loadProgress.complete) {
-                        item { Text("正在恢复目录数据，加载失败时将自动重试。", Modifier.padding(16.dp)) }
+                    if (rows.isEmpty() && directory?.initialized != true && !loadProgress.complete) {
+                        item { Text(if (pageLoad?.error != null) "目录加载失败，已有缓存保留，可下拉重试。" else "正在加载目录数据…", Modifier.padding(16.dp)) }
                     } else if (rows.isEmpty()) {
                         item {
                             EmptyState(
@@ -412,8 +437,8 @@ fun TreeScreen(
                             DirectoryDetailPlaceholder(
                                 folderTitle = folderId?.let { folderTitle(it, allFolders) } ?: "根目录",
                                 folderCount = folders.size,
-                                taskCount = counts.total,
-                                doneCount = counts.done,
+                                taskCount = visibleCounts.total,
+                                doneCount = visibleCounts.done,
                             )
                         }
                     },

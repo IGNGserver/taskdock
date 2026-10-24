@@ -232,9 +232,24 @@ class WidgetSyncWorker(
         val engine = SyncEngine(db, api, auth)
         return try {
             engine.setNetworkAvailable(true)
-            engine.triggerSync()
+            val outcome = engine.triggerSync()
             WidgetUpdater.refreshAll(applicationContext)
-            ListenableWorker.Result.success()
+            when (outcome) {
+                com.devtodo.app.data.sync.SyncOutcome.Continuing -> {
+                    // Progress is not a failed network attempt. A fresh continuation
+                    // avoids exponential retry delays exceeding the snapshot TTL.
+                    enqueue(applicationContext, continuation = true)
+                    ListenableWorker.Result.success()
+                }
+                is com.devtodo.app.data.sync.SyncOutcome.Failure ->
+                    if (runAttemptCount < 5 && engine.syncState.value !in setOf(
+                        com.devtodo.app.data.sync.SyncState.AUTH_REQUIRED,
+                        com.devtodo.app.data.sync.SyncState.INCOMPATIBLE,
+                    )) ListenableWorker.Result.retry() else ListenableWorker.Result.success()
+                com.devtodo.app.data.sync.SyncOutcome.Success -> ListenableWorker.Result.success()
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             // Keep the outbox durable. The next app foreground or widget tap
             // will try again; a periodic retry storm is worse for a personal
@@ -248,8 +263,9 @@ class WidgetSyncWorker(
     companion object {
         private const val UNIQUE_NAME = "taskdock-widget-sync"
 
-        fun enqueue(context: Context) {
+        fun enqueue(context: Context, continuation: Boolean = false) {
             val request = OneTimeWorkRequestBuilder<WidgetSyncWorker>()
+                .setInitialDelay(if (continuation) 1L else 0L, java.util.concurrent.TimeUnit.SECONDS)
                 .setConstraints(
                     Constraints.Builder()
                         .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -257,7 +273,7 @@ class WidgetSyncWorker(
                 )
                 .build()
             WorkManager.getInstance(context.applicationContext)
-                .enqueueUniqueWork(UNIQUE_NAME, ExistingWorkPolicy.KEEP, request)
+                .enqueueUniqueWork(UNIQUE_NAME, if (continuation) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.KEEP, request)
         }
     }
 }
