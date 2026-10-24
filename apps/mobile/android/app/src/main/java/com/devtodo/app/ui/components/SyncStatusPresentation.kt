@@ -29,6 +29,7 @@ internal fun resolveSyncBanner(
     lastSyncError: String?,
     checkedLabel: String,
     pageVerified: Boolean = false,
+    pendingIssue: String? = null,
 ): SyncBannerContent {
     val fresh = pageVerified || (recent && progress.complete)
 
@@ -61,6 +62,11 @@ internal fun resolveSyncBanner(
 
         state == SyncState.AUTH_REQUIRED -> error("登录需要恢复 · 本地缓存已保留")
         state == SyncState.INCOMPATIBLE -> error("中枢协议不兼容 · 本地缓存已保留")
+        pendingIssue != null -> SyncBannerContent(
+            mode = SyncBannerMode.ERROR,
+            message = pendingIssue,
+            detail = "本地内容已保留，可在设置中查看待处理操作",
+        )
         state == SyncState.SERVER_UNAVAILABLE -> error("中枢服务暂不可用 · 已保留缓存")
         state == SyncState.ERROR ->
             error(if (cached) "更新失败 · 已保留缓存，稍后自动重试" else "首次加载失败 · 稍后自动重试")

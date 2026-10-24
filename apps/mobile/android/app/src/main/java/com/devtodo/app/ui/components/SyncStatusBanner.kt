@@ -61,6 +61,11 @@ fun SyncStatusBanner(viewModel: MainViewModel, pageKey: String) {
         lastSyncError = error,
         checkedLabel = checkedLabel,
         pageVerified = pageVerified,
+        pendingIssue = when {
+            pending.any { it.lastError?.startsWith("CONFLICT:") == true } -> "有同步冲突需要处理"
+            pending.any { it.lastError?.startsWith("TERMINAL:") == true } -> "有本地操作被中枢拒绝"
+            else -> null
+        },
     )
 
     if (content.mode == SyncBannerMode.COMPACT) {

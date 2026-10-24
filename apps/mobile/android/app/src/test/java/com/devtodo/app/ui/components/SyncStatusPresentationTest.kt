@@ -20,6 +20,7 @@ class SyncStatusPresentationTest {
         pendingCount: Int = 0,
         lastSyncError: String? = null,
         pageVerified: Boolean = false,
+        pendingIssue: String? = null,
     ) = resolveSyncBanner(
         state = state,
         progress = progress,
@@ -31,6 +32,7 @@ class SyncStatusPresentationTest {
         lastSyncError = lastSyncError,
         checkedLabel = checked,
         pageVerified = pageVerified,
+        pendingIssue = pendingIssue,
     )
 
     @Test
@@ -164,5 +166,20 @@ class SyncStatusPresentationTest {
     @Test
     fun verifiedPageNeverHidesAuthenticationFailure() {
         assertEquals(SyncBannerMode.ERROR, resolve(state = SyncState.AUTH_REQUIRED, pageVerified = true).mode)
+    }
+
+    @Test
+    fun durableConflictRemainsVisibleAfterBackgroundReconciliationClearsTransientErrors() {
+        val content = resolve(pageVerified = true, pendingCount = 1, pendingIssue = "有同步冲突需要处理")
+        assertEquals(SyncBannerMode.ERROR, content.mode)
+        assertEquals("有同步冲突需要处理", content.message)
+        assertFalse(content.showRetry)
+    }
+
+    @Test
+    fun terminalRejectionIsNeverShownAsOrdinaryPendingWork() {
+        val content = resolve(pendingCount = 1, pendingIssue = "有本地操作被中枢拒绝")
+        assertEquals(SyncBannerMode.ERROR, content.mode)
+        assertEquals("有本地操作被中枢拒绝", content.message)
     }
 }
