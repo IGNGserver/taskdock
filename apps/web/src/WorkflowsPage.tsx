@@ -18,6 +18,7 @@ import {
 
 import { mutationV2, requestV2 } from './api.js';
 import { useAuth } from './auth.js';
+import { notifyDataChanged, shouldReloadTaskList } from './data-changes.js';
 import {
   Alert,
   Button,
@@ -405,7 +406,9 @@ export function WorkflowsPage() {
 
   useEffect(() => {
     void load();
-    const listener = () => void load();
+    const listener = (event: Event) => {
+      if (shouldReloadTaskList(event, load)) void load();
+    };
     window.addEventListener('devtodo:data-changed', listener);
     return () => {
       loadSequence.current += 1;
@@ -485,7 +488,7 @@ export function WorkflowsPage() {
     const applied = await run(() =>
       mutationV2('PATCH', `/tasks/${task.id}`, { status, baseVersion: task.version }),
     );
-    if (applied) window.dispatchEvent(new Event('devtodo:data-changed'));
+    if (applied) notifyDataChanged(load);
   };
 
   const moveMembership = (

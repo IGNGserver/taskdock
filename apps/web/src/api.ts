@@ -29,6 +29,7 @@ import {
 import { recordNetworkSample } from './network-policy.js';
 import { isAuthLocallyLocked } from './auth-lock.js';
 import { normalizeHubOrigin } from './hub-origin.js';
+import { detailOnlyRevalidationId, notifyDataChanged } from './data-changes.js';
 
 /**
  * v2 is the only product protocol. `/api/v1` is retained solely for the auth,
@@ -652,7 +653,7 @@ export async function requestV2<T>(path: string, init: RequestInit = {}): Promis
               JSON.stringify(local) !== JSON.stringify(updated) &&
               typeof window !== 'undefined'
             )
-              window.dispatchEvent(new Event('devtodo:data-changed'));
+              notifyDataChanged(undefined, detailOnlyRevalidationId(path, local, updated));
           })
           .catch(() => undefined)
           .finally(() => localRevalidations.delete(key));

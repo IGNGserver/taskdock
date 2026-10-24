@@ -4,6 +4,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { ChevronRight, Folder, FolderOpen } from 'lucide-react';
 import { requestV2 } from '../api.js';
 import { directoryEntries } from '../directory-paths.js';
+import { shouldReloadTaskList } from '../data-changes.js';
 import { Button, IconButton } from './m3e/index.js';
 
 export function DirectoryNavigation({ onNavigate }: { onNavigate?: () => void }) {
@@ -35,7 +36,9 @@ export function DirectoryNavigation({ onNavigate }: { onNavigate?: () => void })
   useEffect(() => {
     const controller = new AbortController();
     void reload(controller.signal);
-    const changed = () => void reload(controller.signal);
+    const changed = (event: Event) => {
+      if (shouldReloadTaskList(event)) void reload(controller.signal);
+    };
     window.addEventListener('devtodo:data-changed', changed);
     return () => {
       controller.abort();

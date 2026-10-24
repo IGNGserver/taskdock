@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom';
 import { requestV2 } from '../api.js';
 import { localCacheGeneration } from '../local.js';
 import { isLowDataMode } from '../network-policy.js';
+import { changedTaskDetailId } from '../data-changes.js';
 import {
   previewNoteText,
   previewStepProgress,
@@ -52,7 +53,11 @@ const detailCache = new Map<string, { detail: TaskDetailV2Dto; fetchedAt: number
  * content that was already superseded.
  */
 if (typeof window !== 'undefined')
-  window.addEventListener('devtodo:data-changed', () => detailCache.clear());
+  window.addEventListener('devtodo:data-changed', (event) => {
+    const taskId = changedTaskDetailId(event);
+    if (taskId) detailCache.delete(`${localCacheGeneration()}:${taskId}`);
+    else detailCache.clear();
+  });
 
 function previewPosition(anchor: HTMLElement): PreviewPosition {
   const rect = anchor.getBoundingClientRect();

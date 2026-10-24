@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { requestV2 } from './api.js';
 import { useAuth } from './auth.js';
+import { shouldReloadTaskList } from './data-changes.js';
 
 interface FolderContextValue {
   folders: readonly FolderDto[];
@@ -64,7 +65,9 @@ export function FolderProvider({ children }: { children: ReactNode }) {
     }
     const controller = new AbortController();
     void load(controller.signal);
-    const changed = () => void load(controller.signal);
+    const changed = (event: Event) => {
+      if (shouldReloadTaskList(event)) void load(controller.signal);
+    };
     window.addEventListener('devtodo:data-changed', changed);
     return () => {
       controller.abort();

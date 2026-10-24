@@ -6,7 +6,6 @@ import type {
   SettingsDto,
   TaskDto,
   TimePointDto,
-  TreeTaskDto,
   V2SettingsDto,
   UserDto,
   TreeItemDto,
@@ -2485,10 +2484,14 @@ async function readLocalInTransaction(db: DevTodoDatabase, path: string): Promis
   if (projectDetail) return db.projects.get(projectDetail[1]!);
   const pointPlacements = /^\/time-points\/([^/]+)\/placements$/.exec(pathname ?? '');
   if (pointPlacements) {
-    const tasks = new Map((await db.tasks.toArray()).map((task) => [task.id, task]));
-    const items = (await db.placements.where('timePointId').equals(pointPlacements[1]!).toArray())
-      .map((placement) => ({ ...placement, task: tasks.get(placement.taskId) }))
-      .filter((item): item is PlacementDto & { task: TaskDto } => Boolean(item.task));
+    const tasks = new Map(
+      (await db.tasks.toArray()).filter((task) => !task.deletedAt).map((task) => [task.id, task]),
+    );
+    const items = sortByRank(
+      (await db.placements.where('timePointId').equals(pointPlacements[1]!).toArray()).filter(
+        (placement) => !placement.deletedAt && tasks.has(placement.taskId),
+      ),
+    ).map((placement) => ({ ...placement, task: tasks.get(placement.taskId)! }));
     return { items };
   }
   const pointDetail = /^\/time-points\/([^/]+)$/.exec(pathname ?? '');
@@ -2728,12 +2731,15 @@ async function readV2LocalInTransaction(
         (!params.get('from') || (point.localDate ?? '') >= params.get('from')!) &&
         (!params.get('to') || (point.localDate ?? '') <= params.get('to')!),
     );
-    const taskMap = new Map(tasks.map((task) => [task.id, task]));
+    const taskMap = new Map(tasks.filter(visibleTask).map((task) => [task.id, task]));
     const allPlacements = await db.placements.toArray();
     return {
       items: points.map((point) => {
         const pointPlacements = allPlacements.filter(
-          (placement) => placement.timePointId === point.id,
+          (placement) =>
+            placement.timePointId === point.id &&
+            !placement.deletedAt &&
+            taskMap.has(placement.taskId),
         );
         const doneCount = pointPlacements.filter(
           (placement) => taskMap.get(placement.taskId)?.status === 'DONE',
@@ -2765,10 +2771,12 @@ async function readV2LocalInTransaction(
     return { point, items };
   }
   if (pointPlacements) {
-    const taskMap = new Map(tasks.map((task) => [task.id, task]));
-    const items = (await db.placements.where('timePointId').equals(pointPlacements[1]!).toArray())
-      .map((placement) => ({ ...placement, task: taskMap.get(placement.taskId) }))
-      .filter((item): item is PlacementDto & { task: TreeTaskDto } => Boolean(item.task));
+    const taskMap = new Map(tasks.filter(visibleTask).map((task) => [task.id, task]));
+    const items = sortByRank(
+      (await db.placements.where('timePointId').equals(pointPlacements[1]!).toArray()).filter(
+        (placement) => !placement.deletedAt && taskMap.has(placement.taskId),
+      ),
+    ).map((placement) => ({ ...placement, task: taskMap.get(placement.taskId)! }));
     return { items };
   }
   const pointDetail = /^\/time-points\/([^/]+)$/.exec(pathname);
@@ -2779,22 +2787,26 @@ async function readV2LocalInTransaction(
     const memberships = (await db.workflowTaskMemberships.toArray()).filter(
       (membership) => !membership.deletedAt,
     );
+    const taskMap = new Map(tasks.filter(visibleTask).map((task) => [task.id, task]));
     return {
       items: sortByRank(workflows).map((workflow) => ({
         ...workflow,
         stages: sortByRank(stages.filter((stage) => stage.workflowId === workflow.id)).map(
-          (stage) => ({
-            ...stage,
-            memberships: memberships.filter((membership) => membership.stageId === stage.id),
-            tasks: sortByRank(
-              memberships
-                .filter((membership) => membership.stageId === stage.id)
-                .flatMap((membership) => {
-                  const task = tasks.find((candidate) => candidate.id === membership.taskId);
-                  return task ? [task] : [];
-                }),
-            ),
-          }),
+          (stage) => {
+            const stageMemberships = sortByRank(
+              memberships.filter((membership) => membership.stageId === stage.id),
+            );
+            const stageTasks = stageMemberships.flatMap((membership) => {
+              const task = taskMap.get(membership.taskId);
+              return task ? [task] : [];
+            });
+            return {
+              ...stage,
+              memberships: stageMemberships,
+              hiddenTaskCount: stageMemberships.length - stageTasks.length,
+              tasks: stageTasks,
+            };
+          },
         ),
       })),
     };
