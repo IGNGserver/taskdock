@@ -575,12 +575,25 @@ class WorkspaceScreenTest {
         waitForText("站点发布检查")
         waitForText("当前目录")
         screenshot("app-folder")
-        compose.onNodeWithText("站点发布检查").performClick()
+        compose.onNodeWithText("站点发布检查").assertIsDisplayed().performClick()
         waitForText("任务详情")
         compose.onNodeWithContentDescription("返回").performClick()
         waitForText("IGNG站点")
+        // Returning from a task must keep the folder exactly where it was.
+        compose.onNodeWithText("站点发布检查").assertIsDisplayed()
         compose.onNodeWithContentDescription("返回上级目录").performClick()
-        waitForText("快捷视图")
+        waitForDescription("设置")
+        // ...and returning from the folder must keep the directory's scroll.
+        compose.onNodeWithText("IGNG站点").assertIsDisplayed()
+
+        // A deep folder row is only reachable after scrolling; it must still be
+        // on screen when the root destination comes back from the back stack.
+        compose.onNodeWithTag("directory-tree-list").performScrollToNode(hasText("tokenmonitor"))
+        compose.onNodeWithText("tokenmonitor").performClick()
+        waitForText("当前目录")
+        compose.onNodeWithContentDescription("返回上级目录").performClick()
+        waitForDescription("设置")
+        compose.onNodeWithText("tokenmonitor").assertIsDisplayed()
     }
 
     @Test

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.devtodo.app.data.local.MonthCount
 import com.devtodo.app.data.local.PlacementEntity
 import com.devtodo.app.data.local.TaskEntity
 import com.devtodo.app.data.local.TimePointEntity
@@ -77,18 +79,28 @@ fun CalendarScreen(
     val useSplitCalendar = adaptive.useTwoPane && onNavigateToDetail != null
     val rangeStart = String.format(Locale.US, "%04d-%02d-01", year, month)
     val rangeEnd = String.format(Locale.US, "%04d-%02d-31", year, month)
-    val points by remember(rangeStart, rangeEnd) { viewModel.observeMonthPoints(rangeStart, rangeEnd) }
-        .collectAsStateWithLifecycle(initialValue = emptyList())
-    val monthCounts by remember(rangeStart, rangeEnd) { viewModel.observeMonthCounts(rangeStart, rangeEnd) }
-        .collectAsStateWithLifecycle(initialValue = emptyList())
+    // `key` resets the collected state when the month changes and seeds it with
+    // that month's cached rows, so returning to the page never flashes an
+    // empty month. `null` still means "not loaded yet".
+    val points: List<TimePointEntity>? = key(rangeStart, rangeEnd) {
+        remember { viewModel.observeMonthPoints(rangeStart, rangeEnd) }
+            .collectAsStateWithLifecycle(initialValue = viewModel.cachedMonthPoints(rangeStart, rangeEnd))
+            .value
+    }
+    val monthCounts: List<MonthCount>? = key(rangeStart, rangeEnd) {
+        remember { viewModel.observeMonthCounts(rangeStart, rangeEnd) }
+            .collectAsStateWithLifecycle(initialValue = viewModel.cachedMonthCounts(rangeStart, rangeEnd))
+            .value
+    }
     val events by viewModel.activeEvents.collectAsStateWithLifecycle()
     val weekStartsOn = settings?.weekStartsOn ?: 1
     val datePoints = remember(points) {
-        points.filter { it.type == TimePointType.DATE && it.localDate != null }
+        points.orEmpty().filter { it.type == TimePointType.DATE && it.localDate != null }
             .associateBy { it.localDate!! }
     }
-    val countByDate = remember(monthCounts) { monthCounts.associate { it.localDate to it.total } }
+    val countByDate = remember(monthCounts) { monthCounts.orEmpty().associate { it.localDate to it.total } }
     val cells = remember(year, month, weekStartsOn) { monthCells(year, month, weekStartsOn) }
+    val listState = rememberLazyListState()
 
     WorkspaceScaffold(
         topBar = {
@@ -125,6 +137,7 @@ fun CalendarScreen(
             @Composable
             fun MonthPaneContent() {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize().testTag("calendar-month"),
                     contentPadding = PaddingValues(bottom = 28.dp),
                 ) {
@@ -196,7 +209,7 @@ fun CalendarScreen(
                             }
                         }
                     }
-                    if (datePoints.isEmpty()) {
+                    if (points != null && datePoints.isEmpty()) {
                         item(key = "calendar-empty") {
                             EmptyState(
                                 icon = Icons.Default.CalendarMonth,
@@ -405,6 +418,8 @@ fun DayScheduleScreen(
         remember(scheduled) {
             scheduled.withIndex().associate { (index, pair) -> pair.second.id to index }
         }
+    // Lives outside the Scaffold content so the back stack restores it.
+    val listState = rememberLazyListState()
 
     fun moveScheduled(placementId: String, direction: Int) {
         val fullIndex = scheduledIndexByPlacement[placementId] ?: return
@@ -433,6 +448,7 @@ fun DayScheduleScreen(
     @Composable
     fun DayScheduleList(padding: PaddingValues) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize().padding(padding).testTag("day-schedule-$localDate"),
             contentPadding = PaddingValues(bottom = 28.dp),
         ) {
@@ -593,6 +609,8 @@ fun EventsScreen(
     val refreshing by viewModel.pullRefreshing.collectAsStateWithLifecycle()
     val adaptive = LocalAdaptiveInfo.current
     val useSplitEvents = adaptive.useTwoPane && onNavigateToDetail != null
+    val loadProgress by viewModel.loadProgress.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
     var selectedEventId by rememberSaveable { mutableStateOf<String?>(null) }
     val activeSelectedEventId = (selectedEventId ?: events.firstOrNull()?.id)?.takeIf { id -> events.any { it.id == id } }
     var showCreate by rememberSaveable { mutableStateOf(false) }
@@ -621,6 +639,7 @@ fun EventsScreen(
             @Composable
             fun EventsListPane() {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize().testTag("events-list"),
                     contentPadding = PaddingValues(bottom = 96.dp),
                 ) {
@@ -632,7 +651,7 @@ fun EventsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    if (events.isEmpty()) {
+                    if (events.isEmpty() && loadProgress.complete) {
                         item(key = "events-empty") {
                             EmptyState(
                                 icon = Icons.Default.Event,
@@ -782,6 +801,8 @@ fun EventDetailScreen(
     val folders by viewModel.foldersV2.collectAsStateWithLifecycle()
     val folderAggregates by viewModel.folderAggregates.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val loadProgress by viewModel.loadProgress.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
     val event = events.firstOrNull { it.id == eventId }
     val taskById = remember(tasks) { tasks.associateBy { it.id } }
     val scheduled = remember(event, placements, taskById) {
@@ -811,16 +832,25 @@ fun EventDetailScreen(
         }
 
     if (event == null) {
+        val stillLoading = events.isEmpty() && !loadProgress.complete
         if (isEmbedded) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                EmptyState(Icons.Default.Event, "事件不存在", "它可能已被删除或尚未同步。")
+                if (stillLoading) {
+                    CircularProgressIndicator()
+                } else {
+                    EmptyState(Icons.Default.Event, "事件不存在", "它可能已被删除或尚未同步。")
+                }
             }
         } else {
             WorkspaceScaffold(
                 topBar = { TopAppBar(title = { Text("事件详情") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) },
             ) { padding ->
                 Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    EmptyState(Icons.Default.Event, "事件不存在", "它可能已被删除或尚未同步。")
+                    if (stillLoading) {
+                        CircularProgressIndicator()
+                    } else {
+                        EmptyState(Icons.Default.Event, "事件不存在", "它可能已被删除或尚未同步。")
+                    }
                 }
             }
         }
@@ -839,6 +869,7 @@ fun EventDetailScreen(
     @Composable
     fun EventDetailList(padding: PaddingValues) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize().padding(padding).testTag("event-detail-${event.id}"),
             contentPadding = PaddingValues(bottom = 28.dp),
         ) {

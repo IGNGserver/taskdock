@@ -5,9 +5,11 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -70,6 +72,28 @@ fun WorkflowsV2Screen(
     val adaptive = LocalAdaptiveInfo.current
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     val selected = workflows.find { it.id == selectedId }
+    val chosenWorkflowId = selected?.id
+
+    // Detail data is collected at destination level (not inside a lazy item) so
+    // scrolling the list cannot cancel it. Cached rows seed the first frame and
+    // `null` keeps "not loaded yet" distinct from "no stages".
+    val stages: List<WorkflowStageEntity>? = chosenWorkflowId?.let { id ->
+        key(id) {
+            remember(id) { viewModel.observeWorkflowStages(id) }
+                .collectAsStateWithLifecycle(initialValue = viewModel.cachedWorkflowStages(id))
+                .value
+        }
+    }
+    val memberships: List<WorkflowTaskMembershipEntity>? = chosenWorkflowId?.let { id ->
+        key(id) {
+            remember(id) { viewModel.observeWorkflowMemberships(id) }
+                .collectAsStateWithLifecycle(initialValue = viewModel.cachedWorkflowMemberships(id))
+                .value
+        }
+    }
+    val listState = rememberLazyListState()
+    val detailListState = rememberSaveable(chosenWorkflowId, saver = LazyListState.Saver) { LazyListState() }
+    val kanbanRowState = rememberLazyListState()
 
     // The workflow detail lives inside this destination; back closes it first
     // and only then falls through to the NavHost's predictive back pop.
@@ -125,12 +149,8 @@ fun WorkflowsV2Screen(
         ) {
             if (selected != null && adaptive.useTwoPane) {
                 val workflow = selected
-                val stages by remember(workflow.id) {
-                    viewModel.observeWorkflowStages(workflow.id)
-                }.collectAsStateWithLifecycle(initialValue = emptyList())
-                val memberships by remember(workflow.id) {
-                    viewModel.observeWorkflowMemberships(workflow.id)
-                }.collectAsStateWithLifecycle(initialValue = emptyList())
+                val stageList = stages.orEmpty()
+                val membershipList = memberships.orEmpty()
 
                 Column(Modifier.fillMaxSize()) {
                     Surface(
@@ -154,7 +174,7 @@ fun WorkflowsV2Screen(
                                     fontWeight = FontWeight.Medium,
                                 )
                                 Text(
-                                    text = "${stages.size} 个阶段 · ${memberships.size} 项任务流转中",
+                                    text = "${stageList.size} 个阶段 · ${membershipList.size} 项任务流转中",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -193,7 +213,7 @@ fun WorkflowsV2Screen(
                         }
                     }
 
-                    if (stages.isEmpty()) {
+                    if (stages != null && stageList.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             EmptyState(
                                 icon = Icons.Default.AccountTree,
@@ -213,6 +233,7 @@ fun WorkflowsV2Screen(
                         }
                     } else {
                         LazyRow(
+                            state = kanbanRowState,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .testTag("workflow-kanban-row"),
@@ -224,7 +245,7 @@ fun WorkflowsV2Screen(
                             ),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            itemsIndexed(stages, key = { _, stage -> stage.id }) { index, stage ->
+                            itemsIndexed(stageList, key = { _, stage -> stage.id }) { index, stage ->
                                 Box(
                                     modifier = Modifier
                                         .width(340.dp)
@@ -235,11 +256,11 @@ fun WorkflowsV2Screen(
                                         workflow = workflow,
                                         stage = stage,
                                         stageIndex = index,
-                                        stages = stages,
-                                        memberships = memberships.filter { it.stageId == stage.id },
+                                        stages = stageList,
+                                        memberships = membershipList.filter { it.stageId == stage.id },
                                         allTasks = tasks,
                                         folders = folders,
-                                        onMoveStage = { viewModel.moveWorkflowStageV2(stage, stages, it) },
+                                        onMoveStage = { viewModel.moveWorkflowStageV2(stage, stageList, it) },
                                         onAddTask = { addTarget = AddTarget(workflow, stage) },
                                         onCreateTask = { createTaskStage = AddTarget(workflow, stage) },
                                         onEditStage = {
@@ -265,6 +286,7 @@ fun WorkflowsV2Screen(
                 }
             } else {
                 LazyColumn(
+                    state = if (selected == null) listState else detailListState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
@@ -327,12 +349,8 @@ fun WorkflowsV2Screen(
                         // Workflow Detail & Stages View
                         item(key = selected.id) {
                             val workflow = selected
-                            val stages by remember(workflow.id) {
-                                viewModel.observeWorkflowStages(workflow.id)
-                            }.collectAsStateWithLifecycle(initialValue = emptyList())
-                            val memberships by remember(workflow.id) {
-                                viewModel.observeWorkflowMemberships(workflow.id)
-                            }.collectAsStateWithLifecycle(initialValue = emptyList())
+                            val stageList = stages.orEmpty()
+                            val membershipList = memberships.orEmpty()
 
                             Surface(
                                 modifier = Modifier
@@ -355,7 +373,7 @@ fun WorkflowsV2Screen(
                                             fontWeight = FontWeight.Medium,
                                         )
                                         Text(
-                                            text = "${stages.size} 个阶段 · ${memberships.size} 项任务流转中",
+                                            text = "${stageList.size} 个阶段 · ${membershipList.size} 项任务流转中",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
@@ -379,16 +397,16 @@ fun WorkflowsV2Screen(
                                 }
                             }
 
-                            stages.forEachIndexed { index, stage ->
+                            stageList.forEachIndexed { index, stage ->
                                 ExpressiveStageBlock(
                                     workflow = workflow,
                                     stage = stage,
                                     stageIndex = index,
-                                    stages = stages,
-                                    memberships = memberships.filter { it.stageId == stage.id },
+                                    stages = stageList,
+                                    memberships = membershipList.filter { it.stageId == stage.id },
                                     allTasks = tasks,
                                     folders = folders,
-                                    onMoveStage = { viewModel.moveWorkflowStageV2(stage, stages, it) },
+                                    onMoveStage = { viewModel.moveWorkflowStageV2(stage, stageList, it) },
                                     onAddTask = { addTarget = AddTarget(workflow, stage) },
                                     onCreateTask = { createTaskStage = AddTarget(workflow, stage) },
                                     onEditStage = {
@@ -408,7 +426,7 @@ fun WorkflowsV2Screen(
                                 )
                             }
 
-                            if (stages.isEmpty()) {
+                            if (stages != null && stageList.isEmpty()) {
                                 EmptyState(
                                     icon = Icons.Default.AccountTree,
                                     title = "当前流程暂无阶段",

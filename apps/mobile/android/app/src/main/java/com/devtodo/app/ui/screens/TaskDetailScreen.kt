@@ -52,19 +52,21 @@ fun TaskDetailScreen(
     onBack: () -> Unit,
     isEmbedded: Boolean = false,
 ) {
+    val cachedTask = remember(taskId) { viewModel.cachedTask(taskId) }
+    val cachedNote = remember(taskId) { viewModel.cachedNote(taskId) }
     val detail by remember(taskId) {
         combine(viewModel.observeTask(taskId), viewModel.observeNote(taskId)) { task, note ->
             task to note
         }
-    }.collectAsStateWithLifecycle(initialValue = null)
+    }.collectAsStateWithLifecycle(initialValue = cachedTask?.let { it to cachedNote })
 
     val task = detail?.first
     val note = detail?.second
     val steps by remember(taskId) { viewModel.observeTaskSteps(taskId) }
-        .collectAsStateWithLifecycle(initialValue = emptyList())
+        .collectAsStateWithLifecycle(initialValue = viewModel.cachedTaskSteps(taskId).orEmpty())
     val folders by viewModel.foldersV2.collectAsStateWithLifecycle()
     val placements by remember(taskId) { viewModel.observeTaskPlacements(taskId) }
-        .collectAsStateWithLifecycle(initialValue = emptyList())
+        .collectAsStateWithLifecycle(initialValue = viewModel.cachedTaskPlacements(taskId).orEmpty())
     val timePoints by viewModel.activeTimePoints.collectAsStateWithLifecycle()
     val ready by viewModel.dataReady.collectAsStateWithLifecycle()
     val pageLoads by viewModel.pageLoads.collectAsStateWithLifecycle()
@@ -96,6 +98,10 @@ fun TaskDetailScreen(
     val datePickerState = rememberDatePickerState()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    // Hoisted out of the Scaffold content so Navigation Compose restores them.
+    val detailScroll = rememberScrollState()
+    val splitLeftScroll = rememberScrollState()
+    val splitRightScroll = rememberScrollState()
 
     val dirty = (originalTitle != null && title != originalTitle) ||
         (noteEdited && markdownContent != (originalNote ?: ""))
@@ -267,7 +273,7 @@ fun TaskDetailScreen(
                             modifier = Modifier
                                 .weight(0.55f)
                                 .fillMaxHeight()
-                                .verticalScroll(rememberScrollState()),
+                                .verticalScroll(splitLeftScroll),
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             TaskContentAndNoteSection(
@@ -288,7 +294,7 @@ fun TaskDetailScreen(
                             modifier = Modifier
                                 .weight(0.45f)
                                 .fillMaxHeight()
-                                .verticalScroll(rememberScrollState()),
+                                .verticalScroll(splitRightScroll),
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             TaskStepsSection(
@@ -337,7 +343,7 @@ fun TaskDetailScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
+                            .verticalScroll(detailScroll)
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {

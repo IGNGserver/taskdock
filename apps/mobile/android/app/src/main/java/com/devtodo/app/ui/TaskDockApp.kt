@@ -225,36 +225,35 @@ fun TaskDockApp(
                         modifier = Modifier
                             .weight(1f)
                             .consumeWindowInsets(padding),
-                // Material 3 Expressive motion. Forward navigation is a shared
-                // axis slide + fade; the back stack uses the M3 full-screen
-                // surface spec (exit 100% -> 90%, enter 110% -> 100%), which
-                // Navigation Compose 2.8 also drives directly from the
-                // predictive back gesture.
+                // Material 3 Expressive motion. The entering surface stays
+                // opaque and only moves: cross-fading both destinations made
+                // their text overlap for a few hundred milliseconds, which
+                // read as content flicker during every page switch.
                 enterTransition = {
                     slideInHorizontally(
                         animationSpec = TaskDockMotion.springSpatial(),
-                        initialOffsetX = { fullWidth -> (fullWidth * 0.3f).toInt() },
-                    ) + fadeIn(animationSpec = TaskDockMotion.springEffects())
+                        initialOffsetX = { fullWidth -> (fullWidth * 0.25f).toInt() },
+                    )
                 },
                 exitTransition = {
                     slideOutHorizontally(
                         animationSpec = TaskDockMotion.springSpatial(),
-                        targetOffsetX = { fullWidth -> -(fullWidth * 0.3f).toInt() },
-                    ) + fadeOut(animationSpec = TaskDockMotion.springEffects())
+                        targetOffsetX = { fullWidth -> -(fullWidth * 0.25f).toInt() },
+                    )
                 },
                 popEnterTransition = {
                     scaleIn(
                         animationSpec = TaskDockMotion.springSpatial(),
-                        initialScale = 1.1f,
+                        initialScale = 1.03f,
                         transformOrigin = TransformOrigin.Center,
-                    ) + fadeIn(animationSpec = TaskDockMotion.springEffects())
+                    )
                 },
                 popExitTransition = {
                     scaleOut(
                         animationSpec = TaskDockMotion.springSpatial(),
-                        targetScale = 0.9f,
+                        targetScale = 0.97f,
                         transformOrigin = TransformOrigin.Center,
-                    ) + fadeOut(animationSpec = TaskDockMotion.springEffects())
+                    )
                 },
             ) {
                 composable(Screen.Login.route) {

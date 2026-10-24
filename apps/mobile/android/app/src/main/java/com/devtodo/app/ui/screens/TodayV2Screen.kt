@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -55,6 +56,8 @@ fun TodayV2Screen(
     var inlineTaskId by rememberSaveable { mutableStateOf<String?>(null) }
     val activeInlineTaskId = inlineTaskId?.takeIf { id -> scheduled.any { it.first.id == id } }
     val adaptive = LocalAdaptiveInfo.current
+    // Kept outside the Scaffold content so the navigation back stack restores it.
+    val listState = rememberLazyListState()
     val done = scheduled.count { it.first.status == TaskStatus.DONE }
     val total = scheduled.size
     val pending = total - done
@@ -93,7 +96,11 @@ fun TodayV2Screen(
             @Composable
             fun TodayListContent() {
                 val compactHero = adaptive.isCompactLandscape
-                LazyColumn(Modifier.fillMaxSize().testTag("today-task-list"), contentPadding = PaddingValues(bottom = 24.dp)) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize().testTag("today-task-list"),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                ) {
                     item(key = "today-summary") {
                         Surface(
                             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (compactHero) 8.dp else 16.dp)

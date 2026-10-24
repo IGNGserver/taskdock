@@ -73,6 +73,51 @@ class MainViewModel(
     private val _directoryPages = MutableStateFlow<Map<String, com.devtodo.app.data.sync.DirectoryPageState>>(emptyMap())
     val directoryPages = _directoryPages.asStateFlow()
     val freshnessWindowMs: Long get() = if (api.isConstrainedNetwork) 360_000L else 120_000L
+
+    // Destinations re-subscribe to Room on every visit, so their flows start
+    // from an empty emission. Seeding `collectAsStateWithLifecycle` with the
+    // last list keeps the first frame complete: a restored LazyListState is
+    // not clamped against an empty list, and detail pages do not flash their
+    // "empty" state before the first row arrives. Keys include the owner so a
+    // cached list can never leak across accounts.
+    private val directoryMembersCache = java.util.concurrent.ConcurrentHashMap<String, List<TaskEntity>>()
+    private val directoryFoldersCache = java.util.concurrent.ConcurrentHashMap<String, List<FolderEntity>>()
+    private val directoryCountsCache = java.util.concurrent.ConcurrentHashMap<String, DirectoryCounts>()
+    private val monthPointsCache = java.util.concurrent.ConcurrentHashMap<String, List<TimePointEntity>>()
+    private val monthCountsCache = java.util.concurrent.ConcurrentHashMap<String, List<MonthCount>>()
+    private val workflowStagesCache = java.util.concurrent.ConcurrentHashMap<String, List<WorkflowStageEntity>>()
+    private val workflowMembershipsCache =
+        java.util.concurrent.ConcurrentHashMap<String, List<WorkflowTaskMembershipEntity>>()
+    private val taskStepsCache = java.util.concurrent.ConcurrentHashMap<String, List<TaskStepEntity>>()
+    private val taskPlacementsCache = java.util.concurrent.ConcurrentHashMap<String, List<PlacementEntity>>()
+    private val taskDetailCache = java.util.concurrent.ConcurrentHashMap<String, TaskEntity>()
+    private val noteCache = java.util.concurrent.ConcurrentHashMap<String, NoteEntity>()
+
+    private fun cacheKey(scope: String): String = "${authManager.ownerId ?: "anonymous"}:$scope"
+
+    /** Page caches only accelerate a return; bound them so browsing stays flat. */
+    private fun <T : Any> java.util.concurrent.ConcurrentHashMap<String, T>.putBounded(
+        key: String,
+        value: T,
+        limit: Int = 48,
+    ) {
+        if (size >= limit && !containsKey(key)) remove(keys.firstOrNull() ?: key)
+        put(key, value)
+    }
+
+    private fun clearPageCaches() {
+        directoryMembersCache.clear()
+        directoryFoldersCache.clear()
+        directoryCountsCache.clear()
+        monthPointsCache.clear()
+        monthCountsCache.clear()
+        workflowStagesCache.clear()
+        workflowMembershipsCache.clear()
+        taskStepsCache.clear()
+        taskPlacementsCache.clear()
+        taskDetailCache.clear()
+        noteCache.clear()
+    }
     private var activePageKey: String? = null
     private var foreground = false
     private val ownerIdentity = MutableStateFlow(authManager.ownerId)
@@ -101,6 +146,7 @@ class MainViewModel(
             boundSession = authManager.sessionKey
             databaseVersion.value++
         }
+        if (ownerIdentity.value != authManager.ownerId) clearPageCaches()
         ownerIdentity.value = authManager.ownerId
         engineObservers?.cancel()
         engineObservers = viewModelScope.launch {
@@ -151,6 +197,11 @@ class MainViewModel(
                     else -> db.taskDao().directoryWindow(owner, parent, cacheLimit, pinnedIds)
                 }
             }
+            .onEach { directoryMembersCache.putBounded(cacheKey("directory-members:${parent ?: "root"}"), it) }
+
+    fun cachedDirectoryMembers(parent: String?): List<TaskEntity> =
+        directoryMembersCache[cacheKey("directory-members:${parent ?: "root"}")].orEmpty()
+
     fun observeDirectoryFolders(parent: String?): Flow<List<FolderEntity>> =
         combine(currentOwnerId, directoryPages) { owner, pages -> owner to pages["directory:${parent ?: "root"}"] }
             .flatMapLatest { (owner, page) ->
@@ -163,15 +214,30 @@ class MainViewModel(
                     else -> db.folderDao().getChildrenFlow(owner, parent)
                 }
             }
+            .onEach { directoryFoldersCache.putBounded(cacheKey("directory-folders:${parent ?: "root"}"), it) }
+
+    fun cachedDirectoryFolders(parent: String?): List<FolderEntity> =
+        directoryFoldersCache[cacheKey("directory-folders:${parent ?: "root"}")].orEmpty()
+
     fun observeDirectoryCounts(parent: String?): Flow<DirectoryCounts> = currentOwnerId.flatMapLatest { owner ->
         owner?.let { db.taskDao().directoryCounts(it, parent) } ?: flowOf(DirectoryCounts())
-    }
+    }.onEach { directoryCountsCache.putBounded(cacheKey("directory-counts:${parent ?: "root"}"), it) }
+
+    fun cachedDirectoryCounts(parent: String?): DirectoryCounts? =
+        directoryCountsCache[cacheKey("directory-counts:${parent ?: "root"}")]
     fun observeMonthPoints(start: String, end: String): Flow<List<TimePointEntity>> = currentOwnerId.flatMapLatest { owner ->
         owner?.let { db.timePointDao().monthPoints(it, start, end) } ?: flowOf(emptyList())
-    }
+    }.onEach { monthPointsCache.putBounded(cacheKey("month-points:$start:$end"), it) }
+
+    fun cachedMonthPoints(start: String, end: String): List<TimePointEntity>? =
+        monthPointsCache[cacheKey("month-points:$start:$end")]
+
     fun observeMonthCounts(start: String, end: String): Flow<List<MonthCount>> = currentOwnerId.flatMapLatest { owner ->
         owner?.let { db.placementDao().monthCounts(it, start, end) } ?: flowOf(emptyList())
-    }
+    }.onEach { monthCountsCache.putBounded(cacheKey("month-counts:$start:$end"), it) }
+
+    fun cachedMonthCounts(start: String, end: String): List<MonthCount>? =
+        monthCountsCache[cacheKey("month-counts:$start:$end")]
 
     val workflowsV2: StateFlow<List<WorkflowEntity>> = currentOwnerId
         .flatMapLatest { ownerId -> ownerId?.let { db.workflowDao().getActiveFlow(it) } ?: flowOf(emptyList()) }
@@ -460,15 +526,24 @@ class MainViewModel(
 
     fun observeTaskSteps(taskId: String): Flow<List<TaskStepEntity>> = currentOwnerId.flatMapLatest { ownerId ->
         ownerId?.let { db.taskStepDao().getByTaskFlow(taskId, it) } ?: flowOf(emptyList())
-    }
+    }.onEach { taskStepsCache.putBounded(cacheKey("task-steps:$taskId"), it) }
+
+    fun cachedTaskSteps(taskId: String): List<TaskStepEntity>? =
+        taskStepsCache[cacheKey("task-steps:$taskId")]
 
     fun observeWorkflowStages(workflowId: String): Flow<List<WorkflowStageEntity>> = currentOwnerId.flatMapLatest { ownerId ->
         ownerId?.let { db.workflowDao().getStagesFlow(workflowId, it) } ?: flowOf(emptyList())
-    }
+    }.onEach { workflowStagesCache.putBounded(cacheKey("workflow-stages:$workflowId"), it) }
+
+    fun cachedWorkflowStages(workflowId: String): List<WorkflowStageEntity>? =
+        workflowStagesCache[cacheKey("workflow-stages:$workflowId")]
 
     fun observeWorkflowMemberships(workflowId: String): Flow<List<WorkflowTaskMembershipEntity>> = currentOwnerId.flatMapLatest { ownerId ->
         ownerId?.let { db.workflowDao().getMembershipsFlow(workflowId, it) } ?: flowOf(emptyList())
-    }
+    }.onEach { workflowMembershipsCache.putBounded(cacheKey("workflow-memberships:$workflowId"), it) }
+
+    fun cachedWorkflowMemberships(workflowId: String): List<WorkflowTaskMembershipEntity>? =
+        workflowMembershipsCache[cacheKey("workflow-memberships:$workflowId")]
 
     fun observeTimePointPlacements(timePointId: String): Flow<List<PlacementEntity>> = currentOwnerId.flatMapLatest { ownerId ->
         ownerId?.let { db.placementDao().getPlacementsByTimePointFlow(it, timePointId) } ?: flowOf(emptyList())
@@ -476,7 +551,10 @@ class MainViewModel(
 
     fun observeTaskPlacements(taskId: String): Flow<List<PlacementEntity>> = currentOwnerId.flatMapLatest { ownerId ->
         ownerId?.let { db.placementDao().getPlacementsByTaskFlow(taskId, it) } ?: flowOf(emptyList())
-    }
+    }.onEach { taskPlacementsCache.putBounded(cacheKey("task-placements:$taskId"), it) }
+
+    fun cachedTaskPlacements(taskId: String): List<PlacementEntity>? =
+        taskPlacementsCache[cacheKey("task-placements:$taskId")]
 
     fun createFolderV2(parentFolderId: String?, title: String) {
         viewModelScope.launch {
@@ -2426,18 +2504,30 @@ class MainViewModel(
         midnightRefreshJob?.cancel()
         _todayTasks.value = emptyList()
         _dataReady.value = true
+        clearPageCaches()
         WidgetUpdater.refreshAll(authManager.appContext)
     }
 
     fun observeTask(taskId: String): Flow<TaskEntity?> = currentOwnerId.flatMapLatest { ownerId ->
         ownerId?.let { db.taskDao().getTaskByIdFlow(taskId, it) } ?: flowOf(null)
+    }.onEach { task ->
+        val key = cacheKey("task:$taskId")
+        if (task == null) taskDetailCache.remove(key) else taskDetailCache.putBounded(key, task)
     }
+
+    fun cachedTask(taskId: String): TaskEntity? =
+        taskDetailCache[cacheKey("task:$taskId")] ?: treeTasksV2.value.firstOrNull { it.id == taskId }
 
     fun observeTaskById(taskId: String): Flow<TaskEntity?> = observeTask(taskId)
 
     fun observeNote(taskId: String): Flow<NoteEntity?> = currentOwnerId.flatMapLatest { ownerId ->
         ownerId?.let { db.noteDao().getNoteByTaskIdFlow(taskId, it) } ?: flowOf(null)
+    }.onEach { note ->
+        val key = cacheKey("note:$taskId")
+        if (note == null) noteCache.remove(key) else noteCache.putBounded(key, note)
     }
+
+    fun cachedNote(taskId: String): NoteEntity? = noteCache[cacheKey("note:$taskId")]
 
     fun loadTaskDetails(taskId: String) {
         activatePage("task:$taskId")
