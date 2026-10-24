@@ -158,6 +158,7 @@ class SyncEngineTest {
             publish.set(true)
             assertEquals(SyncOutcome.Success, workerEngine.triggerSync())
             withTimeout(5000) { engine.directoryPages.first { "worker-received" in it["directory:root"]!!.taskIds } }
+            assertTrue("worker-received" in engine.directoryPages.value["directory:root"]!!.taskIds)
         } finally { workerEngine.stop() }
     }
 
