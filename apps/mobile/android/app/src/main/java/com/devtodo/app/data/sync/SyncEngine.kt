@@ -34,6 +34,8 @@ enum class SyncState {
 
 sealed interface SyncOutcome {
     data object Success : SyncOutcome
+    /** Durable bootstrap checkpoint; callers must continue rather than claim completion. */
+    data object Continuing : SyncOutcome
     data class Failure(val message: String) : SyncOutcome
 }
 
@@ -46,7 +48,9 @@ class SyncEngine(
     private val authManager: SecureAuthManager,
     private val syncBudgetMs: Long = 45_000L,
     private val verificationIntervalMs: Long = 60_000L,
+    private val bootstrapSliceMs: Long = 8_000L,
 ) {
+    private class BootstrapPending : Exception()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _syncState = MutableStateFlow(SyncState.IDLE)
     val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
@@ -57,6 +61,8 @@ class SyncEngine(
     val loadProgress: StateFlow<LoadProgress> = _loadProgress.asStateFlow()
     private val _pageLoads = MutableStateFlow<Map<String, PageLoadState>>(emptyMap())
     val pageLoads = _pageLoads.asStateFlow()
+    private val _directoryPages = MutableStateFlow<Map<String, DirectoryPageState>>(emptyMap())
+    val directoryPages = _directoryPages.asStateFlow()
     @Volatile private var foreground = false
     @Volatile private var activePage: String? = null
     private val pageFlights = mutableMapOf<String, Deferred<SyncOutcome>>()
@@ -67,6 +73,8 @@ class SyncEngine(
     private var retrySyncJob: Job? = null
     private var retrySyncAttempt = 0
     private var engineEpoch = 0L
+    private var sharedCursorObserver: Job? = null
+    @Volatile private var lastAppliedCursor: String? = null
     private val boundSession = authManager.sessionKey
 
     private suspend fun ensureSession() {
@@ -87,9 +95,11 @@ class SyncEngine(
             syncFlight?.takeIf { it.isActive } ?: scope.async {
                 var outcome: SyncOutcome
                 var passes = 0
+                var consumedRequest = 0L
                 val flightStartedAt = System.nanoTime()
                 do {
                     val requested = synchronized(flightLock) { syncRequested }
+                    consumedRequest = requested
                     outcome = try {
                         val remaining = syncBudgetMs - (System.nanoTime() - flightStartedAt) / 1_000_000
                         withTimeout(remaining.coerceAtLeast(1L)) { runSync() }
@@ -101,10 +111,16 @@ class SyncEngine(
                         SyncOutcome.Failure(message)
                     }
                     passes++
-                    if (outcome is SyncOutcome.Failure) break
+                    if (outcome !is SyncOutcome.Success) break
                 } while (passes < 2 && synchronized(flightLock) { requested != syncRequested })
                 if (outcome is SyncOutcome.Failure) scheduleSyncRetry()
                 else { retrySyncAttempt = 0; retrySyncJob?.cancel() }
+                if (outcome is SyncOutcome.Success && synchronized(flightLock) { consumedRequest != syncRequested }) {
+                    // Notifications during the final pass must not wait for polling.
+                    currentCoroutineContext()[Job]?.invokeOnCompletion {
+                        if (started) scope.launch { triggerSync() }
+                    }
+                }
                 outcome
             }.also { syncFlight = it }
         }
@@ -126,11 +142,14 @@ class SyncEngine(
 
     private val socketLock = Any()
     @Volatile private var activeWebSocket: WebSocket? = null
+    private var socketConnecting = false
     @Volatile private var started = false
     @Volatile private var networkAvailable = true
     private var socketGeneration = 0L
     private var reconnectAttempt = 0
     private var reconnectJob: Job? = null
+    @Volatile private var socketReady = false
+    private var socketAuthTimeout: Job? = null
 
     // Outbox mutations are recorded inside Room transactions; a sync fired from
     // inside the transaction can read the pre-commit snapshot and find nothing
@@ -163,6 +182,7 @@ class SyncEngine(
         }
 
     fun start() {
+        watchSharedCursor()
         val alreadyStarted = synchronized(socketLock) {
             if (started) true
             else {
@@ -183,7 +203,10 @@ class SyncEngine(
         }
         scope.launch {
             while (isActive) {
-                delay(if (api.isConstrainedNetwork) verificationIntervalMs * 3 else verificationIntervalMs)
+                // Only accelerate foreground recovery when realtime is unavailable.
+                val interval = if (!socketReady) minOf(verificationIntervalMs, 15_000L)
+                    else if (api.isConstrainedNetwork) verificationIntervalMs * 3 else verificationIntervalMs
+                delay(interval)
                 if (!foreground || !networkAvailable || !authManager.isLoggedIn) continue
                 // The visible page is rendered from Room, so the incremental
                 // feed already refreshes it. A periodic page preview would send
@@ -196,6 +219,25 @@ class SyncEngine(
     }
 
     fun setForeground(value: Boolean) { foreground = value }
+
+    private fun watchSharedCursor() {
+        if (sharedCursorObserver?.isActive == true) return
+        val owner = authManager.ownerId ?: return
+        sharedCursorObserver = scope.launch {
+            val key = v2SyncCursorKey(owner)
+            var previous = db.syncMetaDao().get(key)
+            db.syncMetaDao().observe(key).collect { cursor ->
+                if (cursor != previous && cursor != lastAppliedCursor) {
+                    // Widget/other engine consumed the shared feed. Its private
+                    // membership map cannot update ours; revalidate the visible page.
+                    activePage?.takeIf { it.startsWith("directory:") }?.let { page ->
+                        scope.launch { refreshDirectoryPage(page.removePrefix("directory:").takeUnless { it == "root" }) }
+                    }
+                }
+                previous = cursor
+            }
+        }
+    }
 
     fun prioritizePage(key: String, force: Boolean = false) {
         val previousPage = activePage
@@ -211,7 +253,8 @@ class SyncEngine(
             if (activePage != key) return@launch
             when {
                 key.startsWith("task:") -> loadTaskDetails(key.removePrefix("task:"))
-                key.startsWith("directory:") || key == "today" -> loadPreview(key)
+                key.startsWith("directory:") -> loadDirectoryPage(key.removePrefix("directory:").takeUnless { it == "root" })
+                key == "today" -> loadPreview(key)
             }
             // Preview/detail responses are partial. Reconcile deletions and
             // relations with the global feed before claiming cache freshness.
@@ -224,6 +267,7 @@ class SyncEngine(
             if (pageFlights.size >= 48) {
                 pageFlights.entries.removeAll { !it.value.isActive && it.key != key && it.key != activePage }
                 _pageLoads.update { states -> states.filterKeys { it in pageFlights || it == key || it == activePage } }
+                _directoryPages.update { states -> states.filterKeys { it in pageFlights || it == key || it == activePage } }
             }
             pageFlights[key]?.takeIf { it.isActive } ?: scope.async(start = CoroutineStart.LAZY) {
                 val job = currentCoroutineContext()[Job]
@@ -271,6 +315,93 @@ class SyncEngine(
         applyV2Changes(preview.changes, owner)
     }
 
+    suspend fun loadDirectoryPage(parent: String?, append: Boolean = false): SyncOutcome {
+        watchSharedCursor()
+        val key = "directory:${parent ?: "root"}"
+        return pageRequest(key) {
+            _directoryPages.update { if (key in it) it else it + (key to DirectoryPageState()) }
+            val previous = _directoryPages.value[key] ?: DirectoryPageState()
+            if (append && (!previous.initialized || previous.nextCursor == null)) return@pageRequest
+            var extending = append
+            val owner = authManager.ownerId ?: error("账户不可用")
+            val generationKey = "reconciled:$owner"
+            var generation = db.syncMetaDao().get(generationKey)
+            var result = api.directoryChildren(parent, previous.nextCursor.takeIf { append })
+            if (generation != db.syncMetaDao().get(generationKey)) {
+                // A complete snapshot removed missing rows while this request
+                // was in flight. Never resurrect them using an older partial read.
+                extending = false
+                generation = db.syncMetaDao().get(generationKey)
+                result = api.directoryChildren(parent)
+            }
+            val expired = (result.exceptionOrNull() as? ApiClientException)?.category == ApiFailureCategory.CURSOR_EXPIRED
+            val page = if (expired && append) {
+                // A revision change invalidates the chain, not the Room cache.
+                extending = false
+                api.directoryChildren(parent).getOrThrow()
+            } else result.getOrThrow()
+            require(page.parentFolderId == parent) { "目录页面不属于当前目录" }
+            val changes = page.items.map { item ->
+                when (item.kind) {
+                    "TASK" -> {
+                        val task = requireNotNull(item.task)
+                        require(item.folder == null && task.parentFolderId == parent)
+                        ChangeItem("0", "task", task.id, task.version, "upsert", api.json.encodeToJsonElement(task))
+                    }
+                    "FOLDER" -> {
+                        val folder = requireNotNull(item.folder)
+                        require(item.task == null && folder.parentFolderId == parent && item.aggregate != null)
+                        ChangeItem("0", "folder", folder.id, folder.version, "upsert", api.json.encodeToJsonElement(folder))
+                    }
+                    else -> error("未知目录项目类型")
+                }
+            }
+            require(page.nextCursor == null || page.nextCursor != previous.nextCursor || !extending) { "目录游标未前进" }
+            db.withTransaction {
+                ensureSession()
+                require(generation == db.syncMetaDao().get(generationKey)) { "目录读取期间快照已更新，请重试" }
+                applyV2Changes(changes, owner)
+            }
+            ensureSession()
+            _directoryPages.update { pages ->
+                pages + (key to (pages[key] ?: DirectoryPageState()).merge(page, extending))
+            }
+        }
+    }
+
+    suspend fun refreshDirectoryPage(parent: String?): SyncOutcome {
+        val key = "directory:${parent ?: "root"}"
+        // A manual refresh arriving during pagination must eventually read a
+        // new first page, not mistake the next-page flight for a full refresh.
+        try {
+            synchronized(pageFlights) { pageFlights[key]?.takeIf { it.isActive } }?.await()
+        } catch (_: CancellationException) {
+            currentCoroutineContext().ensureActive()
+        }
+        return loadDirectoryPage(parent)
+    }
+
+    /** Feed updates and acknowledged local creations stay visible in loaded directories. */
+    private fun includeDirectoryChanges(changes: List<ChangeItem>) {
+        _directoryPages.update { pages ->
+            pages.mapValues { (key, state) ->
+                run {
+                    val parent = key.removePrefix("directory:").takeUnless { it == "root" }
+                    val relevant = changes.filter { change ->
+                        change.entityType in setOf("task", "folder") && change.operation == "upsert" &&
+                            change.snapshot?.jsonObject?.get("parentFolderId")?.jsonPrimitive?.contentOrNull == parent
+                    }
+                    state.copy(
+                        taskIds = state.taskIds + relevant.filter { it.entityType == "task" }.map { it.entityId },
+                        folderIds = state.folderIds + relevant.filter { it.entityType == "folder" }.map { it.entityId },
+                        retainedTaskIds = state.retainedTaskIds + relevant.filter { it.entityType == "task" }.map { it.entityId },
+                        retainedFolderIds = state.retainedFolderIds + relevant.filter { it.entityType == "folder" }.map { it.entityId },
+                    )
+                }
+            }
+        }
+    }
+
     private suspend fun outboxSyncLoop() {
         for (request in outboxRequests) {
             // Coalesce bursts (a capture writes task + note + placement) into a
@@ -300,6 +431,7 @@ class SyncEngine(
             reconnectAttempt = 0
             val current = activeWebSocket
             activeWebSocket = null
+            socketConnecting = false
             current
         }
         // Stop cancels every in-flight sync, refresh, and reconnect child as
@@ -310,6 +442,11 @@ class SyncEngine(
         synchronized(flightLock) { syncFlight = null }
         synchronized(pageFlights) { pageFlights.clear() }
         _pageLoads.value = emptyMap()
+        _directoryPages.value = emptyMap()
+        sharedCursorObserver = null
+        socketReady = false
+        socketAuthTimeout?.cancel()
+        socketAuthTimeout = null
         retrySyncJob = null
         socket?.close(1000, "App closed")
         _syncState.value = SyncState.IDLE
@@ -323,6 +460,7 @@ class SyncEngine(
                 reconnectJob = null
                 val current = activeWebSocket
                 activeWebSocket = null
+                socketConnecting = false
                 current
             } else {
                 reconnectJob?.cancel()
@@ -332,6 +470,8 @@ class SyncEngine(
             }
         }
         if (!available) {
+            socketReady = false
+            socketAuthTimeout?.cancel()
             socketToCancel?.cancel()
             if (started) _syncState.value = SyncState.OFFLINE
             return
@@ -347,14 +487,16 @@ class SyncEngine(
         if (!started || !networkAvailable || !authManager.isLoggedIn) return
         val generation: Long
         synchronized(socketLock) {
-            if (!started || !networkAvailable || activeWebSocket != null) return
+            if (!started || !networkAvailable || activeWebSocket != null || socketConnecting) return
             generation = ++socketGeneration
+            socketConnecting = true
+            socketReady = false
         }
         try {
             val socket = api.createV2WebSocket(object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     if (isCurrentSocket(webSocket, generation)) {
-                        synchronized(socketLock) { reconnectAttempt = 0 }
+                        android.util.Log.d("TaskDockSync", "realtime=handshake")
                     }
                 }
 
@@ -362,7 +504,21 @@ class SyncEngine(
                     if (!isCurrentSocket(webSocket, generation)) return
                     try {
                         val element = api.json.parseToJsonElement(text).jsonObject
-                        if (element["type"]?.jsonPrimitive?.content in setOf("sync.required", "ready")) {
+                        val type = element["type"]?.jsonPrimitive?.content
+                        if (type == "ready") {
+                            socketReady = true
+                            socketAuthTimeout?.cancel()
+                            synchronized(socketLock) { reconnectAttempt = 0 }
+                            android.util.Log.d("TaskDockSync", "realtime=ready")
+                        }
+                        if (type in setOf("sync.required", "ready")) {
+                            // During first bootstrap, the global feed cannot yet
+                            // advance. Refresh just the visible page independently.
+                            if (type == "sync.required" && !_loadProgress.value.complete) activePage?.let { page ->
+                                if (page.startsWith("directory:")) {
+                                    scope.launch { refreshDirectoryPage(page.removePrefix("directory:").takeUnless { it == "root" }) }
+                                } else prioritizePage(page, force = true)
+                            }
                             scope.launch { triggerSync() }
                         }
                     } catch (_: Exception) {}
@@ -372,37 +528,61 @@ class SyncEngine(
                     handleWebSocketEnd(webSocket, generation)
                 }
 
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    // Reply to the close frame; otherwise onClosed may never arrive.
+                    webSocket.close(code, null)
+                    handleWebSocketEnd(webSocket, generation)
+                }
+
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                     handleWebSocketEnd(webSocket, generation)
                 }
             })
             synchronized(socketLock) {
-                if (started && networkAvailable && activeWebSocket == null) {
+                if (started && networkAvailable && socketGeneration == generation &&
+                    (socketConnecting || activeWebSocket === socket) && (activeWebSocket == null || activeWebSocket === socket)) {
                     activeWebSocket = socket
+                    socketConnecting = false
+                    socketAuthTimeout?.cancel()
+                    socketAuthTimeout = scope.launch {
+                        delay(10_000L)
+                        if (isCurrentSocket(socket, generation) && !socketReady) {
+                            socket.cancel()
+                            handleWebSocketEnd(socket, generation)
+                        }
+                    }
                 } else {
                     socket.cancel()
                 }
             }
         } catch (_: Exception) {
+            synchronized(socketLock) { if (socketGeneration == generation) socketConnecting = false }
             scheduleReconnect()
         }
     }
 
     private fun isCurrentSocket(socket: WebSocket, generation: Long): Boolean = synchronized(socketLock) {
+        // A localhost/pooled handshake can callback before newWebSocket returns.
+        if (socketGeneration == generation && socketConnecting && activeWebSocket == null && started && networkAvailable) {
+            activeWebSocket = socket
+        }
         activeWebSocket === socket && socketGeneration == generation && authManager.sessionKey == boundSession
     }
 
     private fun handleWebSocketEnd(socket: WebSocket, generation: Long) {
         val shouldReconnect = synchronized(socketLock) {
-            if (activeWebSocket !== socket || socketGeneration != generation) return@synchronized false
+            if (socketGeneration != generation || (activeWebSocket !== socket && !(activeWebSocket == null && socketConnecting))) return@synchronized false
             activeWebSocket = null
+            socketConnecting = false
+            socketReady = false
+            socketAuthTimeout?.cancel()
             started && networkAvailable && authManager.isLoggedIn
         }
         if (shouldReconnect) {
             scope.launch {
                 // Refresh an expired short-lived access token before opening
                 // the next first-message-authenticated WebSocket.
-                api.restoreSession()
+                api.restoreSessionAsync()
                 scheduleReconnect()
             }
         }
@@ -538,7 +718,7 @@ class SyncEngine(
                 repairProtection(ownerId)
                 val cursorKey = v2SyncCursorKey(ownerId)
                 var cursor = db.syncMetaDao().get(cursorKey)
-                if (cursor == null) {
+                if (cursor == null || db.syncMetaDao().get("bootstrap:$ownerId") != null) {
                     bootstrap(ownerId)
                     cursor = db.syncMetaDao().get(cursorKey)
                 } else {
@@ -566,7 +746,9 @@ class SyncEngine(
                     bootstrap(ownerId)
                 }
 
-                if (hadPending || blockedMutation != null) pullRemote(ownerId)
+                // Each successful upload batch already pulled its changes. Only
+                // an uncertain response or a reconciliation needs a final pull.
+                if ((hadPending && pushFailure != null) || blockedMutation != null) pullRemote(ownerId)
                 replayDeferred(ownerId)
                 _loadProgress.value = LoadProgress("ready", complete = true)
                 pushFailure?.let { throw it }
@@ -578,6 +760,14 @@ class SyncEngine(
                     _syncState.value = if (networkAvailable) SyncState.IDLE else SyncState.OFFLINE
                     SyncOutcome.Success
                 }
+            } catch (_: BootstrapPending) {
+                // A committed checkpoint is progress, not a network failure.
+                // Finish this flight so priority reads and other workers get a turn.
+                _syncState.value = SyncState.IDLE
+                currentCoroutineContext()[Job]?.invokeOnCompletion {
+                    if (started) scope.launch { delay(250); triggerSync() }
+                }
+                SyncOutcome.Continuing
             } catch (cancelled: CancellationException) {
                 // A timeout is handled by triggerSync, which marks ERROR. A
                 // session/hub change instead cancels this flight while the
@@ -615,15 +805,18 @@ class SyncEngine(
                 (!result.hasMore || result.cursor.toBigInteger() > cursor.toBigInteger())) { "增量游标未正确前进" }
             db.withTransaction {
                 applyV2Changes(result.changes, ownerId)
+                if (result.changes.isNotEmpty()) lastAppliedCursor = result.cursor
                 db.syncMetaDao().set(SyncMetaEntity(cursorKey, result.cursor))
                 if (!result.hasMore) db.syncMetaDao().set(SyncMetaEntity("confirmed:$ownerId", System.currentTimeMillis().toString()))
             }
+            includeDirectoryChanges(result.changes)
             cursor = result.cursor
             if (!result.hasMore) break
         }
     }
 
     private suspend fun bootstrap(ownerId: String) {
+        val sliceStarted = System.nanoTime()
         _loadProgress.value = LoadProgress("preview")
         val capabilities = api.syncCapabilities()
         val unsupported = capabilities.exceptionOrNull() as? ApiClientException
@@ -687,6 +880,9 @@ class SyncEngine(
                     page++
                     _loadProgress.value = LoadProgress("bootstrap", page, manifest.pageCount)
                     android.util.Log.d("TaskDockSync", "bootstrap pages=$page/${manifest.pageCount} rows=${batch.changes.size}")
+                    if (page < manifest.pageCount && (System.nanoTime() - sliceStarted) / 1_000_000 >= bootstrapSliceMs) {
+                        throw BootstrapPending()
+                    }
                     yield()
                 }
                 db.withTransaction {
@@ -696,6 +892,7 @@ class SyncEngine(
                         db.openHelper.writableDatabase.execSQL("DELETE FROM $table WHERE ownerId = ? AND pendingSync = 0 AND id NOT IN (SELECT entityId FROM bootstrap_rows WHERE entityType = ?)", arrayOf(ownerId, type))
                     }
                     db.syncMetaDao().set(SyncMetaEntity(v2SyncCursorKey(ownerId), manifest.cursor))
+                    db.syncMetaDao().set(SyncMetaEntity("reconciled:$ownerId", UUID.randomUUID().toString()))
                     db.syncMetaDao().set(SyncMetaEntity("protocol:$ownerId", "2"))
                     db.syncMetaDao().remove(key)
                     db.syncMetaDao().remove(pageKey)
@@ -714,15 +911,21 @@ class SyncEngine(
             val epoch = engineEpoch
             ensureSession()
             val owner = authManager.ownerId ?: error("账户不可用")
+            val generation = db.syncMetaDao().get("reconciled:$owner")
             val detail = api.taskDetails(taskId).getOrThrow()
             if (epoch != engineEpoch) throw CancellationException("详情请求已失效")
             fun <T> change(type: String, id: String, version: Long, value: T, serializer: kotlinx.serialization.SerializationStrategy<T>) =
                 ChangeItem("0", type, id, version, "upsert", api.json.encodeToJsonElement(serializer, value))
-            applyV2Changes(buildList {
+            val changes = buildList {
                 add(change("task", detail.task.id, detail.task.version, detail.task, TreeTaskDto.serializer()))
                 add(change("note", detail.note.id, detail.note.version, detail.note, NoteDto.serializer()))
                 detail.steps.forEach { add(change("taskStep", it.id, it.version, it, TaskStepDto.serializer())) }
-            }, owner)
+            }
+            db.withTransaction {
+                ensureSession()
+                require(generation == db.syncMetaDao().get("reconciled:$owner")) { "详情读取期间快照已更新，请重试" }
+                applyV2Changes(changes, owner)
+            }
     }
 
     fun prioritizeDirectory(folderId: String?) {
@@ -1093,6 +1296,7 @@ class SyncEngine(
                 }
                 db.syncMetaDao().set(SyncMetaEntity("protocol:$ownerId", "2"))
                 db.syncMetaDao().set(SyncMetaEntity(v2SyncCursorKey(ownerId), snapshot.cursor))
+                db.syncMetaDao().set(SyncMetaEntity("reconciled:$ownerId", UUID.randomUUID().toString()))
                 ensureSession()
         }
     }
@@ -1348,6 +1552,7 @@ class SyncEngine(
             }
         }
         applyV2Changes(returned, ownerId)
+        includeDirectoryChanges(returned)
     }
 
     private fun folderEntity(dto: FolderDto, ownerId: String, now: String) = FolderEntity(dto.id, dto.ownerId ?: ownerId, dto.parentFolderId, dto.title, dto.rank, dto.version, dto.archivedAt, dto.archivedByOperationId, dto.createdAt ?: now, dto.updatedAt ?: now, null, false)
@@ -1584,6 +1789,23 @@ class SyncEngine(
         )
         db.outboxDao().insert(item)
         MutationGuards(db, api.json).track(item)
+        // Retain locally accepted rows even if an older in-flight first page
+        // returns after their ACK. Membership is not permission to drop edits.
+        if (command.substringBefore('.') in setOf("task", "tree", "folder")) {
+            val task = db.taskDao().getTaskById(entityId, ownerId)
+            val folder = if (task == null) db.folderDao().getById(entityId, ownerId) else null
+            val parent = task?.parentFolderId ?: folder?.parentFolderId
+            val key = "directory:${parent ?: "root"}"
+            _directoryPages.update { pages ->
+                val state = pages[key]
+                if (state == null) pages else pages + (key to state.copy(
+                    taskIds = state.taskIds + listOfNotNull(task?.id),
+                    folderIds = state.folderIds + listOfNotNull(folder?.id),
+                    retainedTaskIds = state.retainedTaskIds + listOfNotNull(task?.id),
+                    retainedFolderIds = state.retainedFolderIds + listOfNotNull(folder?.id),
+                ))
+            }
+        }
         // The outbox observer picks this up after the surrounding transaction
         // commits, so callers may record mutations from inside `withTransaction`.
     }

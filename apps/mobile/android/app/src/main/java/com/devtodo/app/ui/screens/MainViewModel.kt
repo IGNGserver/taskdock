@@ -70,6 +70,9 @@ class MainViewModel(
     val loadProgress: StateFlow<LoadProgress> = _loadProgress.asStateFlow()
     private val _pageLoads = MutableStateFlow<Map<String, com.devtodo.app.data.sync.PageLoadState>>(emptyMap())
     val pageLoads = _pageLoads.asStateFlow()
+    private val _directoryPages = MutableStateFlow<Map<String, com.devtodo.app.data.sync.DirectoryPageState>>(emptyMap())
+    val directoryPages = _directoryPages.asStateFlow()
+    val freshnessWindowMs: Long get() = if (api.isConstrainedNetwork) 360_000L else 120_000L
     private var activePageKey: String? = null
     private var foreground = false
     private val ownerIdentity = MutableStateFlow(authManager.ownerId)
@@ -108,6 +111,7 @@ class MainViewModel(
             launch { syncEngine.lastSyncError.collect { _lastSyncError.value = it } }
             launch { syncEngine.loadProgress.collect { _loadProgress.value = it } }
             launch { syncEngine.pageLoads.collect { _pageLoads.value = it } }
+            launch { syncEngine.directoryPages.collect { _directoryPages.value = it } }
         }
     }
 
@@ -134,6 +138,31 @@ class MainViewModel(
     fun observeDirectory(parent: String?, limit: Int, pinnedIds: List<String>): Flow<List<TaskEntity>> = currentOwnerId.flatMapLatest { owner ->
         owner?.let { db.taskDao().directoryWindow(it, parent, limit, pinnedIds) } ?: flowOf(emptyList())
     }
+    fun observeDirectoryMembers(parent: String?, pinnedIds: List<String>, cacheLimit: Int = 100): Flow<List<TaskEntity>> =
+        combine(currentOwnerId, directoryPages) { owner, pages -> owner to pages["directory:${parent ?: "root"}"] }
+            .flatMapLatest { (owner, page) ->
+                when {
+                    owner == null -> flowOf(emptyList())
+                    page?.initialized == true -> {
+                        // Older Android SQLite builds cap bind parameters at 999.
+                        val chunks = (page.taskIds + pinnedIds).toList().chunked(800).ifEmpty { listOf(emptyList()) }
+                        combine(chunks.map { db.taskDao().directoryMembers(owner, parent, it) }) { rows -> rows.flatMap { it }.distinctBy { it.id } }
+                    }
+                    else -> db.taskDao().directoryWindow(owner, parent, cacheLimit, pinnedIds)
+                }
+            }
+    fun observeDirectoryFolders(parent: String?): Flow<List<FolderEntity>> =
+        combine(currentOwnerId, directoryPages) { owner, pages -> owner to pages["directory:${parent ?: "root"}"] }
+            .flatMapLatest { (owner, page) ->
+                when {
+                    owner == null -> flowOf(emptyList())
+                    page?.initialized == true -> {
+                        val chunks = page.folderIds.toList().chunked(800).ifEmpty { listOf(emptyList()) }
+                        combine(chunks.map { db.folderDao().directoryMembers(owner, parent, it) }) { rows -> rows.flatMap { it }.distinctBy { it.id } }
+                    }
+                    else -> db.folderDao().getChildrenFlow(owner, parent)
+                }
+            }
     fun observeDirectoryCounts(parent: String?): Flow<DirectoryCounts> = currentOwnerId.flatMapLatest { owner ->
         owner?.let { db.taskDao().directoryCounts(it, parent) } ?: flowOf(DirectoryCounts())
     }
@@ -265,9 +294,9 @@ class MainViewModel(
 
     private fun restorePersistedSession(showOfflineMessage: Boolean) {
         if (!authManager.isLoggedIn) return
-        sessionRestoreJob?.cancel()
+        if (sessionRestoreJob?.isActive == true) return
         sessionRestoreJob = viewModelScope.launch(Dispatchers.IO) {
-            val restored = api.restoreSession()
+            val restored = api.restoreSessionAsync()
             if (!isActive) return@launch
             withContext(Dispatchers.Main.immediate) {
                 when {
@@ -474,7 +503,6 @@ class MainViewModel(
                     )
                     require(authManager.ownerId == ownerId) { "当前账户已变化" }
                 }
-                _messages.tryEmit("文件夹已创建")
             } catch (error: Exception) {
                 _messages.tryEmit(error.userMessage("创建文件夹失败"))
             }
@@ -510,7 +538,6 @@ class MainViewModel(
                         ownerId = ownerId,
                     )
                 }
-                _messages.tryEmit("文件夹已重命名")
                 onComplete?.invoke(true)
             } catch (error: CancellationException) {
                 throw error
@@ -586,7 +613,6 @@ class MainViewModel(
                 loadTodayData()
                 WidgetUpdater.refreshAll(authManager.appContext)
                 onComplete(null)
-                _messages.tryEmit("已保存到本地")
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -626,7 +652,6 @@ class MainViewModel(
                     )
                     require(authManager.ownerId == ownerId) { "当前账户已变化" }
                 }
-                _messages.tryEmit("任务已复制")
             } catch (error: Exception) {
                 _messages.tryEmit(error.userMessage("复制任务失败"))
             }
@@ -1516,7 +1541,6 @@ class MainViewModel(
                 }
                 loadTodayData()
                 onComplete?.invoke(null)
-                _messages.tryEmit("已安排到 $localDate")
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -1558,7 +1582,6 @@ class MainViewModel(
                 loadTodayData()
                 onComplete?.invoke(null)
                 onSuccess()
-                _messages.tryEmit("已安排到 $localDate")
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -1620,7 +1643,6 @@ class MainViewModel(
                     event
                 }
                 onComplete(point.id)
-                _messages.tryEmit("事件已创建")
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -1659,7 +1681,6 @@ class MainViewModel(
                     )
                 }
                 onComplete(true)
-                _messages.tryEmit("事件已保存")
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -1697,7 +1718,6 @@ class MainViewModel(
                     }
                 }
                 onComplete(true)
-                _messages.tryEmit("事件已标记为到达")
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -1735,7 +1755,6 @@ class MainViewModel(
                     }
                 }
                 onComplete(true)
-                _messages.tryEmit("事件已撤销到达")
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -1875,7 +1894,6 @@ class MainViewModel(
                 }
                 loadTodayData()
                 onComplete(true)
-                _messages.tryEmit("任务已加入安排")
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -1939,7 +1957,6 @@ class MainViewModel(
                 }
                 loadTodayData()
                 onComplete(true)
-                _messages.tryEmit(if (copy) "已添加另一份日期安排" else "安排已移动")
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -1964,7 +1981,6 @@ class MainViewModel(
                 }
                 loadTodayData()
                 onComplete(true)
-                _messages.tryEmit(if (copy) "已添加另一份事件安排" else "安排已移动")
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -2063,7 +2079,6 @@ class MainViewModel(
                     )
                 }
                 loadTodayData()
-                _messages.tryEmit("安排已移除")
             } catch (error: Exception) {
                 _messages.tryEmit(error.userMessage("移除安排失败"))
             }
@@ -2099,7 +2114,6 @@ class MainViewModel(
                         ownerId = ownerId,
                     )
                 }
-                _messages.tryEmit("设置已保存")
             } catch (error: Exception) {
                 _messages.tryEmit(error.userMessage("保存设置失败"))
             }
@@ -2338,15 +2352,25 @@ class MainViewModel(
         _pullRefreshing.value = true
         viewModelScope.launch {
             try {
-                activePageKey?.let { syncEngine.prioritizePage(it, force = true) }
-                when (val outcome = withTimeoutOrNull(15_000L) { syncEngine.triggerSync() }) {
+                val page = activePageKey
+                val outcome = withTimeoutOrNull(15_000L) {
+                    if (page?.startsWith("directory:") == true) {
+                        syncEngine.refreshDirectoryPage(page.removePrefix("directory:").takeUnless { it == "root" })
+                    } else {
+                        page?.let { syncEngine.prioritizePage(it, force = true) }
+                        syncEngine.triggerSync()
+                    }
+                }
+                when (outcome) {
                     null -> _messages.tryEmit("刷新仍在后台继续，已保留当前内容")
+                    SyncOutcome.Continuing -> Unit
                     SyncOutcome.Success -> {
                         loadTodayData()
                         WidgetUpdater.refreshAll(authManager.appContext)
                     }
                     is SyncOutcome.Failure -> _messages.tryEmit("同步失败：${outcome.message}")
                 }
+            } catch (cancelled: CancellationException) { throw cancelled
             } catch (error: Exception) {
                 _messages.tryEmit(error.userMessage("同步失败"))
             } finally {
@@ -2361,10 +2385,10 @@ class MainViewModel(
             _dataReady.value = false
             try {
                 when (val outcome = syncEngine.triggerSync()) {
+                    SyncOutcome.Continuing -> Unit
                     SyncOutcome.Success -> {
                         loadTodayData()
                         WidgetUpdater.refreshAll(authManager.appContext)
-                        _messages.tryEmit("同步成功")
                     }
                     is SyncOutcome.Failure -> _messages.tryEmit("同步失败：${outcome.message}")
                 }
@@ -2433,7 +2457,10 @@ class MainViewModel(
         onAppForeground()
         pullRefresh()
     }
-    fun prioritizeDirectory(folderId: String?) { syncEngine.prioritizeDirectory(folderId) }
+    fun prioritizeDirectory(folderId: String?) { activatePage("directory:${folderId ?: "root"}") }
+    fun loadMoreDirectory(folderId: String?) {
+        viewModelScope.launch { syncEngine.loadDirectoryPage(folderId, append = true) }
+    }
     fun exportLegacyCache(destination: android.net.Uri) {
         viewModelScope.launch {
             try { authManager.exportLegacyCache(destination); _messages.tryEmit("旧缓存与离线队列已导出；请妥善保管个人数据") }

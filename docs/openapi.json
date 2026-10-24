@@ -802,6 +802,14 @@
         }
       ],
       "get": {
+        "parameters": [
+          {
+            "name": "maxBytes",
+            "in": "query",
+            "description": "UTF-8 response target. Returns a contiguous change prefix and advances only to its last record. One oversized entity is allowed alone so progress is always possible.",
+            "schema": { "type": "integer", "minimum": 16384, "maximum": 1048576, "default": 524288 }
+          }
+        ],
         "responses": {
           "200": {
             "description": "TaskDock v2 GET /v2/sync/pull"

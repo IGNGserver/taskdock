@@ -27,6 +27,8 @@ interface ProjectDao {
 
 @Dao
 interface FolderDao {
+    @Query("SELECT * FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL AND archivedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent) AND (id IN (:ids) OR pendingSync = 1) ORDER BY CAST(rank AS INTEGER), id")
+    fun directoryMembers(ownerId: String, parent: String?, ids: List<String>): Flow<List<FolderEntity>>
     @Query("SELECT * FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL AND archivedAt IS NULL AND ((:parentFolderId IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parentFolderId) ORDER BY CAST(rank AS INTEGER) ASC, id ASC")
     fun getChildrenFlow(ownerId: String, parentFolderId: String?): Flow<List<FolderEntity>>
 
@@ -57,6 +59,8 @@ interface FolderDao {
 
 @Dao
 interface TaskDao {
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND deletedAt IS NULL AND archivedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent) AND (id IN (:ids) OR pendingSync = 1) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER), id")
+    fun directoryMembers(ownerId: String, parent: String?, ids: List<String>): Flow<List<TaskEntity>>
     @Query("SELECT EXISTS(SELECT 1 FROM tasks WHERE ownerId = :ownerId AND deletedAt IS NULL) OR EXISTS(SELECT 1 FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL)")
     fun hasCacheFlow(ownerId: String): Flow<Boolean>
     @Query("SELECT parentFolderId, status FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL")

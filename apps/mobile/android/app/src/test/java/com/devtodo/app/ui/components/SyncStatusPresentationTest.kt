@@ -19,6 +19,7 @@ class SyncStatusPresentationTest {
         pageError: String? = null,
         pendingCount: Int = 0,
         lastSyncError: String? = null,
+        pageVerified: Boolean = false,
     ) = resolveSyncBanner(
         state = state,
         progress = progress,
@@ -29,6 +30,7 @@ class SyncStatusPresentationTest {
         pendingCount = pendingCount,
         lastSyncError = lastSyncError,
         checkedLabel = checked,
+        pageVerified = pageVerified,
     )
 
     @Test
@@ -55,7 +57,7 @@ class SyncStatusPresentationTest {
     fun staleDataWhileCheckingIsDescribedAsCache() {
         val content = resolve(state = SyncState.SYNCING, recent = false, checking = true)
 
-        assertEquals(SyncBannerMode.WARNING, content.mode)
+        assertEquals(SyncBannerMode.COMPACT, content.mode)
         assertEquals("显示缓存 · 正在检查中枢更新", content.message)
         assertTrue(content.showProgress)
         assertFalse(content.showRetry)
@@ -86,7 +88,7 @@ class SyncStatusPresentationTest {
             recent = false,
         )
 
-        assertEquals(SyncBannerMode.WARNING, content.mode)
+        assertEquals(SyncBannerMode.COMPACT, content.mode)
         assertEquals("后台加载 1/3 批 · 已有数据可用", content.message)
         assertTrue(content.showProgress)
         assertFalse(content.showRetry)
@@ -96,8 +98,8 @@ class SyncStatusPresentationTest {
     fun pendingWorkStaysVisibleWithoutHidingFreshness() {
         val content = resolve(pendingCount = 2)
 
-        assertEquals(SyncBannerMode.WARNING, content.mode)
-        assertEquals("已核验中枢数据 · 2 项本地操作待处理", content.message)
+        assertEquals(SyncBannerMode.COMPACT, content.mode)
+        assertEquals("$checked · 2 项待同步", content.message)
         assertFalse(content.showRetry)
     }
 
@@ -150,5 +152,17 @@ class SyncStatusPresentationTest {
 
         assertEquals(SyncBannerMode.ERROR, content.mode)
         assertEquals("更新失败 · 已保留缓存，稍后自动重试", content.message)
+    }
+
+    @Test
+    fun verifiedPageDoesNotWaitForEntireAccountToBecomeFresh() {
+        val content = resolve(recent = false, progress = LoadProgress("cache"), pageVerified = true)
+        assertEquals(SyncBannerMode.COMPACT, content.mode)
+        assertFalse(content.message.contains("尚未核验"))
+    }
+
+    @Test
+    fun verifiedPageNeverHidesAuthenticationFailure() {
+        assertEquals(SyncBannerMode.ERROR, resolve(state = SyncState.AUTH_REQUIRED, pageVerified = true).mode)
     }
 }

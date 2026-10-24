@@ -39,10 +39,13 @@ fun SyncStatusBanner(viewModel: MainViewModel, pageKey: String) {
             delay(15_000)
         }
     }
-    val recent = isRecentlyConfirmed(confirmedAt, now)
+    val recent = isRecentlyConfirmed(confirmedAt, now, viewModel.freshnessWindowMs)
+    val pageVerified = page?.let { it.error == null && isRecentlyConfirmed(it.loadedAt, now, viewModel.freshnessWindowMs) } == true
     val checking = state == SyncState.SYNCING || page?.loading == true
     val checkedLabel =
-        if (confirmedAt > 0) {
+        if (pageVerified) {
+            "当前页面已更新"
+        } else if (confirmedAt > 0) {
             "上次核验 ${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(confirmedAt))}"
         } else {
             "尚未完成中枢核验"
@@ -57,6 +60,7 @@ fun SyncStatusBanner(viewModel: MainViewModel, pageKey: String) {
         pendingCount = pending.size,
         lastSyncError = error,
         checkedLabel = checkedLabel,
+        pageVerified = pageVerified,
     )
 
     if (content.mode == SyncBannerMode.COMPACT) {

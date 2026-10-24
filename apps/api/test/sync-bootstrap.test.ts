@@ -46,6 +46,54 @@ async function boot() {
 }
 
 describe('immutable progressive bootstrap', () => {
+  it('bounds HTTP incremental responses without skipping large notes or advancing past them', async () => {
+    const { app, headers } = await boot();
+    const before = (await app.inject({ url: '/api/v2/sync/status', headers })).json()
+      .cursor as string;
+    for (let index = 0; index < 2; index++) {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/v2/tasks',
+        headers: { ...headers, 'idempotency-key': randomUUID() },
+        payload: { id: randomUUID(), title: `budget-${index}` },
+      });
+      expect(created.statusCode).toBe(201);
+      const updated = await app.inject({
+        method: 'PATCH',
+        url: `/api/v2/tasks/${created.json().task.id}/note`,
+        headers: { ...headers, 'idempotency-key': randomUUID() },
+        payload: { baseVersion: created.json().note.version, contentMarkdown: '待办'.repeat(4000) },
+      });
+      expect(updated.statusCode).toBe(200);
+    }
+    const full = (await app.inject({ url: `/api/v2/sync/pull?cursor=${before}`, headers })).json();
+    const collected: unknown[] = [];
+    let cursor = before;
+    let complete = false;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const response = await app.inject({
+        url: `/api/v2/sync/pull?cursor=${cursor}&maxBytes=16384`,
+        headers,
+      });
+      expect(response.statusCode).toBe(200);
+      const page = response.json();
+      collected.push(...page.changes);
+      expect(BigInt(page.nextCursor)).toBeGreaterThan(BigInt(cursor));
+      if (Buffer.byteLength(response.body) > 16384) expect(page.changes).toHaveLength(1);
+      cursor = page.nextCursor;
+      if (!page.hasMore) {
+        complete = true;
+        break;
+      }
+    }
+    expect(complete).toBe(true);
+    expect(collected).toEqual(full.changes);
+    expect(cursor).toBe(full.nextCursor);
+    expect((await app.inject({ url: '/api/v2/sync/pull?maxBytes=1', headers })).statusCode).toBe(
+      400,
+    );
+  });
+
   it('reads Today without creating dates or advancing the account revision', async () => {
     const { app, headers } = await boot();
     const before = (await app.inject({ url: '/api/v2/sync/status', headers })).json();

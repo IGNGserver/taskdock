@@ -105,7 +105,12 @@ fun TaskDockApp(
         }
     }
 
-    LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
+    LaunchedEffect(viewModel) {
+        viewModel.messages.collectLatest {
+            snackbar.currentSnackbarData?.dismiss()
+            snackbar.showSnackbar(it)
+        }
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.statusChanges.collectLatest { change ->
