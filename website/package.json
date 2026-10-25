@@ -1,0 +1,8 @@
+{
+  "name": "taskdock-website",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  }
+}
