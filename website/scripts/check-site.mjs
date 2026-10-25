@@ -7,7 +7,9 @@ import { join, dirname, relative, extname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const root = resolve(process.argv[2] || resolve(dirname(fileURLToPath(import.meta.url)), '..', 'site'));
+const root = resolve(
+  process.argv[2] || resolve(dirname(fileURLToPath(import.meta.url)), '..', 'site'),
+);
 const errors = [];
 const fail = (file, msg) => errors.push(`${relative(root, file) || file}: ${msg}`);
 
@@ -46,7 +48,8 @@ for (const page of pages) {
   for (const m of html.matchAll(/<(script|link)\b[^>]*\s(?:src|href)="(https?:)?\/\/[^"]*"/g)) {
     if (m[1] === 'script' || /rel="stylesheet"/.test(m[0])) fail(page, `引用了外部资源：${m[0]}`);
   }
-  if (/<script(?![^>]*\bsrc=)[^>]*>\s*\S/.test(html)) fail(page, '存在内联脚本（CSP 只允许站内脚本文件）');
+  if (/<script(?![^>]*\bsrc=)[^>]*>\s*\S/.test(html))
+    fail(page, '存在内联脚本（CSP 只允许站内脚本文件）');
 
   // 站内链接、资源与锚点
   for (const m of html.matchAll(/\s(?:href|src)="([^"]+)"/g)) {
@@ -59,7 +62,8 @@ for (const page of pages) {
     let target = page;
     if (path) {
       const base = path.startsWith('/') ? join(root, path) : join(dirname(page), path);
-      target = path.endsWith('/') || path === '.' || path === './' ? join(base, 'index.html') : base;
+      target =
+        path.endsWith('/') || path === '.' || path === './' ? join(base, 'index.html') : base;
       if (!existsSync(target)) {
         fail(page, `链接目标不存在：${ref}`);
         continue;
@@ -73,7 +77,9 @@ for (const page of pages) {
 
 // 脚本语法（ES module）
 for (const js of files.filter((f) => extname(f) === '.js')) {
-  const r = spawnSync(process.execPath, ['--input-type=module', '--check'], { input: readFileSync(js) });
+  const r = spawnSync(process.execPath, ['--input-type=module', '--check'], {
+    input: readFileSync(js),
+  });
   if (r.status !== 0) fail(js, `语法错误\n${r.stderr.toString()}`);
 }
 
@@ -98,4 +104,6 @@ if (errors.length) {
   console.error(`\n站点检查失败：${errors.length} 项`);
   process.exit(1);
 }
-console.log(`site check passed: ${pages.length} pages, ${files.length} files, ${(total / 1024).toFixed(0)} KB`);
+console.log(
+  `site check passed: ${pages.length} pages, ${files.length} files, ${(total / 1024).toFixed(0)} KB`,
+);
