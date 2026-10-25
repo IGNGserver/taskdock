@@ -1,275 +1,540 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>下载与部署 — TaskDock</title>
-  <meta name="description" content="用 Docker 部署 TaskDock 中枢，在浏览器中直接使用网页端，或从 GitHub Releases 下载 Android 客户端。">
-  <meta name="theme-color" content="#0a1124">
-  <meta name="color-scheme" content="dark">
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="TaskDock">
-  <meta property="og:title" content="下载与部署 — TaskDock">
-  <meta property="og:description" content="Docker 部署中枢，网页端随中枢提供，Android 客户端在 GitHub Releases。">
-  <link rel="canonical" href="https://taskdock.igng.net/download">
-  <meta property="og:url" content="https://taskdock.igng.net/download">
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/img/taskdock-icon-32.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="assets/img/taskdock-icon-192.png">
-  <link rel="apple-touch-icon" href="assets/img/taskdock-icon-180.png">
-  <link rel="stylesheet" href="assets/css/site.css">
-  <script type="module" src="assets/js/main.js"></script>
-</head>
-<body data-page="download">
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-    <defs>
-      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-      <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v13M6 11l6 6 6-6M5 20.5h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-      <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.58 9.58 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></symbol>
-      <symbol id="i-copy" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></g></symbol>
-      <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4.5h5.5V10M19.5 4.5 11 13M17 14v4a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 18V8.5A1.5 1.5 0 0 1 6.5 7H10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-      <symbol id="i-warn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 4 2.8 19.5h18.4Z" stroke-linejoin="round"/><path d="M12 10v4.5M12 17.2v.1"/></g></symbol>
-    </defs>
-  </svg>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>下载与部署 — TaskDock</title>
+    <meta
+      name="description"
+      content="用 Docker 部署 TaskDock 中枢，在浏览器中直接使用网页端，或从 GitHub Releases 下载 Android 客户端。"
+    />
+    <meta name="theme-color" content="#0a1124" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="TaskDock" />
+    <meta property="og:title" content="下载与部署 — TaskDock" />
+    <meta
+      property="og:description"
+      content="Docker 部署中枢，网页端随中枢提供，Android 客户端在 GitHub Releases。"
+    />
+    <link rel="canonical" href="https://taskdock.igng.net/download" />
+    <meta property="og:url" content="https://taskdock.igng.net/download" />
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/img/taskdock-icon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/img/taskdock-icon-192.png" />
+    <link rel="apple-touch-icon" href="assets/img/taskdock-icon-180.png" />
+    <link rel="stylesheet" href="assets/css/site.css" />
+    <script type="module" src="assets/js/main.js"></script>
+  </head>
+  <body data-page="download">
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+      <defs>
+        <symbol id="i-arrow" viewBox="0 0 24 24">
+          <path
+            d="M5 12h14M13 6l6 6-6 6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-down" viewBox="0 0 24 24">
+          <path
+            d="M12 4v13M6 11l6 6 6-6M5 20.5h14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-github" viewBox="0 0 24 24">
+          <path
+            fill="currentColor"
+            d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.58 9.58 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"
+          />
+        </symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="8.5" y="8.5" width="11" height="11" rx="2" />
+            <path
+              d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"
+            />
+          </g>
+        </symbol>
+        <symbol id="i-ext" viewBox="0 0 24 24">
+          <path
+            d="M14 4.5h5.5V10M19.5 4.5 11 13M17 14v4a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 18V8.5A1.5 1.5 0 0 1 6.5 7H10"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-warn" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <path d="M12 4 2.8 19.5h18.4Z" stroke-linejoin="round" />
+            <path d="M12 10v4.5M12 17.2v.1" />
+          </g>
+        </symbol>
+      </defs>
+    </svg>
 
-  <a class="skip-link" href="#main">跳到正文</a>
+    <a class="skip-link" href="#main">跳到正文</a>
 
-  <header class="site-header" data-header>
-    <div class="wrap header-inner">
-      <a class="brand" href="./" aria-label="TaskDock 首页">
-        <img src="assets/img/taskdock-icon-96.png" width="30" height="30" alt="">
-        <span>TaskDock</span>
-      </a>
-      <nav class="site-nav" id="site-nav" aria-label="主导航">
-        <a href="./#model">数据模型</a>
-        <a href="./#time">日程</a>
-        <a href="./#offline">离线同步</a>
-        <a href="./#selfhost">自托管</a>
-        <a href="download.html" aria-current="page">下载与部署</a>
-      </nav>
-      <div class="header-actions">
-        <a class="icon-link" href="https://github.com/IGNGserver/taskdock" aria-label="在 GitHub 查看 TaskDock 源码"><svg aria-hidden="true"><use href="#i-github"/></svg></a>
-        <a class="btn btn-primary btn-small" href="#deploy">开始部署</a>
-        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开菜单" data-menu-toggle><span></span><span></span><span></span></button>
-      </div>
-    </div>
-  </header>
-
-  <main id="main">
-    <section class="page-hero">
-      <div class="wrap">
-        <p class="eyebrow reveal"><span class="dot"></span>下载与部署</p>
-        <h1 class="reveal">先部署中枢，<br>再从任何设备打开。</h1>
-        <p class="lead reveal">TaskDock 由一个自托管中枢和若干客户端组成。中枢用 Docker 运行，网页端随中枢一起提供；Android 客户端从 GitHub Releases 下载。</p>
-
-        <div class="release-card reveal">
-          <span class="tag" data-release-tag>v2.0.0-rc.37</span>
-          <span><span data-release-channel>预览版</span> · 发布于 <span data-release-date>2026年10月13日</span><br><span class="note">当前发布均为预发布版本，正式使用前请先备份数据。</span></span>
-          <a href="https://github.com/IGNGserver/taskdock/releases" data-release-link>发布说明</a>
+    <header class="site-header" data-header>
+      <div class="wrap header-inner">
+        <a class="brand" href="./" aria-label="TaskDock 首页">
+          <img src="assets/img/taskdock-icon-96.png" width="30" height="30" alt="" />
+          <span>TaskDock</span>
+        </a>
+        <nav class="site-nav" id="site-nav" aria-label="主导航">
+          <a href="./#model">数据模型</a>
+          <a href="./#time">日程</a>
+          <a href="./#offline">离线同步</a>
+          <a href="./#selfhost">自托管</a>
+          <a href="download.html" aria-current="page">下载与部署</a>
+        </nav>
+        <div class="header-actions">
+          <a
+            class="icon-link"
+            href="https://github.com/IGNGserver/taskdock"
+            aria-label="在 GitHub 查看 TaskDock 源码"
+            ><svg aria-hidden="true"><use href="#i-github" /></svg
+          ></a>
+          <a class="btn btn-primary btn-small" href="#deploy">开始部署</a>
+          <button
+            class="menu-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="site-nav"
+            aria-label="打开菜单"
+            data-menu-toggle
+          >
+            <span></span><span></span><span></span>
+          </button>
         </div>
       </div>
-    </section>
+    </header>
 
-    <section class="section" style="padding-top:0" aria-label="获取方式">
-      <div class="wrap channels">
-        <article class="channel is-primary reveal" style="--d:0">
-          <span class="kind">01 · 中枢</span>
-          <h2>Docker 镜像</h2>
-          <p>运行在 NAS、家用服务器或云主机上。镜像发布在 GitHub Container Registry，服务器上不需要源码，也不需要 Node.js。</p>
-          <div class="codeline"><code id="image-ref" data-image-text>ghcr.io/igngserver/taskdock:2.0.0-rc.37</code><button class="copy-btn" type="button" data-copy="image-ref"><svg aria-hidden="true"><use href="#i-copy"/></svg><span>复制</span></button></div>
-          <div class="actions">
-            <a class="btn btn-primary btn-small" href="#deploy">按步骤部署<svg class="arrow" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-            <a class="btn btn-small" href="https://github.com/IGNGserver/taskdock/blob/master/compose.yaml">compose.yaml</a>
-          </div>
-        </article>
-        <article class="channel reveal" style="--d:1">
-          <span class="kind">02 · 网页</span>
-          <h2>浏览器 / PWA</h2>
-          <p>中枢启动后，用浏览器打开你配置的 <code class="inline-code">APP_ORIGIN</code> 地址就能使用，无需安装客户端。使用 HTTPS 时可以安装为 PWA 并离线打开。</p>
-          <div class="actions"><span class="chip">默认 http://服务器地址:48731</span></div>
-        </article>
-        <article class="channel reveal" style="--d:2">
-          <span class="kind">03 · 手机</span>
-          <h2>Android</h2>
-          <p>原生客户端，登录时填写你的中枢地址。APK 附在每个 Release 中，由发布流程构建并签名。</p>
-          <div class="actions">
-            <a class="btn btn-small" href="https://github.com/IGNGserver/taskdock/releases" data-apk-link><svg aria-hidden="true"><use href="#i-down"/></svg>下载 APK</a>
-          </div>
-          <span class="ref" data-apk-name>TaskDock-2.0.0-rc.37-android.apk</span>
-        </article>
-      </div>
-    </section>
+    <main id="main">
+      <section class="page-hero">
+        <div class="wrap">
+          <p class="eyebrow reveal"><span class="dot"></span>下载与部署</p>
+          <h1 class="reveal">先部署中枢，<br />再从任何设备打开。</h1>
+          <p class="lead reveal">
+            TaskDock 由一个自托管中枢和若干客户端组成。中枢用 Docker
+            运行，网页端随中枢一起提供；Android 客户端从 GitHub Releases 下载。
+          </p>
 
-    <section class="section" id="deploy" aria-labelledby="deploy-title" style="padding-top:clamp(40px,6vw,80px)">
-      <div class="wrap">
-        <div class="section-head">
-          <p class="eyebrow reveal"><span class="idx">部署</span>五步完成</p>
-          <h2 class="reveal" id="deploy-title">用 Docker Compose<br>部署中枢。</h2>
-          <p class="lead reveal">以下步骤与产品仓库的 README 和部署说明一致。服务器只需要 Docker 与 Docker Compose。</p>
+          <div class="release-card reveal">
+            <span class="tag" data-release-tag>v2.0.0-rc.37</span>
+            <span
+              ><span data-release-channel>预览版</span> · 发布于
+              <span data-release-date>2026年10月13日</span><br /><span class="note"
+                >当前发布均为预发布版本，正式使用前请先备份数据。</span
+              ></span
+            >
+            <a href="https://github.com/IGNGserver/taskdock/releases" data-release-link>发布说明</a>
+          </div>
         </div>
+      </section>
 
-        <div class="steps-rail" data-rail>
-          <span class="rail-line" aria-hidden="true"><b data-rail-fill></b></span>
-
-          <div class="rail-step">
-            <span class="num">1</span>
-            <div class="body">
-              <h3>准备文件</h3>
-              <p>在服务器上建一个空目录，下载 <a class="inline-code" href="https://github.com/IGNGserver/taskdock/blob/master/compose.yaml">compose.yaml</a> 和 <a class="inline-code" href="https://github.com/IGNGserver/taskdock/blob/master/.env.example">.env.example</a>，然后复制一份环境变量文件。</p>
-              <div class="codeline"><code id="cmd-env">cp .env.example .env</code><button class="copy-btn" type="button" data-copy="cmd-env"><svg aria-hidden="true"><use href="#i-copy"/></svg><span>复制</span></button></div>
+      <section class="section" style="padding-top: 0" aria-label="获取方式">
+        <div class="wrap channels">
+          <article class="channel is-primary reveal" style="--d: 0">
+            <span class="kind">01 · 中枢</span>
+            <h2>Docker 镜像</h2>
+            <p>
+              运行在 NAS、家用服务器或云主机上。镜像发布在 GitHub Container
+              Registry，服务器上不需要源码，也不需要 Node.js。
+            </p>
+            <div class="codeline">
+              <code id="image-ref" data-image-text>ghcr.io/igngserver/taskdock:2.0.0-rc.37</code
+              ><button class="copy-btn" type="button" data-copy="image-ref">
+                <svg aria-hidden="true"><use href="#i-copy" /></svg><span>复制</span>
+              </button>
             </div>
+            <div class="actions">
+              <a class="btn btn-primary btn-small" href="#deploy"
+                >按步骤部署<svg class="arrow" aria-hidden="true"><use href="#i-arrow" /></svg
+              ></a>
+              <a
+                class="btn btn-small"
+                href="https://github.com/IGNGserver/taskdock/blob/master/compose.yaml"
+                >compose.yaml</a
+              >
+            </div>
+          </article>
+          <article class="channel reveal" style="--d: 1">
+            <span class="kind">02 · 网页</span>
+            <h2>浏览器 / PWA</h2>
+            <p>
+              中枢启动后，用浏览器打开你配置的
+              <code class="inline-code">APP_ORIGIN</code> 地址就能使用，无需安装客户端。使用 HTTPS
+              时可以安装为 PWA 并离线打开。
+            </p>
+            <div class="actions"><span class="chip">默认 http://服务器地址:48731</span></div>
+          </article>
+          <article class="channel reveal" style="--d: 2">
+            <span class="kind">03 · 手机</span>
+            <h2>Android</h2>
+            <p>
+              原生客户端，登录时填写你的中枢地址。APK 附在每个 Release 中，由发布流程构建并签名。
+            </p>
+            <div class="actions">
+              <a
+                class="btn btn-small"
+                href="https://github.com/IGNGserver/taskdock/releases"
+                data-apk-link
+                ><svg aria-hidden="true"><use href="#i-down" /></svg>下载 APK</a
+              >
+            </div>
+            <span class="ref" data-apk-name>TaskDock-2.0.0-rc.37-android.apk</span>
+          </article>
+        </div>
+      </section>
+
+      <section
+        class="section"
+        id="deploy"
+        aria-labelledby="deploy-title"
+        style="padding-top: clamp(40px, 6vw, 80px)"
+      >
+        <div class="wrap">
+          <div class="section-head">
+            <p class="eyebrow reveal"><span class="idx">部署</span>五步完成</p>
+            <h2 class="reveal" id="deploy-title">用 Docker Compose<br />部署中枢。</h2>
+            <p class="lead reveal">
+              以下步骤与产品仓库的 README 和部署说明一致。服务器只需要 Docker 与 Docker Compose。
+            </p>
           </div>
 
-          <div class="rail-step">
-            <span class="num">2</span>
-            <div class="body">
-              <h3>填写 .env</h3>
-              <p>至少填写下面这些项。随机密钥可以用 <code>openssl rand -base64 48</code> 生成；真实密钥不要提交到 Git。</p>
-              <div class="table-wrap">
-                <table class="env-table">
-                  <thead><tr><th scope="col">变量</th><th scope="col">说明</th></tr></thead>
-                  <tbody>
-                    <tr><td><code>TASKDOCK_PORT</code></td><td>对外 HTTP 端口，默认 <code class="inline-code">48731</code>；被占用时可以换成其他五位端口。</td></tr>
-                    <tr><td><code>APP_ORIGIN</code></td><td>访问 TaskDock 的完整地址，例如 <code class="inline-code">https://tasks.example.com</code> 或 <code class="inline-code">http://192.168.1.10:48731</code>。</td></tr>
-                    <tr><td><code>CORS_ALLOWED_ORIGINS</code></td><td>允许访问的前端地址，通常与 <code class="inline-code">APP_ORIGIN</code> 相同。</td></tr>
-                    <tr><td><code>POSTGRES_PASSWORD</code></td><td>数据库密码。</td></tr>
-                    <tr><td><code>BOOTSTRAP_TOKEN</code></td><td>首次初始化 Owner 用的一次性令牌，只在部署端使用，客户端不会要求填写。</td></tr>
-                    <tr><td><code>OWNER_USERNAME</code><br><code>OWNER_PASSWORD</code></td><td>首次初始化的 Owner 账号。密码至少 6 位。</td></tr>
-                    <tr><td><code>ACCESS_TOKEN_SECRET</code></td><td>访问令牌密钥。</td></tr>
-                    <tr><td><code>REFRESH_TOKEN_PEPPER</code></td><td>刷新令牌保护密钥。</td></tr>
-                  </tbody>
-                </table>
+          <div class="steps-rail" data-rail>
+            <span class="rail-line" aria-hidden="true"><b data-rail-fill></b></span>
+
+            <div class="rail-step">
+              <span class="num">1</span>
+              <div class="body">
+                <h3>准备文件</h3>
+                <p>
+                  在服务器上建一个空目录，下载
+                  <a
+                    class="inline-code"
+                    href="https://github.com/IGNGserver/taskdock/blob/master/compose.yaml"
+                    >compose.yaml</a
+                  >
+                  和
+                  <a
+                    class="inline-code"
+                    href="https://github.com/IGNGserver/taskdock/blob/master/.env.example"
+                    >.env.example</a
+                  >，然后复制一份环境变量文件。
+                </p>
+                <div class="codeline">
+                  <code id="cmd-env">cp .env.example .env</code
+                  ><button class="copy-btn" type="button" data-copy="cmd-env">
+                    <svg aria-hidden="true"><use href="#i-copy" /></svg><span>复制</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="rail-step">
-            <span class="num">3</span>
-            <div class="body">
-              <h3>选择版本并启动</h3>
-              <p>使用明确的版本号，方便升级和回滚。下面的版本号是当前最新发布。</p>
-              <div class="term" data-term>
-                <div class="term-bar">
-                  <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-                  <span class="term-tab is-label">启动</span>
-                  <button class="copy-btn" type="button" data-copy-term><svg aria-hidden="true"><use href="#i-copy"/></svg><span>复制</span></button>
+            <div class="rail-step">
+              <span class="num">2</span>
+              <div class="body">
+                <h3>填写 .env</h3>
+                <p>
+                  至少填写下面这些项。随机密钥可以用
+                  <code>openssl rand -base64 48</code> 生成；真实密钥不要提交到 Git。
+                </p>
+                <div class="table-wrap">
+                  <table class="env-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">变量</th>
+                        <th scope="col">说明</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><code>TASKDOCK_PORT</code></td>
+                        <td>
+                          对外 HTTP 端口，默认
+                          <code class="inline-code">48731</code>；被占用时可以换成其他五位端口。
+                        </td>
+                      </tr>
+                      <tr>
+                        <td><code>APP_ORIGIN</code></td>
+                        <td>
+                          访问 TaskDock 的完整地址，例如
+                          <code class="inline-code">https://tasks.example.com</code> 或
+                          <code class="inline-code">http://192.168.1.10:48731</code>。
+                        </td>
+                      </tr>
+                      <tr>
+                        <td><code>CORS_ALLOWED_ORIGINS</code></td>
+                        <td>
+                          允许访问的前端地址，通常与
+                          <code class="inline-code">APP_ORIGIN</code> 相同。
+                        </td>
+                      </tr>
+                      <tr>
+                        <td><code>POSTGRES_PASSWORD</code></td>
+                        <td>数据库密码。</td>
+                      </tr>
+                      <tr>
+                        <td><code>BOOTSTRAP_TOKEN</code></td>
+                        <td>
+                          首次初始化 Owner 用的一次性令牌，只在部署端使用，客户端不会要求填写。
+                        </td>
+                      </tr>
+                      <tr>
+                        <td><code>OWNER_USERNAME</code><br /><code>OWNER_PASSWORD</code></td>
+                        <td>首次初始化的 Owner 账号。密码至少 6 位。</td>
+                      </tr>
+                      <tr>
+                        <td><code>ACCESS_TOKEN_SECRET</code></td>
+                        <td>访问令牌密钥。</td>
+                      </tr>
+                      <tr>
+                        <td><code>REFRESH_TOKEN_PEPPER</code></td>
+                        <td>刷新令牌保护密钥。</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
-<pre><span class="pr">$ </span>export APP_VERSION=<span class="vr" data-version-text>2.0.0-rc.37</span>
+              </div>
+            </div>
+
+            <div class="rail-step">
+              <span class="num">3</span>
+              <div class="body">
+                <h3>选择版本并启动</h3>
+                <p>使用明确的版本号，方便升级和回滚。下面的版本号是当前最新发布。</p>
+                <div class="term" data-term>
+                  <div class="term-bar">
+                    <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                    <span class="term-tab is-label">启动</span>
+                    <button class="copy-btn" type="button" data-copy-term>
+                      <svg aria-hidden="true"><use href="#i-copy" /></svg><span>复制</span>
+                    </button>
+                  </div>
+                  <pre><span class="pr">$ </span>export APP_VERSION=<span class="vr" data-version-text>2.0.0-rc.37</span>
 <span class="pr">$ </span>docker compose pull
 <span class="pr">$ </span>docker compose --profile operations run --rm migrate
 <span class="pr">$ </span>docker compose up -d
 <span class="cm"># 检查就绪状态（使用 HTTPS 或自定义端口时按 APP_ORIGIN 修改）</span>
 <span class="pr">$ </span>curl -fsS http://服务器地址:48731/health/ready</pre>
+                </div>
+                <div class="callout">
+                  <svg aria-hidden="true"><use href="#i-warn" /></svg
+                  ><span
+                    ><code>latest</code> 只指向正式稳定版本，不会指向预发布版本。要使用 2.0
+                    预览版，请写明确的版本号；生产环境同样建议固定版本。</span
+                  >
+                </div>
               </div>
-              <div class="callout"><svg aria-hidden="true"><use href="#i-warn"/></svg><span><code>latest</code> 只指向正式稳定版本，不会指向预发布版本。要使用 2.0 预览版，请写明确的版本号；生产环境同样建议固定版本。</span></div>
             </div>
-          </div>
 
-          <div class="rail-step">
-            <span class="num">4</span>
-            <div class="body">
-              <h3>初始化 Owner</h3>
-              <p>TaskDock 是单用户设计。由部署端执行一次初始化，读取 <code>.env</code> 里的 Owner 账号与 <code>BOOTSTRAP_TOKEN</code>。</p>
-              <div class="codeline"><code id="cmd-boot">docker compose --profile operations run --rm bootstrap</code><button class="copy-btn" type="button" data-copy="cmd-boot"><svg aria-hidden="true"><use href="#i-copy"/></svg><span>复制</span></button></div>
-              <div class="callout"><svg aria-hidden="true"><use href="#i-warn"/></svg><span>初始化成功后，从 <code>.env</code> 中删除 <code>OWNER_PASSWORD</code>，并删除或轮换 <code>BOOTSTRAP_TOKEN</code>。</span></div>
+            <div class="rail-step">
+              <span class="num">4</span>
+              <div class="body">
+                <h3>初始化 Owner</h3>
+                <p>
+                  TaskDock 是单用户设计。由部署端执行一次初始化，读取 <code>.env</code> 里的 Owner
+                  账号与 <code>BOOTSTRAP_TOKEN</code>。
+                </p>
+                <div class="codeline">
+                  <code id="cmd-boot">docker compose --profile operations run --rm bootstrap</code
+                  ><button class="copy-btn" type="button" data-copy="cmd-boot">
+                    <svg aria-hidden="true"><use href="#i-copy" /></svg><span>复制</span>
+                  </button>
+                </div>
+                <div class="callout">
+                  <svg aria-hidden="true"><use href="#i-warn" /></svg
+                  ><span
+                    >初始化成功后，从 <code>.env</code> 中删除
+                    <code>OWNER_PASSWORD</code>，并删除或轮换 <code>BOOTSTRAP_TOKEN</code>。</span
+                  >
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div class="rail-step">
-            <span class="num">5</span>
-            <div class="body">
-              <h3>打开并登录</h3>
-              <p>浏览器访问 <code>APP_ORIGIN</code> 并登录；Android 客户端安装后填写同一个中枢地址。HTTP 地址可以使用，但页面会显示安全警告，密码与会话信息会明文传输。公网环境请使用 HTTPS：需要反向代理时，可以启用 Compose 中的 <code>gateway</code>（Caddy）profile，注意不要让两个服务占用同一个宿主机端口。</p>
+            <div class="rail-step">
+              <span class="num">5</span>
+              <div class="body">
+                <h3>打开并登录</h3>
+                <p>
+                  浏览器访问 <code>APP_ORIGIN</code> 并登录；Android
+                  客户端安装后填写同一个中枢地址。HTTP
+                  地址可以使用，但页面会显示安全警告，密码与会话信息会明文传输。公网环境请使用
+                  HTTPS：需要反向代理时，可以启用 Compose 中的
+                  <code>gateway</code>（Caddy）profile，注意不要让两个服务占用同一个宿主机端口。
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="section" aria-labelledby="ops-title" style="padding-top:clamp(40px,6vw,80px)">
+      <section
+        class="section"
+        aria-labelledby="ops-title"
+        style="padding-top: clamp(40px, 6vw, 80px)"
+      >
+        <div class="wrap">
+          <div class="section-head">
+            <p class="eyebrow reveal"><span class="idx">运维</span>升级、回滚与版本</p>
+            <h2 class="reveal" id="ops-title">升级前，先备份。</h2>
+          </div>
+          <div class="rules">
+            <div class="rule reveal" style="--d: 0">
+              <h3>升级</h3>
+              <p>
+                按备份与恢复文档生成并校验备份，再把 <code>APP_VERSION</code> 改成目标版本，依次执行
+                <code>pull</code>、<code>migrate</code>、<code>up -d</code>。
+              </p>
+            </div>
+            <div class="rule reveal" style="--d: 1">
+              <h3>回滚</h3>
+              <p>
+                把
+                <code>APP_VERSION</code>
+                改回上一个版本，并根据备份恢复文档处理数据库。不要直接删除旧的数据库卷。
+              </p>
+            </div>
+            <div class="rule reveal" style="--d: 2">
+              <h3>预览版与正式版</h3>
+              <p>
+                版本号遵循语义化版本。普通发布默认是预发布版本，例如
+                <code>2.0.0-rc.37</code>；只有明确选择正式发布时，才会生成正式 Release。
+              </p>
+            </div>
+            <div class="rule reveal" style="--d: 3">
+              <h3>每个版本都有说明</h3>
+              <p>
+                每次发布都会在 GitHub Release 中用中文写明更新内容、已知问题和安装包状态。Docker
+                镜像单独发布在 GHCR，不是 Release 附件。
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="section"
+        aria-labelledby="docs-title"
+        style="padding-top: clamp(40px, 6vw, 80px)"
+      >
+        <div class="wrap">
+          <div class="section-head">
+            <p class="eyebrow reveal"><span class="idx">文档</span>产品仓库</p>
+            <h2 class="reveal" id="docs-title">更多细节，<br />以产品仓库为准。</h2>
+          </div>
+          <div class="doc-links">
+            <a
+              class="doc-link reveal"
+              href="https://github.com/IGNGserver/taskdock/blob/master/docs/DEPLOYMENT.md"
+              ><span><b>部署说明</b><span>Compose、端口、HTTPS 与健康检查</span></span
+              ><svg aria-hidden="true"><use href="#i-ext" /></svg
+            ></a>
+            <a
+              class="doc-link reveal"
+              href="https://github.com/IGNGserver/taskdock/blob/master/docs/BACKUP_RESTORE.md"
+              ><span><b>备份与恢复</b><span>升级前必读</span></span
+              ><svg aria-hidden="true"><use href="#i-ext" /></svg
+            ></a>
+            <a
+              class="doc-link reveal"
+              href="https://github.com/IGNGserver/taskdock/blob/master/docs/SECURITY.md"
+              ><span><b>安全说明</b><span>令牌、会话与凭据保存</span></span
+              ><svg aria-hidden="true"><use href="#i-ext" /></svg
+            ></a>
+            <a
+              class="doc-link reveal"
+              href="https://github.com/IGNGserver/taskdock/blob/master/docs/SYNC_PROTOCOL.md"
+              ><span><b>同步协议</b><span>待同步队列、游标与冲突</span></span
+              ><svg aria-hidden="true"><use href="#i-ext" /></svg
+            ></a>
+            <a
+              class="doc-link reveal"
+              href="https://github.com/IGNGserver/taskdock/blob/master/docs/RELEASING.md"
+              ><span><b>发布规范</b><span>版本号与发布渠道</span></span
+              ><svg aria-hidden="true"><use href="#i-ext" /></svg
+            ></a>
+            <a
+              class="doc-link reveal"
+              href="https://github.com/IGNGserver/taskdock/blob/master/CHANGELOG.md"
+              ><span><b>更新日志</b><span>每个版本改了什么</span></span
+              ><svg aria-hidden="true"><use href="#i-ext" /></svg
+            ></a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
       <div class="wrap">
-        <div class="section-head">
-          <p class="eyebrow reveal"><span class="idx">运维</span>升级、回滚与版本</p>
-          <h2 class="reveal" id="ops-title">升级前，先备份。</h2>
+        <div class="footer-grid">
+          <div class="footer-brand">
+            <a class="brand" href="./"
+              ><img src="assets/img/taskdock-icon-96.png" width="30" height="30" alt="" /><span
+                >TaskDock</span
+              ></a
+            >
+            <p>为个人开发者准备的自托管、离线优先任务工作台。单用户，数据只属于你。</p>
+          </div>
+          <div>
+            <h4>产品</h4>
+            <ul>
+              <li><a href="./#model">数据模型</a></li>
+              <li><a href="./#time">日期与时间点</a></li>
+              <li><a href="./#offline">离线同步</a></li>
+              <li><a href="./#selfhost">自托管</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4>文档</h4>
+            <ul>
+              <li>
+                <a href="https://github.com/IGNGserver/taskdock/blob/master/docs/DEPLOYMENT.md"
+                  >部署说明</a
+                >
+              </li>
+              <li>
+                <a href="https://github.com/IGNGserver/taskdock/blob/master/docs/BACKUP_RESTORE.md"
+                  >备份与恢复</a
+                >
+              </li>
+              <li>
+                <a href="https://github.com/IGNGserver/taskdock/blob/master/docs/SECURITY.md"
+                  >安全说明</a
+                >
+              </li>
+              <li>
+                <a href="https://github.com/IGNGserver/taskdock/blob/master/docs/SYNC_PROTOCOL.md"
+                  >同步协议</a
+                >
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h4>获取</h4>
+            <ul>
+              <li><a href="download.html">下载与部署</a></li>
+              <li><a href="https://github.com/IGNGserver/taskdock/releases">GitHub Releases</a></li>
+              <li><a href="https://github.com/IGNGserver/taskdock">产品源码</a></li>
+              <li><a href="https://github.com/IGNGserver/taskdock-website">官网源码</a></li>
+            </ul>
+          </div>
         </div>
-        <div class="rules">
-          <div class="rule reveal" style="--d:0">
-            <h3>升级</h3>
-            <p>按备份与恢复文档生成并校验备份，再把 <code>APP_VERSION</code> 改成目标版本，依次执行 <code>pull</code>、<code>migrate</code>、<code>up -d</code>。</p>
-          </div>
-          <div class="rule reveal" style="--d:1">
-            <h3>回滚</h3>
-            <p>把 <code>APP_VERSION</code> 改回上一个版本，并根据备份恢复文档处理数据库。不要直接删除旧的数据库卷。</p>
-          </div>
-          <div class="rule reveal" style="--d:2">
-            <h3>预览版与正式版</h3>
-            <p>版本号遵循语义化版本。普通发布默认是预发布版本，例如 <code>2.0.0-rc.37</code>；只有明确选择正式发布时，才会生成正式 Release。</p>
-          </div>
-          <div class="rule reveal" style="--d:3">
-            <h3>每个版本都有说明</h3>
-            <p>每次发布都会在 GitHub Release 中用中文写明更新内容、已知问题和安装包状态。Docker 镜像单独发布在 GHCR，不是 Release 附件。</p>
-          </div>
+        <div class="footer-base">
+          <span>TaskDock 仍处于早期版本阶段，正式使用前请先备份数据。</span>
+          <span>© <span data-year>2026</span> TaskDock</span>
         </div>
       </div>
-    </section>
-
-    <section class="section" aria-labelledby="docs-title" style="padding-top:clamp(40px,6vw,80px)">
-      <div class="wrap">
-        <div class="section-head">
-          <p class="eyebrow reveal"><span class="idx">文档</span>产品仓库</p>
-          <h2 class="reveal" id="docs-title">更多细节，<br>以产品仓库为准。</h2>
-        </div>
-        <div class="doc-links">
-          <a class="doc-link reveal" href="https://github.com/IGNGserver/taskdock/blob/master/docs/DEPLOYMENT.md"><span><b>部署说明</b><span>Compose、端口、HTTPS 与健康检查</span></span><svg aria-hidden="true"><use href="#i-ext"/></svg></a>
-          <a class="doc-link reveal" href="https://github.com/IGNGserver/taskdock/blob/master/docs/BACKUP_RESTORE.md"><span><b>备份与恢复</b><span>升级前必读</span></span><svg aria-hidden="true"><use href="#i-ext"/></svg></a>
-          <a class="doc-link reveal" href="https://github.com/IGNGserver/taskdock/blob/master/docs/SECURITY.md"><span><b>安全说明</b><span>令牌、会话与凭据保存</span></span><svg aria-hidden="true"><use href="#i-ext"/></svg></a>
-          <a class="doc-link reveal" href="https://github.com/IGNGserver/taskdock/blob/master/docs/SYNC_PROTOCOL.md"><span><b>同步协议</b><span>待同步队列、游标与冲突</span></span><svg aria-hidden="true"><use href="#i-ext"/></svg></a>
-          <a class="doc-link reveal" href="https://github.com/IGNGserver/taskdock/blob/master/docs/RELEASING.md"><span><b>发布规范</b><span>版本号与发布渠道</span></span><svg aria-hidden="true"><use href="#i-ext"/></svg></a>
-          <a class="doc-link reveal" href="https://github.com/IGNGserver/taskdock/blob/master/CHANGELOG.md"><span><b>更新日志</b><span>每个版本改了什么</span></span><svg aria-hidden="true"><use href="#i-ext"/></svg></a>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <div class="wrap">
-      <div class="footer-grid">
-        <div class="footer-brand">
-          <a class="brand" href="./"><img src="assets/img/taskdock-icon-96.png" width="30" height="30" alt=""><span>TaskDock</span></a>
-          <p>为个人开发者准备的自托管、离线优先任务工作台。单用户，数据只属于你。</p>
-        </div>
-        <div>
-          <h4>产品</h4>
-          <ul>
-            <li><a href="./#model">数据模型</a></li>
-            <li><a href="./#time">日期与时间点</a></li>
-            <li><a href="./#offline">离线同步</a></li>
-            <li><a href="./#selfhost">自托管</a></li>
-          </ul>
-        </div>
-        <div>
-          <h4>文档</h4>
-          <ul>
-            <li><a href="https://github.com/IGNGserver/taskdock/blob/master/docs/DEPLOYMENT.md">部署说明</a></li>
-            <li><a href="https://github.com/IGNGserver/taskdock/blob/master/docs/BACKUP_RESTORE.md">备份与恢复</a></li>
-            <li><a href="https://github.com/IGNGserver/taskdock/blob/master/docs/SECURITY.md">安全说明</a></li>
-            <li><a href="https://github.com/IGNGserver/taskdock/blob/master/docs/SYNC_PROTOCOL.md">同步协议</a></li>
-          </ul>
-        </div>
-        <div>
-          <h4>获取</h4>
-          <ul>
-            <li><a href="download.html">下载与部署</a></li>
-            <li><a href="https://github.com/IGNGserver/taskdock/releases">GitHub Releases</a></li>
-            <li><a href="https://github.com/IGNGserver/taskdock">产品源码</a></li>
-            <li><a href="https://github.com/IGNGserver/taskdock-website">官网源码</a></li>
-          </ul>
-        </div>
-      </div>
-      <div class="footer-base">
-        <span>TaskDock 仍处于早期版本阶段，正式使用前请先备份数据。</span>
-        <span>© <span data-year>2026</span> TaskDock</span>
-      </div>
-    </div>
-  </footer>
-</body>
+    </footer>
+  </body>
 </html>

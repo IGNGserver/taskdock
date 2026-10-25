@@ -2,18 +2,65 @@
 // 卡片可以拖动：散落时可以随手甩开，归位后可以在组内重新排序；
 // 点状态圆圈按「待开始 → 进行中 → 已完成」切换，卡片会移动到对应分组。
 
-import { Spring2D, clamp, createLoop, easeInOut, easeOut, integrate, lerp, prefersReducedMotion } from './spring.js';
+import {
+  Spring2D,
+  clamp,
+  createLoop,
+  easeInOut,
+  easeOut,
+  integrate,
+  lerp,
+  prefersReducedMotion,
+} from './spring.js';
 
 const TASKS = [
   { id: 'a', title: '迁移脚本加回滚演练', ref: 'TASK-214', s: 'doing', chip: ['flow', '验证'] },
-  { id: 'b', title: '修复 Android 冷启动读取凭据', ref: 'TASK-208', s: 'doing', chip: ['date', '明天'] },
-  { id: 'c', title: '整理同步冲突的复现步骤', ref: 'TASK-219', s: 'doing', chip: ['steps', '步骤 2/4'], mobile: false },
-  { id: 'd', title: '额度重置后重跑 e2e 门禁', ref: 'TASK-221', s: 'todo', chip: ['event', '额度重置后'] },
-  { id: 'e', title: '上线前检查 HTTPS 与 CORS', ref: 'TASK-223', s: 'todo', chip: ['event', '上线前'] },
-  { id: 'f', title: '给备份脚本补一次恢复演练', ref: 'TASK-197', s: 'todo', chip: ['date', '周六'] },
+  {
+    id: 'b',
+    title: '修复 Android 冷启动读取凭据',
+    ref: 'TASK-208',
+    s: 'doing',
+    chip: ['date', '明天'],
+  },
+  {
+    id: 'c',
+    title: '整理同步冲突的复现步骤',
+    ref: 'TASK-219',
+    s: 'doing',
+    chip: ['steps', '步骤 2/4'],
+    mobile: false,
+  },
+  {
+    id: 'd',
+    title: '额度重置后重跑 e2e 门禁',
+    ref: 'TASK-221',
+    s: 'todo',
+    chip: ['event', '额度重置后'],
+  },
+  {
+    id: 'e',
+    title: '上线前检查 HTTPS 与 CORS',
+    ref: 'TASK-223',
+    s: 'todo',
+    chip: ['event', '上线前'],
+  },
+  {
+    id: 'f',
+    title: '给备份脚本补一次恢复演练',
+    ref: 'TASK-197',
+    s: 'todo',
+    chip: ['date', '周六'],
+  },
   { id: 'g', title: '升级到 PostgreSQL 18', ref: 'TASK-188', s: 'done', chip: ['note', '笔记'] },
   { id: 'h', title: '统一移动端底部导航', ref: 'TASK-176', s: 'done', chip: ['flow', '发布'] },
-  { id: 'i', title: '清理过期的同步游标', ref: 'TASK-181', s: 'done', chip: ['date', '周一'], mobile: false },
+  {
+    id: 'i',
+    title: '清理过期的同步游标',
+    ref: 'TASK-181',
+    s: 'done',
+    chip: ['date', '周一'],
+    mobile: false,
+  },
 ];
 
 const GROUPS = ['doing', 'todo', 'done'];
@@ -21,13 +68,24 @@ const NEXT = { todo: 'doing', doing: 'done', done: 'todo' };
 
 // 散落构图（中心点，按舞台归一化）：桌面避开左侧文案，移动端集中在下方与边缘
 const SCATTER_DESKTOP = [
-  [0.67, 0.2, -11, 0.86], [0.9, 0.12, 8, 0.8], [0.79, 0.37, -4, 0.9], [0.99, 0.5, 13, 0.78],
-  [0.69, 0.6, 7, 0.85], [0.87, 0.73, -9, 0.9], [0.63, 0.9, 4, 0.82], [0.96, 0.92, -6, 0.8],
+  [0.67, 0.2, -11, 0.86],
+  [0.9, 0.12, 8, 0.8],
+  [0.79, 0.37, -4, 0.9],
+  [0.99, 0.5, 13, 0.78],
+  [0.69, 0.6, 7, 0.85],
+  [0.87, 0.73, -9, 0.9],
+  [0.63, 0.9, 4, 0.82],
+  [0.96, 0.92, -6, 0.8],
   [0.24, 0.95, -7, 0.78],
 ];
 const SCATTER_MOBILE = [
-  [0.22, 0.7, -9, 0.9], [0.8, 0.66, 8, 0.86], [0.5, 0.79, 3, 0.95], [0.12, 0.9, 10, 0.86],
-  [0.86, 0.86, -7, 0.9], [0.45, 0.97, -4, 0.92], [1.0, 0.98, 12, 0.82],
+  [0.22, 0.7, -9, 0.9],
+  [0.8, 0.66, 8, 0.86],
+  [0.5, 0.79, 3, 0.95],
+  [0.12, 0.9, 10, 0.86],
+  [0.86, 0.86, -7, 0.9],
+  [0.45, 0.97, -4, 0.92],
+  [1.0, 0.98, 12, 0.82],
 ];
 
 const ICONS = {
@@ -37,7 +95,13 @@ const ICONS = {
   steps: '<svg aria-hidden="true"><use href="#i-steps"/></svg>',
   note: '<svg aria-hidden="true"><use href="#i-note"/></svg>',
 };
-const CHIP_CLASS = { flow: 'chip-flow', date: 'chip-date', event: 'chip-event', steps: '', note: '' };
+const CHIP_CLASS = {
+  flow: 'chip-flow',
+  date: 'chip-date',
+  event: 'chip-event',
+  steps: '',
+  note: '',
+};
 
 function cardHTML(t) {
   const [kind, text] = t.chip;
@@ -89,7 +153,12 @@ export function initHero(track) {
     scatterLine.setAttribute('aria-label', text);
     scatterLine.textContent = '';
     const jitter = [
-      [0, 0, 0], [-4, -10, -12], [6, 8, 10], [-3, -6, -8], [0, 0, 0], [0, 0, 0],
+      [0, 0, 0],
+      [-4, -10, -12],
+      [6, 8, 10],
+      [-3, -6, -8],
+      [0, 0, 0],
+      [0, 0, 0],
     ];
     [...text].forEach((ch, i) => {
       const span = document.createElement('span');
@@ -105,8 +174,14 @@ export function initHero(track) {
     field.querySelectorAll('.tcard').forEach((el) => el.remove());
     const pick = TASKS.filter((t) => !mobile || t.mobile !== false);
     const scatter = mobile ? SCATTER_MOBILE : SCATTER_DESKTOP;
-    tasks = pick.map((t, i) => ({ ...t, anchor: scatter[i % scatter.length].slice(), custom: null }));
-    order = Object.fromEntries(GROUPS.map((g) => [g, tasks.filter((t) => t.s === g).map((t) => t.id)]));
+    tasks = pick.map((t, i) => ({
+      ...t,
+      anchor: scatter[i % scatter.length].slice(),
+      custom: null,
+    }));
+    order = Object.fromEntries(
+      GROUPS.map((g) => [g, tasks.filter((t) => t.s === g).map((t) => t.id)]),
+    );
     // 归位顺序打散一点，看起来像被一张张吸过去，而不是排队
     const settleOrder = [2, 0, 4, 1, 6, 3, 8, 5, 7];
     cards = tasks.map((t, i) => {
@@ -160,7 +235,16 @@ export function initHero(track) {
     const s = clamp(avail / tall, 0.62, 1);
     const ph = tall * s;
     const py = mobile ? top : Math.max(top, top + (avail - ph) / 2);
-    geo = { W, H, px, pw, py, s, m, fs: scatterLine ? parseFloat(getComputedStyle(scatterLine).fontSize) / 90 : 1 };
+    geo = {
+      W,
+      H,
+      px,
+      pw,
+      py,
+      s,
+      m,
+      fs: scatterLine ? parseFloat(getComputedStyle(scatterLine).fontSize) / 90 : 1,
+    };
     const cw = (pw - 28) / s;
     field.style.setProperty('--card-w', `${cw}px`);
     geo.cw = cw;
@@ -264,7 +348,10 @@ export function initHero(track) {
     if (reduced) {
       cards.forEach((c) => c.sp.snap());
     } else {
-      integrate(cards.map((c) => c.sp), dt);
+      integrate(
+        cards.map((c) => c.sp),
+        dt,
+      );
     }
 
     const { cw, ch } = geo;
@@ -314,7 +401,8 @@ export function initHero(track) {
     const fs = geo.fs;
     for (const gl of glyphs) {
       const [dx, dy, dr] = gl.j.map((v, i) => (i < 2 ? v * fs : v));
-      gl.el.style.transform = ge > 0.001 ? `translate(${dx * ge}px, ${dy * ge}px) rotate(${dr * ge}deg)` : '';
+      gl.el.style.transform =
+        ge > 0.001 ? `translate(${dx * ge}px, ${dy * ge}px) rotate(${dr * ge}deg)` : '';
     }
 
     // 移动端：文案让出舞台给面板
@@ -451,7 +539,9 @@ export function initHero(track) {
       c.el.dataset.s = orig.s;
       c.el.querySelector('.status').dataset.s = orig.s;
     }
-    order = Object.fromEntries(GROUPS.map((g) => [g, fresh.filter((t) => t.s === g).map((t) => t.id)]));
+    order = Object.fromEntries(
+      GROUPS.map((g) => [g, fresh.filter((t) => t.s === g).map((t) => t.id)]),
+    );
     interacted = false;
     loop.kick();
   });

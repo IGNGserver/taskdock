@@ -12,14 +12,14 @@ TaskDock 的产品官网与下载入口，源码位于产品仓库的 `website/`
 
 ## 目录结构
 
-| 路径 | 内容 |
-| --- | --- |
-| `site/` | 站点源文件：首页、下载/部署页、404、`assets/`、`_headers`、`sitemap.xml`、`robots.txt` |
-| `scripts/build-site.mjs` | 生成 `dist/`，注入最新发布版本/日期/渠道/APK 名称 |
-| `scripts/check-site.mjs` | 静态检查：元信息、站内链接与锚点、外部资源、脚本语法、体积预算 |
-| `docs/SITE.md` | 官网定位、设计系统、内容事实来源与维护 |
-| `docs/HOSTING.md` | Cloudflare 托管、自动部署与回滚 |
-| `docs/WORKSPACE.md` | 本机 worktree 与验证约定 |
+| 路径                     | 内容                                                                                   |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| `site/`                  | 站点源文件：首页、下载/部署页、404、`assets/`、`_headers`、`sitemap.xml`、`robots.txt` |
+| `scripts/build-site.mjs` | 生成 `dist/`，注入最新发布版本/日期/渠道/APK 名称                                      |
+| `scripts/check-site.mjs` | 静态检查：元信息、站内链接与锚点、外部资源、脚本语法、体积预算                         |
+| `docs/SITE.md`           | 官网定位、设计系统、内容事实来源与维护                                                 |
+| `docs/HOSTING.md`        | Cloudflare 托管、自动部署与回滚                                                        |
+| `docs/WORKSPACE.md`      | 本机 worktree 与验证约定                                                               |
 
 ## 开发
 

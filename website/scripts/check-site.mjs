@@ -7,7 +7,9 @@ import { join, dirname, relative, extname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const root = resolve(process.argv[2] || resolve(dirname(fileURLToPath(import.meta.url)), '..', 'site'));
+const root = resolve(
+  process.argv[2] || resolve(dirname(fileURLToPath(import.meta.url)), '..', 'site'),
+);
 const errors = [];
 const fail = (file, msg) => errors.push(`${relative(root, file) || file}: ${msg}`);
 
@@ -34,19 +36,28 @@ for (const page of pages) {
 
 for (const page of pages) {
   const html = readFileSync(page, 'utf8');
+  const metaTags = html.match(/<meta\b[^>]*>/gi) || [];
   if (!/^<!doctype html>/i.test(html)) fail(page, '缺少 <!doctype html>');
   if (!/<html lang="zh-CN">/.test(html)) fail(page, '缺少 <html lang="zh-CN">');
-  if (!/<meta charset="utf-8">/.test(html)) fail(page, '缺少 charset');
+  if (!metaTags.some((tag) => /\scharset\s*=\s*"utf-8"/i.test(tag))) fail(page, '缺少 charset');
   if (!/<meta name="viewport"[^>]*width=device-width/.test(html)) fail(page, '缺少 viewport');
   if (!/<title>[^<]+<\/title>/.test(html)) fail(page, '缺少 <title>');
-  if (!/<meta name="description" content="[^"]+">/.test(html)) fail(page, '缺少 description');
+  if (
+    !metaTags.some(
+      (tag) =>
+        /\sname\s*=\s*"description"/i.test(tag) &&
+        /\scontent\s*=\s*"([^"]*)"/i.exec(tag)?.[1]?.trim(),
+    )
+  )
+    fail(page, '缺少 description');
   if ((html.match(/<h1[\s>]/g) || []).length !== 1) fail(page, '每页应当恰好有一个 <h1>');
 
   // 外部脚本与样式：站点只加载自身资源
   for (const m of html.matchAll(/<(script|link)\b[^>]*\s(?:src|href)="(https?:)?\/\/[^"]*"/g)) {
     if (m[1] === 'script' || /rel="stylesheet"/.test(m[0])) fail(page, `引用了外部资源：${m[0]}`);
   }
-  if (/<script(?![^>]*\bsrc=)[^>]*>\s*\S/.test(html)) fail(page, '存在内联脚本（CSP 只允许站内脚本文件）');
+  if (/<script(?![^>]*\bsrc=)[^>]*>\s*\S/.test(html))
+    fail(page, '存在内联脚本（CSP 只允许站内脚本文件）');
 
   // 站内链接、资源与锚点
   for (const m of html.matchAll(/\s(?:href|src)="([^"]+)"/g)) {
@@ -59,7 +70,8 @@ for (const page of pages) {
     let target = page;
     if (path) {
       const base = path.startsWith('/') ? join(root, path) : join(dirname(page), path);
-      target = path.endsWith('/') || path === '.' || path === './' ? join(base, 'index.html') : base;
+      target =
+        path.endsWith('/') || path === '.' || path === './' ? join(base, 'index.html') : base;
       if (!existsSync(target)) {
         fail(page, `链接目标不存在：${ref}`);
         continue;
@@ -73,7 +85,9 @@ for (const page of pages) {
 
 // 脚本语法（ES module）
 for (const js of files.filter((f) => extname(f) === '.js')) {
-  const r = spawnSync(process.execPath, ['--input-type=module', '--check'], { input: readFileSync(js) });
+  const r = spawnSync(process.execPath, ['--input-type=module', '--check'], {
+    input: readFileSync(js),
+  });
   if (r.status !== 0) fail(js, `语法错误\n${r.stderr.toString()}`);
 }
 
@@ -98,4 +112,6 @@ if (errors.length) {
   console.error(`\n站点检查失败：${errors.length} 项`);
   process.exit(1);
 }
-console.log(`site check passed: ${pages.length} pages, ${files.length} files, ${(total / 1024).toFixed(0)} KB`);
+console.log(
+  `site check passed: ${pages.length} pages, ${files.length} files, ${(total / 1024).toFixed(0)} KB`,
+);
