@@ -30,21 +30,21 @@ if (!taskdockVersionMatch.matches()) {
 def taskdockMajor = taskdockVersionMatch.group(1).toInteger()
 def taskdockMinor = taskdockVersionMatch.group(2).toInteger()
 def taskdockPatch = taskdockVersionMatch.group(3).toInteger()
-// Stable releases sort above every prerelease of the same base version.
-def taskdockPrereleaseText = taskdockVersionMatch.group(5)
-def taskdockPrerelease = taskdockPrereleaseText?.toInteger() ?: 999
-if (taskdockPrereleaseText != null && taskdockPrerelease > 998) {
-    throw new GradleException("预发布序号必须在 0..998 之间")
+// Epoch 300M is above every historical APK (through v2.0.0-rc.59: 200000059).
+// Each SemVer field has a reserved range and alpha < beta < rc < stable.
+// Do not change this mapping for an already released version.
+def taskdockPrerelease = taskdockVersionMatch.group(5)?.toInteger() ?: 0
+def taskdockStage = ['alpha': 0, 'beta': 1, 'rc': 2].get(taskdockVersionMatch.group(4), 3)
+if (taskdockMinor > 99 || taskdockPatch > 99 || taskdockPrerelease > 998) {
+    throw new GradleException('Android versionCode 支持 minor/patch 0..99，预发布序号 0..998')
 }
-// Android's versionCode cannot contain dots. Keep each release strictly
-// increasing so rc.53 -> rc.54 is accepted by the package installer.
-def taskdockVersionCode = taskdockMajor * 100_000_000 +
-        taskdockMinor * 1_000_000 +
-        taskdockPatch * 1_000 +
-        taskdockPrerelease
-if (taskdockVersionCode > 2_100_000_000) {
-    throw new GradleException("versionCode 超出 Android 上限: ${taskdockVersionCode}")
+def taskdockVersionCodeLong = 300_000_000L + taskdockMajor * 100_000_000L +
+        taskdockMinor * 1_000_000L + taskdockPatch * 10_000L +
+        taskdockStage * 1_000L + taskdockPrerelease
+if (taskdockVersionCodeLong > 2_100_000_000L) {
+    throw new GradleException("versionCode 超出 Android 上限: ${taskdockVersionCodeLong}")
 }
+def taskdockVersionCode = (int) taskdockVersionCodeLong
 println "TaskDock ${taskdockVersion} -> versionCode ${taskdockVersionCode}"
 
 android {

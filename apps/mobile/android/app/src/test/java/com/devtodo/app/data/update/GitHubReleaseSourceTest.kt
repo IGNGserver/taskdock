@@ -22,6 +22,7 @@ class GitHubReleaseSourceTest {
         downloadUrl = url,
         size = size,
         digest = digest,
+        state = "uploaded",
     )
 
     private fun release(
@@ -136,7 +137,7 @@ class GitHubReleaseSourceTest {
         val source = GitHubReleaseSource(OkHttpClient())
         val parsed = source.parseReleases(
             """
-            [
+            {"schemaVersion":1,"repository":"IGNGserver/taskdock","generatedAt":"2026-10-25T00:00:00Z","releases":[
               {
                 "tag_name": "v2.0.0-rc.54",
                 "html_url": "https://github.com/IGNGserver/taskdock/releases/tag/v2.0.0-rc.54",
@@ -148,11 +149,12 @@ class GitHubReleaseSourceTest {
                     "name": "TaskDock-2.0.0-rc.54-android.apk",
                     "browser_download_url": "https://github.com/IGNGserver/taskdock/releases/download/v2.0.0-rc.54/TaskDock-2.0.0-rc.54-android.apk",
                     "size": 24450967,
+                    "state":"uploaded",
                     "digest": "sha256:${"a".repeat(64)}"
                   }
                 ]
               }
-            ]
+            ]}
             """.trimIndent(),
         )
         assertEquals(1, parsed.size)
@@ -164,15 +166,12 @@ class GitHubReleaseSourceTest {
     }
 
     @Test
-    fun parsesSha256FromDigestOrChecksumFile() {
+    fun parsesRequiredSha256Digest() {
         val digest = parseSha256Digest("sha256:" + "A".repeat(64))
         assertEquals("a".repeat(64), digest)
         assertNull(parseSha256Digest("md5:" + "a".repeat(64)))
         assertNull(parseSha256Digest(null))
 
-        val file = parseSha256File("${"b".repeat(64)}  TaskDock-2.0.0-rc.54-android.apk\n")
-        assertEquals("b".repeat(64), file)
-        assertNull(parseSha256File("not a checksum"))
     }
 
     @Test
@@ -181,6 +180,27 @@ class GitHubReleaseSourceTest {
         assertFalse(isTrustedGitHubUrl("http://github.com/IGNGserver/taskdock/releases"))
         assertFalse(isTrustedGitHubUrl("https://example.com/TaskDock.apk"))
         assertFalse(isTrustedGitHubUrl("not a url"))
+        assertTrue(isTrustedGitHubAssetHost("release-assets.githubusercontent.com"))
+        assertFalse(isTrustedGitHubAssetHost("github.com.evil.example"))
+    }
+
+    @Test
+    fun incompleteAndNonIncreasingApksCannotHideAnOlderInstallableUpdate() {
+        val current = requireNotNull(SemanticVersion.parse("2.0.0-rc.53"))
+        val good = release("v2.0.0-rc.54")
+        val missingDigest = release("v2.0.0-rc.60", assets = listOf(asset("v2.0.0-rc.60", digest = null)))
+        val lowerCode = release("v2.0.0-rc.61", assets = listOf(asset("v2.0.0-rc.61").copy(versionCode = 10)))
+        assertEquals("2.0.0-rc.54", selectCandidate(listOf(good, missingDigest, lowerCode), current,
+            UpdateChannel.PRERELEASE, currentVersionCode = 10)?.versionName)
+    }
+
+    @Test
+    fun rejectsForeignFeedAndMalformedEnvelope() {
+        val source = GitHubReleaseSource(OkHttpClient())
+        assertThrows(UpdateException::class.java) { source.parseReleases("[]") }
+        assertThrows(UpdateException::class.java) {
+            source.parseReleases("""{"schemaVersion":1,"repository":"evil/repo","generatedAt":"2026-10-25T00:00:00Z","releases":[]}""")
+        }
     }
 
     @Test

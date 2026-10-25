@@ -8,10 +8,11 @@ import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.io.IOException
+import java.io.File
+import java.util.Properties
 
-internal const val TASKDOCK_RELEASES_API =
-    "https://api.github.com/repos/IGNGserver/taskdock/releases?per_page=50"
+internal const val TASKDOCK_UPDATE_FEED =
+    "https://raw.githubusercontent.com/IGNGserver/taskdock/updates/updates.json"
 
 private val sha256Pattern = Regex("^[0-9a-fA-F]{64}$")
 
@@ -21,6 +22,8 @@ internal data class GitHubAsset(
     @SerialName("browser_download_url") val downloadUrl: String = "",
     val size: Long = 0,
     val digest: String? = null,
+    val state: String = "",
+    val versionCode: Long? = null,
 )
 
 @Serializable
@@ -46,17 +49,7 @@ internal fun androidAssetName(versionName: String): String =
     "TaskDock-$versionName-android.apk"
 
 internal fun parseSha256Digest(digest: String?): String? {
-    val value = digest?.substringAfter("sha256:", "")?.trim().orEmpty()
-    return value.takeIf(sha256Pattern::matches)?.lowercase()
-}
-
-internal fun parseSha256File(contents: String): String? {
-    val value = contents.lineSequence()
-        .firstOrNull()
-        ?.trim()
-        ?.split(Regex("\\s+"))
-        ?.firstOrNull()
-        .orEmpty()
+    val value = digest?.trim()?.takeIf { it.startsWith("sha256:") }?.removePrefix("sha256:").orEmpty()
     return value.takeIf(sha256Pattern::matches)?.lowercase()
 }
 
@@ -64,6 +57,9 @@ internal fun isTrustedGitHubUrl(url: String): Boolean {
     val parsed = url.toHttpUrlOrNull() ?: return false
     return parsed.isHttps && parsed.host == "github.com"
 }
+
+internal fun isTrustedGitHubAssetHost(host: String): Boolean =
+    host == "github.com" || host.endsWith(".githubusercontent.com")
 
 /**
  * Picks the highest strictly-newer release that has an exact Android APK asset.
@@ -73,6 +69,7 @@ internal fun selectCandidate(
     releases: List<GitHubRelease>,
     currentVersion: SemanticVersion,
     channel: UpdateChannel,
+    currentVersionCode: Long = 0,
 ): UpdateCandidate? = releases.asSequence()
     .filterNot { it.draft }
     .mapNotNull { release ->
@@ -85,7 +82,9 @@ internal fun selectCandidate(
         val versionName = release.tagName.removePrefix("v").removePrefix("V")
         val apk = release.assets.firstOrNull { it.name == androidAssetName(versionName) }
             ?: return@mapNotNull null
-        if (apk.size <= 0 || !isTrustedGitHubUrl(apk.downloadUrl)) return@mapNotNull null
+        if (apk.size !in 1..200L * 1024 * 1024 || apk.state != "uploaded" || parseSha256Digest(apk.digest) == null ||
+            !apk.downloadUrl.startsWith("https://github.com/IGNGserver/taskdock/releases/download/${release.tagName}/") ||
+            (apk.versionCode != null && apk.versionCode <= currentVersionCode)) return@mapNotNull null
         UpdateCandidate(release, version, versionName, apk, prerelease)
     }
     .sortedWith(
@@ -94,103 +93,122 @@ internal fun selectCandidate(
     )
     .firstOrNull()
 
+@Serializable
+internal data class UpdateFeed(
+    val schemaVersion: Int,
+    val repository: String,
+    val generatedAt: String,
+    val releases: List<GitHubRelease>,
+)
+
 class GitHubReleaseSource(
     private val client: OkHttpClient,
-    private val json: Json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-    },
-    private val releasesUrl: String = TASKDOCK_RELEASES_API,
+    private val json: Json = Json { ignoreUnknownKeys = true },
+    private val releasesUrl: String = TASKDOCK_UPDATE_FEED,
+    private val cacheDirectory: File? = null,
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val jitter: () -> Long = { kotlin.random.Random.nextLong(15 * 60_000L + 1) },
 ) {
-    /**
-     * Returns the newest installable update, or null when the installed build is
-     * already current for its channel. Throws [UpdateException] on failures.
-     */
+    private val policyFile get() = cacheDirectory?.let { File(it, "policy.properties") }
+    private val bodyFile get() = cacheDirectory?.let { File(it, "updates.json") }
+    private val etagFile get() = cacheDirectory?.let { File(it, "updates.etag") }
+    private var cachedBody: String? = runCatching { bodyFile?.takeIf { it.isFile && it.length() <= MAX_UPDATE_FEED_BYTES }?.inputStream()?.use { readUpdateFeed(it) } }.getOrNull()
+    private var etag: String? = runCatching { etagFile?.takeIf { it.isFile && it.length() <= 4096 }?.readText()?.takeIf(String::isNotBlank) }.getOrNull()
+    private var policy = loadPolicy()
+
     suspend fun latestUpdate(
         currentVersion: SemanticVersion,
         channel: UpdateChannel,
+        currentVersionCode: Long = 0,
+        automatic: Boolean = false,
     ): AndroidUpdate? = withContext(Dispatchers.IO) {
-        val releases = fetchReleases()
-        val candidate = selectCandidate(releases, currentVersion, channel)
-            ?: return@withContext null
-        candidate.toUpdate(resolveSha256(candidate))
+        val candidate = selectCandidate(fetchReleases(automatic), currentVersion, channel, currentVersionCode)
+        candidate?.toUpdate(requireNotNull(parseSha256Digest(candidate.apk.digest)))
     }
 
+    /** A channel change only re-evaluates the validated feed; it never evades network cooldowns. */
+    internal fun cachedUpdate(current: SemanticVersion, channel: UpdateChannel, code: Long): AndroidUpdate? =
+        cachedBody?.let { body -> runCatching {
+            selectCandidate(parseReleases(body), current, channel, code)?.let {
+                it.toUpdate(requireNotNull(parseSha256Digest(it.apk.digest)))
+            }
+        }.getOrNull() }
+
     internal fun parseReleases(body: String): List<GitHubRelease> = try {
-        json.decodeFromString(body)
+        val feed = json.decodeFromString<UpdateFeed>(body)
+        require(feed.schemaVersion == 1 && feed.repository == "IGNGserver/taskdock")
+        require(validGeneratedAt(feed.generatedAt))
+        feed.releases
     } catch (error: Exception) {
         throw UpdateException(UpdateFailure.INVALID_RESPONSE, "更新信息格式异常", error)
     }
 
-    private fun fetchReleases(): List<GitHubRelease> {
-        val request = Request.Builder()
-            .url(releasesUrl)
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .header("User-Agent", "TaskDock-Android")
-            .get()
-            .build()
-        return try {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    if (response.code == 403 || response.code == 429) {
-                        throw UpdateException(
-                            UpdateFailure.RATE_LIMITED,
-                            "GitHub 请求过于频繁，请稍后再试",
-                        )
-                    }
-                    throw UpdateException(
-                        UpdateFailure.NETWORK,
-                        "检查更新失败（HTTP ${response.code}）",
-                    )
+    @Synchronized
+    private fun fetchReleases(automatic: Boolean): List<GitHubRelease> {
+        val now = clock()
+        val allowed = policy.allowedAt(automatic)
+        if (now < allowed) {
+            if (automatic && now >= policy.retryAt) cachedBody?.let { return parseReleases(it) }
+            throw UpdateException(UpdateFailure.RATE_LIMITED, "请在 ${(allowed - now + 999) / 1000} 秒后检查更新")
+        }
+        policy = policy.attempted(now)
+        savePolicy()
+        try {
+            // A missing/corrupt cache must not produce an unusable 304 loop.
+            val validCache = cachedBody?.takeIf { runCatching { parseReleases(it) }.isSuccess }
+            val request = Request.Builder().url(releasesUrl)
+                .header("Accept", "application/json")
+                .header("User-Agent", "TaskDock-Android")
+                .apply { if (validCache != null) etag?.let { header("If-None-Match", it) } }
+                .build()
+            return client.newCall(request).execute().use { response ->
+                if (response.code != 304 && !response.isSuccessful) {
+                    policy = policy.failed(now, response.header("Retry-After"), response.header("X-RateLimit-Reset"))
+                    savePolicy()
+                    val limited = response.code == 429 || response.code == 403 &&
+                        (response.header("Retry-After") != null || response.header("X-RateLimit-Remaining") == "0")
+                    throw UpdateException(if (limited) UpdateFailure.RATE_LIMITED else UpdateFailure.NETWORK,
+                        if (limited) "更新源暂时限流，请在 ${(policy.retryAt - now + 999) / 1000} 秒后重试" else "检查更新失败（HTTP ${response.code}）")
                 }
-                parseReleases(response.body?.string().orEmpty())
+                val body = if (response.code == 304) validCache
+                    ?: throw UpdateException(UpdateFailure.INVALID_RESPONSE, "更新缓存已失效")
+                    else response.body?.let { data -> data.byteStream().use { readUpdateFeed(it, data.contentLength()) } }.orEmpty()
+                val parsed = parseReleases(body)
+                cachedBody = body
+                if (response.code != 304) etag = response.header("ETag")
+                cacheDirectory?.mkdirs()
+                bodyFile?.writeText(body)
+                etagFile?.writeText(etag.orEmpty())
+                policy = policy.succeeded(now, jitter())
+                savePolicy()
+                parsed
             }
-        } catch (error: UpdateException) {
-            throw error
-        } catch (error: IOException) {
-            throw UpdateException(UpdateFailure.NETWORK, "无法连接 GitHub，请检查网络", error)
+        } catch (error: Exception) {
+            if (policy.failures == 0 || policy.retryAt <= now) {
+                policy = policy.failed(now)
+                savePolicy()
+            }
+            if (error is UpdateException) throw error
+            throw UpdateException(UpdateFailure.NETWORK, "无法获取仓库更新信息，请检查网络", error)
         }
     }
 
-    private fun resolveSha256(candidate: UpdateCandidate): String {
-        parseSha256Digest(candidate.apk.digest)?.let { return it }
-        val shaAsset = candidate.release.assets.firstOrNull {
-            it.name == candidate.apk.name.removeSuffix(".apk") + ".sha256"
-        } ?: throw UpdateException(
-            UpdateFailure.MISSING_DIGEST,
-            "更新包缺少 SHA-256 校验值，已阻止安装",
-        )
-        val contents = fetchText(shaAsset.downloadUrl)
-        return parseSha256File(contents) ?: throw UpdateException(
-            UpdateFailure.MISSING_DIGEST,
-            "更新包校验文件格式异常，已阻止安装",
-        )
-    }
+    private fun loadPolicy(): UpdateFetchPolicy = runCatching {
+        val values = Properties()
+        policyFile?.takeIf { it.isFile }?.inputStream()?.use(values::load)
+        fun value(key: String) = values.getProperty(key)?.toLongOrNull()?.coerceAtLeast(0) ?: 0
+        UpdateFetchPolicy(value("attempt"), value("automatic"), value("retry"), value("failures").coerceAtMost(16).toInt())
+    }.getOrDefault(UpdateFetchPolicy())
 
-    private fun fetchText(url: String): String {
-        if (!isTrustedGitHubUrl(url)) {
-            throw UpdateException(UpdateFailure.MISSING_DIGEST, "更新包校验地址不受信任")
-        }
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", "TaskDock-Android")
-            .get()
-            .build()
-        return try {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw UpdateException(
-                        UpdateFailure.NETWORK,
-                        "读取更新校验文件失败（HTTP ${response.code}）",
-                    )
-                }
-                response.body?.string().orEmpty()
-            }
-        } catch (error: UpdateException) {
-            throw error
-        } catch (error: IOException) {
-            throw UpdateException(UpdateFailure.NETWORK, "无法连接 GitHub，请检查网络", error)
+    private fun savePolicy() {
+        cacheDirectory?.mkdirs()
+        policyFile?.outputStream()?.use { stream ->
+            Properties().apply {
+                setProperty("attempt", policy.lastAttempt.toString())
+                setProperty("automatic", policy.nextAutomatic.toString())
+                setProperty("retry", policy.retryAt.toString())
+                setProperty("failures", policy.failures.toString())
+            }.store(stream, null)
         }
     }
 }
@@ -208,4 +226,5 @@ private fun UpdateCandidate.toUpdate(sha256: String): AndroidUpdate = AndroidUpd
     assetSize = apk.size,
     sha256 = sha256,
     prerelease = prerelease,
+    versionCode = apk.versionCode,
 )

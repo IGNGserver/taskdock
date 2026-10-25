@@ -9,6 +9,7 @@ import com.devtodo.app.data.update.AndroidUpdate
 import com.devtodo.app.data.update.AppUpdateState
 import com.devtodo.app.data.update.UpdateChannel
 import com.devtodo.app.ui.screens.AppUpdateSettingsSection
+import com.devtodo.app.ui.screens.LoginUpdatesAccess
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -75,7 +76,7 @@ class AppUpdateSettingsTest {
         }
 
         compose.onNodeWithText("检查中").assertExists()
-        compose.onNodeWithText("正在查询 GitHub Releases…").assertExists()
+        compose.onNodeWithText("正在检查仓库更新…").assertExists()
     }
 
     @Test
@@ -158,4 +159,30 @@ class AppUpdateSettingsTest {
         compose.onNodeWithText("无法连接 GitHub，请检查网络").assertExists()
         compose.onNodeWithText("打开发布页").assertExists()
     }
-}
+    @Test
+    fun loginUpdateEntryWorksWithoutHubFieldsOrAuthentication() {
+        var opens = 0
+        var checks = 0
+        var selected: UpdateChannel? = null
+        var downloads = 0
+        compose.setContent {
+            MaterialTheme {
+                LoginUpdatesAccess(
+                    state = state(update()),
+                    onOpen = { opens++ }, onCheck = { checks++ },
+                    onChannelChange = { selected = it },
+                    onDownload = { downloads++ }, onCancelDownload = {}, onInstall = {},
+                )
+            }
+        }
+        compose.onNodeWithText("关于与更新").performClick()
+        compose.onNodeWithText("重新检查").performClick()
+        compose.onNodeWithText("下载并安装").performClick()
+        compose.onNodeWithText("正式通道").performClick()
+        compose.runOnIdle {
+            assertEquals(1, opens)
+            assertEquals(1, checks)
+            assertEquals(UpdateChannel.STABLE, selected)
+            assertEquals(1, downloads)
+        }
+    }}

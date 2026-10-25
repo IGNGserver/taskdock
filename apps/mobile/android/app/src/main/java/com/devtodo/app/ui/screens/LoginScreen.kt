@@ -30,6 +30,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.devtodo.app.R
 import com.devtodo.app.data.remote.ApiClientException
 import com.devtodo.app.data.remote.ApiFailureCategory
@@ -45,6 +46,7 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     val haptic = LocalHapticFeedback.current
+    val updateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
 
     var hubUrl by rememberSaveable { mutableStateOf(viewModel.authManager.hubOrigin) }
     var username by rememberSaveable { mutableStateOf(viewModel.authManager.username ?: "") }
@@ -276,6 +278,15 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                 )
             }
         }
+        LoginUpdatesAccess(
+            state = updateState,
+            onOpen = { viewModel.checkForUpdate(silent = true) },
+            onCheck = { viewModel.checkForUpdate(silent = false) },
+            onChannelChange = viewModel::setUpdateChannel,
+            onDownload = viewModel::downloadUpdate,
+            onCancelDownload = viewModel::cancelUpdateDownload,
+            onInstall = viewModel::requestInstallDownloadedUpdate,
+        )
     }
 
     Box(

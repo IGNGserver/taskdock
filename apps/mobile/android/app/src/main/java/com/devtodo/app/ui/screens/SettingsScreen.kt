@@ -209,6 +209,7 @@ fun SettingsScreen(
             AppUpdateSettingsSection(
                 state = updateState,
                 onCheck = { viewModel.checkForUpdate(silent = false) },
+                onChannelChange = viewModel::setUpdateChannel,
                 onDownload = viewModel::downloadUpdate,
                 onCancelDownload = viewModel::cancelUpdateDownload,
                 onInstall = viewModel::requestInstallDownloadedUpdate,

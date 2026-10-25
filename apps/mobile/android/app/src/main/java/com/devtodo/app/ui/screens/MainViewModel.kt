@@ -419,6 +419,8 @@ class MainViewModel(
 
     fun checkForUpdate(silent: Boolean = false) = appUpdateManager.check(silent)
 
+    fun setUpdateChannel(channel: com.devtodo.app.data.update.UpdateChannel) = appUpdateManager.setUpdateChannel(channel)
+
     fun downloadUpdate() = appUpdateManager.download()
 
     fun cancelUpdateDownload() = appUpdateManager.cancelDownload()

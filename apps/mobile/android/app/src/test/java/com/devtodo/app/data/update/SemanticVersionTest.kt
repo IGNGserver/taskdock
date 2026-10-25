@@ -49,7 +49,15 @@ class SemanticVersionTest {
         assertNull(SemanticVersion.parse(""))
         assertNull(SemanticVersion.parse("2.0"))
         assertNull(SemanticVersion.parse("2.0.0-"))
+        assertNull(SemanticVersion.parse("02.0.0"))
+        assertNull(SemanticVersion.parse("2.0.0-rc.01"))
+        assertNull(SemanticVersion.parse("2.0.0-rc..1"))
         assertNull(SemanticVersion.parse("version-2.0.0"))
+    }
+
+    @Test
+    fun buildMetadataDoesNotChangeUpgradePrecedence() {
+        assertEquals(SemanticVersion.parse("2.0.0+one"), SemanticVersion.parse("2.0.0+two"))
     }
 
     @Test

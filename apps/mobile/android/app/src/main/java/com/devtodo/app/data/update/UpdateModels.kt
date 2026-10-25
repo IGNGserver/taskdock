@@ -18,6 +18,7 @@ data class AndroidUpdate(
     val assetSize: Long,
     val sha256: String,
     val prerelease: Boolean,
+    val versionCode: Long? = null,
 )
 
 /** Everything the settings screen needs to render the update section. */
@@ -64,3 +65,9 @@ internal fun updateChannelFor(version: String?): UpdateChannel =
     } else {
         UpdateChannel.STABLE
     }
+
+internal fun updateAllowed(update: AndroidUpdate, currentVersion: String, channel: UpdateChannel): Boolean {
+    val current = SemanticVersion.parse(currentVersion) ?: return false
+    val candidate = SemanticVersion.parse(update.version) ?: return false
+    return candidate > current && (channel == UpdateChannel.PRERELEASE || !update.prerelease && !candidate.isPrerelease)
+}

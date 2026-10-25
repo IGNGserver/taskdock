@@ -34,7 +34,7 @@ import java.util.TimeZone
 /**
  * Settings › 关于与更新.
  *
- * The update source is the public GitHub Releases API, not the user's hub:
+ * The update source is the repository-hosted update feed, not the user's hub:
  * a self-hosted API may be unreachable or older than the installed client.
  */
 @Composable
@@ -44,6 +44,7 @@ fun AppUpdateSettingsSection(
     onDownload: () -> Unit,
     onCancelDownload: () -> Unit,
     onInstall: () -> Unit,
+    onChannelChange: (UpdateChannel) -> Unit = {},
 ) {
     val context = LocalContext.current
     ExpressiveSettingsGroup(
@@ -59,12 +60,21 @@ fun AppUpdateSettingsSection(
             return@ExpressiveSettingsGroup
         }
 
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { onChannelChange(UpdateChannel.STABLE) }, enabled = !state.checking && !state.downloading) {
+                Text(if (state.currentChannel == UpdateChannel.STABLE) "✓ 正式通道" else "正式通道")
+            }
+            TextButton(onClick = { onChannelChange(UpdateChannel.PRERELEASE) }, enabled = !state.checking && !state.downloading) {
+                Text(if (state.currentChannel == UpdateChannel.PRERELEASE) "✓ 预发布通道" else "预发布通道")
+            }
+        }
+        Text("预发布通道包含正式版；切换通道只升级，不降级。", style = MaterialTheme.typography.bodySmall)
         val update = state.update
         if (update == null) {
             SettingsActionRow(
                 title = "检查更新",
                 subtitle = when {
-                    state.checking -> "正在查询 GitHub Releases…"
+                    state.checking -> "正在检查仓库更新…"
                     state.error != null -> "检查失败"
                     state.message != null -> state.message!!
                     state.lastCheckedAt != null -> "上次检查：${relativeTime(state.lastCheckedAt)}"
