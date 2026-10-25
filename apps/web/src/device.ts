@@ -2,118 +2,80 @@ import { useEffect, useState } from 'react';
 import { useWindowSizeClass, type WindowSizeClass } from './components/m3e/behavior.js';
 
 export type DeviceFormFactor = 'phone' | 'tablet' | 'desktop';
-
 export interface DeviceInfo {
-  /** 'phone' for compact touch screens, 'tablet' for medium/expanded touch screens, 'desktop' for others */
   formFactor: DeviceFormFactor;
-  /** True when primary pointer is coarse or touch events are supported */
   isTouch: boolean;
-  /** True when device is a phone (< 600px width or phone UA) */
   isPhone: boolean;
-  /** True when device is a tablet (touch screen with medium or expanded width) */
   isTablet: boolean;
-  /** True when standalone PWA mode */
   isStandalone: boolean;
-  /** Current window size class */
   sizeClass: WindowSizeClass;
 }
 
-/** Check if current runtime environment has touch capability */
 export function detectTouch(): boolean {
-  if (typeof window === 'undefined') return false;
   return (
-    'ontouchstart' in window ||
-    navigator.maxTouchPoints > 0 ||
-    window.matchMedia('(pointer: coarse)').matches
+    typeof window !== 'undefined' &&
+    (navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches)
   );
 }
 
-/** Check if current device is an iPad (including modern iPadOS with desktop UA) */
 export function detectIPad(): boolean {
   if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent.toLowerCase();
-  const isExplicitIPad = /ipad/.test(ua);
-  // iPadOS 13+ sends Macintosh UA by default, but has multi-touch capability
-  const isModernIPad =
-    /macintosh|mac os x/.test(ua) &&
-    typeof navigator.maxTouchPoints === 'number' &&
-    navigator.maxTouchPoints > 1;
-  return isExplicitIPad || isModernIPad;
-}
-
-/** Check if the display mode is standalone (installed PWA) */
-export function detectStandalone(): boolean {
-  if (typeof window === 'undefined') return false;
   return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    // iOS Safari standalone
-    (window.navigator as unknown as { standalone?: boolean }).standalone === true
+    /ipad/i.test(navigator.userAgent) ||
+    (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
   );
 }
 
-/** Determine device form factor based on window size class and touch features */
+export function detectStandalone(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    (window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true)
+  );
+}
+
+/** Device identity survives rotation; the window size class still controls pane count. */
 export function determineFormFactor(
   sizeClass: WindowSizeClass,
   isTouch: boolean,
-  isIPadDevice: boolean = false,
+  isIPadDevice = false,
+  userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent,
+  screenShortSide = typeof screen === 'undefined' ? 0 : Math.min(screen.width, screen.height),
+  coarsePointer = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches,
 ): DeviceFormFactor {
-  // Compact is always phone layout
-  if (sizeClass === 'compact') {
-    return 'phone';
-  }
-
-  // If touch is enabled and viewport is medium or expanded (up to 1200px), treat as tablet
-  if (isTouch && (sizeClass === 'medium' || sizeClass === 'expanded')) {
+  if (/iphone|ipod|android.*mobile|windows phone/i.test(userAgent)) return 'phone';
+  if (isIPadDevice || /ipad|tablet|android(?!.*mobile)/i.test(userAgent)) return 'tablet';
+  if (sizeClass === 'compact') return 'phone';
+  // A large touch-enabled laptop keeps its desktop navigation. Real tablets
+  // without an identifying UA can still use their physical short side.
+  if (
+    isTouch &&
+    ((coarsePointer && screenShortSide >= 600) ||
+      sizeClass === 'medium' ||
+      sizeClass === 'expanded')
+  ) {
     return 'tablet';
   }
-
-  // Check UA for iPad/Android tablets
-  if (typeof navigator !== 'undefined') {
-    const ua = navigator.userAgent.toLowerCase();
-    const isTabletUA = /ipad|tablet|(android(?!.*mobile))/.test(ua) || detectIPad();
-    if (isTabletUA && (sizeClass === 'medium' || sizeClass === 'expanded')) {
-      return 'tablet';
-    }
-  }
-
-  // If explicitly flagged as iPad in medium/expanded, treat as tablet
-  if (isIPadDevice && (sizeClass === 'medium' || sizeClass === 'expanded')) {
-    return 'tablet';
-  }
-
-  // Large or wide non-touch screens are desktop
   return 'desktop';
 }
 
-/**
- * Hook providing comprehensive device form factor and touch context.
- * Enables specialized phone and tablet UI experiences.
- */
 export function useDevice(): DeviceInfo {
   const sizeClass = useWindowSizeClass();
   const [isTouch, setIsTouch] = useState(detectTouch);
   const [isStandalone, setIsStandalone] = useState(detectStandalone);
-
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mediaQueryTouch = window.matchMedia('(pointer: coarse)');
-    const mediaQueryStandalone = window.matchMedia('(display-mode: standalone)');
-
+    const touch = window.matchMedia('(pointer: coarse)');
+    const standalone = window.matchMedia('(display-mode: standalone)');
     const updateTouch = () => setIsTouch(detectTouch());
     const updateStandalone = () => setIsStandalone(detectStandalone());
-
-    mediaQueryTouch.addEventListener('change', updateTouch);
-    mediaQueryStandalone.addEventListener('change', updateStandalone);
-
+    touch.addEventListener('change', updateTouch);
+    standalone.addEventListener('change', updateStandalone);
     return () => {
-      mediaQueryTouch.removeEventListener('change', updateTouch);
-      mediaQueryStandalone.removeEventListener('change', updateStandalone);
+      touch.removeEventListener('change', updateTouch);
+      standalone.removeEventListener('change', updateStandalone);
     };
   }, []);
-
-  const isIPad = detectIPad();
-  const formFactor = determineFormFactor(sizeClass, isTouch, isIPad);
-
+  const formFactor = determineFormFactor(sizeClass, isTouch, detectIPad());
   return {
     formFactor,
     isTouch,

@@ -1,4 +1,13 @@
 import react from '@vitejs/plugin-react';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+
+const iconRevision = createHash('sha256')
+  .update('taskdock-pwa-v2')
+  .update(readFileSync(new URL('../../assets/branding/taskdock-icon.png', import.meta.url)))
+  .digest('hex')
+  .slice(0, 16);
+const iconUrl = (name: string) => '/icons/' + iconRevision + '/' + name;
 import { brotliCompressSync, gzipSync, constants } from 'node:zlib';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -11,6 +20,13 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    {
+      name: 'taskdock-versioned-icons',
+      transformIndexHtml: {
+        order: 'pre',
+        handler: (html) => html.replaceAll('%TASKDOCK_ICON_REVISION%', iconRevision),
+      },
+    },
     {
       name: 'taskdock-precompressed-assets',
       apply: 'build',
@@ -33,6 +49,9 @@ export default defineConfig({
       },
     },
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'prompt',
       devOptions: {
         enabled: true,
@@ -66,16 +85,23 @@ export default defineConfig({
         theme_color: '#f5f2f9',
         background_color: '#f5f2f9',
         icons: [
-          { src: '/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: iconUrl('pwa-1024.png'), sizes: '1024x1024', type: 'image/png', purpose: 'any' },
           {
-            src: '/pwa-maskable-192.png',
+            src: iconUrl('pwa-maskable-1024.png'),
+            sizes: '1024x1024',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          { src: iconUrl('pwa-192.png'), sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: iconUrl('pwa-512.png'), sizes: '512x512', type: 'image/png', purpose: 'any' },
+          {
+            src: iconUrl('pwa-maskable-192.png'),
             sizes: '192x192',
             type: 'image/png',
             purpose: 'maskable',
           },
           {
-            src: '/pwa-maskable-512.png',
+            src: iconUrl('pwa-maskable-512.png'),
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
@@ -87,55 +113,34 @@ export default defineConfig({
             short_name: '今日',
             description: '查看今天的安排与待办任务',
             url: '/today',
-            icons: [{ src: '/pwa-192.png', sizes: '192x192', type: 'image/png' }],
+            icons: [{ src: iconUrl('pwa-192.png'), sizes: '192x192', type: 'image/png' }],
           },
           {
             name: '新建任务',
             short_name: '新建',
             description: '快速创建并捕获一条新任务',
             url: '/today?action=new-task',
-            icons: [{ src: '/pwa-192.png', sizes: '192x192', type: 'image/png' }],
+            icons: [{ src: iconUrl('pwa-192.png'), sizes: '192x192', type: 'image/png' }],
           },
           {
             name: '任务目录树',
             short_name: '目录',
             description: '浏览完整文件夹结构与任务清单',
             url: '/tree',
-            icons: [{ src: '/pwa-192.png', sizes: '192x192', type: 'image/png' }],
+            icons: [{ src: iconUrl('pwa-192.png'), sizes: '192x192', type: 'image/png' }],
           },
           {
             name: '工作流看板',
             short_name: '流程',
             description: '按阶段跟踪任务流动与交付',
             url: '/workflows',
-            icons: [{ src: '/pwa-192.png', sizes: '192x192', type: 'image/png' }],
+            icons: [{ src: iconUrl('pwa-192.png'), sizes: '192x192', type: 'image/png' }],
           },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png}'],
-        cleanupOutdatedCaches: true,
-        // Core routes stay available offline; large optional surfaces are cached
-        // when visited rather than competing with the first useful screen.
         globIgnores: ['**/WorkflowsPage-*.js'],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/assets/'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'taskdock-hashed-assets-v1',
-              cacheableResponse: { statuses: [200] },
-              expiration: { maxEntries: 64, maxAgeSeconds: 31_536_000, purgeOnQuotaError: true },
-            },
-          },
-        ],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [
-          /^\/api(?:\/|$)/,
-          /^\/health(?:\/|$)/,
-          /^\/version$/,
-          /^\/assets(?:\/|$)/,
-        ],
       },
     }),
   ],

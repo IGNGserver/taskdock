@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -240,35 +241,56 @@ async function main(): Promise<void> {
     encodePng(width, height, resizeCover(source, width, height));
   const resizedIcon = (width: number, height: number, contentScale = 0.72) =>
     encodePng(width, height, resizeContain(source, width, height, contentScale));
+  const webIcon = (size: number, contentScale = 0.72) => {
+    const pixels = resizeContain(source, size, size, contentScale);
+    // Always composite onto the brand canvas: RGBA files may still be opaque,
+    // but no launcher should have to invent a backdrop for transparent pixels.
+    const background = source.rgba.subarray(0, 3);
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+      const alpha = pixels[offset + 3]! / 255;
+      for (let channel = 0; channel < 3; channel++)
+        pixels[offset + channel] = Math.round(
+          pixels[offset + channel]! * alpha + background[channel]! * (1 - alpha),
+        );
+      pixels[offset + 3] = 255;
+    }
+    return encodePng(size, size, pixels);
+  };
+  const iconRevision = createHash('sha256')
+    .update('taskdock-pwa-v2')
+    .update(sourceBytes)
+    .digest('hex')
+    .slice(0, 16);
   const webPublic = join(rootDir, 'apps', 'web', 'public');
 
-  await writeBinary(join(webPublic, 'favicon.png'), resizedIcon(64, 64));
-  await writeBinary(join(webPublic, 'pwa-64.png'), resizedIcon(64, 64));
-  await writeBinary(join(webPublic, 'pwa-180.png'), resizedIcon(180, 180));
-  await writeBinary(join(webPublic, 'pwa-192.png'), resizedIcon(192, 192));
-  await writeBinary(join(webPublic, 'pwa-512.png'), resizedIcon(512, 512));
-  await writeBinary(join(webPublic, 'pwa-maskable-192.png'), resizedIcon(192, 192, 0.65));
-  await writeBinary(join(webPublic, 'pwa-maskable-512.png'), resizedIcon(512, 512, 0.65));
-
-  // Apple touch icons with solid background. Safari/iOS cache a web clip icon
-  // against its URL for the lifetime of the installed app, so the icons
-  // referenced by index.html live under /icons/ (a new URL space since the
-  // original installs). The root-level copies stay in place for Safari's
-  // automatic /apple-touch-icon.png probe and older service workers.
-  await writeBinary(join(webPublic, 'apple-touch-icon.png'), resizedIcon(180, 180));
-  await writeBinary(join(webPublic, 'apple-touch-icon-180x180.png'), resizedIcon(180, 180));
-  await writeBinary(join(webPublic, 'apple-touch-icon-167x167.png'), resizedIcon(167, 167));
-  await writeBinary(join(webPublic, 'apple-touch-icon-152x152.png'), resizedIcon(152, 152));
-  await writeBinary(join(webPublic, 'apple-touch-icon-120x120.png'), resizedIcon(120, 120));
-
-  const appleTouchIcons = join(webPublic, 'icons');
-  await writeBinary(join(appleTouchIcons, 'apple-touch-icon.png'), resizedIcon(180, 180));
-  await writeBinary(join(appleTouchIcons, 'apple-touch-icon-180x180.png'), resizedIcon(180, 180));
-  await writeBinary(join(appleTouchIcons, 'apple-touch-icon-167x167.png'), resizedIcon(167, 167));
-  await writeBinary(join(appleTouchIcons, 'apple-touch-icon-152x152.png'), resizedIcon(152, 152));
-  await writeBinary(join(appleTouchIcons, 'apple-touch-icon-120x120.png'), resizedIcon(120, 120));
-
+  const versioned = join(webPublic, 'icons', iconRevision);
+  for (const size of [64, 180, 192, 512, 1024]) {
+    const bytes = webIcon(size);
+    await writeBinary(join(webPublic, `pwa-${size}.png`), bytes);
+    await writeBinary(join(versioned, `pwa-${size}.png`), bytes);
+  }
+  await writeBinary(join(webPublic, 'favicon.png'), webIcon(64));
+  for (const size of [192, 512, 1024]) {
+    const bytes = webIcon(size, 0.65);
+    await writeBinary(join(webPublic, `pwa-maskable-${size}.png`), bytes);
+    await writeBinary(join(versioned, `pwa-maskable-${size}.png`), bytes);
+  }
+  // Stable aliases support automatic Apple probes and previously installed apps.
+  for (const size of [120, 152, 167, 180]) {
+    const name = `apple-touch-icon-${size}x${size}.png`;
+    const bytes = webIcon(size);
+    await writeBinary(join(webPublic, name), bytes);
+    await writeBinary(join(webPublic, 'icons', name), bytes);
+    await writeBinary(join(versioned, name), bytes);
+  }
+  for (const path of [
+    join(webPublic, 'apple-touch-icon.png'),
+    join(webPublic, 'icons', 'apple-touch-icon.png'),
+  ])
+    await writeBinary(path, webIcon(180));
   await writeBinary(join(webPublic, 'brand', 'taskdock-icon.png'), resized(512, 512));
+
+  if (process.argv.includes('--web-only')) return;
 
   const androidRes = join(rootDir, 'apps', 'mobile', 'android', 'app', 'src', 'main', 'res');
   const backgroundColor = `#${source.rgba.subarray(0, 3).toString('hex').toUpperCase()}`;
