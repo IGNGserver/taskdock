@@ -30,8 +30,9 @@ node scripts/check-site.mjs dist
 python3 -m http.server -d dist 8765
 ```
 
-站点没有 npm 依赖，构建脚本只用 Node 标准库。`dist/` 是生成产物，不提交。构建与检查的 scratch
-步骤见 [`docs/WORKSPACE.md`](docs/WORKSPACE.md)。
+站点没有前端依赖，构建脚本只用 Node 标准库。`package.json` 只用于把 npm 的包边界固定在 `website/`，
+避免部署工具向上读到产品根的 Node 引擎约束；不要在这里添加前端依赖。`dist/` 是生成产物，不提交。
+构建与检查的 scratch 步骤见 [`docs/WORKSPACE.md`](docs/WORKSPACE.md)。
 
 ## 许可
 
