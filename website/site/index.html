@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>TaskDock — 让散落的任务各归其位</title>
+  <meta name="description" content="TaskDock 是为个人开发者准备的自托管、离线优先任务工作台：目录树、日期与时间点、流程和执行步骤，数据保存在你自己的服务器与 PostgreSQL 中。">
+  <meta name="theme-color" content="#0a1124">
+  <meta name="color-scheme" content="dark">
+  <meta name="msvalidate.01" content="B411826ACAE5C5CD20EA5574C3F8A6E4">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="TaskDock">
+  <meta property="og:title" content="TaskDock — 让散落的任务各归其位">
+  <meta property="og:description" content="为个人开发者准备的自托管、离线优先任务工作台。">
+  <link rel="canonical" href="https://taskdock.igng.net/">
+  <meta property="og:url" content="https://taskdock.igng.net/">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/img/taskdock-icon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/img/taskdock-icon-192.png">
+  <link rel="apple-touch-icon" href="assets/img/taskdock-icon-180.png">
+  <link rel="stylesheet" href="assets/css/site.css">
+  <script type="module" src="assets/js/main.js"></script>
+</head>
+<body data-page="home">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.58 9.58 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h3.6l2 2h7.4a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+      <symbol id="i-cal" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M8 3.5v4M16 3.5v4M4 10h16"/></g></symbol>
+      <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4.5M6 5h10.5l-2 4 2 4H6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-flow" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="4.5" width="4.5" height="15" rx="1.5"/><rect x="9.75" y="4.5" width="4.5" height="10" rx="1.5"/><rect x="16" y="4.5" width="4.5" height="6" rx="1.5"/></g></symbol>
+      <symbol id="i-steps" viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19V5a1.5 1.5 0 0 1 1-1.5ZM14 3.5V8.5h5M8.5 13h7M8.5 16.5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-browser" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18" /></g></symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></g></symbol>
+      <symbol id="i-hub" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="6" rx="7.5" ry="2.8"/><path d="M4.5 6v6c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8V6M4.5 12v6c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8v-6"/></g></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 5.8v5.7c0 4.3 2.9 7.9 7 9.5 4.1-1.6 7-5.2 7-9.5V5.8Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+      <symbol id="i-box" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3 20 7.3v9.4L12 21l-8-4.3V7.3Z"/><path d="m4 7.3 8 4.4 8-4.4M12 11.7V21"/></g></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.4 3.5 5.2 3.5 8.5s-1.2 6.1-3.5 8.5c-2.3-2.4-3.5-5.2-3.5-8.5s1.2-6.1 3.5-8.5Z"/></g></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></g></symbol>
+      <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4.5h5.5V10M19.5 4.5 11 13M17 14v4a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 18V8.5A1.5 1.5 0 0 1 6.5 7H10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-gate" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></g></symbol>
+    </defs>
+  </svg>
+
+  <a class="skip-link" href="#main">跳到正文</a>
+
+  <header class="site-header" data-header>
+    <div class="wrap header-inner">
+      <a class="brand" href="./" aria-label="TaskDock 首页">
+        <img src="assets/img/taskdock-icon-96.png" width="30" height="30" alt="">
+        <span>TaskDock</span>
+      </a>
+      <nav class="site-nav" id="site-nav" aria-label="主导航">
+        <a href="#model">数据模型</a>
+        <a href="#time">日程</a>
+        <a href="#offline">离线同步</a>
+        <a href="#selfhost">自托管</a>
+        <a href="download.html">下载与部署</a>
+      </nav>
+      <div class="header-actions">
+        <a class="icon-link" href="https://github.com/IGNGserver/taskdock" aria-label="在 GitHub 查看 TaskDock 源码"><svg aria-hidden="true"><use href="#i-github"/></svg></a>
+        <a class="btn btn-primary btn-small" href="download.html">开始部署</a>
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开菜单" data-menu-toggle><span></span><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- 首屏：散落 → 归位。卡片是装饰性演示，正文信息都在文本里。 -->
+    <section class="hero-track" aria-labelledby="hero-title" data-hero>
+      <div class="hero-stage">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="dot"></span>自托管 · 离线优先 · 为个人开发者</p>
+          <h1 class="hero-title" id="hero-title">
+            <span class="line" data-scatter>让散落的任务</span>
+            <span class="line settle">各归其位。</span>
+          </h1>
+          <p class="hero-lead">TaskDock 是一个自托管的任务工作台：先把想法记下来，再按目录、日期和流程安排，每个任务都能附上开发笔记。它部署在你自己的服务器上，断网时照样能看、能改。</p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="download.html">部署与下载<svg class="arrow" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+            <a class="btn" href="https://github.com/IGNGserver/taskdock"><svg aria-hidden="true"><use href="#i-github"/></svg>查看源码</a>
+          </div>
+          <div class="hero-meta">
+            <span class="release-badge" data-release-badge>2.0 预览版</span>
+            <span>网页 / PWA · Android · Docker 中枢</span>
+          </div>
+        </div>
+
+        <div class="hero-field" data-field aria-hidden="true">
+          <div class="dock-panel" data-panel>
+            <div class="dock-panel-head">
+              <span class="crumbs"><svg><use href="#i-folder"/></svg>开发<span class="sep">/</span>TaskDock</span>
+              <span class="count" data-count>已归位 0/10</span>
+            </div>
+          </div>
+          <div class="dock-group" data-group="doing" style="--c: var(--amber)"><i></i>进行中 <span class="n"></span></div>
+          <div class="dock-group" data-group="todo" style="--c: var(--slate)"><i></i>待开始 <span class="n"></span></div>
+          <div class="dock-group" data-group="done" style="--c: var(--sage)"><i></i>已完成 <span class="n"></span></div>
+        </div>
+
+        <button class="btn btn-small btn-ghost hero-reset" type="button" data-hero-reset>重新归位</button>
+
+        <div class="hero-hint" aria-hidden="true">
+          <span class="label-long">向下滚动，或拖动卡片</span>
+          <span class="meter"><b data-meter></b></span>
+          <span data-meter-label>散落</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 01 数据模型 -->
+    <section class="section" id="model" aria-labelledby="model-title">
+      <div class="wrap model">
+        <div>
+          <p class="eyebrow reveal"><span class="idx">01</span>数据模型</p>
+          <h2 class="reveal" id="model-title">一个任务，<br>只有一个事实。</h2>
+          <p class="lead reveal">目录决定任务放在哪里，日期与时间点决定什么时候关注它，流程记录它走到哪个阶段，步骤拆解它具体怎么做。四个维度彼此独立，引用的始终是同一个任务——在任何一处改变状态，所有视图同时更新。</p>
+          <div class="model-tabs reveal" role="tablist" aria-label="任务的四个维度" data-model-tabs>
+            <button class="model-tab" role="tab" id="tab-tree" aria-controls="lens-stage" aria-selected="true" data-view="tree">
+              <span class="k">01</span><span class="t">目录树</span>
+              <span class="d"><span>文件夹可以无限嵌套，同一级里文件夹和任务并存。文件夹没有手动状态，由全部后代任务实时推导。</span></span>
+            </button>
+            <button class="model-tab" role="tab" id="tab-time" aria-controls="lens-stage" aria-selected="false" tabindex="-1" data-view="time">
+              <span class="k">02</span><span class="t">日期与时间点</span>
+              <span class="d"><span>同一个任务可以同时出现在多个日期，也可以挂在「额度重置后」「上线前」这样的自定义事件上。</span></span>
+            </button>
+            <button class="model-tab" role="tab" id="tab-flow" aria-controls="lens-stage" aria-selected="false" tabindex="-1" data-view="flow">
+              <span class="k">03</span><span class="t">流程</span>
+              <span class="d"><span>把任务放进分阶段的流程看板。一个任务可以加入多个流程，在同一个流程里只出现一次。</span></span>
+            </button>
+            <button class="model-tab" role="tab" id="tab-steps" aria-controls="lens-stage" aria-selected="false" tabindex="-1" data-view="steps">
+              <span class="k">04</span><span class="t">执行步骤</span>
+              <span class="d"><span>在任务内部列出线性步骤，并附上 Markdown 笔记。步骤有自己的三态状态，不会自动改动任务状态。</span></span>
+            </button>
+          </div>
+          <p class="model-desc" data-model-desc aria-live="polite"></p>
+        </div>
+
+        <div class="lens reveal" data-lens>
+          <div class="lens-bar">
+            <span class="dots"><i></i><i></i><i></i></span>
+            <span class="where" data-lens-where>/tree</span>
+            <span class="live">同一个 taskId</span>
+          </div>
+          <div class="lens-stage" id="lens-stage" role="tabpanel" aria-labelledby="tab-tree" data-lens-stage>
+            <!-- 视图由 dimensions.js 渲染；无脚本时显示目录视图的静态说明 -->
+            <noscript><p class="muted">启用 JavaScript 后可以切换四个视图并交互。</p></noscript>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 时间 -->
+    <section class="section" id="time" aria-labelledby="time-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow reveal"><span class="idx">02</span>日期与时间点</p>
+          <h2 class="reveal" id="time-title">什么时候做，<br>交给时间轴。</h2>
+          <p class="lead reveal">把任务安排到某一天，或者挂在一个还没有确定日期的事件上。安排只是一条引用：同一个任务可以同时出现在好几处，完成一次，处处完成。</p>
+        </div>
+
+        <div class="time-shell reveal" data-timeline>
+          <div class="time-tray">
+            <span class="label">拖到时间轴上，或点选后再点目标列：</span>
+            <div class="tray-items" data-tray style="display:contents"></div>
+          </div>
+          <div class="timeline" data-tl-cols></div>
+          <div class="time-foot">
+            <span class="msg" data-tl-msg aria-live="polite">试试把任务拖到另一天：它不会被复制，只是多了一处安排。</span>
+            <button class="btn btn-small" type="button" data-tl-undo hidden>撤销顺延</button>
+          </div>
+        </div>
+
+        <div class="legend-row">
+          <div class="reveal" style="--d:0">
+            <h3>安排不是复制</h3>
+            <p>加入日程只增加一条安排关系，标题、状态和笔记仍然只存在于任务本身。</p>
+          </div>
+          <div class="reveal" style="--d:1">
+            <h3>顺延可以撤销</h3>
+            <p>把某一天仍未完成的安排批量顺延到次日，自动跳过已完成或已归档的任务，随时可以撤销。</p>
+          </div>
+          <div class="reveal" style="--d:2">
+            <h3>事件到达不改任务</h3>
+            <p>「上线前」「额度重置后」这样的事件到达，只改变事件本身；任务是否完成，仍然由你决定。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 离线优先 -->
+    <section class="section" id="offline" aria-labelledby="offline-title">
+      <div class="wrap sync-wrap">
+        <div>
+          <p class="eyebrow reveal"><span class="idx">03</span>离线优先</p>
+          <h2 class="reveal" id="offline-title">断网的时候，<br>工作不会停。</h2>
+          <p class="lead reveal">界面先读本地数据，不等网络。每次修改和它的待同步记录在同一个本地事务里写入；恢复连接后按顺序推送，再拉取其他设备的变化。</p>
+          <ul class="sync-facts">
+            <li class="reveal" style="--d:0"><svg aria-hidden="true"><use href="#i-check"/></svg><span><b>先读本地。</b>浏览器使用 IndexedDB，Android 使用 Room，打开就能用。</span></li>
+            <li class="reveal" style="--d:1"><svg aria-hidden="true"><use href="#i-check"/></svg><span><b>按顺序重放。</b>修改先进入待同步队列，联网后逐条推送；同一条修改重试不会重复写入。</span></li>
+            <li class="reveal" style="--d:2"><svg aria-hidden="true"><use href="#i-check"/></svg><span><b>冲突不静默覆盖。</b>版本对不上时，同时保留你的修改和服务器快照，由你决定。</span></li>
+            <li class="reveal" style="--d:3"><svg aria-hidden="true"><use href="#i-check"/></svg><span><b>高风险操作不冒险。</b>整棵目录删除、批量顺延这类操作，离线时直接拒绝。</span></li>
+            <li class="reveal" style="--d:4"><svg aria-hidden="true"><use href="#i-check"/></svg><span><b>实时但克制。</b>WebSocket 只推送“需要同步”的信号，不携带任务内容。</span></li>
+          </ul>
+        </div>
+
+        <div class="sync-stage reveal" data-sync>
+          <div class="sync-grid" data-sync-grid>
+            <svg class="sync-wires" data-wires aria-hidden="true"><path data-wire="a"/><path data-wire="b"/></svg>
+            <div class="client" data-client="web">
+              <div class="client-head"><svg aria-hidden="true"><use href="#i-browser"/></svg>浏览器 · PWA<span class="net" data-net>在线</span></div>
+              <div class="client-list" data-list></div>
+              <div class="outbox">
+                <div class="outbox-head"><span>待同步队列</span><b data-outbox-count>0</b></div>
+                <div class="outbox-items" data-outbox></div>
+              </div>
+            </div>
+            <div class="hub" data-hub>
+              <svg aria-hidden="true"><use href="#i-hub"/></svg>
+              <span class="name">TaskDock 中枢</span>
+              <span class="sub">Fastify · PostgreSQL</span>
+              <span class="cursor" data-cursor>cursor 1042</span>
+            </div>
+            <div class="client" data-client="android">
+              <div class="client-head"><svg aria-hidden="true"><use href="#i-phone"/></svg>Android<span class="net">在线</span></div>
+              <div class="client-list" data-list></div>
+              <div class="outbox">
+                <div class="outbox-head"><span>待同步队列</span><b>0</b></div>
+                <div class="outbox-items"></div>
+              </div>
+            </div>
+          </div>
+          <div class="sync-controls">
+            <button class="switch" type="button" role="switch" aria-checked="true" data-net-toggle><span class="track"></span><span data-net-label>浏览器在线</span></button>
+            <button class="btn btn-small" type="button" data-remote-edit disabled>在 Android 上改同一个任务</button>
+          </div>
+          <p class="sync-log" data-sync-log aria-live="polite">点浏览器里任务前的圆圈改变状态，看修改怎样到达中枢和 Android；再把浏览器切到离线试试。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 自托管 -->
+    <section class="section" id="selfhost" aria-labelledby="host-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow reveal"><span class="idx">04</span>自托管</p>
+          <h2 class="reveal" id="host-title">数据放在你自己的<br>服务器上。</h2>
+          <p class="lead reveal">TaskDock 以 Docker 镜像发布在 GitHub Container Registry。服务器上不需要源码，也不需要 Node.js：准备好 <code class="inline-code">compose.yaml</code> 和 <code class="inline-code">.env</code>，拉取镜像、执行迁移、启动，家里的 NAS 也能跑。</p>
+        </div>
+
+        <div class="host">
+          <div class="term reveal" data-term>
+            <div class="term-bar" role="tablist" aria-label="部署命令">
+              <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              <button class="term-tab" type="button" role="tab" aria-selected="true" aria-controls="term-deploy" id="tt-deploy">首次部署</button>
+              <button class="term-tab" type="button" role="tab" aria-selected="false" aria-controls="term-owner" id="tt-owner" tabindex="-1">初始化 Owner</button>
+              <button class="term-tab" type="button" role="tab" aria-selected="false" aria-controls="term-upgrade" id="tt-upgrade" tabindex="-1">升级</button>
+              <button class="copy-btn" type="button" data-copy-term><svg aria-hidden="true"><use href="#i-copy"/></svg><span>复制</span></button>
+            </div>
+<pre id="term-deploy" role="tabpanel" aria-labelledby="tt-deploy"><span class="cm"># 在空目录中准备 compose.yaml 与 .env.example</span>
+<span class="pr">$ </span>cp .env.example .env
+<span class="cm"># 生成随机密钥，填写 .env 里的密码与令牌</span>
+<span class="pr">$ </span>openssl rand -base64 48
+<span class="pr">$ </span>export APP_VERSION=<span class="vr" data-version-text>2.0.0-rc.37</span>
+<span class="pr">$ </span>docker compose pull
+<span class="pr">$ </span>docker compose --profile operations run --rm migrate
+<span class="pr">$ </span>docker compose up -d
+<span class="cm"># 默认访问 http://服务器地址:48731</span></pre>
+<pre id="term-owner" role="tabpanel" aria-labelledby="tt-owner" hidden><span class="cm"># 在 .env 中填写 OWNER_USERNAME 与 OWNER_PASSWORD</span>
+<span class="pr">$ </span>docker compose --profile operations run --rm bootstrap
+<span class="cm"># 初始化成功后：从 .env 删除 OWNER_PASSWORD，</span>
+<span class="cm"># 并删除或轮换 BOOTSTRAP_TOKEN</span></pre>
+<pre id="term-upgrade" role="tabpanel" aria-labelledby="tt-upgrade" hidden><span class="cm"># 先备份数据库，再修改版本号</span>
+<span class="pr">$ </span>export APP_VERSION=<span class="vr">&lt;新版本号&gt;</span>
+<span class="pr">$ </span>docker compose pull
+<span class="pr">$ </span>docker compose --profile operations run --rm migrate
+<span class="pr">$ </span>docker compose up -d
+<span class="cm"># 出现问题时改回上一个版本号，并按备份恢复文档处理数据库</span></pre>
+          </div>
+
+          <div>
+            <div class="stack">
+              <div class="stack-layer is-optional reveal" style="--d:0">
+                <span class="ic"><svg aria-hidden="true"><use href="#i-gate"/></svg></span>
+                <span><span class="t">Caddy 网关（可选）</span><br><span class="d">反向代理；HTTPS 地址自动签发证书</span></span>
+                <span class="port">:80 :443</span>
+              </div>
+              <div class="stack-layer is-core reveal" style="--d:1">
+                <span class="ic"><svg aria-hidden="true"><use href="#i-box"/></svg></span>
+                <span><span class="t">TaskDock 中枢</span><br><span class="d">REST · WebSocket · 网页端</span></span>
+                <span class="port">:48731</span>
+              </div>
+              <div class="stack-layer is-sealed reveal" style="--d:2">
+                <span class="ic"><svg aria-hidden="true"><use href="#i-hub"/></svg></span>
+                <span><span class="t">PostgreSQL 18</span><br><span class="d">权威数据源，只在容器网络内可达</span></span>
+                <span class="port">不映射端口</span>
+              </div>
+            </div>
+            <ul class="host-notes reveal">
+              <li><span>推荐固定具体版本号。<code class="inline-code">latest</code> 只跟随正式稳定版，不会指向预览版。</span></li>
+              <li><span>公网建议使用 HTTPS。HTTP 地址也能用，但界面会给出安全提示；网页端要安装为 PWA 或离线打开，需要 HTTPS（或本机 localhost）。</span></li>
+              <li><span>用于重要数据前，先读 <a href="https://github.com/IGNGserver/taskdock/blob/master/docs/BACKUP_RESTORE.md">备份与恢复</a> 和 <a href="https://github.com/IGNGserver/taskdock/blob/master/docs/SECURITY.md">安全说明</a>。</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 细节 -->
+    <section class="section" id="details" aria-labelledby="details-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow reveal"><span class="idx">05</span>细节</p>
+          <h2 class="reveal" id="details-title">每天都会碰到的小事，<br>都有安放的位置。</h2>
+        </div>
+        <div class="ledger">
+          <div class="ledger-row reveal">
+            <span class="no">05.1</span>
+            <h3>Markdown 开发笔记</h3>
+            <p>每个任务都能保存 Markdown 笔记，记下思路、命令、链接和处理过程，和任务放在一起。</p>
+            <div class="demo" aria-hidden="true">
+              <div class="demo-md">
+                <div class="src">## 复现<br>- 先 `pg_dump`</div>
+                <div class="out"><b>复现</b>• 先 <code>pg_dump</code></div>
+              </div>
+            </div>
+          </div>
+          <div class="ledger-row reveal">
+            <span class="no">05.2</span>
+            <h3>命令面板</h3>
+            <p>在桌面浏览器按 <code class="inline-code">⌘ K</code> 或 <code class="inline-code">Ctrl K</code>，直接搜索任务和备注。</p>
+            <div class="demo" aria-hidden="true">
+              <div class="demo-k"><kbd>⌘</kbd><kbd>K</kbd><span class="search"><span class="typed">回滚演练笔记</span></span></div>
+            </div>
+          </div>
+          <div class="ledger-row reveal">
+            <span class="no">05.3</span>
+            <h3>右滑完成</h3>
+            <p>在手机浏览器里，向右滑过阈值即可完成任务，向左滑展开操作菜单；随手记录有常驻的新建按钮。</p>
+            <div class="demo" aria-hidden="true">
+              <div class="demo-swipe"><div class="mini"><span class="status"></span><span>更新部署说明</span></div></div>
+            </div>
+          </div>
+          <div class="ledger-row reveal">
+            <span class="no">05.4</span>
+            <h3>按操作恢复归档</h3>
+            <p>归档文件夹会逐项归档整棵子树；恢复时只恢复这一次操作归档的内容，不会误恢复更早归档的任务。</p>
+            <div class="demo" aria-hidden="true">
+              <div class="demo-archive"><span class="box"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i></span><span>归档 → 恢复同一次操作</span></div>
+            </div>
+          </div>
+          <div class="ledger-row reveal">
+            <span class="no">05.5</span>
+            <h3>不变的任务编号</h3>
+            <p>新任务统一使用 TASK-N 全局编号，编号创建后不再改变，在笔记和提交信息里引用都不会失效。</p>
+            <div class="demo" aria-hidden="true">
+              <div class="demo-ref"><span>fix: 回滚脚本</span><span class="tok">TASK-214</span></div>
+            </div>
+          </div>
+          <div class="ledger-row reveal">
+            <span class="no">05.6</span>
+            <h3>跟随系统深浅色</h3>
+            <p>网页端读取系统配色偏好，Android 跟随系统主题。主题属于设备本身，不会同步到其他设备。</p>
+            <div class="demo" aria-hidden="true">
+              <div class="demo-theme"><div class="light"><i></i><i></i><i></i></div><div class="dark"><i></i><i></i><i></i></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06 多端 -->
+    <section class="section" id="platforms" aria-labelledby="platforms-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow reveal"><span class="idx">06</span>多端</p>
+          <h2 class="reveal" id="platforms-title">一套数据，<br>在你常用的地方打开。</h2>
+        </div>
+        <div class="platforms">
+          <article class="platform reveal" style="--d:0">
+            <span class="ic"><svg aria-hidden="true"><use href="#i-globe"/></svg></span>
+            <h3>网页 · PWA</h3>
+            <p>部署后直接用浏览器访问，无需另装客户端。界面按屏幕自适应：手机单手快速记录，平板双栏，桌面支持拖放与键盘。</p>
+            <span class="foot">随中枢一起提供</span>
+          </article>
+          <article class="platform reveal" style="--d:1">
+            <span class="ic"><svg aria-hidden="true"><use href="#i-phone"/></svg></span>
+            <h3>Android</h3>
+            <p>原生 Jetpack Compose 客户端，使用 Room 本地存储，和网页端共用同一套 API 与同步协议。</p>
+            <span class="foot">APK · GitHub Releases</span>
+          </article>
+          <article class="platform reveal" style="--d:2">
+            <span class="ic"><svg aria-hidden="true"><use href="#i-box"/></svg></span>
+            <h3>中枢 · Docker</h3>
+            <p>Fastify 与 PostgreSQL 组成的单用户中枢。所有设备的数据最终汇集在这里，也只在这里。</p>
+            <span class="foot">ghcr.io/igngserver/taskdock</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section finale" aria-labelledby="finale-title" data-finale>
+      <div class="wrap">
+        <h2 class="reveal" id="finale-title">把今天的事，<br>放回它该在的位置。</h2>
+        <p class="lead reveal">TaskDock 目前处于 2.0 预览阶段，发布的都是预发布版本。用于重要数据前，请先阅读部署与备份文档。</p>
+        <div class="hero-cta reveal">
+          <a class="btn btn-primary" href="download.html">部署与下载<svg class="arrow" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          <a class="btn" href="https://github.com/IGNGserver/taskdock/releases"><svg aria-hidden="true"><use href="#i-ext"/></svg>查看全部版本</a>
+        </div>
+        <div class="finale-dock" aria-hidden="true">
+          <i style="--x:8;--i:0;--r:-40deg"></i><i style="--x:20;--i:1;--r:25deg"></i><i style="--x:32;--i:2;--r:-15deg"></i><i style="--x:44;--i:3;--r:50deg"></i><i style="--x:56;--i:4;--r:-30deg"></i><i style="--x:68;--i:5;--r:20deg"></i><i style="--x:80;--i:6;--r:-55deg"></i><i style="--x:92;--i:7;--r:35deg"></i>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="brand" href="./"><img src="assets/img/taskdock-icon-96.png" width="30" height="30" alt=""><span>TaskDock</span></a>
+          <p>为个人开发者准备的自托管、离线优先任务工作台。单用户，数据只属于你。</p>
+        </div>
+        <div>
+          <h4>产品</h4>
+          <ul>
+            <li><a href="#model">数据模型</a></li>
+            <li><a href="#time">日期与时间点</a></li>
+            <li><a href="#offline">离线同步</a></li>
+            <li><a href="#selfhost">自托管</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>文档</h4>
+          <ul>
+            <li><a href="https://github.com/IGNGserver/taskdock/blob/master/docs/DEPLOYMENT.md">部署说明</a></li>
+            <li><a href="https://github.com/IGNGserver/taskdock/blob/master/docs/BACKUP_RESTORE.md">备份与恢复</a></li>
+            <li><a href="https://github.com/IGNGserver/taskdock/blob/master/docs/SECURITY.md">安全说明</a></li>
+            <li><a href="https://github.com/IGNGserver/taskdock/blob/master/docs/SYNC_PROTOCOL.md">同步协议</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>获取</h4>
+          <ul>
+            <li><a href="download.html">下载与部署</a></li>
+            <li><a href="https://github.com/IGNGserver/taskdock/releases">GitHub Releases</a></li>
+            <li><a href="https://github.com/IGNGserver/taskdock">产品源码</a></li>
+            <li><a href="https://github.com/IGNGserver/taskdock-website">官网源码</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-base">
+        <span>TaskDock 仍处于早期版本阶段，正式使用前请先备份数据。</span>
+        <span>© <span data-year>2026</span> TaskDock</span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

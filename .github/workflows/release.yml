@@ -289,5 +289,9 @@ jobs:
             fi
             gh release create "${args[@]}"
           fi
+      - name: Trigger website deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${GITHUB_REPOSITORY}/dispatches" -f event_type=release-published
 
 # 手动发布流程：默认生成预发布版本。
