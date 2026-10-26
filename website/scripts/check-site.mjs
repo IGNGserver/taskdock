@@ -6,6 +6,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, dirname, relative, extname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { readMetaTags } from './meta-tags.mjs';
 
 const root = resolve(
   process.argv[2] || resolve(dirname(fileURLToPath(import.meta.url)), '..', 'site'),
@@ -38,10 +39,24 @@ for (const page of pages) {
   const html = readFileSync(page, 'utf8');
   if (!/^<!doctype html>/i.test(html)) fail(page, '缺少 <!doctype html>');
   if (!/<html lang="zh-CN">/.test(html)) fail(page, '缺少 <html lang="zh-CN">');
-  if (!/<meta charset="utf-8">/.test(html)) fail(page, '缺少 charset');
-  if (!/<meta name="viewport"[^>]*width=device-width/.test(html)) fail(page, '缺少 viewport');
+  const metadata = readMetaTags(html);
+  if (!metadata.some((tag) => tag.get('charset')?.trim().toLowerCase() === 'utf-8'))
+    fail(page, '缺少 charset');
+  if (
+    !metadata.some(
+      (tag) =>
+        tag.get('name')?.toLowerCase() === 'viewport' &&
+        /(?:^|,)\s*width\s*=\s*device-width\s*(?:,|$)/i.test(tag.get('content') ?? ''),
+    )
+  )
+    fail(page, '缺少 viewport');
   if (!/<title>[^<]+<\/title>/.test(html)) fail(page, '缺少 <title>');
-  if (!/<meta name="description" content="[^"]+">/.test(html)) fail(page, '缺少 description');
+  if (
+    !metadata.some(
+      (tag) => tag.get('name')?.toLowerCase() === 'description' && tag.get('content')?.trim(),
+    )
+  )
+    fail(page, '缺少 description');
   if ((html.match(/<h1[\s>]/g) || []).length !== 1) fail(page, '每页应当恰好有一个 <h1>');
 
   // 外部脚本与样式：站点只加载自身资源
