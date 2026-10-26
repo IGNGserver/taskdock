@@ -131,7 +131,7 @@ import {
 } from './components/m3e/index.js';
 import { useDevice } from './device.js';
 import { useDismissibleMenu } from './components/m3e/behavior.js';
-import { PwaLifecycleNotice } from './pwa.js';
+import { PwaInstallButton, PwaLifecycleNotice } from './pwa.js';
 import { ErrorBoundary, TaskDetailErrorFallback } from './components/error-boundary.js';
 import { LazyPageBoundary } from './components/lazy-page-boundary.js';
 import { TaskDetailV2Overlay } from './components/task-detail-overlay.js';
@@ -280,7 +280,8 @@ function AuthenticatedApp() {
   const location = useLocation();
   const navigate = useNavigate();
   const { isPhone, isTablet } = useDevice();
-  const sizeClass = useWindowSizeClass();
+  const windowSizeClass = useWindowSizeClass();
+  const sizeClass = isPhone ? 'compact' : windowSizeClass;
   const pageWrapRef = useRef<HTMLDivElement | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -500,7 +501,7 @@ function AuthenticatedApp() {
     <div
       className={`app-frame${isTablet ? ' is-tablet-frame' : ''}${isPhone ? ' is-phone-frame' : ''}`}
     >
-      {(sizeClass === 'medium' || (isTablet && sizeClass === 'expanded')) && (
+      {(sizeClass === 'medium' || (isTablet && sizeClass !== 'compact')) && (
         <NavigationRail
           label="主导航"
           destinations={navItems}
@@ -508,29 +509,36 @@ function AuthenticatedApp() {
           onNavigate={navigate}
           linkAs={RouterLinkAdapter}
           header={<BrandMark size="sm" />}
+          footer={
+            <IconButton
+              label="退出登录"
+              variant="outlined"
+              onClick={() => setLogoutConfirmOpen(true)}
+            >
+              <LogOut size={20} />
+            </IconButton>
+          }
         />
       )}
-      {!isCompactShell(sizeClass) &&
-        (!isTablet || sizeClass !== 'expanded') &&
-        sizeClass !== 'medium' && (
-          /* Expanded and up on desktop: the drawer is persistent, so it is never modal. */
-          <NavigationDrawer
-            open
-            onClose={() => undefined}
-            modal={false}
-            side="start"
-            label="主导航"
-            destinations={navItems}
-            activeTo={activeForExpanded}
-            onNavigate={navigate}
-            linkAs={RouterLinkAdapter}
-            header={drawerHeader}
-            footer={drawerFooter}
-            className="m3e-drawer-layer--persistent"
-          >
-            <DirectoryNavigation />
-          </NavigationDrawer>
-        )}
+      {!isCompactShell(sizeClass) && !isTablet && sizeClass !== 'medium' && (
+        /* Expanded and up on desktop: the drawer is persistent, so it is never modal. */
+        <NavigationDrawer
+          open
+          onClose={() => undefined}
+          modal={false}
+          side="start"
+          label="主导航"
+          destinations={navItems}
+          activeTo={activeForExpanded}
+          onNavigate={navigate}
+          linkAs={RouterLinkAdapter}
+          header={drawerHeader}
+          footer={drawerFooter}
+          className="m3e-drawer-layer--persistent"
+        >
+          <DirectoryNavigation />
+        </NavigationDrawer>
+      )}
       <main className="main-shell">
         <TopAppBar
           variant="small"
@@ -825,6 +833,7 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
   return (
     <main className="auth-page">
       <div className="auth-panel">
+        <PwaInstallButton />
         <div className="brand auth-brand">
           <BrandMark size="lg" />
           <span>TaskDock</span>
@@ -994,6 +1003,7 @@ function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
   return (
     <div className="page">
       <PageHeader eyebrow="MORE" title="更多" />
+      <PwaInstallButton />
       <Button
         variant="tonal"
         className="m3e-button--more-search"
@@ -3543,6 +3553,7 @@ function SettingsPage() {
   return (
     <div className="page narrow-page">
       <PageHeader eyebrow="PREFERENCES" title="设置" />
+      <PwaInstallButton />
       {isNativeClient() && <HubSettingsSection />}
       <form className="settings-form" onSubmit={save}>
         <div className="settings-section">

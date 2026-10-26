@@ -6,6 +6,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, dirname, relative, extname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { readMetaTags } from './meta-tags.mjs';
 
 const root = resolve(
   process.argv[2] || resolve(dirname(fileURLToPath(import.meta.url)), '..', 'site'),
@@ -36,17 +37,23 @@ for (const page of pages) {
 
 for (const page of pages) {
   const html = readFileSync(page, 'utf8');
-  const metaTags = html.match(/<meta\b[^>]*>/gi) || [];
   if (!/^<!doctype html>/i.test(html)) fail(page, '缺少 <!doctype html>');
   if (!/<html lang="zh-CN">/.test(html)) fail(page, '缺少 <html lang="zh-CN">');
-  if (!metaTags.some((tag) => /\scharset\s*=\s*"utf-8"/i.test(tag))) fail(page, '缺少 charset');
-  if (!/<meta name="viewport"[^>]*width=device-width/.test(html)) fail(page, '缺少 viewport');
+  const metadata = readMetaTags(html);
+  if (!metadata.some((tag) => tag.get('charset')?.trim().toLowerCase() === 'utf-8'))
+    fail(page, '缺少 charset');
+  if (
+    !metadata.some(
+      (tag) =>
+        tag.get('name')?.toLowerCase() === 'viewport' &&
+        /(?:^|,)\s*width\s*=\s*device-width\s*(?:,|$)/i.test(tag.get('content') ?? ''),
+    )
+  )
+    fail(page, '缺少 viewport');
   if (!/<title>[^<]+<\/title>/.test(html)) fail(page, '缺少 <title>');
   if (
-    !metaTags.some(
-      (tag) =>
-        /\sname\s*=\s*"description"/i.test(tag) &&
-        /\scontent\s*=\s*"([^"]*)"/i.exec(tag)?.[1]?.trim(),
+    !metadata.some(
+      (tag) => tag.get('name')?.toLowerCase() === 'description' && tag.get('content')?.trim(),
     )
   )
     fail(page, '缺少 description');

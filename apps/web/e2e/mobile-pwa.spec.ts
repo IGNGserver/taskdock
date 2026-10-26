@@ -285,10 +285,24 @@ test('landscape and enlarged text keep navigation and forms within reach', async
   await expect(dialog).toBeVisible();
   await assertFits(page);
   await dialog.getByRole('button', { name: '关闭', exact: true }).click();
-  await page
-    .getByRole('navigation', { name: '主导航' })
-    .getByRole('link', { name: '日历', exact: true })
-    .click();
+  if (test.info().project.name === 'mobile') {
+    // Rotation keeps a real phone in its phone shell. Reach the calendar
+    // through the same Plan entry a person uses, rather than waiting for a
+    // tablet rail that intentionally does not exist on this device.
+    const navigation = page.getByRole('navigation', { name: '移动导航' });
+    await expect(navigation).toBeVisible();
+    await expect(page.getByRole('navigation', { name: '主导航' })).toHaveCount(0);
+    await navigation.getByRole('link', { name: '计划', exact: true }).click();
+    await expect(page).toHaveURL(/\/time$/);
+    await assertFits(page);
+    await page.locator('.time-hub-grid').getByRole('link', { name: /^日历/ }).click();
+  } else {
+    // A resized desktop browser still uses the medium-width navigation rail.
+    const navigation = page.getByRole('navigation', { name: '主导航' });
+    await expect(navigation).toBeVisible();
+    await navigation.getByRole('link', { name: '日历', exact: true }).click();
+  }
+  await expect(page).toHaveURL(/\/time\/calendar(?:\/\d{4}-\d{2}-\d{2})?$/);
   await assertFits(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('navigation', { name: '移动导航' })).toBeVisible();

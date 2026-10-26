@@ -46,6 +46,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Test metadata validation
+        run: node --test scripts/meta-tags.test.mjs
+
       - name: Check static site
         run: node scripts/check-site.mjs dist
 

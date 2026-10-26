@@ -11,11 +11,20 @@ describe('static delivery cache contract', () => {
     const root = await mkdtemp(join(tmpdir(), 'taskdock-static-fixture-'));
     const { mkdir } = await import('node:fs/promises');
     await mkdir(join(root, 'assets'));
+    await mkdir(join(root, 'icons/0123456789abcdef'), { recursive: true });
+    await writeFile(
+      join(root, 'icons/0123456789abcdef/pwa-192.png'),
+      Buffer.from('89504e470d0a1a0a', 'hex'),
+    );
     const source = 'console.log("taskdock");'.repeat(100);
     await writeFile(join(root, 'index.html'), '<!doctype html><div>TaskDock</div>');
     await writeFile(join(root, 'assets/app-AbCd1234.js'), source);
     await writeFile(join(root, 'assets/app-AbCd1234.js.gz'), gzipSync(source));
     await writeFile(join(root, 'sw.js'), '// service worker');
+    await writeFile(
+      join(root, 'manifest.webmanifest'),
+      JSON.stringify({ id: '/', start_url: '/today', display: 'standalone' }),
+    );
     const { app } = await buildServer({
       store: new MemoryStore(),
       config: { webRoot: root, logLevel: 'silent' },
@@ -29,9 +38,17 @@ describe('static delivery cache contract', () => {
       expect(asset.headers['content-encoding']).toBe('gzip');
       expect(asset.headers['cache-control']).toBe('public, max-age=31536000, immutable');
       expect(asset.headers['vary']).toContain('Accept-Encoding');
+      expect(
+        (await app.inject('/icons/0123456789abcdef/pwa-192.png')).headers['cache-control'],
+      ).toBe('public, max-age=31536000, immutable');
       expect((await app.inject('/')).headers['cache-control']).toContain('must-revalidate');
       expect((await app.inject('/sw.js')).headers['cache-control']).toContain('must-revalidate');
       expect((await app.inject('/today')).headers['cache-control']).toContain('must-revalidate');
+      for (const endpoint of ['/', '/today', '/sw.js', '/manifest.webmanifest']) {
+        const response = await app.inject(endpoint);
+        expect(response.statusCode).toBe(200);
+        expect(response.headers['cache-control']).toContain('no-store');
+      }
       // A missing hashed chunk must not silently become the SPA shell: Safari
       // refuses to execute HTML as a module and the task detail chunk dies.
       const missingAsset = await app.inject('/assets/missing-DEADBEEF.js');

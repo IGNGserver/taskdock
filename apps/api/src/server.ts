@@ -307,12 +307,15 @@ export async function buildServer(
       cacheControl: false,
       setHeaders(response, filePath) {
         const hashedAsset =
-          /[/\\]assets[/\\][^/\\]+-[A-Za-z0-9_-]{8,}\.(?:js|css)(?:\.(?:br|gz))?$/.test(filePath);
+          /[/\\]assets[/\\][^/\\]+-[A-Za-z0-9_-]{8,}\.(?:js|css)(?:\.(?:br|gz))?$/.test(filePath) ||
+          /[/\\]icons[/\\][a-f0-9]{16}[/\\][^/\\]+\.png$/.test(filePath);
         response.setHeader(
           'Cache-Control',
           hashedAsset
             ? 'public, max-age=31536000, immutable'
-            : 'public, max-age=0, must-revalidate',
+            : /(?:index\.html|manifest\.webmanifest|sw\.js)(?:\.(?:br|gz))?$/.test(filePath)
+              ? 'no-store, no-cache, max-age=0, must-revalidate'
+              : 'public, max-age=0, must-revalidate',
         );
       },
     });
