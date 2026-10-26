@@ -56,7 +56,9 @@ async function fetchLatest() {
     const latest = Array.isArray(list) ? list.find((r) => !r.draft) : null;
     if (!latest || typeof latest.tag_name !== 'string') return null;
     if (!SAFE_SEGMENT.test(latest.tag_name)) return null;
-    const apk = (latest.assets || []).find((a) => /\.apk$/i.test(a.name) && SAFE_SEGMENT.test(a.name));
+    const apk = (latest.assets || []).find(
+      (a) => /\.apk$/i.test(a.name) && SAFE_SEGMENT.test(a.name),
+    );
     const apkName = apk ? apk.name : null;
     const release = {
       tag: latest.tag_name,
@@ -82,7 +84,11 @@ const versionOf = (tag) => tag.replace(/^v/, '');
 function formatDate(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(d);
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(d);
 }
 
 function apply(release) {

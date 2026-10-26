@@ -7,10 +7,10 @@
 TaskDock 的产品官网：介绍产品、提供下载与部署入口和文档链接，并作为搜索引擎与 AI 工具的可引用入口。
 站点源码位于产品仓库的 `website/`：
 
-| 事项 | 归属 |
-| --- | --- |
-| 产品功能、版本、发布资产、产品文档 | 产品仓库 `IGNGserver/taskdock`（默认分支 `master`） |
-| 页面、样式、静态资源、SEO、站点文案 | `IGNGserver/taskdock/website/` |
+| 事项                                | 归属                                                |
+| ----------------------------------- | --------------------------------------------------- |
+| 产品功能、版本、发布资产、产品文档  | 产品仓库 `IGNGserver/taskdock`（默认分支 `master`） |
+| 页面、样式、静态资源、SEO、站点文案 | `IGNGserver/taskdock/website/`                      |
 
 产品定位（以产品仓库 `README.md` 为准）：面向个人开发者的离线优先、自托管任务工作台，单用户使用；
 数据存放在用户自己的服务器与 PostgreSQL 数据库。当前活动客户端是响应式 Web/PWA 与原生 Android；
@@ -28,13 +28,13 @@ TaskDock 的产品官网：介绍产品、提供下载与部署入口和文档�
 
 ## 已定案的决策
 
-| 事项 | 决定 |
-| --- | --- |
-| 技术栈 | 零依赖静态站点：`website/site/` 下手写 HTML + CSS + 原生 ES 模块 JS；无框架、无 `package.json`；部署前由 Node 标准库脚本 `website/scripts/build-site.mjs` 注入最新发布并生成 `dist/` |
-| 页面 | `index.html`（首页）、`download.html`（下载与部署）、`404.html`；文档入口链接到产品仓库 `docs/`，不在本站复制文档 |
-| 语言 | 简体中文单语（与产品文档一致）；`<html lang="zh-CN">` |
-| 视觉方向 | 见下文“设计系统” |
-| Cloudflare Pages 与地址 | 项目 `taskdock-website`；正式地址 `https://taskdock.igng.net/`，默认别名 `https://taskdock-website.pages.dev/`，见 `docs/HOSTING.md` |
+| 事项                    | 决定                                                                                                                                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 技术栈                  | 零依赖静态站点：`website/site/` 下手写 HTML + CSS + 原生 ES 模块 JS；无框架、无 `package.json`；部署前由 Node 标准库脚本 `website/scripts/build-site.mjs` 注入最新发布并生成 `dist/` |
+| 页面                    | `index.html`（首页）、`download.html`（下载与部署）、`404.html`；文档入口链接到产品仓库 `docs/`，不在本站复制文档                                                                    |
+| 语言                    | 简体中文单语（与产品文档一致）；`<html lang="zh-CN">`                                                                                                                                |
+| 视觉方向                | 见下文“设计系统”                                                                                                                                                                     |
+| Cloudflare Pages 与地址 | 项目 `taskdock-website`；正式地址 `https://taskdock.igng.net/`，默认别名 `https://taskdock-website.pages.dev/`，见 `docs/HOSTING.md`                                                 |
 
 ## 目录结构
 
@@ -86,15 +86,15 @@ website/
 
 站点上的产品事实与出处（改文案前先核对产品仓库当前版本）：
 
-| 站点内容 | 产品仓库出处 |
-| --- | --- |
+| 站点内容                                                                       | 产品仓库出处                                                             |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
 | 目录树、日期与时间点、流程、执行步骤四个维度；文件夹状态推导；一个任务多处安排 | `docs/V2_TREE_WORKFLOW_DEVELOPMENT.md`、`docs/ARCHITECTURE.md`（不变量） |
-| 顺延只复制未完成的安排、可撤销、离线拒绝；事件到达不改任务 | `docs/API.md`、`docs/ARCHITECTURE.md` |
-| 先读本地、待同步队列、按顺序推送、冲突保留双方、WebSocket 只发信号 | `docs/SYNC_PROTOCOL.md` |
-| Docker 部署步骤、`.env` 变量、端口 48731、Owner 初始化、升级与回滚 | `README.md`、`docs/DEPLOYMENT.md`、`compose.yaml` |
-| PWA 安装与离线打开需要 HTTPS | `docs/DEPLOYMENT.md` |
-| 命令面板（⌘K / Ctrl K）、移动端右滑完成与左滑菜单、三态状态圆圈 | `apps/web/src/App.tsx`、`CHANGELOG.md`（rc.24、rc.28） |
-| 版本规则（预发布默认、`latest` 只指向正式版） | `README.md`、`docs/RELEASING.md` |
+| 顺延只复制未完成的安排、可撤销、离线拒绝；事件到达不改任务                     | `docs/API.md`、`docs/ARCHITECTURE.md`                                    |
+| 先读本地、待同步队列、按顺序推送、冲突保留双方、WebSocket 只发信号             | `docs/SYNC_PROTOCOL.md`                                                  |
+| Docker 部署步骤、`.env` 变量、端口 48731、Owner 初始化、升级与回滚             | `README.md`、`docs/DEPLOYMENT.md`、`compose.yaml`                        |
+| PWA 安装与离线打开需要 HTTPS                                                   | `docs/DEPLOYMENT.md`                                                     |
+| 命令面板（⌘K / Ctrl K）、移动端右滑完成与左滑菜单、三态状态圆圈                | `apps/web/src/App.tsx`、`CHANGELOG.md`（rc.24、rc.28）                   |
+| 版本规则（预发布默认、`latest` 只指向正式版）                                  | `README.md`、`docs/RELEASING.md`                                         |
 
 ## 维护
 

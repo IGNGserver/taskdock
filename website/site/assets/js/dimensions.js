@@ -8,9 +8,15 @@ const DESC = {
   tree: '文件夹可以无限嵌套，同一级里文件夹和任务并存。文件夹没有手动状态，由全部后代任务实时推导。',
   time: '同一个任务可以同时出现在多个日期，也可以挂在「额度重置后」「上线前」这样的自定义事件上。',
   flow: '把任务放进分阶段的流程看板。一个任务可以加入多个流程，在同一个流程里只出现一次。',
-  steps: '在任务内部列出线性步骤，并附上 Markdown 笔记。步骤有自己的三态状态，不会自动改动任务状态。',
+  steps:
+    '在任务内部列出线性步骤，并附上 Markdown 笔记。步骤有自己的三态状态，不会自动改动任务状态。',
 };
-const WHERE = { tree: '/tree/发布-2.0', time: '/time/calendar', flow: '/workflows/发布-2.0', steps: 'TASK-214 · 详情' };
+const WHERE = {
+  tree: '/tree/发布-2.0',
+  time: '/time/calendar',
+  flow: '/workflows/发布-2.0',
+  steps: 'TASK-214 · 详情',
+};
 
 const focus = {
   title: '迁移脚本加回滚演练',
@@ -110,7 +116,8 @@ function views() {
         <ol class="steps">
           ${focus.steps
             .map(
-              ([label, s], i) => `<li><button class="status" type="button" data-step="${i}" data-s="${s}" aria-label="切换步骤「${label}」的状态"></button><span class="lbl">${label}</span><span class="st" data-step-label="${i}">${LABEL[s]}</span></li>`,
+              ([label, s], i) =>
+                `<li><button class="status" type="button" data-step="${i}" data-s="${s}" aria-label="切换步骤「${label}」的状态"></button><span class="lbl">${label}</span><span class="st" data-step-label="${i}">${LABEL[s]}</span></li>`,
             )
             .join('')}
         </ol>
@@ -129,7 +136,8 @@ export function initDimensions(lens, tabsEl) {
   const tabs = [...tabsEl.querySelectorAll('[role="tab"]')];
   let current = 'tree';
 
-  const caption = () => `<div class="lens-caption"><span>点任务前的圆圈：待开始 → 进行中 → 已完成</span><span class="ref" data-caption-ref>${focus.ref} · ${LABEL[focus.s]}</span></div>`;
+  const caption = () =>
+    `<div class="lens-caption"><span>点任务前的圆圈：待开始 → 进行中 → 已完成</span><span class="ref" data-caption-ref>${focus.ref} · ${LABEL[focus.s]}</span></div>`;
 
   function sync() {
     stage.querySelectorAll('[data-focus-status]').forEach((el) => {
@@ -159,14 +167,26 @@ export function initDimensions(lens, tabsEl) {
     const andTasks = ['doing', 'todo'];
     const tdTasks = [...relTasks, ...andTasks];
     const devTasks = [...tdTasks, 'todo'];
-    const aggs = { rel: derive(relTasks), and: derive(andTasks), td: derive(tdTasks), dev: derive(devTasks) };
+    const aggs = {
+      rel: derive(relTasks),
+      and: derive(andTasks),
+      td: derive(tdTasks),
+      dev: derive(devTasks),
+    };
     stage.querySelectorAll('[data-agg]').forEach((el) => {
       const s = aggs[el.dataset.agg];
       const changed = el.dataset.s && el.dataset.s !== s;
       el.dataset.s = s;
       el.innerHTML = `${LABEL[s]}`;
       el.style.color = s === 'done' ? 'var(--sage)' : s === 'doing' ? 'var(--amber)' : '';
-      if (changed) el.animate([{ opacity: 0.2, transform: 'translateY(-4px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.22,1,.36,1)' });
+      if (changed)
+        el.animate(
+          [
+            { opacity: 0.2, transform: 'translateY(-4px)' },
+            { opacity: 1, transform: 'none' },
+          ],
+          { duration: 420, easing: 'cubic-bezier(.22,1,.36,1)' },
+        );
     });
   }
 

@@ -75,3 +75,72 @@
     display: none;
   }
 }
+
+/* Pane count follows available window space, including tablet split view. */
+@media (max-width: 839.98px) {
+  .is-tablet-frame .today-task-workspace,
+  .is-tablet-frame .calendar-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .is-tablet-frame .page {
+    inline-size: calc(100% - 32px);
+    max-inline-size: calc(100% - 32px);
+    padding-inline: 0;
+  }
+  .is-tablet-frame .m3e-app-bar__row {
+    padding-inline: 16px;
+  }
+}
+
+.app-frame.is-phone-frame {
+  flex-direction: column;
+}
+.is-phone-frame .m3e-navigation-bar {
+  display: grid;
+  flex: none;
+}
+.is-phone-frame .m3e-app-bar__row {
+  min-inline-size: 0;
+}
+.app-frame.is-tablet-frame,
+.app-frame.is-phone-frame {
+  block-size: var(--dt-viewport-height, 100dvh);
+}
+
+/* Portals are outside the app frame; keyboard bounds must also cover large iPads. */
+@media (any-pointer: coarse) {
+  .m3e-dialog-layer,
+  .m3e-sheet-layer,
+  .m3e-side-sheet-layer,
+  .m3e-drawer-layer:not(.m3e-drawer-layer--persistent) {
+    inset-block-start: var(--dt-viewport-top, 0px);
+    inset-block-end: auto;
+    block-size: var(--dt-viewport-height, 100dvh);
+  }
+  .auth-page {
+    block-size: var(--dt-viewport-height, 100dvh);
+    min-block-size: 0;
+    overflow-y: auto;
+    padding-block: max(24px, var(--dt-safe-top)) max(24px, var(--dt-safe-bottom));
+  }
+  .keyboard-visible .is-phone-frame .m3e-navigation-bar,
+  .keyboard-visible .app-float-layer {
+    display: none;
+  }
+}
+.pwa-help {
+  display: grid;
+  gap: 16px;
+  overflow-wrap: anywhere;
+}
+.pwa-help p {
+  margin: 0;
+  line-height: 1.65;
+}
+
+.is-tablet-frame .m3e-navigation-rail {
+  overflow-y: auto;
+}
+.is-tablet-frame .m3e-navigation-rail__list {
+  flex-shrink: 0;
+}

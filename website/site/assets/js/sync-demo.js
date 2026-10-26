@@ -30,8 +30,16 @@ export function initSync(root) {
     { id: 'b', ref: 'TASK-219', title: '整理同步冲突的复现步骤', s: 'todo' },
     { id: 'c', ref: 'TASK-188', title: '升级到 PostgreSQL 18', s: 'done' },
   ];
-  const hub = { cursor: 1042, tasks: Object.fromEntries(seed.map((t) => [t.id, { s: t.s, v: 3 }])) };
-  const web = { online: true, tasks: Object.fromEntries(seed.map((t) => [t.id, { s: t.s, v: 3 }])), outbox: [], conflict: null };
+  const hub = {
+    cursor: 1042,
+    tasks: Object.fromEntries(seed.map((t) => [t.id, { s: t.s, v: 3 }])),
+  };
+  const web = {
+    online: true,
+    tasks: Object.fromEntries(seed.map((t) => [t.id, { s: t.s, v: 3 }])),
+    outbox: [],
+    conflict: null,
+  };
   const android = { tasks: Object.fromEntries(seed.map((t) => [t.id, { s: t.s, v: 3 }])) };
   const meta = Object.fromEntries(seed.map((t) => [t.id, t]));
   let busy = false;
@@ -50,7 +58,11 @@ export function initSync(root) {
         const status = interactive
           ? `<button class="status" type="button" data-cycle="${t.id}" data-s="${st.s}" aria-label="切换「${t.title}」的状态，当前${LABEL[st.s]}"></button>`
           : `<span class="status" data-s="${st.s}"></span>`;
-        const tag = conflict ? '<span class="tag">冲突</span>' : pending ? '<span class="tag">待同步</span>' : '';
+        const tag = conflict
+          ? '<span class="tag">冲突</span>'
+          : pending
+            ? '<span class="tag">待同步</span>'
+            : '';
         return `<div class="mini${pending ? ' is-pending' : ''}${conflict ? ' is-conflict' : ''}" data-row="${t.id}">${status}<span>${t.title}</span>${tag}</div>`;
       })
       .join('');
@@ -58,7 +70,9 @@ export function initSync(root) {
 
   function renderOutbox() {
     outboxEl.innerHTML = web.outbox
-      .map((op) => `<span class="op" data-op="${op.id}">${meta[op.task].ref} → ${LABEL[op.to]}</span>`)
+      .map(
+        (op) => `<span class="op" data-op="${op.id}">${meta[op.task].ref} → ${LABEL[op.to]}</span>`,
+      )
       .join('');
     outboxCount.textContent = String(web.outbox.length);
   }
@@ -137,7 +151,12 @@ export function initSync(root) {
     const ch = chip.offsetHeight;
     const a = center(fromEl);
     const b = center(toEl);
-    await flyTo(chip, { x: a.x - cw / 2, y: a.y - ch / 2 }, { x: b.x - cw / 2, y: b.y - ch / 2 }, { duration: 640, arc: 26 }).catch(() => {});
+    await flyTo(
+      chip,
+      { x: a.x - cw / 2, y: a.y - ch / 2 },
+      { x: b.x - cw / 2, y: b.y - ch / 2 },
+      { duration: 640, arc: 26 },
+    ).catch(() => {});
     chip.remove();
   }
 
@@ -176,15 +195,25 @@ export function initSync(root) {
         web.outbox.forEach((rest) => {
           if (rest.task === op.task) rest.base = server.v;
         });
-        if (!web.outbox.some((rest) => rest.task === op.task)) web.tasks[op.task] = { s: op.to, v: server.v };
+        if (!web.outbox.some((rest) => rest.task === op.task))
+          web.tasks[op.task] = { s: op.to, v: server.v };
         changed.add(op.task);
         pulse(hubEl, 'is-hit');
-        say(`中枢已应用 <b>${meta[op.task].ref} → ${LABEL[op.to]}</b>，版本 ${server.v}，变更游标前进到 ${hub.cursor}。`);
+        say(
+          `中枢已应用 <b>${meta[op.task].ref} → ${LABEL[op.to]}</b>，版本 ${server.v}，变更游标前进到 ${hub.cursor}。`,
+        );
       } else {
         // 版本冲突：保留本地意图与服务器快照，不静默覆盖
         web.outbox = web.outbox.filter((rest) => rest.task !== op.task);
-        web.conflict = { task: op.task, local: web.tasks[op.task].s, server: server.s, serverV: server.v };
-        say(`<b>${meta[op.task].ref}</b> 的基准版本是 ${op.base}，中枢已经是 ${server.v}：返回冲突与服务器快照，等你选择。`);
+        web.conflict = {
+          task: op.task,
+          local: web.tasks[op.task].s,
+          server: server.s,
+          serverV: server.v,
+        };
+        say(
+          `<b>${meta[op.task].ref}</b> 的基准版本是 ${op.base}，中枢已经是 ${server.v}：返回冲突与服务器快照，等你选择。`,
+        );
       }
       render();
       await sleep(reduced ? 0 : 120);
@@ -209,14 +238,21 @@ export function initSync(root) {
     const to = NEXT[t.s];
     // 先写本地：实体与待同步记录在同一个事务里
     const pendingBase = web.outbox.find((op) => op.task === id)?.base;
-    web.outbox.push({ id: `${Date.now()}-${Math.random()}`, task: id, to, base: pendingBase ?? t.v });
+    web.outbox.push({
+      id: `${Date.now()}-${Math.random()}`,
+      task: id,
+      to,
+      base: pendingBase ?? t.v,
+    });
     t.s = to;
     render();
     if (web.online) {
       say(`本地已写入 <b>${meta[id].ref} → ${LABEL[to]}</b>，正在推送……`);
       flush();
     } else {
-      say(`离线：<b>${meta[id].ref} → ${LABEL[to]}</b> 已写入本地，排进待同步队列（${web.outbox.length}）。`);
+      say(
+        `离线：<b>${meta[id].ref} → ${LABEL[to]}</b> 已写入本地，排进待同步队列（${web.outbox.length}）。`,
+      );
     }
   }
 
@@ -236,7 +272,12 @@ export function initSync(root) {
         render();
       } else {
         web.tasks[c.task] = { s: c.local, v: hub.tasks[c.task].v };
-        web.outbox.push({ id: `r-${Date.now()}`, task: c.task, to: c.local, base: hub.tasks[c.task].v });
+        web.outbox.push({
+          id: `r-${Date.now()}`,
+          task: c.task,
+          to: c.local,
+          base: hub.tasks[c.task].v,
+        });
         say(`已采用本地版本，基于最新版本重新推送 <b>${meta[c.task].ref}</b>……`);
         render();
         flush();
@@ -249,7 +290,11 @@ export function initSync(root) {
     web.online = !web.online;
     render();
     if (web.online) {
-      say(web.outbox.length ? `重新连上中枢：按顺序推送 ${web.outbox.length} 条修改……` : '重新连上中枢，没有待同步的修改。');
+      say(
+        web.outbox.length
+          ? `重新连上中枢：按顺序推送 ${web.outbox.length} 条修改……`
+          : '重新连上中枢，没有待同步的修改。',
+      );
       flush();
     } else {
       say('浏览器离线了。照常改任务：界面立刻更新，修改排进待同步队列。');
@@ -262,7 +307,9 @@ export function initSync(root) {
     const id = web.outbox[0]?.task || 'a';
     const server = hub.tasks[id];
     // 选一个与服务器、浏览器本地都不同的状态，冲突才看得出差别
-    const to = ['todo', 'doing', 'done'].find((x) => x !== server.s && x !== web.tasks[id].s) || NEXT[server.s];
+    const to =
+      ['todo', 'doing', 'done'].find((x) => x !== server.s && x !== web.tasks[id].s) ||
+      NEXT[server.s];
     busy = true;
     render();
     await fly(`${meta[id].ref} → ${LABEL[to]}`, andEl, hubEl);
@@ -278,7 +325,9 @@ export function initSync(root) {
       flush();
       return;
     }
-    say(`Android 把 <b>${meta[id].ref}</b> 改成了 ${LABEL[to]}。浏览器离线，收不到通知；重新连上时会发现版本对不上。`);
+    say(
+      `Android 把 <b>${meta[id].ref}</b> 改成了 ${LABEL[to]}。浏览器离线，收不到通知；重新连上时会发现版本对不上。`,
+    );
   });
 
   render();

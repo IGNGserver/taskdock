@@ -31,7 +31,8 @@ const zhDate = `${year}年${Number(month)}月${Number(day)}日`;
 const channel = latest.prerelease ? '预览版' : '正式版';
 const apk = (latest.assets || []).find((asset) => /\.apk$/i.test(asset.name));
 const expectedApk = `TaskDock-${version}-android.apk`;
-if (!apk || apk.name !== expectedApk) throw new Error(`Expected APK ${expectedApk}, got ${apk?.name || 'none'}`);
+if (!apk || apk.name !== expectedApk)
+  throw new Error(`Expected APK ${expectedApk}, got ${apk?.name || 'none'}`);
 
 await rm(outRoot, { recursive: true, force: true });
 await cp(siteRoot, outRoot, { recursive: true });
@@ -60,7 +61,12 @@ for (const file of ['index.html', 'download.html', 'assets/js/release.js']) {
   }
   if (file === 'assets/js/release.js') {
     text = replaceAll(text, OLD_DATE_ISO, publishedAt, 'fallback ISO date');
-    text = replaceAll(text, 'prerelease: true,', `prerelease: ${latest.prerelease},`, 'fallback prerelease flag');
+    text = replaceAll(
+      text,
+      'prerelease: true,',
+      `prerelease: ${latest.prerelease},`,
+      'fallback prerelease flag',
+    );
   }
   await writeFile(new URL(file, outRoot), text);
 }

@@ -32,7 +32,12 @@ export function initTimeline(root) {
   for (let i = 0; i < 5; i++) {
     const d = new Date(base);
     d.setDate(base.getDate() + i);
-    cols.push({ id: `d${i}`, kind: 'date', title: i === 0 ? '今天' : i === 1 ? '明天' : wd.format(d), sub: md.format(d) });
+    cols.push({
+      id: `d${i}`,
+      kind: 'date',
+      title: i === 0 ? '今天' : i === 1 ? '明天' : wd.format(d),
+      sub: md.format(d),
+    });
   }
   cols.push({ id: 'e1', kind: 'event', title: '额度重置后', sub: '自定义事件', arrived: false });
   cols.push({ id: 'e2', kind: 'event', title: '上线前', sub: '自定义事件', arrived: false });
@@ -55,7 +60,9 @@ export function initTimeline(root) {
   function renderTray() {
     tray.innerHTML = ['t1', 't2', 't4']
       .map(
-        (id) => `<button class="pill-task" type="button" data-task="${id}" aria-pressed="${selected === id}">
+        (
+          id,
+        ) => `<button class="pill-task" type="button" data-task="${id}" aria-pressed="${selected === id}">
           <span class="status" data-s="${tasks[id].s}"></span>${tasks[id].title}</button>`,
       )
       .join('');
@@ -148,7 +155,8 @@ export function initTimeline(root) {
     const pill = e.target.closest('[data-task]');
     if (pill) {
       selected = selected === pill.dataset.task ? null : pill.dataset.task;
-      if (selected) say(`已选中「${tasks[selected].title}」，点一个日期或事件放进去。按 Esc 取消。`);
+      if (selected)
+        say(`已选中「${tasks[selected].title}」，点一个日期或事件放进去。按 Esc 取消。`);
       render();
       return;
     }
@@ -230,7 +238,9 @@ export function initTimeline(root) {
     drag = {
       src,
       pid: mini ? mini.dataset.placement : null,
-      task: pill ? pill.dataset.task : placements.find((p) => p.id === mini.dataset.placement)?.task,
+      task: pill
+        ? pill.dataset.task
+        : placements.find((p) => p.id === mini.dataset.placement)?.task,
       sx: e.clientX,
       sy: e.clientY,
       ox: e.clientX - rect.left,
@@ -295,7 +305,10 @@ export function initTimeline(root) {
           .animate(
             [
               { transform: d.ghost.style.transform, opacity: 1 },
-              { transform: `translate(${r.left}px, ${toY}px) rotate(0deg) scale(0.92)`, opacity: 0.2 },
+              {
+                transform: `translate(${r.left}px, ${toY}px) rotate(0deg) scale(0.92)`,
+                opacity: 0.2,
+              },
             ],
             { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' },
           )
@@ -310,7 +323,10 @@ export function initTimeline(root) {
       if (!reduced) {
         await d.ghost
           .animate(
-            [{ transform: d.ghost.style.transform }, { transform: `translate(${r.left}px, ${r.top}px) rotate(0deg) scale(1)` }],
+            [
+              { transform: d.ghost.style.transform },
+              { transform: `translate(${r.left}px, ${r.top}px) rotate(0deg) scale(1)` },
+            ],
             { duration: 420, easing: 'cubic-bezier(.34,1.56,.64,1)', fill: 'forwards' },
           )
           .finished.catch(() => {});
