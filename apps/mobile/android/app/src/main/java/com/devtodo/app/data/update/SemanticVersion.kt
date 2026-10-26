@@ -3,8 +3,7 @@ package com.devtodo.app.data.update
 /**
  * A small semantic-version implementation for release tags.
  *
- * Android's versionCode cannot distinguish `2.0.0-rc.53` from `2.0.0-rc.54`
- * (and historically did not), so the update decision must use versionName.
+ * The update decision checks SemVer first and Android versionCode again before installation.
  * The comparison follows semver precedence: stable > prerelease, numeric
  * prerelease identifiers compare numerically, and consumers of a shorter
  * identifier list have lower precedence (`rc` < `rc.1`).
@@ -31,8 +30,8 @@ class SemanticVersion private constructor(
         for (index in 0 until length) {
             val left = preRelease.getOrNull(index) ?: return -1
             val right = other.preRelease.getOrNull(index) ?: return 1
-            val leftNumber = left.toIntOrNull()
-            val rightNumber = right.toIntOrNull()
+            val leftNumber = left.takeIf { it.all(Char::isDigit) }?.toBigIntegerOrNull()
+            val rightNumber = right.takeIf { it.all(Char::isDigit) }?.toBigIntegerOrNull()
             val compared = when {
                 leftNumber != null && rightNumber != null -> leftNumber.compareTo(rightNumber)
                 leftNumber != null -> -1
@@ -67,7 +66,7 @@ class SemanticVersion private constructor(
     }
 
     companion object {
-        private val pattern = Regex("""^[vV]?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$""")
+        private val pattern = Regex("""^[vV]?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$""")
 
         fun parse(raw: String?): SemanticVersion? {
             val value = raw?.trim().orEmpty()
@@ -81,6 +80,7 @@ class SemanticVersion private constructor(
                 ?.split('.')
                 ?.filter { it.isNotEmpty() }
                 ?: emptyList()
+            if (prerelease.any { it.length > 1 && it[0] == '0' && it.all(Char::isDigit) }) return null
             return SemanticVersion(major, minor, patch, prerelease)
         }
     }

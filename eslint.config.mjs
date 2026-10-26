@@ -33,6 +33,39 @@ export default tseslint.config(
     },
   },
   {
+    files: ['website/scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        URL: 'readonly',
+        process: 'readonly',
+        fetch: 'readonly',
+        AbortSignal: 'readonly',
+        console: 'readonly',
+      },
+    },
+  },
+  {
+    files: ['website/site/assets/js/**/*.js'],
+    languageOptions: {
+      globals: {
+        document: 'readonly',
+        window: 'readonly',
+        navigator: 'readonly',
+        localStorage: 'readonly',
+        performance: 'readonly',
+        fetch: 'readonly',
+        AbortController: 'readonly',
+        IntersectionObserver: 'readonly',
+        ResizeObserver: 'readonly',
+        getComputedStyle: 'readonly',
+        requestAnimationFrame: 'readonly',
+        cancelAnimationFrame: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+      },
+    },
+  },
+  {
     files: ['apps/web/public/**/*.js'],
     languageOptions: {
       globals: {

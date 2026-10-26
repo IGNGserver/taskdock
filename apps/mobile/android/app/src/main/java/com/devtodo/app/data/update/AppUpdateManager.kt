@@ -44,6 +44,7 @@ class AppUpdateManager(
     context: Context,
     private val source: GitHubReleaseSource = GitHubReleaseSource(
         createApiClient(context.applicationContext),
+        cacheDirectory = File(context.applicationContext.filesDir, "update-feed"),
     ),
     private val downloadClient: OkHttpClient = createDownloadClient(),
     private val clock: () -> Long = System::currentTimeMillis,
@@ -57,8 +58,13 @@ class AppUpdateManager(
     private val isDebuggable =
         (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     private val currentVersion = installedPackage?.versionName ?: "未知版本"
-    private val currentChannel = updateChannelFor(currentVersion)
-    private var lastAttemptAt = preferences.getLong(KEY_LAST_ATTEMPT, 0L)
+    @Volatile private var currentChannel = when (preferences.getString("channel", null)) {
+        "stable" -> UpdateChannel.STABLE
+        "preview" -> UpdateChannel.PRERELEASE
+        else -> updateChannelFor(currentVersion).also {
+            preferences.edit().putString("channel", if (it == UpdateChannel.STABLE) "stable" else "preview").apply()
+        }
+    }
     private var activeJob: Job? = null
 
     private val _state = MutableStateFlow(
@@ -83,10 +89,11 @@ class AppUpdateManager(
         scope.launch { cleanupStaleDownloads() }
     }
 
+    @Synchronized
     fun check(silent: Boolean = false) {
         if (isDebuggable) return
         val snapshot = _state.value
-        if (snapshot.checking || snapshot.downloading) return
+        if (snapshot.checking || snapshot.downloading || activeJob?.isCompleted == false) return
         val current = SemanticVersion.parse(currentVersion) ?: run {
             if (!silent) {
                 _state.update {
@@ -95,19 +102,13 @@ class AppUpdateManager(
             }
             return
         }
-        val now = clock()
-        if (silent) {
-            val last = lastAttemptAt
-            if (last > 0L && now - last < AUTO_CHECK_INTERVAL_MS) return
-        }
-
-        lastAttemptAt = now
-        preferences.edit().putLong(KEY_LAST_ATTEMPT, now).apply()
+        _state.update { it.copy(checking = true, error = null, message = null) }
 
         activeJob = scope.launch {
-            _state.update { it.copy(checking = true, error = null, message = null) }
             try {
-                val update = source.latestUpdate(current, currentChannel)
+                source.latestUpdate(current, currentChannel, installedPackage?.longVersionCodeCompat() ?: 0, silent)
+                synchronized(this@AppUpdateManager) {
+                val update = source.cachedUpdate(current, currentChannel, installedPackage?.longVersionCodeCompat() ?: 0)
                 val checkedAt = clock()
                 preferences.edit().putLong(KEY_LAST_CHECK, checkedAt).apply()
 
@@ -128,6 +129,7 @@ class AppUpdateManager(
                             else -> null
                         },
                     )
+                }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -166,12 +168,27 @@ class AppUpdateManager(
         }
     }
 
+    @Synchronized
+    fun setUpdateChannel(channel: UpdateChannel) {
+        if (currentChannel == channel) return
+        currentChannel = channel
+        if (_state.value.downloading) activeJob?.cancel()
+        preferences.edit().putString("channel", if (channel == UpdateChannel.STABLE) "stable" else "preview").apply()
+        deleteDownloadedFiles()
+        val update = SemanticVersion.parse(currentVersion)?.let {
+            source.cachedUpdate(it, channel, installedPackage?.longVersionCodeCompat() ?: 0)
+        }
+        _state.update { it.copy(currentChannel = channel, update = update, downloading = false, downloadedApkUri = null,
+            error = null, message = "更新通道已保存，仅提示更高版本") }
+    }
+    @Synchronized
     fun download() {
         if (isDebuggable) return
         val snapshot = _state.value
-        val update = snapshot.update ?: return
-        if (snapshot.checking || snapshot.downloading) return
+        val update = snapshot.update?.takeIf { updateAllowed(it, currentVersion, currentChannel) } ?: return
+        if (snapshot.checking || snapshot.downloading || activeJob?.isCompleted == false) return
 
+        _state.update { it.copy(downloading = true) }
         activeJob = scope.launch {
             _state.update {
                 it.copy(
@@ -211,6 +228,10 @@ class AppUpdateManager(
                     "${appContext.packageName}.fileprovider",
                     target,
                 ).toString()
+                synchronized(this@AppUpdateManager) {
+                if (!updateAllowed(update, currentVersion, currentChannel)) {
+                    throw UpdateException(UpdateFailure.INVALID_APK, "当前通道已变更，请重新检查更新")
+                }
                 _state.update {
                     it.copy(
                         downloading = false,
@@ -223,6 +244,7 @@ class AppUpdateManager(
                     )
                 }
                 installRequests.tryEmit(uri)
+                }
             } catch (cancelled: CancellationException) {
                 partial.delete()
                 target.delete()
@@ -272,7 +294,10 @@ class AppUpdateManager(
     }
 
     fun requestInstall() {
-        _state.value.downloadedApkUri?.let { installRequests.tryEmit(it) }
+        val snapshot = _state.value
+        val update = snapshot.update ?: return
+        if (!updateAllowed(update, currentVersion, currentChannel)) return
+        snapshot.downloadedApkUri?.let { installRequests.tryEmit(it) }
     }
 
     fun close() {
@@ -336,6 +361,9 @@ class AppUpdateManager(
                     }
                     output.fd.sync()
                 }
+                if (copied != update.assetSize) {
+                    throw UpdateException(UpdateFailure.INVALID_APK, "更新包大小与发布信息不一致")
+                }
                 digest.digest().toHex()
             }
         } catch (error: UpdateException) {
@@ -346,6 +374,9 @@ class AppUpdateManager(
     }
 
     private fun verifyApk(file: File, update: AndroidUpdate) {
+        if (!updateAllowed(update, currentVersion, currentChannel)) {
+            throw UpdateException(UpdateFailure.INVALID_APK, "当前通道已变更，请重新检查更新")
+        }
         val packageManager = appContext.packageManager
         val archive = readPackageArchiveInfo(packageManager, file.absolutePath)
             ?: throw UpdateException(UpdateFailure.INVALID_APK, "更新包无法解析，已删除")
@@ -363,7 +394,8 @@ class AppUpdateManager(
         }
         val current = installedPackage
             ?: throw UpdateException(UpdateFailure.INVALID_APK, "无法读取当前应用版本")
-        if (archive.longVersionCodeCompat() < current.longVersionCodeCompat()) {
+        if (archive.longVersionCodeCompat() <= current.longVersionCodeCompat() ||
+            (update.versionCode != null && archive.longVersionCodeCompat() != update.versionCode)) {
             throw UpdateException(
                 UpdateFailure.INVALID_APK,
                 "更新包版本号低于当前应用，已阻止安装",
@@ -427,8 +459,6 @@ class AppUpdateManager(
     private companion object {
         const val PREFERENCES_NAME = "taskdock_app_update"
         const val KEY_LAST_CHECK = "last_check_at"
-        const val KEY_LAST_ATTEMPT = "last_attempt_at"
-        const val AUTO_CHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L
         const val STALE_DOWNLOAD_MS = 24L * 60L * 60L * 1000L
         const val STALE_PART_MS = 60L * 60L * 1000L
         const val BUFFER_SIZE = 128 * 1024
@@ -482,6 +512,13 @@ private fun createApiClient(context: Context): OkHttpClient {
 }
 
 private fun createDownloadClient(): OkHttpClient = OkHttpClient.Builder()
+    .addNetworkInterceptor { chain ->
+        val url = chain.request().url
+        if (!url.isHttps || !isTrustedGitHubAssetHost(url.host)) {
+            throw IOException("更新包下载地址不受信任")
+        }
+        chain.proceed(chain.request())
+    }
     .connectTimeout(15, TimeUnit.SECONDS)
     .readTimeout(60, TimeUnit.SECONDS)
     .callTimeout(0, TimeUnit.SECONDS)
