@@ -74,7 +74,7 @@ jobs:
           sudo python3 - <<'PY'
           from pathlib import Path
           import re
-          paths = [Path('/etc/apt/sources.list'), *Path('/etc/apt/sources.list.d').glob('*.list'), *Path('/etc/apt/sources.list.d').glob('*.sources')]
+          paths = [Path('/etc/apt/sources.list'), Path('/etc/apt/apt-mirrors.txt'), *Path('/etc/apt/sources.list.d').glob('*.list'), *Path('/etc/apt/sources.list.d').glob('*.sources')]
           mirror = re.compile(r'(?<!\S)https?://azure\.archive\.ubuntu\.com/ubuntu(/?)(?!\S)')
           for path in paths:
               if not path.is_file():
@@ -89,6 +89,7 @@ jobs:
               updated = ''.join(updated_lines)
               if source != updated:
                   path.write_text(updated)
+                  print(f'Updated Ubuntu package mirror URI in {path}')
           Path('/etc/apt/apt.conf.d/80-ci-downloads').write_text('Acquire::Retries "2";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n')
           PY
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
