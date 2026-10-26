@@ -96,7 +96,7 @@
   flex-direction: column;
 }
 .is-phone-frame .m3e-navigation-bar {
-  display: flex;
+  display: grid;
   flex: none;
 }
 .is-phone-frame .m3e-app-bar__row {

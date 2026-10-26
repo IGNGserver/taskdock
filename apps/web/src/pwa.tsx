@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { readUpgradePending } from '@devtodo/sync-client';
 import { Download } from 'lucide-react';
@@ -47,11 +47,39 @@ export function PwaLifecycleNotice() {
   const [busy, setBusy] = useState(false);
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const registration = useRef<ServiceWorkerRegistration | undefined>(undefined);
+  const pendingConsent = useRef<{ worker: ServiceWorker; dispose: () => void } | null>(null);
+  const activatedWorker = useRef<ServiceWorker | null>(null);
+  const reloadIssued = useRef(false);
+  const [activatedUpdate, setActivatedUpdate] = useState(false);
+  const clearConsent = useCallback(() => {
+    const pending = pendingConsent.current;
+    pendingConsent.current = null;
+    pending?.dispose();
+  }, []);
+  const handleActivatedUpdate = useCallback(() => {
+    if (reloadIssued.current) return;
+    const controller = navigator.serviceWorker.controller;
+    if (!controller) return;
+    const consented = pendingConsent.current?.worker === controller;
+    clearConsent();
+    if (consented) {
+      reloadIssued.current = true;
+      window.location.reload();
+      return;
+    }
+    // An update accepted in another tab must not discard this tab's draft.
+    activatedWorker.current = controller;
+    setActivatedUpdate(true);
+    setUpdateDismissed(false);
+    setBusy(false);
+    setFeedback('其他窗口已完成更新。当前窗口会保留原有内容，请保存输入后再重新打开。');
+  }, [clearConsent]);
   const {
     needRefresh: [needRefresh],
     offlineReady: [offlineReady, setOfflineReady],
     updateServiceWorker,
   } = useRegisterSW({
+    onNeedReload: handleActivatedUpdate,
     onRegisteredSW(_url, value) {
       registration.current = value;
     },
@@ -60,6 +88,30 @@ export function PwaLifecycleNotice() {
     },
   });
 
+  const updateAvailable = needRefresh || activatedUpdate;
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const workers = navigator.serviceWorker;
+    let previous = workers.controller;
+    const changed = () => {
+      const controller = workers.controller;
+      const previousController = previous;
+      previous = controller;
+      // Also cover a page whose first registration predated the update. The
+      // plugin's isUpdate flag is fixed when that registration was created.
+      if (
+        controller &&
+        controller !== previousController &&
+        (previousController || pendingConsent.current?.worker === controller)
+      )
+        handleActivatedUpdate();
+    };
+    workers.addEventListener('controllerchange', changed);
+    return () => {
+      workers.removeEventListener('controllerchange', changed);
+      clearConsent();
+    };
+  }, [clearConsent, handleActivatedUpdate]);
   useEffect(() => {
     const show = () => {
       setOpen(true);
@@ -127,16 +179,54 @@ export function PwaLifecycleNotice() {
         return;
       }
       if (!window.confirm('更新会重新打开页面。请确认当前输入和设置已经保存，再继续更新。')) return;
+      const waiting = registration.current?.waiting;
+      if (
+        !waiting &&
+        activatedWorker.current &&
+        activatedWorker.current === navigator.serviceWorker.controller
+      ) {
+        // Another tab already activated the worker; there is no SKIP_WAITING
+        // message to send, but this tab has now passed its own safety checks.
+        reloadIssued.current = true;
+        window.location.reload();
+        return;
+      }
+      if (!waiting || waiting.state !== 'installed') {
+        setFeedback('更新尚未就绪，请稍后重试。');
+        return;
+      }
+      clearConsent();
+      const revoked = () => {
+        if (waiting.state !== 'redundant' || pendingConsent.current?.worker !== waiting) return;
+        clearConsent();
+        setBusy(false);
+        setFeedback('候选更新未能启用，请稍后重新确认。当前内容仍会保留。');
+      };
+      const timeout = window.setTimeout(() => {
+        if (pendingConsent.current?.worker !== waiting) return;
+        clearConsent();
+        setBusy(false);
+        setFeedback('更新尚未完成。当前窗口会保留，请稍后重新确认。');
+      }, 10_000);
+      pendingConsent.current = {
+        worker: waiting,
+        dispose: () => {
+          window.clearTimeout(timeout);
+          waiting.removeEventListener('statechange', revoked);
+        },
+      };
+      waiting.addEventListener('statechange', revoked);
       await updateServiceWorker(true);
     } catch {
+      clearConsent();
       setFeedback('暂时无法更新，请稍后重试。当前版本仍可继续使用。');
     } finally {
-      setBusy(false);
+      if (!pendingConsent.current) setBusy(false);
     }
   };
   return (
     <>
-      {needRefresh && !updateDismissed ? (
+      {updateAvailable && !updateDismissed ? (
         <Snackbar
           message="TaskDock 有新版本可用。"
           action={{ label: '查看更新', onAction: () => setOpen(true) }}
@@ -155,10 +245,12 @@ export function PwaLifecycleNotice() {
       )}
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          if (!busy) setOpen(false);
+        }}
         title="安装与离线使用"
         footer={
-          <Button variant="text" onClick={() => setOpen(false)}>
+          <Button variant="text" disabled={busy} onClick={() => setOpen(false)}>
             完成
           </Button>
         }
@@ -186,7 +278,7 @@ export function PwaLifecycleNotice() {
             </>
           )}
           <p>已保存的任务保留在本机并在联网后同步。尚未访问的页面或服务器功能可能需要联网。</p>
-          {needRefresh && (
+          {updateAvailable && (
             <>
               <p>新版本已下载。请先保存当前输入；完成待同步改动后可更新并重新打开。</p>
               <Button disabled={busy} onClick={() => void update()}>

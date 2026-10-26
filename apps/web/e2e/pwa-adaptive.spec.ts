@@ -62,6 +62,23 @@ async function loginFixture(page: Page) {
   });
 }
 
+async function assertPhoneTouchTargets(page: Page) {
+  const geometry = await page
+    .getByRole('navigation', { name: '移动导航', exact: true })
+    .evaluate((navigation) => ({
+      width: navigation.getBoundingClientRect().width,
+      items: [...navigation.querySelectorAll('a')].map((item) => ({
+        width: item.getBoundingClientRect().width,
+        height: item.getBoundingClientRect().height,
+      })),
+    }));
+  expect(geometry.items).toHaveLength(5);
+  for (const item of geometry.items) {
+    expect(item.width).toBeGreaterThanOrEqual(44);
+    expect(item.height).toBeGreaterThanOrEqual(44);
+    expect(Math.abs(item.width - geometry.width / geometry.items.length)).toBeLessThanOrEqual(1);
+  }
+}
 for (const viewport of [
   { width: 390, height: 844, phone: true },
   { width: 844, height: 390, phone: true },
@@ -103,6 +120,7 @@ for (const viewport of [
           page.locator(viewport.phone ? '.m3e-navigation-bar' : '.m3e-navigation-rail'),
         ).toBeVisible();
         await expect(page.locator('.page-header')).toBeVisible();
+        if (viewport.phone) await assertPhoneTouchTargets(page);
         const overflow = await page.evaluate(() => {
           const root = document.documentElement;
           const page = document.querySelector('.page-wrap');
