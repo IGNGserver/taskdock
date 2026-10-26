@@ -69,7 +69,30 @@ jobs:
           DATABASE_URL=postgres://devtodo@127.0.0.1:55439/devtodo_runtime pnpm test:pg-runtime
           "$PG_BIN/createdb" -h 127.0.0.1 -p 55439 -U devtodo devtodo_benchmark
           DATABASE_URL=postgres://devtodo@127.0.0.1:55439/devtodo_benchmark pnpm exec tsx scripts/sync-bootstrap-benchmark.ts | tee mobile-loading-benchmark.json
+      - name: Prepare Ubuntu package downloads for browser tests
+        run: |
+          sudo python3 - <<'PY'
+          from pathlib import Path
+          import re
+          paths = [Path('/etc/apt/sources.list'), *Path('/etc/apt/sources.list.d').glob('*.list'), *Path('/etc/apt/sources.list.d').glob('*.sources')]
+          mirror = re.compile(r'(?<!\S)https?://azure\.archive\.ubuntu\.com/ubuntu(/?)(?!\S)')
+          for path in paths:
+              if not path.is_file():
+                  continue
+              source = path.read_text()
+              updated_lines = []
+              for line in source.splitlines(keepends=True):
+                  comment = re.search(r'(?<!\S)#', line)
+                  end = comment.start() if comment else len(line)
+                  active = mirror.sub(r'https://archive.ubuntu.com/ubuntu\1', line[:end])
+                  updated_lines.append(active + line[end:])
+              updated = ''.join(updated_lines)
+              if source != updated:
+                  path.write_text(updated)
+          Path('/etc/apt/apt.conf.d/80-ci-downloads').write_text('Acquire::Retries "2";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n')
+          PY
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
+        timeout-minutes: 10
       - run: pnpm test:e2e
       # 真实链路门禁必须跑生产构建：e2e-real-server.ts 只在 E2E_PWA=1 时用 vite preview
       # 提供 dist 与 service worker，否则退化成 vite dev，mobile-pwa / real-smoke 这类
