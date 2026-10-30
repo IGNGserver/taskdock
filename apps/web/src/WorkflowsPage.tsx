@@ -9,6 +9,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Folder, MoreHorizontal, Plus, Workflow as WorkflowGlyph } from 'lucide-react';
 
 import { mutationV2, requestV2 } from './api.js';
+import { shouldReloadTaskList } from './data-changes.js';
 import { useAuth } from './auth.js';
 import {
   Alert,
@@ -258,7 +259,9 @@ export function WorkflowsPage() {
 
   useEffect(() => {
     void load();
-    const listener = () => void load();
+    const listener = (event: Event) => {
+      if (shouldReloadTaskList(event, load)) void load();
+    };
     window.addEventListener('devtodo:data-changed', listener);
     return () => {
       loadSequence.current += 1;
