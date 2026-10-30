@@ -376,9 +376,31 @@ export function TreePage() {
         setNextCursor(children.nextCursor ?? null);
         setCachedPage(children.cached === true);
         pagesLoaded.current = count;
-        // A fresh read is authoritative for the circle.
-        setStatusOverrides({});
-        setFolderStatusOverrides({});
+        // A fresh read clears overrides only when the server catch up to or exceeds local versions.
+        setStatusOverrides((current) => {
+          const next: Record<string, TreeTaskDto> = {};
+          for (const row of rows) {
+            if (row.kind === 'TASK') {
+              const override = current[row.task.id];
+              if (override && override.version > row.task.version) {
+                next[row.task.id] = override;
+              }
+            }
+          }
+          return next;
+        });
+        setFolderStatusOverrides((current) => {
+          const next: Record<string, FolderDto> = {};
+          for (const row of rows) {
+            if (row.kind === 'FOLDER') {
+              const override = current[row.folder.id];
+              if (override && override.version > row.folder.version) {
+                next[row.folder.id] = override;
+              }
+            }
+          }
+          return next;
+        });
         if (keepPins) {
           // Drop rows that disappeared; anything still on screen keeps its place.
           const alive = rows.map(treeItemId);
@@ -524,6 +546,39 @@ export function TreePage() {
   const displayFolder = useCallback(
     (folder: FolderDto): FolderDto => folderStatusOverrides[folder.id] ?? folder,
     [folderStatusOverrides],
+  );
+
+  const latestItem = useCallback(
+    (item: TreeItemDto): TreeItemDto =>
+      item.kind === 'TASK'
+        ? { ...item, task: displayTask(item.task) }
+        : {
+            ...item,
+            folder: displayFolder(item.folder),
+            aggregate: {
+              ...item.aggregate,
+              status: displayFolder(item.folder).status ?? item.aggregate.status,
+            },
+          },
+    [displayTask, displayFolder],
+  );
+
+  const handleTreeMutationError = useCallback(
+    (cause: unknown, fallback: string) => {
+      const isConflict =
+        (cause instanceof ApiError && cause.code === 'VERSION_CONFLICT') ||
+        (cause instanceof Error &&
+          (cause.message.includes('版本已变化') ||
+            cause.message.includes('状态已变化') ||
+            cause.message.includes('锚点已变化')));
+      if (isConflict) {
+        setError('数据版本已被更新，已自动同步最新状态，请重试');
+        void load();
+        return;
+      }
+      setError(errorMessage(cause, fallback));
+    },
+    [load],
   );
 
   /**
@@ -673,15 +728,16 @@ export function TreePage() {
     }
   };
   const deleteTask = (item: Extract<TreeItemDto, { kind: 'TASK' }>) => {
+    const latestTask = displayTask(item.task);
     setConfirmation({
       title: '永久删除任务',
-      description: `确定要永久删除“${item.task.title}”吗？它的备注、步骤和所有安排都会一并删除，此操作不可恢复。`,
+      description: `确定要永久删除“${latestTask.title}”吗？它的备注、步骤和所有安排都会一并删除，此操作不可恢复。`,
       confirmLabel: '永久删除',
       danger: true,
       onConfirm: async () => {
         try {
-          await mutationV2('DELETE', `/tasks/${item.task.id}`, {
-            baseVersion: item.task.version,
+          await mutationV2('DELETE', `/tasks/${latestTask.id}`, {
+            baseVersion: latestTask.version,
           });
           await load();
           notifyDataChanged(load);
@@ -727,7 +783,7 @@ export function TreePage() {
       setGroupPins((pins) => (task.id in pins ? pins : { ...pins, [task.id]: task.status }));
       window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '更新任务状态失败，请重试');
+      handleTreeMutationError(cause, '更新任务状态失败，请重试');
     }
   };
   const changeFolderStatus = async (
@@ -768,7 +824,7 @@ export function TreePage() {
       );
       window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '更新文件夹状态失败，请重试');
+      handleTreeMutationError(cause, '更新文件夹状态失败，请重试');
     }
   };
   const deleteFolder = async (item: Extract<TreeItemDto, { kind: 'FOLDER' }>) => {
@@ -830,44 +886,41 @@ export function TreePage() {
     }
   };
   const moveWithinStatus = async (item: TreeItemDto, direction: 'up' | 'down') => {
-    const status = item.kind === 'FOLDER' ? item.aggregate.status : item.task.status;
-    const group = items.filter(
-      (candidate) =>
-        (candidate.kind === 'FOLDER' ? candidate.aggregate.status : candidate.task.status) ===
-        status,
-    );
+    const latest = latestItem(item);
+    const status = itemStatus(latest);
+    const latestItems = items.map(latestItem);
+    const group = latestItems.filter((candidate) => itemStatus(candidate) === status);
     const index = group.findIndex(
       (candidate) =>
-        candidate.kind === item.kind &&
-        (candidate.kind === 'FOLDER' ? candidate.folder.id : candidate.task.id) ===
-          (item.kind === 'FOLDER' ? item.folder.id : item.task.id),
+        candidate.kind === latest.kind &&
+        treeItemId(candidate) === treeItemId(latest),
     );
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (index < 0 || targetIndex < 0 || targetIndex >= group.length) return;
     const target = group[targetIndex]!;
     try {
       await mutationV2('POST', '/tree/items/move', {
-        item: { kind: item.kind, id: item.kind === 'FOLDER' ? item.folder.id : item.task.id },
+        item: { kind: latest.kind, id: treeItemId(latest) },
         parentFolderId: folderId,
         expectedStatus: status,
-        baseVersion: item.kind === 'FOLDER' ? item.folder.version : item.task.version,
+        baseVersion: itemRecord(latest).version,
         ...(direction === 'up'
           ? {
               before: {
                 kind: target.kind,
-                id: target.kind === 'FOLDER' ? target.folder.id : target.task.id,
+                id: treeItemId(target),
               },
             }
           : {
               after: {
                 kind: target.kind,
-                id: target.kind === 'FOLDER' ? target.folder.id : target.task.id,
+                id: treeItemId(target),
               },
             }),
       });
       await load();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '调整顺序失败，请重试');
+      handleTreeMutationError(cause, '调整顺序失败，请重试');
     }
   };
   const dropItemBefore = async (target: TreeItemDto) => {
@@ -1043,11 +1096,12 @@ export function TreePage() {
           const messages: string[] = [];
           for (const item of remaining) {
             try {
-              if (item.kind === 'TASK')
-                await mutationV2('DELETE', `/tasks/${item.task.id}`, {
-                  baseVersion: item.task.version,
+              if (item.kind === 'TASK') {
+                const latestTask = displayTask(item.task);
+                await mutationV2('DELETE', `/tasks/${latestTask.id}`, {
+                  baseVersion: latestTask.version,
                 });
-              else
+              } else
                 await mutationV2('DELETE', `/folders/${item.folder.id}/tree`, {
                   confirmationToken: previews.get(item.folder.id)!.confirmationToken,
                 });
