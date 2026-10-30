@@ -33,6 +33,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.devtodo.app.data.local.FolderEntity
+import com.devtodo.app.data.local.TaskEntity
 import com.devtodo.app.data.local.WorkflowEntity
 import com.devtodo.app.data.local.WorkflowStageEntity
 import com.devtodo.app.data.local.WorkflowTaskMembershipEntity
@@ -624,7 +626,6 @@ private fun ExpressiveStageBlock(
 
 private data class AddTarget(val workflow: WorkflowEntity, val stage: WorkflowStageEntity)
 
-
 @Composable
 private fun WorkflowDirectoryTaskPickerDialog(
     stageName: String,
@@ -702,7 +703,7 @@ private fun WorkflowDirectoryTaskPickerDialog(
                             onClick = { currentFolderId = null },
                             label = { Text("根目录") },
                         )
-                        breadcrumbs.forEach { folder ->
+                        for (folder in breadcrumbs) {
                             Icon(
                                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                 contentDescription = null,
@@ -726,7 +727,7 @@ private fun WorkflowDirectoryTaskPickerDialog(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     if (query.trim().isEmpty()) {
-                        visibleFolders.forEach { folder ->
+                        for (folder in visibleFolders) {
                             Surface(
                                 shape = MaterialTheme.shapes.small,
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -764,7 +765,7 @@ private fun WorkflowDirectoryTaskPickerDialog(
                         }
                     }
 
-                    visibleTasks.forEach { task ->
+                    for (task in visibleTasks) {
                         TextButton(
                             onClick = { onTaskSelect(task) },
                             modifier = Modifier.fillMaxWidth(),
