@@ -6,22 +6,13 @@ import type {
   WorkflowTaskMembershipDto,
 } from '@devtodo/contracts';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import {
-  Check,
-  Folder,
-  ListChecks as ListChecksIcon,
-  MoreHorizontal,
-  Plus,
-  Search,
-  Workflow as WorkflowGlyph,
-} from 'lucide-react';
+import { Folder, MoreHorizontal, Plus, Workflow as WorkflowGlyph } from 'lucide-react';
 
 import { mutationV2, requestV2 } from './api.js';
 import { useAuth } from './auth.js';
 import {
   Alert,
   Button,
-  ButtonGroup,
   Card,
   ConfirmDialog,
   Dialog,
@@ -31,7 +22,6 @@ import {
   ListItem,
   LoadingState,
   Menu,
-  SearchBar,
   Select,
   TaskStatusControl,
   TextField,

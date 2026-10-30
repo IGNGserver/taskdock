@@ -4,7 +4,6 @@ import type {
   TaskStatus,
   TimePointDto,
   TimePointPlacementCountDto,
-  TreeItemDto,
   TreeTaskDto,
   V2SettingsDto,
 } from '@devtodo/contracts';
@@ -27,7 +26,6 @@ import {
   Command,
   Copy,
   LayoutList,
-  ListChecks as ListChecksIcon,
   LoaderCircle,
   LogOut,
   Menu,
@@ -132,14 +130,6 @@ import { WorkflowsPage } from './WorkflowsPage.js';
 
 type PlacementWithTask = PlacementDto & { task: TreeTaskDto };
 type PresenceState = 'entering' | 'present' | 'exiting';
-
-function taskStatusLabel(status: TaskStatus): string {
-  return status === 'IN_PROGRESS' ? '进行中' : status === 'DONE' ? '已完成' : '待开始';
-}
-
-function taskStatusClass(status: TaskStatus): string {
-  return status === 'IN_PROGRESS' ? 'in-progress' : status === 'DONE' ? 'done' : 'todo';
-}
 
 /**
  * Overlay lifecycle helper. The exit duration comes from the M3E spring tokens
