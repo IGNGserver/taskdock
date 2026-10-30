@@ -1128,6 +1128,7 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
           {
             parentFolderId: body.parentFolderId,
             title: body.title,
+            ...(body.status !== undefined ? { status: body.status } : {}),
           },
         );
         return reply.code(201).send(result);
@@ -1142,7 +1143,10 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
           'folder.update',
           paramId(request),
           body.baseVersion,
-          { title: body.title },
+          {
+            ...(body.title !== undefined ? { title: body.title } : {}),
+            ...(body.status !== undefined ? { status: body.status } : {}),
+          },
         );
       });
       api.post('/tree/items/move', async (request) => {

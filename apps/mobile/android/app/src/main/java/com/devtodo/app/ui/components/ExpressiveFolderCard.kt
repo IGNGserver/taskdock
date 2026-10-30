@@ -50,7 +50,13 @@ fun ExpressiveFolderCard(
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(folder.title, style = MaterialTheme.typography.bodyLarge, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                    Text(if (itemCount > 0) "$itemCount 条任务" else "暂无任务",
+                    val statusText = when (folder.status) {
+                        com.devtodo.app.data.model.TaskStatus.IN_PROGRESS -> "进行中"
+                        com.devtodo.app.data.model.TaskStatus.DONE -> "已完成"
+                        com.devtodo.app.data.model.TaskStatus.TODO -> "待开始"
+                    }
+                    val countText = if (itemCount > 0) "$itemCount 条任务" else "暂无任务"
+                    Text("$statusText · $countText",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)

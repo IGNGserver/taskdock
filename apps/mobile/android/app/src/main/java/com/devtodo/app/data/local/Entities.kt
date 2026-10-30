@@ -64,7 +64,9 @@ data class FolderEntity(
     val createdAt: String,
     val updatedAt: String,
     val deletedAt: String? = null,
-    val pendingSync: Boolean = false
+    val pendingSync: Boolean = false,
+    val status: TaskStatus = TaskStatus.TODO,
+    val completedAt: String? = null,
 )
 
 @Entity(

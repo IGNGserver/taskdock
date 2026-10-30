@@ -12,6 +12,7 @@ import {
   renderSafeMarkdown,
   sortTreeItems,
   stepTransition,
+  transitionFolder,
   transitionTask,
   validateLocalDate,
 } from '../src/index.js';
@@ -21,6 +22,15 @@ describe('task rules', () => {
     const now = new Date('2026-09-04T10:00:00.000Z');
     expect(transitionTask('TODO', 'DONE', now)).toEqual({ status: 'DONE', completedAt: now });
     expect(transitionTask('DONE', 'TODO', now)).toEqual({ status: 'TODO', completedAt: null });
+    expect(transitionFolder('TODO', 'IN_PROGRESS', now)).toEqual({
+      status: 'IN_PROGRESS',
+      completedAt: null,
+    });
+    expect(transitionFolder('IN_PROGRESS', 'DONE', now)).toEqual({
+      status: 'DONE',
+      completedAt: now,
+    });
+    expect(transitionFolder('DONE', 'TODO', now)).toEqual({ status: 'TODO', completedAt: null });
   });
 
   it('keeps event state independent from task state', () => {
@@ -55,16 +65,28 @@ describe('task rules', () => {
     expect(html).toContain('rel="noreferrer noopener"');
   });
 
-  it('derives mixed descendant folder status without counting deleted data', () => {
+  it('keeps explicit folder status while counting active descendant tasks', () => {
     const folders = [
       { id: 'root', parentFolderId: null },
-      { id: 'child', parentFolderId: 'root' },
+      { id: 'child', parentFolderId: 'root', status: 'IN_PROGRESS' as const },
     ];
     expect(
       deriveFolderAggregate('root', folders, [
         { id: 'a', parentFolderId: 'child', status: 'TODO' },
         { id: 'b', parentFolderId: 'child', status: 'DONE' },
         { id: 'c', parentFolderId: 'child', status: 'DONE', deletedAt: 'now' },
+      ]),
+    ).toEqual({
+      status: 'TODO',
+      todoCount: 1,
+      inProgressCount: 0,
+      doneCount: 1,
+      totalCount: 2,
+    });
+    expect(
+      deriveFolderAggregate('child', folders, [
+        { id: 'a', parentFolderId: 'child', status: 'TODO' },
+        { id: 'b', parentFolderId: 'child', status: 'DONE' },
       ]),
     ).toEqual({
       status: 'IN_PROGRESS',

@@ -124,4 +124,19 @@ class AppDatabaseMigrationTest {
         migrated.query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('sync_guards','remote_changes','bootstrap_rows')").use { assertEquals(true, it.moveToFirst()); assertEquals(3, it.getInt(0)) }
         migrated.close()
     }
+
+    @Test fun migrateV9ToV10AddsFolderStatusColumns() {
+        val name = "taskdock-v9-folder-status-fixture"
+        helper.createDatabase(name, 9).apply {
+            execSQL("INSERT INTO folders (id,ownerId,parentFolderId,title,rank,version,archivedAt,archivedByOperationId,createdAt,updatedAt,deletedAt,pendingSync) VALUES ('f1','u1',NULL,'Folder','1024',1,NULL,NULL,'2026-10-13T00:00:00Z','2026-10-13T00:00:00Z',NULL,0)")
+            close()
+        }
+        val migrated = helper.runMigrationsAndValidate(name, 10, true, AppDatabase.MIGRATION_9_10)
+        migrated.query("SELECT status, completedAt FROM folders WHERE id='f1'").use {
+            assertEquals(true, it.moveToFirst())
+            assertEquals("TODO", it.getString(0))
+            assertEquals(true, it.isNull(1))
+        }
+        migrated.close()
+    }
 }

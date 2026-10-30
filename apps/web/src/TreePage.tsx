@@ -65,7 +65,10 @@ function itemRecord(item: TreeItemDto) {
   return item.kind === 'FOLDER' ? item.folder : item.task;
 }
 function itemStatus(item: TreeItemDto): TaskStatus {
-  return item.kind === 'FOLDER' ? item.aggregate.status : item.task.status;
+  return item.kind === 'FOLDER' ? (item.folder.status ?? item.aggregate.status) : item.task.status;
+}
+function statusLabel(status: TaskStatus): string {
+  return status === 'IN_PROGRESS' ? '进行中' : status === 'DONE' ? '已完成' : '待开始';
 }
 function errorMessage(cause: unknown, fallback: string) {
   return cause instanceof Error ? cause.message : fallback;
@@ -86,6 +89,7 @@ function TreeRowActions({
   onMove,
   onOpenMove,
   onRename,
+  onChangeFolderStatus,
   onDeleteFolder,
   onDeleteTask,
 }: {
@@ -95,6 +99,10 @@ function TreeRowActions({
   onMove: (item: TreeItemDto, direction: 'up' | 'down') => void;
   onOpenMove: (item: TreeItemDto) => void;
   onRename: (item: TreeItemDto) => void;
+  onChangeFolderStatus?: (
+    item: Extract<TreeItemDto, { kind: 'FOLDER' }>,
+    status: TaskStatus,
+  ) => void;
   onDeleteFolder: (item: Extract<TreeItemDto, { kind: 'FOLDER' }>) => void;
   onDeleteTask: (item: Extract<TreeItemDto, { kind: 'TASK' }>) => void;
 }) {
@@ -103,7 +111,30 @@ function TreeRowActions({
   const containerRef = useDismissibleMenu(open, () => setOpen(false));
   const title = item.kind === 'FOLDER' ? item.folder.title : item.task.title;
   const isFolder = item.kind === 'FOLDER';
+  const currentStatus = itemStatus(item);
   const options: MenuOption[] = [
+    ...(isFolder && onChangeFolderStatus
+      ? ([
+          {
+            id: 'status-todo',
+            label: '设为待开始',
+            hint: currentStatus === 'TODO' ? '当前' : undefined,
+            disabled: currentStatus === 'TODO',
+          },
+          {
+            id: 'status-in-progress',
+            label: '设为进行中',
+            hint: currentStatus === 'IN_PROGRESS' ? '当前' : undefined,
+            disabled: currentStatus === 'IN_PROGRESS',
+          },
+          {
+            id: 'status-done',
+            label: '设为已完成',
+            hint: currentStatus === 'DONE' ? '当前' : undefined,
+            disabled: currentStatus === 'DONE',
+          },
+        ] satisfies MenuOption[])
+      : []),
     {
       id: 'move-up',
       label: '同状态上移',
@@ -123,6 +154,11 @@ function TreeRowActions({
 
   const select = (id: string) => {
     setOpen(false);
+    if (isFolder && onChangeFolderStatus) {
+      if (id === 'status-todo') onChangeFolderStatus(item, 'TODO');
+      if (id === 'status-in-progress') onChangeFolderStatus(item, 'IN_PROGRESS');
+      if (id === 'status-done') onChangeFolderStatus(item, 'DONE');
+    }
     if (id === 'move-up') onMove(item, 'up');
     if (id === 'move-down') onMove(item, 'down');
     if (id === 'rename') onRename(item);
@@ -227,9 +263,11 @@ export function TreePage() {
    * immediately.
    */
   const [statusOverrides, setStatusOverrides] = useState<Record<string, TreeTaskDto>>({});
+  const [folderStatusOverrides, setFolderStatusOverrides] = useState<Record<string, FolderDto>>({});
   const [groupPins, setGroupPins] = useState<Record<string, TaskStatus>>({});
   const [orderLock, setOrderLock] = useState<string[] | null>(null);
   const pinnedTasks = useRef(new Map<string, TreeTaskDto>());
+  const pinnedFolders = useRef(new Map<string, Extract<TreeItemDto, { kind: 'FOLDER' }>>());
   const loadedFolder = useRef<string | null | undefined>(undefined);
   const loadSequence = useRef(0);
 
@@ -247,6 +285,7 @@ export function TreePage() {
       setCursorExpired(false);
       if (entering) {
         pinnedTasks.current.clear();
+        pinnedFolders.current.clear();
         pagesLoaded.current = 1;
         setItems([]);
         setPath([]);
@@ -310,6 +349,26 @@ export function TreePage() {
               if (!(cause instanceof ApiError && cause.status === 404)) throw cause;
             }
           }
+          for (const [id, pinnedFolder] of pinnedFolders.current.entries()) {
+            if (present.has(id)) continue;
+            try {
+              const folderDetail = await requestV2<FolderDto>(`/folders/${id}`, {
+                signal: controller.signal,
+              });
+              if (folderDetail.parentFolderId === folderId && !folderDetail.deletedAt) {
+                rows.push({
+                  kind: 'FOLDER',
+                  folder: folderDetail,
+                  aggregate: {
+                    ...pinnedFolder.aggregate,
+                    status: folderDetail.status ?? pinnedFolder.aggregate.status,
+                  },
+                });
+              }
+            } catch (cause) {
+              if (!(cause instanceof ApiError && cause.status === 404)) throw cause;
+            }
+          }
         }
         if (sequence !== loadSequence.current) return;
         loadedFolder.current = folderId;
@@ -319,6 +378,7 @@ export function TreePage() {
         pagesLoaded.current = count;
         // A fresh read is authoritative for the circle.
         setStatusOverrides({});
+        setFolderStatusOverrides({});
         if (keepPins) {
           // Drop rows that disappeared; anything still on screen keeps its place.
           const alive = rows.map(treeItemId);
@@ -337,6 +397,7 @@ export function TreePage() {
           });
         } else {
           pinnedTasks.current.clear();
+          pinnedFolders.current.clear();
           setGroupPins({});
           setOrderLock(null);
         }
@@ -460,15 +521,19 @@ export function TreePage() {
     (task: TreeTaskDto): TreeTaskDto => statusOverrides[task.id] ?? task,
     [statusOverrides],
   );
+  const displayFolder = useCallback(
+    (folder: FolderDto): FolderDto => folderStatusOverrides[folder.id] ?? folder,
+    [folderStatusOverrides],
+  );
 
   /**
-   * The group a row belongs to. A task the user just re-statused keeps the status
+   * The group a row belongs to. A row the user just re-statused keeps the status
    * it was loaded with, so it only changes group on the next visit.
    */
   const groupingStatus = useCallback(
     (item: TreeItemDto) =>
       item.kind === 'FOLDER'
-        ? item.aggregate.status
+        ? (groupPins[item.folder.id] ?? item.folder.status ?? item.aggregate.status)
         : (groupPins[item.task.id] ?? item.task.status),
     [groupPins],
   );
@@ -665,6 +730,47 @@ export function TreePage() {
       setError(cause instanceof Error ? cause.message : '更新任务状态失败，请重试');
     }
   };
+  const changeFolderStatus = async (
+    item: Extract<TreeItemDto, { kind: 'FOLDER' }>,
+    status: TaskStatus,
+  ) => {
+    setError('');
+    const current = displayFolder(item.folder);
+    const currentStatus = current.status ?? item.aggregate.status;
+    if (currentStatus === status) return;
+    setOrderLock((lock) => lock ?? items.map(treeItemId));
+    try {
+      const response = (await mutationV2('PATCH', `/folders/${item.folder.id}`, {
+        status,
+        baseVersion: current.version,
+      })) as Partial<FolderDto> | null;
+      const updatedFolder: FolderDto = {
+        ...current,
+        ...response,
+        id: item.folder.id,
+        status: response?.status ?? status,
+        version: response?.version ?? current.version + 1,
+      };
+      pinnedFolders.current.set(item.folder.id, {
+        kind: 'FOLDER',
+        folder: updatedFolder,
+        aggregate: {
+          ...item.aggregate,
+          status: updatedFolder.status ?? status,
+        },
+      });
+      setFolderStatusOverrides((overrides) => ({
+        ...overrides,
+        [item.folder.id]: updatedFolder,
+      }));
+      setGroupPins((pins) =>
+        item.folder.id in pins ? pins : { ...pins, [item.folder.id]: currentStatus },
+      );
+      window.dispatchEvent(new Event('devtodo:data-changed'));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '更新文件夹状态失败，请重试');
+    }
+  };
   const deleteFolder = async (item: Extract<TreeItemDto, { kind: 'FOLDER' }>) => {
     try {
       const preview = await requestV2<{
@@ -768,7 +874,17 @@ export function TreePage() {
     const source = draggedItem.current;
     draggedItem.current = null;
     if (!source || treeItemId(source) === treeItemId(target)) return;
-    const latest = source.kind === 'TASK' ? { ...source, task: displayTask(source.task) } : source;
+    const latest =
+      source.kind === 'TASK'
+        ? { ...source, task: displayTask(source.task) }
+        : {
+            ...source,
+            folder: displayFolder(source.folder),
+            aggregate: {
+              ...source.aggregate,
+              status: displayFolder(source.folder).status ?? source.aggregate.status,
+            },
+          };
     if (itemStatus(latest) !== itemStatus(target)) {
       setError('请在相同状态的项目之间调整顺序');
       return;
@@ -798,7 +914,16 @@ export function TreePage() {
       setMoveError('');
       setMoveSession({
         items: candidates.map((item) =>
-          item.kind === 'TASK' ? { ...item, task: displayTask(item.task) } : item,
+          item.kind === 'TASK'
+            ? { ...item, task: displayTask(item.task) }
+            : {
+                ...item,
+                folder: displayFolder(item.folder),
+                aggregate: {
+                  ...item.aggregate,
+                  status: displayFolder(item.folder).status ?? item.aggregate.status,
+                },
+              },
         ),
         parentFolderId: folderId,
       });
@@ -824,7 +949,17 @@ export function TreePage() {
             (candidate) =>
               candidate.kind === item.kind && treeItemId(candidate) === treeItemId(item),
           ) ?? item;
-        const latest = fresh.kind === 'TASK' ? { ...fresh, task: displayTask(fresh.task) } : fresh;
+        const latest =
+          fresh.kind === 'TASK'
+            ? { ...fresh, task: displayTask(fresh.task) }
+            : {
+                ...fresh,
+                folder: displayFolder(fresh.folder),
+                aggregate: {
+                  ...fresh.aggregate,
+                  status: displayFolder(fresh.folder).status ?? fresh.aggregate.status,
+                },
+              };
         const response = (await mutationV2('POST', '/tree/items/move', {
           item: { kind: latest.kind, id: treeItemId(latest) },
           parentFolderId: targetParent,
@@ -937,14 +1072,25 @@ export function TreePage() {
   const renderRows = (rows: TreeItemDto[]) => (
     <List className="m3e-list--tree-group">
       {rows.map((item) => {
-        const record = itemRecord(item);
-        const position = statusPosition(item);
-        const folder = item.kind === 'FOLDER';
+        const currentItem: TreeItemDto =
+          item.kind === 'FOLDER'
+            ? {
+                ...item,
+                folder: displayFolder(item.folder),
+                aggregate: {
+                  ...item.aggregate,
+                  status: displayFolder(item.folder).status ?? item.aggregate.status,
+                },
+              }
+            : { ...item, task: displayTask(item.task) };
+        const record = itemRecord(currentItem);
+        const position = statusPosition(currentItem);
+        const folder = currentItem.kind === 'FOLDER';
         const row = (anchorProps?: TaskHoverAnchorProps) => (
           <ListItem
             {...(anchorProps ?? {})}
             id={folder ? `folder-${record.id}` : `task-${record.id}`}
-            className={`m3e-list-item--tree-row${!folder && displayTask(item.task).status === 'DONE' ? ' is-task-done' : ''}`}
+            className={`m3e-list-item--tree-row${itemStatus(currentItem) === 'DONE' ? ' is-task-done' : ''}`}
             leading={folder ? <Folder size={19} /> : undefined}
             leadingControl={
               <>
@@ -957,21 +1103,22 @@ export function TreePage() {
                     onChange={() => toggleSelection(record.id)}
                   />
                 )}
-                {!folder && (
+                {currentItem.kind === 'TASK' && (
                   <TaskStatusControl
-                    status={displayTask(item.task).status}
-                    onStatusChange={(status) => changeTaskStatus(item.task, status)}
+                    status={currentItem.task.status}
+                    onStatusChange={(status) => changeTaskStatus(currentItem.task, status)}
                   />
                 )}
               </>
             }
             headline={record.title}
             trailing={
-              folder ? (
+              currentItem.kind === 'FOLDER' ? (
                 <>
                   <span className="tree-count">
-                    {item.aggregate.totalCount
-                      ? `${item.aggregate.doneCount}/${item.aggregate.totalCount}`
+                    {statusLabel(itemStatus(currentItem))}
+                    {currentItem.aggregate.totalCount
+                      ? ` · ${currentItem.aggregate.doneCount}/${currentItem.aggregate.totalCount}`
                       : ''}
                   </span>
                   <ChevronRight size={16} aria-hidden="true" />
@@ -989,19 +1136,22 @@ export function TreePage() {
             onClick={() => (folder ? openFolder(record.id) : selectTask(record.id))}
             draggable={!isPhone && !selectionMode}
             onDragStart={(event) => {
-              draggedItem.current = item;
+              draggedItem.current = currentItem;
               event.dataTransfer.effectAllowed = 'move';
-              event.dataTransfer.setData('text/plain', treeItemId(item));
+              event.dataTransfer.setData('text/plain', treeItemId(currentItem));
             }}
             onDragOver={(event) => {
-              if (draggedItem.current && itemStatus(draggedItem.current) === itemStatus(item)) {
+              if (
+                draggedItem.current &&
+                itemStatus(draggedItem.current) === itemStatus(currentItem)
+              ) {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = 'move';
               }
             }}
             onDrop={(event) => {
               event.preventDefault();
-              void dropItemBefore(item);
+              void dropItemBefore(currentItem);
             }}
             onDragEnd={() => {
               draggedItem.current = null;
@@ -1009,27 +1159,30 @@ export function TreePage() {
             onKeyDown={(event) => {
               if (event.key === 'F2') {
                 event.preventDefault();
-                renameItem(item);
+                renameItem(currentItem);
               }
             }}
             actions={
               <TreeRowActions
-                item={item}
+                item={currentItem}
                 index={position.index}
                 groupLength={position.length}
                 onMove={(candidate, direction) => void moveWithinStatus(candidate, direction)}
                 onOpenMove={(candidate) => void openMove([candidate])}
                 onRename={renameItem}
+                onChangeFolderStatus={(candidate, status) =>
+                  void changeFolderStatus(candidate, status)
+                }
                 onDeleteFolder={(candidate) => void deleteFolder(candidate)}
                 onDeleteTask={deleteTask}
               />
             }
           />
         );
-        return folder ? (
+        return currentItem.kind === 'FOLDER' ? (
           <Fragment key={`folder-${record.id}`}>{row()}</Fragment>
         ) : (
-          <TaskHoverPreviewRow key={`task-${record.id}`} task={item.task} enabled={!isTouch}>
+          <TaskHoverPreviewRow key={`task-${record.id}`} task={currentItem.task} enabled={!isTouch}>
             {(anchorProps) => row(anchorProps)}
           </TaskHoverPreviewRow>
         );

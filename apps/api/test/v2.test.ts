@@ -149,6 +149,32 @@ describe('TaskDock v2 API and sync protocol', () => {
     expect(rootChildren.statusCode).toBe(200);
     expect(rootChildren.json().items).toHaveLength(1);
     expect(rootChildren.json().items[0].aggregate).toMatchObject({
+      status: 'TODO',
+      todoCount: 1,
+      doneCount: 1,
+      totalCount: 2,
+    });
+
+    const folderProgress = await app.inject({
+      method: 'PATCH',
+      url: `/api/v2/folders/${f1}`,
+      headers: headers(),
+      payload: { status: 'IN_PROGRESS', baseVersion: 1 },
+    });
+    expect(folderProgress.statusCode).toBe(200);
+    expect(folderProgress.json()).toMatchObject({
+      id: f1,
+      status: 'IN_PROGRESS',
+      completedAt: null,
+      version: 2,
+    });
+
+    const updatedRootChildren = await app.inject({
+      method: 'GET',
+      url: '/api/v2/tree/children?parentFolderId=root',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(updatedRootChildren.json().items[0].aggregate).toMatchObject({
       status: 'IN_PROGRESS',
       todoCount: 1,
       doneCount: 1,
@@ -163,7 +189,7 @@ describe('TaskDock v2 API and sync protocol', () => {
         item: { kind: 'FOLDER', id: f1 },
         parentFolderId: f2,
         expectedStatus: 'IN_PROGRESS',
-        baseVersion: 1,
+        baseVersion: 2,
       },
     });
     expect(cycle.statusCode).toBe(409);

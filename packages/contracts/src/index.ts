@@ -37,6 +37,8 @@ export interface FolderDto {
   id: string;
   parentFolderId: string | null;
   title: string;
+  status?: FolderStatus;
+  completedAt?: string | null;
   rank: string;
   version: number;
   deletedAt?: string | null;
@@ -311,9 +313,11 @@ export const createFolderSchema = z.object({
   id: uuidSchema.optional(),
   parentFolderId: uuidSchema.nullable().default(null),
   title: z.string().trim().min(1).max(160),
+  status: TaskStatusSchema.optional(),
 });
 export const updateFolderSchema = z.object({
   title: z.string().trim().min(1).max(160).optional(),
+  status: TaskStatusSchema.optional(),
   baseVersion: z.number().int().positive(),
 });
 export const treeMoveSchema = z.object({

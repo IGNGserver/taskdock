@@ -95,6 +95,8 @@ data class FolderDto(
     val ownerId: String? = null,
     val parentFolderId: String? = null,
     val title: String,
+    val status: FolderStatus = FolderStatus.TODO,
+    val completedAt: String? = null,
     val rank: String,
     val version: Long = 1,
     val archivedAt: String? = null,

@@ -2,6 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type {
   FolderAggregateDto,
   FolderDto,
+  FolderStatus,
   NoteDto,
   PlacementDto,
   TaskDetailV2Dto,
@@ -28,6 +29,7 @@ import {
   nextLocalDate,
   sortTreeItems,
   stepTransition,
+  transitionFolder,
   transitionTask,
   validateLocalDate,
 } from '@devtodo/domain';
@@ -37,6 +39,8 @@ type NullableDate = string | null;
 
 interface FolderRecord extends FolderDto {
   ownerId: string;
+  status: FolderStatus;
+  completedAt: NullableDate;
   deletedAt: NullableDate;
 }
 interface TreeTaskRecord extends TreeTaskDto {
@@ -149,9 +153,14 @@ export interface V2TreeStore {
   getFolderPath(ownerId: string, id: string): Array<Pick<FolderDto, 'id' | 'title'>>;
   createFolder(
     ownerId: string,
-    input: { id?: string; parentFolderId: string | null; title: string },
+    input: { id?: string; parentFolderId: string | null; title: string; status?: FolderStatus },
   ): FolderDto;
-  updateFolder(ownerId: string, id: string, title: string, baseVersion: number): FolderDto;
+  updateFolder(
+    ownerId: string,
+    id: string,
+    patch: string | { title?: string; status?: FolderStatus },
+    baseVersion: number,
+  ): FolderDto;
   moveTree(
     ownerId: string,
     input: {
@@ -489,7 +498,7 @@ export class MemoryTreeStore implements V2TreeStore {
 
   createFolder(
     ownerId: string,
-    input: { id?: string; parentFolderId: string | null; title: string },
+    input: { id?: string; parentFolderId: string | null; title: string; status?: FolderStatus },
   ): FolderDto {
     this.ensureOwner(ownerId);
     assertTreeParentIsActiveFolder(input.parentFolderId, this.ownerFolders(ownerId));
@@ -500,11 +509,15 @@ export class MemoryTreeStore implements V2TreeStore {
       throw new DomainError('MUTATION_REJECTED', '目录实体 ID 已存在');
     const rank = this.nextSiblingRank(ownerId, input.parentFolderId, 'FOLDER');
     const now = this.now();
+    const initialStatus = input.status ?? 'TODO';
+    const transitioned = transitionFolder('TODO', initialStatus, new Date(now), null);
     const folder: FolderRecord = {
       id,
       ownerId,
       parentFolderId: input.parentFolderId,
       title,
+      status: transitioned.status,
+      completedAt: transitioned.completedAt ? transitioned.completedAt.toISOString() : null,
       rank,
       version: 1,
       createdAt: now,
@@ -516,15 +529,36 @@ export class MemoryTreeStore implements V2TreeStore {
     return this.folderDto(folder);
   }
 
-  updateFolder(ownerId: string, id: string, title: string, baseVersion: number): FolderDto {
+  updateFolder(
+    ownerId: string,
+    id: string,
+    patch: string | { title?: string; status?: FolderStatus },
+    baseVersion: number,
+  ): FolderDto {
     const folder = this.folder(ownerId, id);
     this.assertVersion(folder.version, baseVersion, this.folderDto(folder));
-    const normalized = title.trim();
-    if (!normalized || normalized.length > 160)
-      throw new DomainError('VALIDATION_FAILED', '文件夹名称无效');
-    folder.title = normalized;
+    const input = typeof patch === 'string' ? { title: patch } : patch;
+    if (input.title === undefined && input.status === undefined)
+      throw new DomainError('VALIDATION_FAILED', '文件夹更新内容无效');
+    if (input.title !== undefined) {
+      const normalized = input.title.trim();
+      if (!normalized || normalized.length > 160)
+        throw new DomainError('VALIDATION_FAILED', '文件夹名称无效');
+      folder.title = normalized;
+    }
+    const now = this.now();
+    if (input.status !== undefined) {
+      const transitioned = transitionFolder(
+        folder.status ?? 'TODO',
+        input.status,
+        new Date(now),
+        folder.completedAt,
+      );
+      folder.status = transitioned.status;
+      folder.completedAt = transitioned.completedAt ? transitioned.completedAt.toISOString() : null;
+    }
     folder.version += 1;
-    folder.updatedAt = this.now();
+    folder.updatedAt = now;
     this.record(ownerId, 'folder', id, folder.version, 'upsert', this.folderDto(folder));
     return this.folderDto(folder);
   }
@@ -1742,12 +1776,16 @@ export class MemoryTreeStore implements V2TreeStore {
           id: mutation.entityId,
           parentFolderId: nullableUuid(p.parentFolderId),
           title: stringValue(p.title),
+          status: optionalEnum(p.status, ['TODO', 'IN_PROGRESS', 'DONE']),
         });
       case 'folder.update':
         return this.updateFolder(
           ownerId,
           mutation.entityId,
-          stringValue(p.title),
+          {
+            title: optionalString(p.title),
+            status: optionalEnum(p.status, ['TODO', 'IN_PROGRESS', 'DONE']),
+          },
           numberValue(base),
         );
       case 'folder.deleteTree':
@@ -1959,6 +1997,8 @@ export class MemoryTreeStore implements V2TreeStore {
           ownerId,
           parentFolderId: null,
           title: project.name,
+          status: 'TODO',
+          completedAt: null,
           rank: project.rank,
           version: project.version,
           createdAt: project.createdAt,
@@ -2480,11 +2520,24 @@ export class MemoryTreeStore implements V2TreeStore {
     return new Date().toISOString();
   }
   private folderDto(row: FolderRecord): FolderDto {
-    const { id, parentFolderId, title, rank, version, deletedAt, createdAt, updatedAt } = row;
+    const {
+      id,
+      parentFolderId,
+      title,
+      status = 'TODO',
+      completedAt = null,
+      rank,
+      version,
+      deletedAt,
+      createdAt,
+      updatedAt,
+    } = row;
     return {
       id,
       parentFolderId,
       title,
+      status,
+      completedAt,
       rank,
       version,
       deletedAt,
