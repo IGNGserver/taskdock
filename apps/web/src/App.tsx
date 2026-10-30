@@ -36,17 +36,12 @@ import {
   Plus,
   Search,
   Settings,
-  ShieldCheck,
   Sparkles,
   Target,
   Trash2,
-  Undo2,
   Workflow as WorkflowIcon,
 } from 'lucide-react';
 import {
-  Fragment,
-  Suspense,
-  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -70,22 +65,23 @@ import {
 import {
   ApiError,
   getConfiguredHubOrigin,
+  getHubOriginLoadError,
+  isDesktopClient,
+  isDesktopShell,
   isNativeClient,
   isNativeMobileClient,
-  listDevices,
+  isWindowsDesktop,
   loadConfiguredHubOrigin,
   normalizeHubOrigin,
   mutationV2,
   requestV2,
-  revokeDevice,
   setHubOrigin,
   testHubConnection,
-  type DeviceSummary,
 } from './api.js';
 import { DirectoryNavigation } from './components/directory-navigation.js';
-import { TaskFolderBreadcrumb } from './components/task-folder-breadcrumb.js';
 import { directoryEntries } from './directory-paths.js';
-import { readLastFolderId, resolveCaptureFolder } from './folder-preference.js';
+import { readLastFolderId } from './folder-preference.js';
+import { TaskDirectoryPickerModal } from './components/task-directory-picker-modal.js';
 import { useAuth } from './auth.js';
 import { BrandMark } from './components/brand-mark.js';
 import {
@@ -127,32 +123,12 @@ import {
   useSwipeAction,
   useWindowSizeClass,
   type NavigationDestination,
-  type ButtonGroupOption,
 } from './components/m3e/index.js';
 import { useDevice } from './device.js';
 import { useDismissibleMenu } from './components/m3e/behavior.js';
-import { PwaInstallButton, PwaLifecycleNotice } from './pwa.js';
-import { ErrorBoundary, TaskDetailErrorFallback } from './components/error-boundary.js';
-import { LazyPageBoundary } from './components/lazy-page-boundary.js';
-import { TaskDetailV2Overlay } from './components/task-detail-overlay.js';
-import {
-  calendarDays,
-  formatDate,
-  formatMonth,
-  formatTime,
-  isLocalDate,
-  shiftLocalDate,
-  shiftMonth,
-  todayInTimezone,
-  weekdayLabels,
-} from './date-utils.js';
-import { getNetworkMode, setNetworkMode, type NetworkMode } from './network-policy.js';
-import { TaskHoverPreviewRow, useTaskHoverPreview } from './components/task-hover-preview.js';
-import { notifyDataChanged, shouldReloadTaskList } from './data-changes.js';
-const TreePage = lazy(() => import('./TreePage.js').then((page) => ({ default: page.TreePage })));
-const WorkflowsPage = lazy(() =>
-  import('./WorkflowsPage.js').then((page) => ({ default: page.WorkflowsPage })),
-);
+import { PwaLifecycleNotice } from './pwa.js';
+import { TaskDetailV2Overlay, TreePage } from './TreePage.js';
+import { WorkflowsPage } from './WorkflowsPage.js';
 
 type PlacementWithTask = PlacementDto & { task: TreeTaskDto };
 type PresenceState = 'entering' | 'present' | 'exiting';
@@ -163,61 +139,6 @@ function taskStatusLabel(status: TaskStatus): string {
 
 function taskStatusClass(status: TaskStatus): string {
   return status === 'IN_PROGRESS' ? 'in-progress' : status === 'DONE' ? 'done' : 'todo';
-}
-
-/**
- * Swap a placement with its nearest same-status sibling. Status-grouped lists
- * only ever move a row inside its own group, but the reorder API validates the
- * id list against the whole time point, so the returned order still covers
- * every placement. `statusOf` carries the frozen group assignment so a move
- * follows the group the row is currently displayed in.
- */
-function movePlacementWithinStatus(
-  items: PlacementWithTask[],
-  placementId: string,
-  direction: 'up' | 'down',
-  statusOf: (item: PlacementWithTask) => TaskStatus = (item) => item.task.status,
-): PlacementWithTask[] | null {
-  const index = items.findIndex((item) => item.id === placementId);
-  if (index < 0) return null;
-  const status = statusOf(items[index]!);
-  const step = direction === 'up' ? -1 : 1;
-  let target = index + step;
-  while (target >= 0 && target < items.length && statusOf(items[target]!) !== status) {
-    target += step;
-  }
-  if (target < 0 || target >= items.length) return null;
-  const next = [...items];
-  [next[index], next[target]] = [next[target]!, next[index]!];
-  return next;
-}
-
-/**
- * Freeze each placement's status-group membership for as long as the page
- * stays open (or until the time point changes). Toggling a status then updates
- * the row in place, and the list only re-sorts on the next visit; without this
- * a completed row jumps into 已完成 the moment its circle is tapped.
- */
-function useFrozenStatusGroup(
-  items: PlacementWithTask[],
-  pointId: string | undefined,
-): (item: PlacementWithTask) => TaskStatus {
-  const frozen = useRef<{ pointId: string | undefined; byPlacement: Map<string, TaskStatus> }>({
-    pointId,
-    byPlacement: new Map(),
-  });
-  if (frozen.current.pointId !== pointId) {
-    frozen.current = { pointId, byPlacement: new Map() };
-  }
-  for (const item of items) {
-    if (!frozen.current.byPlacement.has(item.id)) {
-      frozen.current.byPlacement.set(item.id, item.task.status);
-    }
-  }
-  return useCallback(
-    (item: PlacementWithTask) => frozen.current.byPlacement.get(item.id) ?? item.task.status,
-    [],
-  );
 }
 
 /**
@@ -255,8 +176,13 @@ function usePresence(open: boolean, exitDuration: number = SPRING_DURATION.effec
 
 export function App() {
   const auth = useAuth();
+  const desktopShell = isDesktopShell();
   const content =
-    auth.status === 'loading' ? (
+    desktopShell && !isDesktopClient() ? (
+      <DesktopBridgeUnavailableScreen />
+    ) : desktopShell ? (
+      <DesktopStartup />
+    ) : auth.status === 'loading' ? (
       <LoadingScreen label="正在打开本地工作区" />
     ) : auth.status === 'anonymous' ? (
       <LoginScreen initialized={auth.initialized} />
@@ -268,10 +194,326 @@ export function App() {
     typeof window !== 'undefined' &&
     (window.location.protocol === 'http:' || window.location.protocol === 'https:');
   return (
-    <>
+    <DesktopChrome>
       {showPwaNotice && <PwaLifecycleNotice />}
       {content}
-    </>
+    </DesktopChrome>
+  );
+}
+
+function DesktopChrome({ children }: { children: ReactNode }) {
+  const windowsDesktop = isWindowsDesktop();
+  if (!windowsDesktop) return children;
+  return (
+    <div className="desktop-app-shell">
+      <div className="desktop-window-drag-region" aria-hidden="true" />
+      {children}
+    </div>
+  );
+}
+
+type DesktopStartupPhase = 'checking' | 'setup' | 'waiting' | 'ready' | 'error';
+
+function DesktopBridgeUnavailableScreen() {
+  return (
+    <main className="auth-page hub-setup-page">
+      <div className="auth-panel">
+        <div className="brand auth-brand">
+          <BrandMark size="lg" />
+          <span>TaskDock</span>
+        </div>
+        <p className="eyebrow">DESKTOP RUNTIME</p>
+        <h1>桌面安全通道未加载</h1>
+        <p className="auth-intro">
+          当前窗口是桌面客户端，但安全桥接没有启动，因此无法读取或保存服务器地址。
+        </p>
+        <Alert tone="error" title="桌面桥接不可用">
+          请完全退出 TaskDock 后重试；如果问题持续，请重新安装最新桌面版本。
+        </Alert>
+        <Button
+          variant="filled"
+          className="m3e-button--wide"
+          type="button"
+          onClick={() => window.location.reload()}
+        >
+          重新加载客户端
+        </Button>
+      </div>
+      <aside className="auth-aside">
+        <span className="aside-number">00</span>
+        <p>先恢复连接，再开始工作。</p>
+        <span className="aside-rule" />
+        <small>桌面端不会在桥接缺失时回退到网页登录，以避免使用错误的服务器会话。</small>
+      </aside>
+    </main>
+  );
+}
+
+function DesktopStartup() {
+  const auth = useAuth();
+  const [origin, setOrigin] = useState<string | null>(null);
+  const [phase, setPhase] = useState<DesktopStartupPhase>('checking');
+  const [message, setMessage] = useState('');
+
+  const verify = useCallback(async (candidate: string) => {
+    setPhase('checking');
+    setMessage('正在连接服务器…');
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8_000);
+    try {
+      const status = await testHubConnection(candidate, controller.signal);
+      setPhase(status.initialized ? 'ready' : 'waiting');
+      setMessage('');
+    } catch (cause) {
+      setPhase('error');
+      setMessage(
+        cause instanceof DOMException && cause.name === 'AbortError'
+          ? '连接超时，请检查地址、证书和网络。'
+          : cause instanceof Error
+            ? cause.message
+            : '无法连接服务器，请检查地址、证书和网络。',
+      );
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void loadConfiguredHubOrigin().then((initialOrigin) => {
+      if (!active) return;
+      setOrigin(initialOrigin);
+      if (initialOrigin) void verify(initialOrigin);
+      else {
+        const loadError = getHubOriginLoadError();
+        setMessage(loadError?.includes('尚未配置') ? '' : (loadError ?? ''));
+        setPhase('setup');
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [verify]);
+
+  useEffect(() => {
+    let active = true;
+    if (auth.status === 'anonymous') {
+      void loadConfiguredHubOrigin().then((currentOrigin) => {
+        if (!active) return;
+        setOrigin(currentOrigin);
+        if (!currentOrigin) {
+          const loadError = getHubOriginLoadError();
+          setMessage(loadError?.includes('尚未配置') ? '' : (loadError ?? ''));
+          setPhase('setup');
+        }
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [auth.status]);
+
+  const handleConnected = useCallback((nextOrigin: string, initialized: boolean) => {
+    setOrigin(nextOrigin);
+    setMessage('');
+    setPhase(initialized ? 'ready' : 'waiting');
+  }, []);
+  const handleChangeOrigin = useCallback(() => {
+    setPhase('setup');
+    setMessage('');
+  }, []);
+  const finishSwitch = useCallback(
+    async (nextOrigin: string, previousOrigin: string | null) => {
+      if (previousOrigin && previousOrigin !== nextOrigin) await auth.logout();
+    },
+    [auth],
+  );
+
+  if (phase === 'setup')
+    return (
+      <HubSetupScreen
+        initialOrigin={origin ?? ''}
+        errorMessage={message}
+        onConnected={handleConnected}
+        afterSave={finishSwitch}
+      />
+    );
+  if (phase === 'checking') return <LoadingScreen label="正在连接服务器" />;
+  if (phase === 'error')
+    return (
+      <HubSetupScreen
+        initialOrigin={origin ?? ''}
+        errorMessage={message}
+        onConnected={handleConnected}
+        afterSave={finishSwitch}
+      />
+    );
+  if (phase === 'waiting')
+    return (
+      <HubWaitingScreen
+        origin={origin ?? ''}
+        onRetry={() => origin && void verify(origin)}
+        onChangeOrigin={handleChangeOrigin}
+      />
+    );
+  if (auth.status === 'loading') return <LoadingScreen label="正在打开本地工作区" />;
+  if (auth.status === 'anonymous')
+    return <LoginScreen initialized onChangeHub={handleChangeOrigin} />;
+  return <AuthenticatedApp />;
+}
+
+function HubSetupScreen({
+  initialOrigin,
+  errorMessage,
+  onConnected,
+  afterSave,
+}: {
+  initialOrigin: string;
+  errorMessage: string;
+  onConnected: (origin: string, initialized: boolean) => void;
+  afterSave?: (origin: string, previousOrigin: string | null) => Promise<void>;
+}) {
+  const [origin, setOrigin] = useState(initialOrigin);
+  const [state, setState] = useState<'idle' | 'checking' | 'error'>(
+    errorMessage ? 'error' : 'idle',
+  );
+  const [message, setMessage] = useState(errorMessage);
+  const originEdited = useRef(false);
+
+  useEffect(() => {
+    setMessage(errorMessage);
+    if (errorMessage) setState('error');
+  }, [errorMessage]);
+  useEffect(() => {
+    if (!originEdited.current) setOrigin(initialOrigin);
+  }, [initialOrigin]);
+
+  const connect = async () => {
+    if (state === 'checking' || !origin.trim()) return;
+    setState('checking');
+    setMessage('正在测试连接…');
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8_000);
+    try {
+      const normalized = normalizeHubOrigin(origin);
+      const status = await testHubConnection(normalized, controller.signal);
+      const previousOrigin = getConfiguredHubOrigin();
+      const saved = await setHubOrigin(normalized);
+      await afterSave?.(saved, previousOrigin);
+      onConnected(saved, status.initialized);
+    } catch (cause) {
+      setState('error');
+      setMessage(
+        cause instanceof DOMException && cause.name === 'AbortError'
+          ? '连接超时，请检查地址、证书和网络。'
+          : cause instanceof Error
+            ? cause.message
+            : '无法连接服务器，请检查地址、证书和网络。',
+      );
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
+
+  return (
+    <main className="auth-page hub-setup-page">
+      <div className="auth-panel">
+        <div className="brand auth-brand">
+          <BrandMark size="lg" />
+          <span>TaskDock</span>
+        </div>
+        <p className="eyebrow">DESKTOP CONNECTION</p>
+        <h1>{origin ? '连接服务器' : '配置服务器地址'}</h1>
+        <p className="auth-intro">
+          先连接你的 TaskDock 服务器，之后登录、同步和离线数据都会跟随这个地址。
+        </p>
+        {message && <Alert tone={state === 'error' ? 'error' : 'info'}>{message}</Alert>}
+        {isHttpOrigin(origin) && (
+          <Alert tone="warning" title="当前地址使用 HTTP" className="m3e-alert--http-security">
+            HTTP 地址可以连接服务器，但密码和会话信息会明文传输；正式公网部署仍建议使用 HTTPS。
+          </Alert>
+        )}
+        <div className="stack-form">
+          <Field
+            label="服务器 HTTP/HTTPS 地址"
+            value={origin}
+            onChange={(value) => {
+              originEdited.current = true;
+              setOrigin(value);
+              setState('idle');
+              setMessage('');
+            }}
+            type="url"
+            autoComplete="url"
+            autoFocus={!origin}
+          />
+          <p className="field-help">
+            例如 https://todo.example.com、http://your-hub.example:48731 或
+            http://localhost:3000。HTTP 地址会显示安全提示。
+          </p>
+          <Button
+            variant="filled"
+            className="m3e-button--wide"
+            type="button"
+            onClick={() => void connect()}
+            disabled={state === 'checking' || !origin.trim()}
+          >
+            {state === 'checking' ? <LoaderCircle className="spin" size={18} /> : '测试并连接'}
+          </Button>
+        </div>
+      </div>
+      <aside className="auth-aside">
+        <span className="aside-number">01</span>
+        <p>先连接，再安排。</p>
+        <span className="aside-rule" />
+        <small>切换服务器后会使用独立的登录会话，数据不会混用。</small>
+      </aside>
+    </main>
+  );
+}
+
+function HubWaitingScreen({
+  origin,
+  onRetry,
+  onChangeOrigin,
+}: {
+  origin: string;
+  onRetry: () => void;
+  onChangeOrigin: () => void;
+}) {
+  return (
+    <main className="auth-page hub-setup-page">
+      <div className="auth-panel">
+        <div className="brand auth-brand">
+          <BrandMark size="lg" />
+          <span>TaskDock</span>
+        </div>
+        <p className="eyebrow">DESKTOP CONNECTION</p>
+        <h1>等待服务器准备就绪</h1>
+        <p className="auth-intro">服务器已经连接，但管理员还没有完成首次初始化。</p>
+        <Alert tone="info" title="请先完成服务器初始化">
+          请让管理员在服务器端完成首次初始化，完成后点击“重新检查”即可登录。
+        </Alert>
+        <div className="hub-origin-card">
+          <span>当前服务器</span>
+          <code>{origin}</code>
+        </div>
+        <div className="hub-check-row">
+          <Button variant="filled" type="button" onClick={onRetry}>
+            重新检查
+          </Button>
+          <Button variant="tonal" type="button" onClick={onChangeOrigin}>
+            更换服务器
+          </Button>
+        </div>
+      </div>
+      <aside className="auth-aside">
+        <span className="aside-number">02</span>
+        <p>部署完成，再开始。</p>
+        <span className="aside-rule" />
+        <small>初始化需要由服务器管理员完成，客户端不会替管理员创建账号。</small>
+      </aside>
+    </main>
   );
 }
 
@@ -280,14 +522,12 @@ function AuthenticatedApp() {
   const location = useLocation();
   const navigate = useNavigate();
   const { isPhone, isTablet } = useDevice();
-  const windowSizeClass = useWindowSizeClass();
-  const sizeClass = isPhone ? 'compact' : windowSizeClass;
+  const sizeClass = useWindowSizeClass();
   const pageWrapRef = useRef<HTMLDivElement | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [toast, setToast] = useState('');
-  const [globalCaptureOpen, setGlobalCaptureOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useSearchParams();
 
   // Only reset scroll when the top-level route changes. Moving between
@@ -327,55 +567,6 @@ function AuthenticatedApp() {
     next.delete('editTitle');
     setSelectedTask(next);
   }, [selectedTask, setSelectedTask]);
-
-  // Handle shortcut URL actions such as ?action=new-task
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get('action') === 'new-task') {
-      setGlobalCaptureOpen(true);
-      params.delete('action');
-      navigate({ search: params.toString() }, { replace: true });
-    }
-  }, [location.search, navigate]);
-
-  const handleGlobalCaptureSubmit = async (title: string) => {
-    let targetFolderId: string | null = null;
-    try {
-      const { items } = await requestV2<{ items: FolderDto[] }>('/folders');
-      targetFolderId = resolveCaptureFolder({
-        folders: items ?? [],
-        defaultCaptureTarget: auth.settings?.defaultCaptureTarget,
-        activeFolderId: null,
-      });
-    } catch {
-      // Fallback to root if folder fetch fails
-      targetFolderId = null;
-    }
-
-    const { task: createdTask } = (await mutationV2('POST', '/tasks', {
-      parentFolderId: targetFolderId,
-      title,
-    })) as { task: TreeTaskDto };
-
-    // If currently on /today, also place into today's timeline
-    if (location.pathname.startsWith('/today')) {
-      try {
-        const localDate = todayInTimezone(auth.settings?.timezone ?? 'Asia/Shanghai');
-        const point = (await mutationV2('POST', '/time-points/date', {
-          localDate,
-        })) as TimePointDto;
-        await mutationV2('POST', '/placements', {
-          taskId: createdTask.id,
-          timePointId: point.id,
-        });
-      } catch {
-        // Placement failure non-blocking
-      }
-    }
-
-    window.dispatchEvent(new Event('devtodo:data-changed'));
-    setToast('已创建任务');
-  };
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -445,21 +636,6 @@ function AuthenticatedApp() {
   /** Navigating to a folder detail should still highlight 目录. */
   const activeForExpanded = activeExpanded || '/tree';
 
-  const activeTabletSegment = useMemo(() => {
-    if (location.pathname.startsWith('/today')) return '/today';
-    if (location.pathname.startsWith('/tree')) return '/tree';
-    if (location.pathname.startsWith('/workflows')) return '/workflows';
-    if (location.pathname.startsWith('/time')) return '/time';
-    return '';
-  }, [location.pathname]);
-
-  const tabletNavOptions: ButtonGroupOption<string>[] = [
-    { value: '/today', label: '今日', icon: <Target size={16} /> },
-    { value: '/tree', label: '目录', icon: <LayoutList size={16} /> },
-    { value: '/workflows', label: '流程', icon: <WorkflowIcon size={16} /> },
-    { value: '/time/calendar', label: '日历', icon: <CalendarDays size={16} /> },
-  ];
-
   const drawerHeader = (
     <div className="brand">
       <BrandMark />
@@ -501,7 +677,7 @@ function AuthenticatedApp() {
     <div
       className={`app-frame${isTablet ? ' is-tablet-frame' : ''}${isPhone ? ' is-phone-frame' : ''}`}
     >
-      {(sizeClass === 'medium' || (isTablet && sizeClass !== 'compact')) && (
+      {(sizeClass === 'medium' || (isTablet && sizeClass === 'expanded')) && (
         <NavigationRail
           label="主导航"
           destinations={navItems}
@@ -509,36 +685,29 @@ function AuthenticatedApp() {
           onNavigate={navigate}
           linkAs={RouterLinkAdapter}
           header={<BrandMark size="sm" />}
-          footer={
-            <IconButton
-              label="退出登录"
-              variant="outlined"
-              onClick={() => setLogoutConfirmOpen(true)}
-            >
-              <LogOut size={20} />
-            </IconButton>
-          }
         />
       )}
-      {!isCompactShell(sizeClass) && !isTablet && sizeClass !== 'medium' && (
-        /* Expanded and up on desktop: the drawer is persistent, so it is never modal. */
-        <NavigationDrawer
-          open
-          onClose={() => undefined}
-          modal={false}
-          side="start"
-          label="主导航"
-          destinations={navItems}
-          activeTo={activeForExpanded}
-          onNavigate={navigate}
-          linkAs={RouterLinkAdapter}
-          header={drawerHeader}
-          footer={drawerFooter}
-          className="m3e-drawer-layer--persistent"
-        >
-          <DirectoryNavigation />
-        </NavigationDrawer>
-      )}
+      {!isCompactShell(sizeClass) &&
+        (!isTablet || sizeClass !== 'expanded') &&
+        sizeClass !== 'medium' && (
+          /* Expanded and up on desktop: the drawer is persistent, so it is never modal. */
+          <NavigationDrawer
+            open
+            onClose={() => undefined}
+            modal={false}
+            side="start"
+            label="主导航"
+            destinations={navItems}
+            activeTo={activeForExpanded}
+            onNavigate={navigate}
+            linkAs={RouterLinkAdapter}
+            header={drawerHeader}
+            footer={drawerFooter}
+            className="m3e-drawer-layer--persistent"
+          >
+            <DirectoryNavigation />
+          </NavigationDrawer>
+        )}
       <main className="main-shell">
         <TopAppBar
           variant="small"
@@ -554,32 +723,8 @@ function AuthenticatedApp() {
               </IconButton>
             ) : undefined
           }
-          content={
-            isTablet && activeTabletSegment ? (
-              <div className="tablet-topbar-segments">
-                <ButtonGroup
-                  label="快速视图切换"
-                  value={activeTabletSegment}
-                  options={tabletNavOptions}
-                  onChange={(to) => navigate(to)}
-                />
-              </div>
-            ) : undefined
-          }
           actions={
             <>
-              {isTablet && (
-                <IconButton
-                  variant="filled"
-                  size="m"
-                  label="快速新建任务"
-                  title="快速新建任务"
-                  className="tablet-topbar-quick-add"
-                  onClick={() => setGlobalCaptureOpen(true)}
-                >
-                  <Plus size={20} />
-                </IconButton>
-              )}
               {sizeClass !== 'compact' ? (
                 <Toolbar
                   variant="floating"
@@ -613,55 +758,40 @@ function AuthenticatedApp() {
         <div className="workspace-body">
           <div ref={pageWrapRef} className="page-wrap">
             <div key={topRoute} className="route-transition">
-              <LazyPageBoundary resetKey={location.pathname}>
-                <Suspense fallback={<LoadingScreen label="正在打开页面" />}>
-                  <Routes>
-                    <Route path="/" element={<WorkspaceEntry />} />
-                    <Route path="/today" element={<TodayPage onOpenTask={openTask} />} />
-                    <Route path="/tree" element={<TreePage />} />
-                    <Route path="/tree/:folderId" element={<TreePage />} />
-                    <Route path="/tasks" element={<Navigate to="/tree" replace />} />
-                    <Route path="/workflows" element={<WorkflowsPage />} />
-                    <Route path="/projects" element={<Navigate to="/tree" replace />} />
-                    <Route path="/projects/:projectId" element={<Navigate to="/tree" replace />} />
-                    <Route path="/inbox" element={<Navigate to="/tree" replace />} />
-                    <Route path="/misc" element={<Navigate to="/tree" replace />} />
-                    <Route path="/time" element={<TimeHubPage />} />
-                    <Route path="/time/calendar" element={<CalendarPage onOpenTask={openTask} />} />
-                    <Route
-                      path="/time/calendar/:localDate"
-                      element={<CalendarPage onOpenTask={openTask} />}
-                    />
-                    <Route path="/time/events" element={<EventsPage />} />
-                    <Route
-                      path="/time/events/:eventId"
-                      element={<EventPage onOpenTask={openTask} />}
-                    />
-                    <Route path="/settings" element={<SettingsPage />} />
-                    <Route
-                      path="/more"
-                      element={<MorePage onOpenSearch={() => setCommandOpen(true)} />}
-                    />
-                    <Route path="*" element={<Navigate to="/today" replace />} />
-                  </Routes>
-                </Suspense>
-              </LazyPageBoundary>
+              <Routes>
+                <Route path="/" element={<WorkspaceEntry />} />
+                <Route path="/today" element={<TodayPage onOpenTask={openTask} />} />
+                <Route path="/tree" element={<TreePage />} />
+                <Route path="/tree/:folderId" element={<TreePage />} />
+                <Route path="/tasks" element={<Navigate to="/tree" replace />} />
+                <Route path="/workflows" element={<WorkflowsPage />} />
+                <Route path="/projects" element={<Navigate to="/tree" replace />} />
+                <Route path="/projects/:projectId" element={<Navigate to="/tree" replace />} />
+                <Route path="/inbox" element={<Navigate to="/tree" replace />} />
+                <Route path="/misc" element={<Navigate to="/tree" replace />} />
+                <Route path="/time" element={<TimeHubPage />} />
+                <Route path="/time/calendar" element={<CalendarPage onOpenTask={openTask} />} />
+                <Route
+                  path="/time/calendar/:localDate"
+                  element={<CalendarPage onOpenTask={openTask} />}
+                />
+                <Route path="/time/events" element={<EventsPage />} />
+                <Route path="/time/events/:eventId" element={<EventPage onOpenTask={openTask} />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route
+                  path="/more"
+                  element={<MorePage onOpenSearch={() => setCommandOpen(true)} />}
+                />
+                <Route path="*" element={<Navigate to="/today" replace />} />
+              </Routes>
             </div>
           </div>
-          <ErrorBoundary
-            fallback={(error, reset) =>
-              selectedTask.get('task') ? (
-                <TaskDetailErrorFallback error={error} onRetry={reset} />
-              ) : null
-            }
-          >
-            <TaskDetailV2Overlay
-              taskId={selectedTask.get('task')}
-              focusTitle={selectedTask.get('editTitle') === '1'}
-              onClose={closeTask}
-              onChanged={() => window.dispatchEvent(new Event('devtodo:data-changed'))}
-            />
-          </ErrorBoundary>
+          <TaskDetailV2Overlay
+            taskId={selectedTask.get('task')}
+            focusTitle={selectedTask.get('editTitle') === '1'}
+            onClose={closeTask}
+            onChanged={() => window.dispatchEvent(new Event('devtodo:data-changed'))}
+          />
         </div>
       </main>
       {isCompactShell(sizeClass) && (
@@ -702,13 +832,6 @@ function AuthenticatedApp() {
       />
 
       {toast && <Snackbar message={toast} onDismiss={() => setToast('')} />}
-      <MobileQuickCaptureSheet
-        open={globalCaptureOpen}
-        onClose={() => setGlobalCaptureOpen(false)}
-        title="快速新建任务"
-        placeholder="准备做点什么？"
-        onSubmit={handleGlobalCaptureSubmit}
-      />
       <ConfirmDialog
         open={logoutConfirmOpen}
         title="退出登录"
@@ -750,10 +873,17 @@ function WorkspaceEntry() {
   return target ? <Navigate to={target} replace /> : <LoadingScreen label="正在打开目录" />;
 }
 
-function LoginScreen({ initialized }: { initialized: boolean }) {
+function LoginScreen({
+  initialized,
+  onChangeHub,
+}: {
+  initialized: boolean;
+  onChangeHub?: () => void;
+}) {
   const auth = useAuth();
   const nativeClient = isNativeClient();
   const mobileClient = isNativeMobileClient();
+  const desktopClient = isDesktopClient();
   const [hubInitialized, setHubInitialized] = useState(initialized);
   const [hubOrigin, setHubOriginValue] = useState(getConfiguredHubOrigin() ?? '');
   const [username, setUsername] = useState('');
@@ -823,7 +953,7 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
         setError('服务器尚未准备好，请让管理员完成首次初始化。');
         return;
       }
-      await auth.login(username, password, nativeClient ? 'Android' : '浏览器');
+      await auth.login(username, password, desktopClient ? '桌面端' : '浏览器');
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '操作失败，请检查网络和输入');
     } finally {
@@ -833,7 +963,6 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
   return (
     <main className="auth-page">
       <div className="auth-panel">
-        <PwaInstallButton />
         <div className="brand auth-brand">
           <BrandMark size="lg" />
           <span>TaskDock</span>
@@ -841,6 +970,15 @@ function LoginScreen({ initialized }: { initialized: boolean }) {
         <p className="eyebrow">PERSONAL DEV WORKSPACE</p>
         <h1>{hubInitialized ? '欢迎回来' : '等待服务器准备就绪'}</h1>
         <p className="auth-intro">一个任务本体，多处安排。离线时也能继续捕获和整理。</p>
+        {desktopClient && onChangeHub && (
+          <div className="hub-origin-card login-hub-origin">
+            <span>当前服务器</span>
+            <code>{hubOrigin}</code>
+            <Button variant="text" type="button" onClick={onChangeHub}>
+              更换服务器
+            </Button>
+          </div>
+        )}
         {!hubInitialized && (
           <Alert tone="info" title="请先完成服务器初始化">
             请让管理员在服务器端完成首次初始化，完成后刷新此页面即可登录。
@@ -1003,7 +1141,6 @@ function MorePage({ onOpenSearch }: { onOpenSearch: () => void }) {
   return (
     <div className="page">
       <PageHeader eyebrow="MORE" title="更多" />
-      <PwaInstallButton />
       <Button
         variant="tonal"
         className="m3e-button--more-search"
@@ -1157,9 +1294,7 @@ function useReloadable<T>(loader: () => Promise<T>, initial: T) {
   }, [loader]);
   useEffect(() => {
     void reload();
-    const listener = (event: Event) => {
-      if (shouldReloadTaskList(event, reload)) void reload();
-    };
+    const listener = () => void reload();
     window.addEventListener('devtodo:data-changed', listener);
     return () => {
       reloadSequence.current += 1;
@@ -1231,7 +1366,7 @@ function CommandPalette({
     if (!open) return;
     setQuery('');
     setActionError('');
-    window.setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 0);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
   }, [open]);
   useEffect(() => {
     if (!open) return;
@@ -1410,27 +1545,33 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const localDate = todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
   const loader = useCallback(async () => {
-    try {
-      return await requestV2<{ point: TimePointDto | null; items: PlacementWithTask[] }>(
-        `/today?localDate=${localDate}`,
-      );
-    } catch (error) {
-      if (!(error instanceof ApiError) || error.status !== 404) throw error;
-      // Older Hubs: read only, without creating an otherwise unused date.
-      const response = await requestV2<{ items: TimePointDto[] }>('/time-points?type=DATE');
-      const point = response.items.find((candidate) => candidate.localDate === localDate) ?? null;
-      const placements = point
-        ? await requestV2<{ items: PlacementWithTask[] }>(`/time-points/${point.id}/placements`)
-        : { items: [] };
-      return { point, items: placements.items };
-    }
+    const point = (await mutationV2('POST', '/time-points/date', { localDate })) as TimePointDto;
+    const [placementResponse, eventResponse, eventCountResponse] = await Promise.all([
+      requestV2<{ items: PlacementWithTask[] }>(`/time-points/${point.id}/placements`),
+      requestV2<{ items: TimePointDto[] }>('/time-points?type=EVENT'),
+      requestV2<{ items: TimePointPlacementCountDto[] }>(
+        '/time-points/placement-counts?type=EVENT',
+      ),
+    ]);
+    return {
+      point,
+      items: placementResponse.items,
+      reachedEvents: eventResponse.items.filter((candidate) => candidate.reachedAt),
+      eventCounts: Object.fromEntries(
+        eventCountResponse.items.map((item) => [item.timePointId, item]),
+      ),
+    };
   }, [localDate]);
   const { data, error, hasData, initialLoading, reload } = useReloadable<{
     point: TimePointDto | null;
     items: PlacementWithTask[];
+    reachedEvents: TimePointDto[];
+    eventCounts: Record<string, TimePointPlacementCountDto>;
   }>(loader, {
     point: null as TimePointDto | null,
     items: [] as PlacementWithTask[],
+    reachedEvents: [] as TimePointDto[],
+    eventCounts: {} as Record<string, TimePointPlacementCountDto>,
   });
   // Rollover is a v2 mutation: it must go through `/api/v2` so the created
   // placements land in the v2 change feed and every client converges. The
@@ -1439,9 +1580,6 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const [rolloverError, setRolloverError] = useState('');
   const [completedOpen, setCompletedOpen] = useState(false);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
-  const [pickerPointId, setPickerPointId] = useState<string | null>(null);
-  const ensureTodayPoint = async (): Promise<TimePointDto> =>
-    data.point ?? ((await mutationV2('POST', '/time-points/date', { localDate })) as TimePointDto);
   const doRollover = async () => {
     setRolloverError('');
     try {
@@ -1487,7 +1625,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       ids: next.map((item) => item.id),
     });
     await reload();
-    notifyDataChanged(reload);
+    window.dispatchEvent(new Event('devtodo:data-changed'));
   };
   return (
     <div className="page page--today">
@@ -1499,16 +1637,8 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             <Button
               variant="tonal"
               leadingIcon={<Plus size={16} />}
-              onClick={() => {
-                void ensureTodayPoint()
-                  .then((point) => {
-                    setPickerPointId(point.id);
-                    setShowTaskPicker(true);
-                  })
-                  .catch((cause: unknown) =>
-                    setRolloverError(cause instanceof Error ? cause.message : '日期创建失败'),
-                  );
-              }}
+              onClick={() => setShowTaskPicker(true)}
+              disabled={!data.point}
             >
               从目录加入
             </Button>
@@ -1607,12 +1737,14 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           </aside>
         </section>
       ) : null}
-      {showTaskPicker && pickerPointId && (
+      {showTaskPicker && data.point && (
         <AddTaskModal
-          pointId={pickerPointId}
+          pointId={data.point.id}
           onClose={() => setShowTaskPicker(false)}
           onAdded={() => {
             setShowTaskPicker(false);
+            void reload();
+            window.dispatchEvent(new Event('devtodo:data-changed'));
           }}
         />
       )}
@@ -1635,7 +1767,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         title="添加今日任务"
         placeholder="今天要做什么？"
         onSubmit={async (title) => {
-          const point = await ensureTodayPoint();
+          if (!data.point) return;
           // Create task first
           const { task: createdTask } = (await mutationV2('POST', '/tasks', {
             parentFolderId: null,
@@ -1644,10 +1776,10 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           // Place into today's timePoint
           await mutationV2('POST', '/placements', {
             taskId: createdTask.id,
-            timePointId: point.id,
+            timePointId: data.point.id,
           });
           await reload();
-          notifyDataChanged(reload);
+          window.dispatchEvent(new Event('devtodo:data-changed'));
         }}
       />
     </div>
@@ -1692,7 +1824,7 @@ function EventsPage() {
         ids: next.map((point) => point.id),
       });
       await reload();
-      notifyDataChanged(reload);
+      window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
       setActionError(cause instanceof ApiError ? cause.message : '事件排序失败，请重试');
     }
@@ -1952,16 +2084,13 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   }, [eventId]);
   useEffect(() => {
     void load();
-    const listener = (event: Event) => {
-      if (shouldReloadTaskList(event, load)) void load();
-    };
+    const listener = () => void load();
     window.addEventListener('devtodo:data-changed', listener);
     return () => {
       loadSequence.current += 1;
       window.removeEventListener('devtodo:data-changed', listener);
     };
   }, [load]);
-  const statusOf = useFrozenStatusGroup(items, point?.id);
   if (loadedEventId !== eventId && loadError)
     return (
       <div className="page">
@@ -1989,38 +2118,23 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
     }
   };
   const movePlacement = async (placementId: string, direction: 'up' | 'down') => {
-    const next = movePlacementWithinStatus(items, placementId, direction, statusOf);
-    if (!next) return;
+    const index = items.findIndex((item) => item.id === placementId);
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || targetIndex < 0 || targetIndex >= items.length) return;
+    const next = [...items];
+    [next[index], next[targetIndex]] = [next[targetIndex]!, next[index]!];
     try {
       await mutationV2('POST', `/time-points/${point.id}/placements/reorder`, {
         ids: next.map((item) => item.id),
       });
       await load();
-      notifyDataChanged(load);
+      window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
       setActionError(cause instanceof ApiError ? cause.message : '安排排序失败，请重试');
     }
   };
-  const toggleReached = async () => {
-    if (actionBusy) return;
-    setActionBusy(true);
-    setActionError('');
-    try {
-      await mutationV2(
-        'POST',
-        `/time-points/${point.id}/${point.reachedAt ? 'unreach' : 'reach'}`,
-        { baseVersion: point.version },
-      );
-      await load();
-      notifyDataChanged(load);
-    } catch (cause) {
-      setActionError(cause instanceof ApiError ? cause.message : '操作失败');
-    } finally {
-      setActionBusy(false);
-    }
-  };
   return (
-    <div className="page" aria-busy={loading || undefined}>
+    <div className="page">
       <PageHeader
         eyebrow="EVENT"
         title={point.title ?? ''}
@@ -2037,11 +2151,20 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             </Button>
             <Button
               variant="outlined"
-              leadingIcon={point.reachedAt ? <Undo2 size={16} /> : <Check size={16} />}
-              disabled={actionBusy}
-              onClick={() => void toggleReached()}
+              leadingIcon={<Check size={16} />}
+              disabled={actionBusy || Boolean(point.reachedAt)}
+              onClick={() =>
+                void mutationV2('POST', `/time-points/${point.id}/reach`, {
+                  baseVersion: point.version,
+                })
+                  .then(load)
+                  .then(() => window.dispatchEvent(new Event('devtodo:data-changed')))
+                  .catch((cause: unknown) =>
+                    setActionError(cause instanceof ApiError ? cause.message : '操作失败'),
+                  )
+              }
             >
-              {point.reachedAt ? '撤销到达' : '标记已到达'}
+              {point.reachedAt ? '已到达' : '标记已到达'}
             </Button>
             <Button
               variant="outlined"
@@ -2075,6 +2198,7 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           {actionError}
         </Alert>
       )}
+      {loading && <LoadingState label="正在更新事件安排" />}
       <SectionTitle
         title="安排在这里"
         count={items.length}
@@ -2092,8 +2216,6 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       <PlacementList
         items={items}
         pointId={point.id}
-        groupByStatus
-        statusOf={statusOf}
         onOpenTask={onOpenTask}
         onChanged={load}
         onMove={movePlacement}
@@ -2111,6 +2233,8 @@ function EventPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
           onClose={() => setShowAdd(false)}
           onAdded={() => {
             setShowAdd(false);
+            void load();
+            window.dispatchEvent(new Event('devtodo:data-changed'));
           }}
         />
       )}
@@ -2198,7 +2322,7 @@ function PlacementRow({
     try {
       await mutationV2('DELETE', `/placements/${placement.id}`, { baseVersion: placement.version });
       await onChanged();
-      notifyDataChanged(onChanged);
+      window.dispatchEvent(new Event('devtodo:data-changed'));
       setMenu(false);
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '移除安排失败');
@@ -2228,7 +2352,7 @@ function PlacementRow({
         baseVersion: task.version,
       });
       await onChanged();
-      notifyDataChanged(onChanged);
+      window.dispatchEvent(new Event('devtodo:data-changed'));
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : '更新任务失败');
     } finally {
@@ -2269,7 +2393,6 @@ function PlacementRow({
     if (id === 'copy') setTargetMode('copy');
   };
   const { isTouch } = useDevice();
-  const preview = useTaskHoverPreview(task, !isTouch);
   const swipe = useSwipeAction({
     disabled: readOnly || busy || !onToggleStatus || !isTouch,
     onSwipeRight: () => {
@@ -2283,8 +2406,6 @@ function PlacementRow({
 
   const rowContent = (
     <div
-      onPointerEnter={preview.anchorProps.onPointerEnter}
-      onPointerDownCapture={preview.anchorProps.onPointerDownCapture}
       className={`task-row${dragging ? ' dragging' : ''}${
         task.status === 'IN_PROGRESS' ? ' is-progress' : ''
       }${task.status === 'DONE' ? ' is-done' : ''}`}
@@ -2301,7 +2422,6 @@ function PlacementRow({
         swipe.handlers.onPointerUp(e);
       }}
       onPointerLeave={(e) => {
-        preview.anchorProps.onPointerLeave();
         cancelLongPress();
         swipe.handlers.onPointerCancel(e);
       }}
@@ -2333,16 +2453,13 @@ function PlacementRow({
         onStatusChange={updateStatus}
         disabled={busy || !onToggleStatus || readOnly}
       />
-      <div className="task-row-main">
-        <TaskRowAction
-          busy={busy}
-          onClick={() => onOpen(task.id)}
-          aria-label={`打开任务 ${task.title}`}
-        >
-          <span className="task-title">{task.title}</span>
-        </TaskRowAction>
-        <TaskFolderBreadcrumb task={task} className="task-row-folder" />
-      </div>
+      <TaskRowAction
+        busy={busy}
+        onClick={() => onOpen(task.id)}
+        aria-label={`打开任务 ${task.title}`}
+      >
+        <span className="task-title">{task.title}</span>
+      </TaskRowAction>
       {!readOnly && (
         <div ref={menuRef} className="task-actions">
           <IconButton
@@ -2373,20 +2490,13 @@ function PlacementRow({
           onDone={async () => {
             setTargetMode(null);
             await onChanged();
-            notifyDataChanged(onChanged);
           }}
         />
       )}
     </div>
   );
 
-  if (!isTouch)
-    return (
-      <>
-        {rowContent}
-        {preview.popover}
-      </>
-    );
+  if (!isTouch) return rowContent;
 
   return (
     <div className={`task-swipe-shell${swipe.isSwiping ? ' is-swiping' : ''}`}>
@@ -2422,8 +2532,6 @@ function PlacementList({
   emptyTitle,
   emptyDescription,
   emptyAction,
-  groupByStatus = false,
-  statusOf,
   readOnly = false,
 }: {
   items: PlacementWithTask[];
@@ -2435,15 +2543,10 @@ function PlacementList({
   emptyTitle: string;
   emptyDescription: string;
   emptyAction?: ReactNode;
-  /** Render status sections (进行中 / 待开始 / 已完成), with completed collapsed. */
-  groupByStatus?: boolean;
-  /** Frozen group assignment for grouped mode (see useFrozenStatusGroup). */
-  statusOf?: (item: PlacementWithTask) => TaskStatus;
   readOnly?: boolean;
 }) {
   const [dropError, setDropError] = useState('');
   const [dropBusy, setDropBusy] = useState(false);
-  const [completedOpen, setCompletedOpen] = useState(false);
   const allItems = reorderItems ?? items;
   const handleDrop = async (event: ReactDragEvent<HTMLElement>, targetPlacementId?: string) => {
     if (!pointId || readOnly || dropBusy) return;
@@ -2463,7 +2566,7 @@ function PlacementList({
             ids: next.map((item) => item.id),
           });
           await onChanged();
-          notifyDataChanged(onChanged);
+          window.dispatchEvent(new Event('devtodo:data-changed'));
         } catch (cause) {
           setDropError(cause instanceof ApiError ? cause.message : '安排排序失败，请重试');
         } finally {
@@ -2477,7 +2580,6 @@ function PlacementList({
     try {
       await moveDraggedPlacement(event, pointId);
       await onChanged();
-      notifyDataChanged(onChanged);
     } catch (cause) {
       setDropError(cause instanceof ApiError ? cause.message : '安排操作失败，请重试');
     } finally {
@@ -2512,27 +2614,6 @@ function PlacementList({
         </div>
       </>
     );
-  const renderRow = (item: PlacementWithTask, index: number, count: number) => (
-    <PlacementRow
-      key={item.id}
-      placement={item}
-      task={item.task}
-      onOpen={onOpenTask}
-      onChanged={onChanged}
-      onDrop={readOnly ? undefined : (event) => void handleDrop(event, item.id)}
-      onMove={readOnly ? undefined : onMove ? (direction) => onMove(item.id, direction) : undefined}
-      canMoveUp={index > 0}
-      canMoveDown={index < count - 1}
-      onToggleStatus={!readOnly}
-      readOnly={readOnly}
-    />
-  );
-  const statusGroups = groupByStatus
-    ? (['IN_PROGRESS', 'TODO', 'DONE'] as const).map((status) => ({
-        status,
-        items: items.filter((item) => (statusOf ? statusOf(item) : item.task.status) === status),
-      }))
-    : null;
   return (
     <>
       {dropNotice}
@@ -2543,52 +2624,25 @@ function PlacementList({
         }}
         onDrop={(event) => void handleDrop(event)}
       >
-        {statusGroups
-          ? statusGroups.map((group) =>
-              group.items.length ? (
-                <Fragment key={group.status}>
-                  <PlacementGroupHeading
-                    status={group.status}
-                    count={group.items.length}
-                    collapsed={group.status === 'DONE' && !completedOpen}
-                    onToggle={
-                      group.status === 'DONE' ? () => setCompletedOpen((open) => !open) : undefined
-                    }
-                  />
-                  {(group.status !== 'DONE' || completedOpen) &&
-                    group.items.map((item, index) => renderRow(item, index, group.items.length))}
-                </Fragment>
-              ) : null,
-            )
-          : items.map((item, index) => renderRow(item, index, items.length))}
+        {items.map((item, index) => (
+          <PlacementRow
+            key={item.id}
+            placement={item}
+            task={item.task}
+            onOpen={onOpenTask}
+            onChanged={onChanged}
+            onDrop={readOnly ? undefined : (event) => void handleDrop(event, item.id)}
+            onMove={
+              readOnly ? undefined : onMove ? (direction) => onMove(item.id, direction) : undefined
+            }
+            canMoveUp={index > 0}
+            canMoveDown={index < items.length - 1}
+            onToggleStatus={!readOnly}
+            readOnly={readOnly}
+          />
+        ))}
       </div>
     </>
-  );
-}
-
-function PlacementGroupHeading({
-  status,
-  count,
-  collapsed,
-  onToggle,
-}: {
-  status: TaskStatus;
-  count: number;
-  collapsed?: boolean;
-  onToggle?: () => void;
-}) {
-  return (
-    <div className={`placement-group-heading placement-group-heading--${taskStatusClass(status)}`}>
-      <span className="placement-group-heading__label">
-        {taskStatusLabel(status)}
-        <span className="count">{count}</span>
-      </span>
-      {onToggle && (
-        <Button variant="text" size="s" aria-expanded={!collapsed} onClick={onToggle}>
-          {collapsed ? '展开' : '收起'}
-        </Button>
-      )}
-    </div>
   );
 }
 
@@ -2825,6 +2879,7 @@ async function moveDraggedPlacement(event: ReactDragEvent<HTMLElement>, targetTi
   if (!taskId) return;
   if (!placementId) {
     await mutationV2('POST', '/placements', { taskId, timePointId: targetTimePointId });
+    window.dispatchEvent(new Event('devtodo:data-changed'));
     return;
   }
   const detail = await requestV2<{ placements: PlacementDto[] }>(`/tasks/${taskId}`);
@@ -2834,6 +2889,7 @@ async function moveDraggedPlacement(event: ReactDragEvent<HTMLElement>, targetTi
     timePointId: targetTimePointId,
     baseVersion: placement.version,
   });
+  window.dispatchEvent(new Event('devtodo:data-changed'));
 }
 
 function AddTaskModal({
@@ -2845,472 +2901,49 @@ function AddTaskModal({
   onClose: () => void;
   onAdded: () => void;
 }) {
-  const { isTouch } = useDevice();
-  const [query, setQuery] = useState('');
-  const [folderId, setFolderId] = useState<string | null>(null);
-  const [items, setItems] = useState<TreeItemDto[]>([]);
-  const [path, setPath] = useState<Array<Pick<FolderDto, 'id' | 'title'>>>([]);
-  const [searchIndex, setSearchIndex] = useState<{
-    tasks: TreeTaskDto[];
-    folders: FolderDto[];
-  } | null>(null);
-  const [error, setError] = useState('');
-  const [pickerError, setPickerError] = useState('');
-  const [searchError, setSearchError] = useState('');
-  const [searchRetry, setSearchRetry] = useState(0);
-  const [pickerLoading, setPickerLoading] = useState(false);
-  const [selectedTasks, setSelectedTasks] = useState<Map<string, TreeTaskDto>>(() => new Map());
-  const [existingTaskIds, setExistingTaskIds] = useState<Set<string>>(() => new Set());
-  const [addingSelected, setAddingSelected] = useState(false);
-  const pickerLoadSequence = useRef(0);
-  const existingLoadSequence = useRef(0);
-  const searchLoadSequence = useRef(0);
-  const loadedPickerFolder = useRef<string | null | undefined>(undefined);
-
-  const loadPicker = useCallback(async () => {
-    const sequence = ++pickerLoadSequence.current;
-    setPickerLoading(true);
-    setPickerError('');
-    try {
-      const queryString = folderId
-        ? `?parentFolderId=${encodeURIComponent(folderId)}`
-        : '?parentFolderId=root';
-      const [children, nextPath] = await Promise.all([
-        requestV2<{ items: TreeItemDto[] }>(`/tree/children${queryString}`),
-        folderId
-          ? requestV2<{ items: Array<Pick<FolderDto, 'id' | 'title'>> }>(
-              `/folders/${encodeURIComponent(folderId)}/path`,
-            )
-          : Promise.resolve({ items: [] }),
-      ]);
-      if (sequence !== pickerLoadSequence.current) return;
-      loadedPickerFolder.current = folderId;
-      setItems(children.items);
-      setPath(nextPath.items);
-    } catch (cause) {
-      if (sequence === pickerLoadSequence.current)
-        setPickerError(cause instanceof ApiError ? cause.message : '任务目录加载失败，请重试');
-    } finally {
-      if (sequence === pickerLoadSequence.current) setPickerLoading(false);
-    }
-  }, [folderId]);
-
-  /**
-   * The tasks already placed on this time point. They stay visible in the
-   * picker as checked, disabled rows so nobody re-adds a task that is on the
-   * list already. A failed refresh keeps the previous snapshot: the picker is
-   * still usable without it.
-   */
-  const loadExistingPlacements = useCallback(async () => {
-    const sequence = ++existingLoadSequence.current;
-    try {
-      const response = await requestV2<{ items: PlacementWithTask[] }>(
-        `/time-points/${pointId}/placements`,
-      );
-      if (sequence !== existingLoadSequence.current) return;
-      setExistingTaskIds(new Set(response.items.map((item) => item.taskId)));
-    } catch {
-      /* Keep the last snapshot; the picker still works without it. */
-    }
-  }, [pointId]);
-
-  useEffect(() => {
-    void loadPicker();
-    void loadExistingPlacements();
-    const listener = (event: Event) => {
-      if (!shouldReloadTaskList(event)) return;
-      // Keep the last search results mounted while the index revalidates.
-      setSearchError('');
-      setSearchRetry((count) => count + 1);
-      void loadPicker();
-      void loadExistingPlacements();
-    };
-    window.addEventListener('devtodo:data-changed', listener);
-    return () => window.removeEventListener('devtodo:data-changed', listener);
-  }, [loadExistingPlacements, loadPicker]);
-
-  const hasSearchQuery = Boolean(query.trim());
-  useEffect(() => {
-    if (!hasSearchQuery) return;
-    let cancelled = false;
-    const sequence = ++searchLoadSequence.current;
-    const timeout = window.setTimeout(() => {
-      setSearchError('');
-      void Promise.all([
-        requestV2<{ items: TreeTaskDto[] }>('/tasks'),
-        requestV2<{ items: FolderDto[] }>('/folders'),
-      ])
-        .then(([taskResult, folderResult]) => {
-          if (cancelled || sequence !== searchLoadSequence.current) return;
-          setSearchIndex({ tasks: taskResult.items, folders: folderResult.items });
-        })
-        .catch((cause) => {
-          if (cancelled || sequence !== searchLoadSequence.current) return;
-          setSearchError(cause instanceof ApiError ? cause.message : '搜索索引加载失败，请重试');
-        });
-    }, 180);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-      if (sequence === searchLoadSequence.current) searchLoadSequence.current += 1;
-    };
-  }, [hasSearchQuery, searchRetry]);
-
-  const activeItems = useMemo(
-    () =>
-      items.filter(
-        (item) => item.kind === 'FOLDER' || (!item.task.deletedAt && item.task.status !== 'DONE'),
-      ),
-    [items],
-  );
-  const searchFoldersById = useMemo(() => {
-    const byId = new Map<string, FolderDto>();
-    for (const folder of searchIndex?.folders ?? []) byId.set(folder.id, folder);
-    return byId;
-  }, [searchIndex]);
-  const taskLocation = useCallback(
-    (task: TreeTaskDto) => {
-      const titles: string[] = [];
-      let parentId = task.parentFolderId;
-      let visited = 0;
-      while (parentId && visited < (searchIndex?.folders.length ?? 0)) {
-        const folder = searchFoldersById.get(parentId);
-        if (!folder) break;
-        titles.unshift(folder.title);
-        parentId = folder.parentFolderId;
-        visited += 1;
-      }
-      return titles.join(' / ') || '根目录';
-    },
-    [searchFoldersById, searchIndex?.folders.length],
-  );
-  const matchingTasks = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase();
-    if (!needle || !searchIndex) return [];
-    return searchIndex.tasks.filter(
-      (task) =>
-        !task.deletedAt &&
-        task.status !== 'DONE' &&
-        (task.title.toLocaleLowerCase().includes(needle) ||
-          task.referenceId.toLocaleLowerCase().includes(needle) ||
-          taskLocation(task).toLocaleLowerCase().includes(needle)),
-    );
-  }, [query, searchIndex, taskLocation]);
-  const searchLoading = Boolean(query.trim()) && !searchIndex && !searchError;
-
-  const openFolder = (id: string | null) => {
-    setQuery('');
-    setFolderId(id);
-  };
-  const toggleTaskSelection = (task: TreeTaskDto) => {
-    setSelectedTasks((current) => {
-      const next = new Map(current);
-      if (next.has(task.id)) next.delete(task.id);
-      else next.set(task.id, task);
-      return next;
-    });
-  };
-  const addSelected = async () => {
-    if (addingSelected || selectedTasks.size === 0) return;
-    const tasks = [...selectedTasks.values()];
-    setAddingSelected(true);
-    setError('');
-    const addedIds = new Set<string>();
-    const failures: unknown[] = [];
-    try {
-      for (const task of tasks) {
-        try {
-          await mutationV2('POST', '/placements', { taskId: task.id, timePointId: pointId });
-          addedIds.add(task.id);
-        } catch (cause) {
-          failures.push(cause);
-        }
-      }
-      if (addedIds.size) {
-        setSelectedTasks((current) => new Map([...current].filter(([id]) => !addedIds.has(id))));
-        setExistingTaskIds((current) => new Set([...current, ...addedIds]));
-        window.dispatchEvent(new Event('devtodo:data-changed'));
-      }
-      if (failures.length) {
-        const cause = failures[0];
-        const detail = cause instanceof ApiError ? cause.message : '请检查后重试';
-        setError(`已加入 ${addedIds.size} 项，${failures.length} 项失败：${detail}`);
-      } else {
-        onAdded();
-      }
-    } finally {
-      setAddingSelected(false);
-    }
-  };
-  const renderTaskRow = (task: TreeTaskDto, showLocation: boolean) => {
-    const selected = selectedTasks.has(task.id);
-    const alreadyAdded = existingTaskIds.has(task.id);
-    return (
-      <TaskHoverPreviewRow key={task.id} task={task} enabled={!isTouch}>
-        {(anchorProps) => (
-          <ListItem
-            {...anchorProps}
-            className={`m3e-list-item--picker m3e-list-item--tree-row${
-              alreadyAdded ? ' is-already-added' : ''
-            }`}
-            headline={task.title}
-            supporting={
-              showLocation ? (
-                <span className="task-picker-location">{taskLocation(task)}</span>
-              ) : undefined
-            }
-            leading={
-              <span
-                className={`task-picker-selection${selected || alreadyAdded ? ' is-selected' : ''}${
-                  alreadyAdded ? ' is-existing' : ''
-                }`}
-                aria-hidden="true"
-              >
-                {(selected || alreadyAdded) && <Check size={15} strokeWidth={3} />}
-              </span>
-            }
-            trailing={
-              alreadyAdded ? (
-                <Chip kind="assist" label="已加入" className="task-picker-added-chip" />
-              ) : (
-                !selected && <Plus size={18} aria-hidden="true" />
-              )
-            }
-            selected={selected}
-            onClick={alreadyAdded ? undefined : () => toggleTaskSelection(task)}
-            disabled={!alreadyAdded && addingSelected}
-            ariaLabel={
-              alreadyAdded
-                ? `任务 ${task.title} 已加入当前日程`
-                : `${selected ? '取消选择' : '选择'}任务 ${task.title}`
-            }
-          />
-        )}
-      </TaskHoverPreviewRow>
-    );
-  };
-  const renderTreeItem = (item: TreeItemDto) =>
-    item.kind === 'FOLDER' ? (
-      <ListItem
-        className="m3e-list-item--tree-row"
-        key={`folder-${item.folder.id}`}
-        leading={<Folder size={20} />}
-        headline={item.folder.title}
-        supporting={
-          <>
-            <Chip
-              kind="assist"
-              label={taskStatusLabel(item.aggregate.status)}
-              className={`m3e-chip--task-status m3e-chip--task-status-${taskStatusClass(item.aggregate.status)}`}
-            />
-            <span className="tree-count">
-              {item.aggregate.doneCount}/{item.aggregate.totalCount} 已完成
-            </span>
-          </>
-        }
-        trailing={<ChevronRight size={16} aria-hidden="true" />}
-        ariaLabel={`打开文件夹 ${item.folder.title}`}
-        onClick={() => openFolder(item.folder.id)}
-      />
-    ) : (
-      renderTaskRow(item.task, false)
-    );
-
   return (
-    <Modal
+    <TaskDirectoryPickerModal
       title="安排任务"
+      confirmLabel={(count) => `加入日程${count ? `（${count}）` : ''}`}
       onClose={onClose}
-      footer={
-        <>
-          <span className="task-picker-selection-count" aria-live="polite">
-            已选择 {selectedTasks.size} 项
-          </span>
-          <Button
-            variant="text"
-            size="s"
-            disabled={selectedTasks.size === 0 || addingSelected}
-            onClick={() => setSelectedTasks(new Map())}
-          >
-            清空选择
-          </Button>
-          <Button
-            variant="filled"
-            disabled={selectedTasks.size === 0 || addingSelected}
-            onClick={() => void addSelected()}
-          >
-            {addingSelected
-              ? '正在加入…'
-              : `加入日程${selectedTasks.size ? `（${selectedTasks.size}）` : ''}`}
-          </Button>
-        </>
-      }
-    >
-      <SearchBar
-        label="搜索任务或目录"
-        variant="view"
-        autoFocus
-        value={query}
-        onChange={(value) => {
-          setSearchError('');
-          setQuery(value);
-        }}
-        placeholder="搜索标题、引用 ID 或目录"
-        leadingIcon={<Search size={20} />}
-      />
-      {error && (
-        <Alert tone="error" title="任务操作失败">
-          {error}
-        </Alert>
-      )}
-      {pickerError && (
-        <Alert
-          tone="error"
-          action={
-            <Button variant="text" size="s" onClick={() => void loadPicker()}>
-              重试
-            </Button>
+      onConfirm={async (tasks) => {
+        const addedIds = new Set<string>();
+        const failures: unknown[] = [];
+        for (const task of tasks) {
+          try {
+            await mutationV2('POST', '/placements', { taskId: task.id, timePointId: pointId });
+            addedIds.add(task.id);
+          } catch (cause) {
+            failures.push(cause);
           }
-        >
-          {pickerError}
-        </Alert>
-      )}
-      {searchError && query.trim() && (
-        <Alert
-          tone="error"
-          title="搜索目录失败"
-          action={
-            <Button
-              variant="text"
-              size="s"
-              onClick={() => {
-                setSearchError('');
-                setSearchRetry((count) => count + 1);
-              }}
-            >
-              重试
-            </Button>
-          }
-        >
-          {searchError}
-        </Alert>
-      )}
-      {!query.trim() && (
-        <p className="field-help picker-hint">
-          点选任务可同时选择多项；选择会在切换目录时保留。已加入当前日程的任务会显示为已勾选，不会重复加入。
-        </p>
-      )}
-      {query.trim() ? (
-        <div className="task-picker-scroll" role="region" aria-label="任务搜索结果">
-          {searchLoading ? (
-            <LoadingState label="正在搜索任务目录" />
-          ) : searchError && !searchIndex ? null : matchingTasks.length ? (
-            <List className="m3e-list--picker m3e-list--tree-group" gap>
-              {matchingTasks.map((task) => renderTaskRow(task, true))}
-            </List>
-          ) : (
-            <M3EmptyState
-              compact
-              icon={<ListChecksIcon size={20} />}
-              title="没有可选择的任务"
-              description="换一个标题、引用 ID 或目录名称再试。"
-            />
-          )}
-        </div>
-      ) : (
-        <>
-          <nav className="tree-breadcrumbs" aria-label="目录路径">
-            <Button
-              variant={!folderId ? 'tonal' : 'text'}
-              size="s"
-              type="button"
-              aria-current={!folderId ? 'page' : undefined}
-              className="m3e-button--tree-breadcrumb"
-              onClick={() => openFolder(null)}
-            >
-              根目录
-            </Button>
-            {path.map((crumb) => (
-              <span key={crumb.id} className="tree-breadcrumbs__segment">
-                <ChevronRight size={16} aria-hidden="true" />
-                <Button
-                  variant={crumb.id === folderId ? 'tonal' : 'text'}
-                  size="s"
-                  type="button"
-                  aria-current={crumb.id === folderId ? 'page' : undefined}
-                  className="m3e-button--tree-breadcrumb"
-                  onClick={() => openFolder(crumb.id)}
-                >
-                  {crumb.title}
-                </Button>
-              </span>
-            ))}
-          </nav>
-          <div
-            key={folderId ?? 'root'}
-            className="task-picker-scroll"
-            role="region"
-            aria-label="当前目录"
-          >
-            {pickerLoading && loadedPickerFolder.current !== folderId ? (
-              <LoadingState label="正在加载目录" />
-            ) : pickerError && !activeItems.length ? null : (
-              <Card
-                as="section"
-                variant="outlined"
-                className="m3e-card--tree-group"
-                aria-labelledby="task-picker-current-folder"
-              >
-                <div className="tree-group-heading">
-                  <span id="task-picker-current-folder">当前目录</span>
-                  <span>{activeItems.length}</span>
-                </div>
-                {activeItems.length ? (
-                  <List className="m3e-list--picker m3e-list--tree-group" gap>
-                    {activeItems.map(renderTreeItem)}
-                  </List>
-                ) : (
-                  <M3EmptyState
-                    compact
-                    icon={<ListChecksIcon size={20} />}
-                    title={folderId ? '此目录没有可安排的任务' : '没有未完成任务'}
-                    description={
-                      folderId
-                        ? '当前目录中没有未完成任务；可以返回上级目录。'
-                        : '根目录下没有未完成任务。'
-                    }
-                  />
-                )}
-              </Card>
-            )}
-          </div>
-        </>
-      )}
-    </Modal>
+        }
+        if (addedIds.size) {
+          window.dispatchEvent(new Event('devtodo:data-changed'));
+        }
+        if (failures.length) {
+          const cause = failures[0];
+          const detail = cause instanceof ApiError ? cause.message : '请检查后重试';
+          throw new Error(`已加入 ${addedIds.size} 项，${failures.length} 项失败：${detail}`);
+        } else {
+          onAdded();
+        }
+      }}
+    />
   );
 }
 
 function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   const { settings } = useAuth();
   const params = useParams();
-  const fallbackDate = todayInTimezone(settings?.timezone);
-  // A bookmark or notification may carry a stale/invalid date. Fall back to
-  // today instead of letting calendarDays()/Intl throw during render.
-  const initial = isLocalDate(params.localDate) ? params.localDate : fallbackDate;
+  const initial = params.localDate ?? todayInTimezone(settings?.timezone ?? 'Asia/Shanghai');
   const [month, setMonth] = useState(initial.slice(0, 7));
-  const [selected, setSelected] = useState(initial);
+  const [selected, setSelected] = useState(params.localDate ?? initial);
   const [items, setItems] = useState<PlacementWithTask[]>([]);
   const [point, setPoint] = useState<TimePointDto | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [dateCounts, setDateCounts] = useState<Record<string, number>>({});
   const [detailError, setDetailError] = useState('');
   const [loadingSelected, setLoadingSelected] = useState(true);
-  /**
-   * The date whose placements are on screen. A background sync re-reads the
-   * selected date in place; only a real date switch (or the first load) may
-   * swap the list for the loading state, because that swap remounts every row
-   * and replays its entry animation.
-   */
-  const [loadedSelectedDate, setLoadedSelectedDate] = useState<string | null>(null);
   const selectedLoadId = useRef(0);
   const days = useMemo(
     () => calendarDays(month, settings?.weekStartsOn ?? 1),
@@ -3382,11 +3015,10 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
       if (loadId !== selectedLoadId.current) return;
       setPoint(nextPoint);
       setItems(result.items);
-      setLoadedSelectedDate(selected);
     } catch (cause) {
       if (loadId !== selectedLoadId.current) return;
-      // A failed background read must not discard the day already being used.
-      // Real date switches clear the previous data in selectDate().
+      setPoint(null);
+      setItems([]);
       setDetailError(cause instanceof ApiError ? cause.message : '日期任务加载失败');
     } finally {
       if (loadId === selectedLoadId.current) setLoadingSelected(false);
@@ -3394,25 +3026,25 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
   }, [selected]);
   useEffect(() => {
     void loadSelected();
-    const listener = (event: Event) => {
-      if (shouldReloadTaskList(event, loadSelected)) void loadSelected();
-    };
+    const listener = () => void loadSelected();
     window.addEventListener('devtodo:data-changed', listener);
     return () => {
       selectedLoadId.current += 1;
       window.removeEventListener('devtodo:data-changed', listener);
     };
   }, [loadSelected]);
-  const statusOf = useFrozenStatusGroup(items, point?.id);
   const movePlacement = async (placementId: string, direction: 'up' | 'down') => {
     if (!point) return;
-    const next = movePlacementWithinStatus(items, placementId, direction, statusOf);
-    if (!next) return;
+    const index = items.findIndex((item) => item.id === placementId);
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || targetIndex < 0 || targetIndex >= items.length) return;
+    const next = [...items];
+    [next[index], next[targetIndex]] = [next[targetIndex]!, next[index]!];
     await mutationV2('POST', `/time-points/${point.id}/placements/reorder`, {
       ids: next.map((item) => item.id),
     });
     await loadSelected();
-    notifyDataChanged(loadSelected);
+    window.dispatchEvent(new Event('devtodo:data-changed'));
   };
   return (
     <div className="page">
@@ -3482,23 +3114,21 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
             <Button
               size="s"
               variant="tonal"
-              disabled={!point}
+              disabled={loadingSelected || !point}
               leadingIcon={<Plus size={16} />}
               onClick={() => setShowAdd(true)}
             >
               加入任务
             </Button>
           </div>
-          {detailError && <ErrorState error={detailError} onRetry={() => void loadSelected()} />}
-          {detailError && loadedSelectedDate !== selected ? null : loadingSelected &&
-            loadedSelectedDate !== selected ? (
+          {detailError ? (
+            <ErrorState error={detailError} onRetry={() => void loadSelected()} />
+          ) : loadingSelected ? (
             <LoadingState label="正在加载日期安排" />
           ) : (
             <PlacementList
               items={items}
               pointId={point?.id}
-              groupByStatus
-              statusOf={statusOf}
               onOpenTask={onOpenTask}
               onChanged={loadSelected}
               onMove={movePlacement}
@@ -3512,6 +3142,7 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
               onClose={() => setShowAdd(false)}
               onAdded={() => {
                 setShowAdd(false);
+                window.dispatchEvent(new Event('devtodo:data-changed'));
               }}
             />
           )}
@@ -3523,7 +3154,6 @@ function CalendarPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
 
 function SettingsPage() {
   const auth = useAuth();
-  const [networkMode, updateNetworkMode] = useState<NetworkMode>(getNetworkMode);
   const [timezone, setTimezone] = useState(auth.settings?.timezone ?? 'Asia/Shanghai');
   const [weekStartsOn, setWeekStartsOn] = useState<0 | 1>(auth.settings?.weekStartsOn ?? 1);
   const [defaultCaptureTarget, setDefaultCaptureTarget] = useState<'ROOT' | 'RECENT_FOLDER'>(
@@ -3531,7 +3161,6 @@ function SettingsPage() {
   );
   const [saved, setSaved] = useState('');
   const [error, setError] = useState('');
-  const [accountSecurityOpened, setAccountSecurityOpened] = useState(false);
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!auth.settings) return;
@@ -3553,29 +3182,8 @@ function SettingsPage() {
   return (
     <div className="page narrow-page">
       <PageHeader eyebrow="PREFERENCES" title="设置" />
-      <PwaInstallButton />
       {isNativeClient() && <HubSettingsSection />}
       <form className="settings-form" onSubmit={save}>
-        <div className="settings-section">
-          <h2>本机网络策略</h2>
-          <Select
-            label="加载与省流"
-            value={networkMode}
-            options={[
-              { value: 'auto', label: '自动适配' },
-              { value: 'standard', label: '标准' },
-              { value: 'low-data', label: '省流弱网' },
-            ]}
-            onChange={(value) => {
-              if (value !== 'auto' && value !== 'standard' && value !== 'low-data') return;
-              setNetworkMode(value);
-              updateNetworkMode(value);
-            }}
-          />
-          <p className="field-help">
-            仅保存在本设备。省流模式降低后台核验频率，当前页面仍优先更新。
-          </p>
-        </div>
         <div className="settings-section">
           <h2>日期与安排</h2>
           <Select
@@ -3637,97 +3245,8 @@ function SettingsPage() {
           )}
         </div>
       </form>
-      <Disclosure
-        className="m3e-disclosure--settings-account"
-        title="账户与安全"
-        description="仅在需要撤销某台设备时展开"
-        leading={<ShieldCheck size={18} />}
-        onOpenChange={(open) => {
-          if (open) setAccountSecurityOpened(true);
-        }}
-      >
-        {accountSecurityOpened ? <DeviceSettingsSection /> : null}
-      </Disclosure>
     </div>
   );
-}
-
-function DeviceSettingsSection() {
-  const [devices, setDevices] = useState<DeviceSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [deviceToRevoke, setDeviceToRevoke] = useState<DeviceSummary | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setDevices(await listDevices());
-      setError('');
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : '无法加载已登录设备');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const activeDevices = devices.filter((device) => !device.revokedAt);
-  return (
-    <div className="settings-section">
-      <h2>已登录设备</h2>
-      <p className="field-help">
-        常用设备会一直保持登录；默认连续 365 天未使用才会失效。撤销后该设备需要重新登录。
-      </p>
-      {error && <Alert tone="error">{error}</Alert>}
-      {loading ? (
-        <LoadingState label="正在加载设备…" />
-      ) : activeDevices.length === 0 ? (
-        <p className="field-help">没有可显示的设备。</p>
-      ) : (
-        <div className="settings-device-list">
-          {activeDevices.map((device) => (
-            <div className="settings-device-row" key={device.id}>
-              <div className="settings-device-row__identity">
-                <strong>{device.name}</strong>
-                <span className="field-help">
-                  {device.platform} · 最近使用 {formatDeviceTime(device.lastSeenAt)}
-                </span>
-              </div>
-              {device.current ? (
-                <Chip kind="assist" label="当前设备" />
-              ) : (
-                <Button variant="text" onClick={() => setDeviceToRevoke(device)}>
-                  撤销
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      <ConfirmDialog
-        open={deviceToRevoke !== null}
-        title="撤销设备"
-        description={
-          deviceToRevoke ? `“${deviceToRevoke.name}”将立即退出登录，需要重新输入密码才能访问。` : ''
-        }
-        confirmLabel="撤销"
-        onClose={() => setDeviceToRevoke(null)}
-        onConfirm={async () => {
-          if (!deviceToRevoke) return;
-          await revokeDevice(deviceToRevoke.id);
-          setDevices((current) => current.filter((device) => device.id !== deviceToRevoke.id));
-        }}
-      />
-    </div>
-  );
-}
-
-function formatDeviceTime(value: string): string {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 }
 
 function HubSettingsSection() {
@@ -4087,4 +3606,74 @@ function breadcrumb(pathname: string): string {
   if (pathname === '/time' || pathname.startsWith('/time/')) return '计划';
   if (pathname.startsWith('/settings')) return '设置';
   return 'TaskDock';
+}
+function todayInTimezone(timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values['year']}-${values['month']}-${values['day']}`;
+}
+function formatDate(localDate: string): string {
+  const date = new Date(`${localDate}T12:00:00`);
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+  }).format(date);
+}
+function formatMonth(month: string): string {
+  const date = new Date(`${month}-01T12:00:00`);
+  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long' }).format(date);
+}
+function formatTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+function shiftMonth(month: string, delta: number): string {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const date = new Date(Date.UTC(year!, monthNumber! - 1 + delta, 1));
+  return date.toISOString().slice(0, 7);
+}
+function shiftLocalDate(localDate: string, delta: number): string {
+  const date = new Date(`${localDate}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + delta);
+  return date.toISOString().slice(0, 10);
+}
+function weekdayLabels(weekStartsOn: 0 | 1): string[] {
+  const mondayFirst = ['一', '二', '三', '四', '五', '六', '日'];
+  return weekStartsOn === 1 ? mondayFirst : ['日', ...mondayFirst.slice(0, 6)];
+}
+interface CalendarDay {
+  date: string;
+  label: number;
+  inMonth: boolean;
+  taskCount: number;
+}
+function calendarDays(month: string, weekStartsOn: 0 | 1 = 1): CalendarDay[] {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const first = new Date(Date.UTC(year!, monthNumber! - 1, 1));
+  const offset = weekStartsOn === 1 ? (first.getUTCDay() + 6) % 7 : first.getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year!, monthNumber!, 0)).getUTCDate();
+  const previousDays = new Date(Date.UTC(year!, monthNumber! - 1, 0)).getUTCDate();
+  return Array.from({ length: 42 }, (_, index) => {
+    const dayIndex = index - offset + 1;
+    const date = new Date(Date.UTC(year!, monthNumber! - 1, dayIndex));
+    const inMonth = dayIndex >= 1 && dayIndex <= daysInMonth;
+    return {
+      date: date.toISOString().slice(0, 10),
+      label: inMonth ? dayIndex : dayIndex < 1 ? previousDays + dayIndex : dayIndex - daysInMonth,
+      inMonth,
+      taskCount: 0,
+    };
+  });
 }

@@ -5,7 +5,7 @@ import type {
   WorkflowDto,
   WorkflowTaskMembershipDto,
 } from '@devtodo/contracts';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Check,
   Folder,
@@ -18,7 +18,6 @@ import {
 
 import { mutationV2, requestV2 } from './api.js';
 import { useAuth } from './auth.js';
-import { notifyDataChanged, shouldReloadTaskList } from './data-changes.js';
 import {
   Alert,
   Button,
@@ -41,7 +40,8 @@ import {
 } from './components/m3e/index.js';
 import { resolveCaptureFolder } from './folder-preference.js';
 import { useSearchParams } from 'react-router-dom';
-import { TaskFolderBreadcrumb } from './components/task-folder-breadcrumb.js';
+import { directoryEntries } from './directory-paths.js';
+import { TaskDirectoryPickerModal } from './components/task-directory-picker-modal.js';
 
 type WorkflowStage = NonNullable<WorkflowDto['stages']>[number];
 
@@ -185,7 +185,6 @@ function WorkflowNameDialog({
 function WorkflowAddTaskDialog({
   stage,
   candidates,
-  folders,
   busy,
   error,
   onAddExisting,
@@ -194,171 +193,42 @@ function WorkflowAddTaskDialog({
 }: {
   stage: WorkflowStage;
   candidates: TreeTaskDto[];
-  folders: FolderDto[];
+  folders?: FolderDto[];
   busy: boolean;
   error: string;
   onAddExisting: (taskIds: string[]) => void;
   onCreateTask: (title: string) => void;
   onClose: () => void;
 }) {
-  const [mode, setMode] = useState<'existing' | 'create'>('existing');
-  const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set<string>());
-  const [title, setTitle] = useState('');
-  const formId = useId();
-  const needle = query.trim().toLowerCase();
-  const matches = needle
-    ? candidates.filter(
-        (task) =>
-          task.title.toLowerCase().includes(needle) ||
-          task.referenceId.toLowerCase().includes(needle),
-      )
-    : candidates;
-  const toggle = (taskId: string) =>
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(taskId)) next.delete(taskId);
-      else next.add(taskId);
-      return next;
-    });
-  const folderTitle = (task: TreeTaskDto) =>
-    task.parentFolderId
-      ? (folders.find((folder) => folder.id === task.parentFolderId)?.title ?? '目录')
-      : '根目录';
+  // 排除掉不在 candidates 中的任务（即已在该流程中的任务）
+  const candidateIds = useMemo(() => new Set(candidates.map((t) => t.id)), [candidates]);
 
   return (
-    <Dialog
-      open
+    <TaskDirectoryPickerModal
       title={`添加任务到「${stage.name}」`}
+      confirmLabel={(count) => `加入流程${count ? `（${count}）` : ''}`}
+      excludedTaskIds={useMemo(() => {
+        // 通过动态判断：若不在候选列表中，则代表已在流程中，应被排除
+        // 但 TaskDirectoryPickerModal 接收的是 excludedTaskIds
+        // 所以我们可以在组件中使用 excludedTaskIds，或者直接传已在流程中的 ID 集合
+        return new Set(
+          (stage.tasks ?? []).map((t) => t.id)
+        );
+      }, [stage.tasks])}
       onClose={onClose}
-      footer={
-        mode === 'existing' ? (
-          <>
-            <span className="task-picker-selection-count" aria-live="polite">
-              已选择 {selected.size} 项
-            </span>
-            <Button variant="text" type="button" disabled={busy} onClick={onClose}>
-              取消
-            </Button>
-            <Button
-              variant="filled"
-              type="button"
-              disabled={busy || selected.size === 0}
-              onClick={() => onAddExisting([...selected])}
-            >
-              {busy ? '加入中…' : `加入流程${selected.size ? `（${selected.size}）` : ''}`}
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button variant="text" type="button" disabled={busy} onClick={onClose}>
-              取消
-            </Button>
-            <Button variant="filled" type="submit" form={formId} disabled={busy || !title.trim()}>
-              {busy ? '创建中…' : '创建并加入'}
-            </Button>
-          </>
-        )
-      }
-    >
-      <ButtonGroup
-        label="添加方式"
-        value={mode}
-        options={[
-          { value: 'existing' as const, label: '选择已有任务' },
-          { value: 'create' as const, label: '新建任务' },
-        ]}
-        onChange={setMode}
-        className="m3e-button-group--add-task-mode"
-      />
-      {error && <Alert tone="error">{error}</Alert>}
-      {mode === 'existing' ? (
-        <>
-          <SearchBar
-            label="搜索任务"
-            variant="view"
-            autoFocus
-            value={query}
-            onChange={setQuery}
-            placeholder="搜索标题或引用 ID"
-            leadingIcon={<Search size={20} />}
-          />
-          {matches.length ? (
-            <List gap className="m3e-list--picker workflow-add-task__list">
-              {matches.map((task) => {
-                const isSelected = selected.has(task.id);
-                return (
-                  <ListItem
-                    key={task.id}
-                    className="m3e-list-item--picker"
-                    headline={task.title}
-                    supporting={
-                      <span className="workflow-task__meta">
-                        <code>{task.referenceId}</code>
-                        <span className="workflow-task__folder">
-                          <Folder size={14} aria-hidden="true" />
-                          {folderTitle(task)}
-                        </span>
-                      </span>
-                    }
-                    leading={
-                      <span
-                        className={`task-picker-selection${isSelected ? ' is-selected' : ''}`}
-                        aria-hidden="true"
-                      >
-                        {isSelected && <Check size={15} strokeWidth={3} />}
-                      </span>
-                    }
-                    selected={isSelected}
-                    disabled={busy}
-                    ariaLabel={`${isSelected ? '取消选择' : '选择'}任务 ${task.title}`}
-                    onClick={() => toggle(task.id)}
-                  />
-                );
-              })}
-            </List>
-          ) : (
-            <EmptyState
-              compact
-              icon={<ListChecksIcon size={20} />}
-              title={candidates.length ? '没有匹配的任务' : '没有可加入的任务'}
-              description={
-                candidates.length
-                  ? '换一个标题或引用 ID 再试。'
-                  : '目录里的任务都已在这个流程中；可以改为新建任务。'
-              }
-            />
-          )}
-        </>
-      ) : (
-        <form
-          id={formId}
-          className="stack-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const next = title.trim();
-            if (next && !busy) onCreateTask(next);
-          }}
-        >
-          <TextField
-            label="任务标题"
-            autoFocus
-            value={title}
-            helperText="新任务会先创建在默认捕获目录，再加入这个阶段。"
-            disabled={busy}
-            onChange={(event) => setTitle(event.target.value)}
-          />
-        </form>
-      )}
-    </Dialog>
+      createTaskSupport={{
+        onCreateTask: async (title) => {
+          onCreateTask(title);
+        },
+        helperText: '新任务会先创建在默认捕获目录，再加入这个阶段。',
+      }}
+      onConfirm={async (tasks) => {
+        onAddExisting(tasks.map((t) => t.id));
+      }}
+    />
   );
 }
 
-/**
- * Workflow board. A workflow is a card, its stages are columns in reading
- * order, and every mutation is reachable from one overflow menu per card,
- * column and task row.
- */
 export function WorkflowsPage() {
   const { settings } = useAuth();
   const [workflows, setWorkflows] = useState<WorkflowDto[]>([]);
@@ -406,9 +276,7 @@ export function WorkflowsPage() {
 
   useEffect(() => {
     void load();
-    const listener = (event: Event) => {
-      if (shouldReloadTaskList(event, load)) void load();
-    };
+    const listener = () => void load();
     window.addEventListener('devtodo:data-changed', listener);
     return () => {
       loadSequence.current += 1;
@@ -488,7 +356,7 @@ export function WorkflowsPage() {
     const applied = await run(() =>
       mutationV2('PATCH', `/tasks/${task.id}`, { status, baseVersion: task.version }),
     );
-    if (applied) notifyDataChanged(load);
+    if (applied) window.dispatchEvent(new Event('devtodo:data-changed'));
   };
 
   const moveMembership = (
@@ -506,6 +374,9 @@ export function WorkflowsPage() {
     ? selectedWorkflowId
     : (workflows[0]?.id ?? '');
   const visibleWorkflows = workflows.filter((item) => item.id === activeWorkflowId);
+  const folderLabels = new Map(
+    directoryEntries(folders).map((entry) => [entry.folder.id, entry.label]),
+  );
 
   return (
     <section className="page-section workflows-page" aria-labelledby="workflows-title">
@@ -717,6 +588,9 @@ export function WorkflowsPage() {
                               const membership = membershipAt(stage, taskIndex);
                               const prevMembership = membershipAt(stage, taskIndex - 1);
                               const nextMembership = membershipAt(stage, taskIndex + 1);
+                              const folderTitle = task.parentFolderId
+                                ? (folderLabels.get(task.parentFolderId) ?? '目录')
+                                : '根目录';
                               return (
                                 <ListItem
                                   className={`m3e-list-item--workflow-task${
@@ -740,7 +614,10 @@ export function WorkflowsPage() {
                                   }
                                   supporting={
                                     <span className="workflow-task__meta">
-                                      <TaskFolderBreadcrumb task={task} />
+                                      <span className="workflow-task__folder">
+                                        <Folder size={14} aria-hidden="true" />
+                                        {folderTitle}
+                                      </span>
                                     </span>
                                   }
                                   trailing={
