@@ -174,25 +174,19 @@ function WorkflowNameDialog({
  */
 function WorkflowAddTaskDialog({
   stage,
-  candidates,
-  busy,
-  error,
   onAddExisting,
   onCreateTask,
   onClose,
 }: {
   stage: WorkflowStage;
-  candidates: TreeTaskDto[];
+  candidates?: TreeTaskDto[];
   folders?: FolderDto[];
-  busy: boolean;
-  error: string;
+  busy?: boolean;
+  error?: string;
   onAddExisting: (taskIds: string[]) => void;
   onCreateTask: (title: string) => void;
   onClose: () => void;
 }) {
-  // 排除掉不在 candidates 中的任务（即已在该流程中的任务）
-  const candidateIds = useMemo(() => new Set(candidates.map((t) => t.id)), [candidates]);
-
   return (
     <TaskDirectoryPickerModal
       title={`添加任务到「${stage.name}」`}
