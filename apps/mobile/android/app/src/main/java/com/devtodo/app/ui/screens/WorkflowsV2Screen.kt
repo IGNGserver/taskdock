@@ -17,8 +17,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Surface
-import com.devtodo.app.data.local.FolderEntity
-import com.devtodo.app.data.local.TaskEntity
 
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountTree
@@ -35,8 +33,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.devtodo.app.data.local.FolderEntity
-import com.devtodo.app.data.local.TaskEntity
 import com.devtodo.app.data.local.WorkflowEntity
 import com.devtodo.app.data.local.WorkflowStageEntity
 import com.devtodo.app.data.local.WorkflowTaskMembershipEntity
@@ -665,7 +661,7 @@ private fun WorkflowDirectoryTaskPickerDialog(
         if (needle.isNotEmpty()) {
             allTasks.filter {
                 it.archivedAt == null && it.deletedAt == null &&
-                        (it.title.lowercase().contains(needle) || it.referenceId.lowercase().contains(needle))
+                        (it.title.lowercase().contains(needle) || (it.referenceId?.lowercase()?.contains(needle) == true))
             }
         } else {
             allTasks.filter {
@@ -785,7 +781,7 @@ private fun WorkflowDirectoryTaskPickerDialog(
                                     modifier = Modifier.weight(1f),
                                 )
                                 Text(
-                                    text = task.referenceId,
+                                    text = task.referenceId.orEmpty(),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
