@@ -1,4 +1,5 @@
 import type {
+import { TaskDirectoryPickerModal } from './components/task-directory-picker-modal.js';
   FolderDto,
   PlacementDto,
   TaskStatus,
