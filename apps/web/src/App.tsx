@@ -145,7 +145,7 @@ import {
   weekdayLabels,
 } from './date-utils.js';
 import { getNetworkMode, setNetworkMode, type NetworkMode } from './network-policy.js';
-import { TaskHoverPreviewRow, useTaskHoverPreview } from './components/task-hover-preview.js';
+import { useTaskHoverPreview } from './components/task-hover-preview.js';
 import { notifyDataChanged, shouldReloadTaskList } from './data-changes.js';
 const TreePage = lazy(() => import('./TreePage.js').then((page) => ({ default: page.TreePage })));
 const WorkflowsPage = lazy(() =>
