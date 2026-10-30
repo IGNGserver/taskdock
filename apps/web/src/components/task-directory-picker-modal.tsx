@@ -1,7 +1,31 @@
-import { Check, ChevronRight, Folder, ListChecksIcon, Plus, Search } from 'lucide-react';
+import type { FolderDto, TaskStatus, TreeItemDto, TreeTaskDto } from '@devtodo/contracts';
+import {
+  Check,
+  ChevronRight,
+  Folder,
+  ListChecks as ListChecksIcon,
+  Plus,
+  Search,
+} from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ApiError, requestV2 } from '../api.js';
-import type { FolderDto, TaskStatus, TreeItemDto, TreeTaskDto } from '@devtodo/contracts';
+import { useDevice } from '../device.js';
+import { shouldReloadTaskList } from '../data-changes.js';
+import { TaskHoverPreviewRow } from './task-hover-preview.js';
+import {
+  Alert,
+  Button,
+  ButtonGroup,
+  Card,
+  Chip,
+  Dialog,
+  EmptyState as M3EmptyState,
+  List,
+  ListItem,
+  LoadingState,
+  SearchBar,
+  TextField,
+} from './m3e/index.js';
 
 function taskStatusLabel(status: TaskStatus): string {
   return status === 'IN_PROGRESS' ? '进行中' : status === 'DONE' ? '已完成' : '待开始';
@@ -10,20 +34,6 @@ function taskStatusLabel(status: TaskStatus): string {
 function taskStatusClass(status: TaskStatus): string {
   return status === 'IN_PROGRESS' ? 'in-progress' : status === 'DONE' ? 'done' : 'todo';
 }
-import {
-  Alert,
-  Button,
-  ButtonGroup,
-  Card,
-  Chip,
-  EmptyState as M3EmptyState,
-  List,
-  ListItem,
-  LoadingState,
-  Dialog,
-  SearchBar,
-  TextField,
-} from './m3e/index.js';
 
 export interface TaskDirectoryPickerModalProps {
   title: string;
@@ -31,7 +41,6 @@ export interface TaskDirectoryPickerModalProps {
   excludedTaskIds?: ReadonlySet<string>;
   onConfirm: (tasks: TreeTaskDto[]) => Promise<void> | void;
   onClose: () => void;
-  /** 可选的新建任务支持（流程页面可切换创建任务与目录选择） */
   createTaskSupport?: {
     onCreateTask: (title: string) => Promise<void> | void;
     helperText?: string;
@@ -46,6 +55,7 @@ export function TaskDirectoryPickerModal({
   onClose,
   createTaskSupport,
 }: TaskDirectoryPickerModalProps) {
+  const { isTouch } = useDevice();
   const [activeTab, setActiveTab] = useState<'existing' | 'create'>('existing');
   const [newTitle, setNewTitle] = useState('');
   const createFormId = useId();
@@ -67,6 +77,7 @@ export function TaskDirectoryPickerModal({
   const [submitting, setSubmitting] = useState(false);
   const pickerLoadSequence = useRef(0);
   const searchLoadSequence = useRef(0);
+  const loadedPickerFolder = useRef<string | null | undefined>(undefined);
 
   const loadPicker = useCallback(async () => {
     const sequence = ++pickerLoadSequence.current;
@@ -85,6 +96,7 @@ export function TaskDirectoryPickerModal({
           : Promise.resolve({ items: [] }),
       ]);
       if (sequence !== pickerLoadSequence.current) return;
+      loadedPickerFolder.current = folderId;
       setItems(children.items);
       setPath(nextPath.items);
     } catch (cause) {
@@ -97,8 +109,8 @@ export function TaskDirectoryPickerModal({
 
   useEffect(() => {
     void loadPicker();
-    const listener = () => {
-      setSearchIndex(null);
+    const listener = (event: Event) => {
+      if (!shouldReloadTaskList(event)) return;
       setSearchError('');
       setSearchRetry((count) => count + 1);
       void loadPicker();
@@ -107,9 +119,9 @@ export function TaskDirectoryPickerModal({
     return () => window.removeEventListener('devtodo:data-changed', listener);
   }, [loadPicker]);
 
+  const hasSearchQuery = Boolean(query.trim());
   useEffect(() => {
-    const searchText = query.trim();
-    if (!searchText || searchIndex) return;
+    if (!hasSearchQuery) return;
     let cancelled = false;
     const sequence = ++searchLoadSequence.current;
     const timeout = window.setTimeout(() => {
@@ -132,17 +144,16 @@ export function TaskDirectoryPickerModal({
       window.clearTimeout(timeout);
       if (sequence === searchLoadSequence.current) searchLoadSequence.current += 1;
     };
-  }, [query, searchIndex, searchRetry]);
+  }, [hasSearchQuery, searchRetry]);
 
   const activeItems = useMemo(
     () =>
       items.filter((item) => {
         if (item.kind === 'FOLDER') return true;
         if (item.task.deletedAt || item.task.status === 'DONE') return false;
-        if (excludedTaskIds?.has(item.task.id)) return false;
         return true;
       }),
-    [items, excludedTaskIds],
+    [items],
   );
 
   const searchFoldersById = useMemo(() => {
@@ -173,14 +184,13 @@ export function TaskDirectoryPickerModal({
     if (!needle || !searchIndex) return [];
     return searchIndex.tasks.filter((task) => {
       if (task.deletedAt || task.status === 'DONE') return false;
-      if (excludedTaskIds?.has(task.id)) return false;
       return (
         task.title.toLocaleLowerCase().includes(needle) ||
         task.referenceId.toLocaleLowerCase().includes(needle) ||
         taskLocation(task).toLocaleLowerCase().includes(needle)
       );
     });
-  }, [query, searchIndex, taskLocation, excludedTaskIds]);
+  }, [query, searchIndex, taskLocation]);
 
   const searchLoading = Boolean(query.trim()) && !searchIndex && !searchError;
 
@@ -228,30 +238,49 @@ export function TaskDirectoryPickerModal({
 
   const renderTaskRow = (task: TreeTaskDto, showLocation: boolean) => {
     const selected = selectedTasks.has(task.id);
+    const alreadyAdded = excludedTaskIds?.has(task.id) ?? false;
     return (
-      <ListItem
-        key={task.id}
-        className="m3e-list-item--picker m3e-list-item--tree-row"
-        headline={task.title}
-        supporting={
-          showLocation ? (
-            <span className="task-picker-location">{taskLocation(task)}</span>
-          ) : undefined
-        }
-        leading={
-          <span
-            className={`task-picker-selection${selected ? ' is-selected' : ''}`}
-            aria-hidden="true"
-          >
-            {selected && <Check size={15} strokeWidth={3} />}
-          </span>
-        }
-        trailing={!selected && <Plus size={18} aria-hidden="true" />}
-        selected={selected}
-        onClick={() => toggleTaskSelection(task)}
-        disabled={submitting}
-        ariaLabel={`${selected ? '取消选择' : '选择'}任务 ${task.title}`}
-      />
+      <TaskHoverPreviewRow key={task.id} task={task} enabled={!isTouch}>
+        {(anchorProps) => (
+          <ListItem
+            {...anchorProps}
+            className={`m3e-list-item--picker m3e-list-item--tree-row${
+              alreadyAdded ? ' is-already-added' : ''
+            }`}
+            headline={task.title}
+            supporting={
+              showLocation ? (
+                <span className="task-picker-location">{taskLocation(task)}</span>
+              ) : undefined
+            }
+            leading={
+              <span
+                className={`task-picker-selection${selected || alreadyAdded ? ' is-selected' : ''}${
+                  alreadyAdded ? ' is-existing' : ''
+                }`}
+                aria-hidden="true"
+              >
+                {(selected || alreadyAdded) && <Check size={15} strokeWidth={3} />}
+              </span>
+            }
+            trailing={
+              alreadyAdded ? (
+                <Chip kind="assist" label="已加入" className="task-picker-added-chip" />
+              ) : (
+                !selected && <Plus size={18} aria-hidden="true" />
+              )
+            }
+            selected={selected}
+            onClick={alreadyAdded ? undefined : () => toggleTaskSelection(task)}
+            disabled={!alreadyAdded && submitting}
+            ariaLabel={
+              alreadyAdded
+                ? `任务 ${task.title} 已加入当前流程`
+                : `${selected ? '取消选择' : '选择'}任务 ${task.title}`
+            }
+          />
+        )}
+      </TaskHoverPreviewRow>
     );
   };
 
@@ -282,7 +311,7 @@ export function TaskDirectoryPickerModal({
       renderTaskRow(item.task, false)
     );
 
-  const defaultConfirmLabel = (count: number) => `加入日程${count ? `（${count}）` : ''}`;
+  const defaultConfirmLabel = (count: number) => `加入流程${count ? `（${count}）` : ''}`;
 
   return (
     <Dialog
@@ -410,10 +439,15 @@ export function TaskDirectoryPickerModal({
             </p>
           )}
           {query.trim() ? (
-            <div className="task-picker-scroll" role="region" aria-label="任务搜索结果">
+            <div
+              className="task-picker-scroll"
+              data-layout-scroll="picker"
+              role="region"
+              aria-label="任务搜索结果"
+            >
               {searchLoading ? (
                 <LoadingState label="正在搜索任务目录" />
-              ) : searchError ? null : matchingTasks.length ? (
+              ) : searchError && !searchIndex ? null : matchingTasks.length ? (
                 <List className="m3e-list--picker m3e-list--tree-group" gap>
                   {matchingTasks.map((task) => renderTaskRow(task, true))}
                 </List>
@@ -458,10 +492,11 @@ export function TaskDirectoryPickerModal({
               <div
                 key={folderId ?? 'root'}
                 className="task-picker-scroll"
+                data-layout-scroll="picker"
                 role="region"
                 aria-label="当前目录"
               >
-                {pickerLoading ? (
+                {pickerLoading && loadedPickerFolder.current !== folderId ? (
                   <LoadingState label="正在加载目录" />
                 ) : pickerError && !activeItems.length ? null : (
                   <Card

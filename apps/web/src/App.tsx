@@ -4,10 +4,10 @@ import type {
   TaskStatus,
   TimePointDto,
   TimePointPlacementCountDto,
+  TreeItemDto,
   TreeTaskDto,
   V2SettingsDto,
 } from '@devtodo/contracts';
-import { TaskDirectoryPickerModal } from './components/task-directory-picker-modal.js';
 import {
   isMergeableConflictCommand,
   readUpgradePending,
@@ -27,6 +27,7 @@ import {
   Command,
   Copy,
   LayoutList,
+  ListChecks as ListChecksIcon,
   LoaderCircle,
   LogOut,
   Menu,
@@ -146,7 +147,7 @@ import {
   weekdayLabels,
 } from './date-utils.js';
 import { getNetworkMode, setNetworkMode, type NetworkMode } from './network-policy.js';
-import { useTaskHoverPreview } from './components/task-hover-preview.js';
+import { TaskHoverPreviewRow, useTaskHoverPreview } from './components/task-hover-preview.js';
 import { notifyDataChanged, shouldReloadTaskList } from './data-changes.js';
 const TreePage = lazy(() => import('./TreePage.js').then((page) => ({ default: page.TreePage })));
 const WorkflowsPage = lazy(() =>
@@ -2844,34 +2845,447 @@ function AddTaskModal({
   onClose: () => void;
   onAdded: () => void;
 }) {
+  const { isTouch } = useDevice();
+  const [query, setQuery] = useState('');
+  const [folderId, setFolderId] = useState<string | null>(null);
+  const [items, setItems] = useState<TreeItemDto[]>([]);
+  const [path, setPath] = useState<Array<Pick<FolderDto, 'id' | 'title'>>>([]);
+  const [searchIndex, setSearchIndex] = useState<{
+    tasks: TreeTaskDto[];
+    folders: FolderDto[];
+  } | null>(null);
+  const [error, setError] = useState('');
+  const [pickerError, setPickerError] = useState('');
+  const [searchError, setSearchError] = useState('');
+  const [searchRetry, setSearchRetry] = useState(0);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [selectedTasks, setSelectedTasks] = useState<Map<string, TreeTaskDto>>(() => new Map());
+  const [existingTaskIds, setExistingTaskIds] = useState<Set<string>>(() => new Set());
+  const [addingSelected, setAddingSelected] = useState(false);
+  const pickerLoadSequence = useRef(0);
+  const existingLoadSequence = useRef(0);
+  const searchLoadSequence = useRef(0);
+  const loadedPickerFolder = useRef<string | null | undefined>(undefined);
+
+  const loadPicker = useCallback(async () => {
+    const sequence = ++pickerLoadSequence.current;
+    setPickerLoading(true);
+    setPickerError('');
+    try {
+      const queryString = folderId
+        ? `?parentFolderId=${encodeURIComponent(folderId)}`
+        : '?parentFolderId=root';
+      const [children, nextPath] = await Promise.all([
+        requestV2<{ items: TreeItemDto[] }>(`/tree/children${queryString}`),
+        folderId
+          ? requestV2<{ items: Array<Pick<FolderDto, 'id' | 'title'>> }>(
+              `/folders/${encodeURIComponent(folderId)}/path`,
+            )
+          : Promise.resolve({ items: [] }),
+      ]);
+      if (sequence !== pickerLoadSequence.current) return;
+      loadedPickerFolder.current = folderId;
+      setItems(children.items);
+      setPath(nextPath.items);
+    } catch (cause) {
+      if (sequence === pickerLoadSequence.current)
+        setPickerError(cause instanceof ApiError ? cause.message : '任务目录加载失败，请重试');
+    } finally {
+      if (sequence === pickerLoadSequence.current) setPickerLoading(false);
+    }
+  }, [folderId]);
+
+  /**
+   * The tasks already placed on this time point. They stay visible in the
+   * picker as checked, disabled rows so nobody re-adds a task that is on the
+   * list already. A failed refresh keeps the previous snapshot: the picker is
+   * still usable without it.
+   */
+  const loadExistingPlacements = useCallback(async () => {
+    const sequence = ++existingLoadSequence.current;
+    try {
+      const response = await requestV2<{ items: PlacementWithTask[] }>(
+        `/time-points/${pointId}/placements`,
+      );
+      if (sequence !== existingLoadSequence.current) return;
+      setExistingTaskIds(new Set(response.items.map((item) => item.taskId)));
+    } catch {
+      /* Keep the last snapshot; the picker still works without it. */
+    }
+  }, [pointId]);
+
+  useEffect(() => {
+    void loadPicker();
+    void loadExistingPlacements();
+    const listener = (event: Event) => {
+      if (!shouldReloadTaskList(event)) return;
+      // Keep the last search results mounted while the index revalidates.
+      setSearchError('');
+      setSearchRetry((count) => count + 1);
+      void loadPicker();
+      void loadExistingPlacements();
+    };
+    window.addEventListener('devtodo:data-changed', listener);
+    return () => window.removeEventListener('devtodo:data-changed', listener);
+  }, [loadExistingPlacements, loadPicker]);
+
+  const hasSearchQuery = Boolean(query.trim());
+  useEffect(() => {
+    if (!hasSearchQuery) return;
+    let cancelled = false;
+    const sequence = ++searchLoadSequence.current;
+    const timeout = window.setTimeout(() => {
+      setSearchError('');
+      void Promise.all([
+        requestV2<{ items: TreeTaskDto[] }>('/tasks'),
+        requestV2<{ items: FolderDto[] }>('/folders'),
+      ])
+        .then(([taskResult, folderResult]) => {
+          if (cancelled || sequence !== searchLoadSequence.current) return;
+          setSearchIndex({ tasks: taskResult.items, folders: folderResult.items });
+        })
+        .catch((cause) => {
+          if (cancelled || sequence !== searchLoadSequence.current) return;
+          setSearchError(cause instanceof ApiError ? cause.message : '搜索索引加载失败，请重试');
+        });
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+      if (sequence === searchLoadSequence.current) searchLoadSequence.current += 1;
+    };
+  }, [hasSearchQuery, searchRetry]);
+
+  const activeItems = useMemo(
+    () =>
+      items.filter(
+        (item) => item.kind === 'FOLDER' || (!item.task.deletedAt && item.task.status !== 'DONE'),
+      ),
+    [items],
+  );
+  const searchFoldersById = useMemo(() => {
+    const byId = new Map<string, FolderDto>();
+    for (const folder of searchIndex?.folders ?? []) byId.set(folder.id, folder);
+    return byId;
+  }, [searchIndex]);
+  const taskLocation = useCallback(
+    (task: TreeTaskDto) => {
+      const titles: string[] = [];
+      let parentId = task.parentFolderId;
+      let visited = 0;
+      while (parentId && visited < (searchIndex?.folders.length ?? 0)) {
+        const folder = searchFoldersById.get(parentId);
+        if (!folder) break;
+        titles.unshift(folder.title);
+        parentId = folder.parentFolderId;
+        visited += 1;
+      }
+      return titles.join(' / ') || '根目录';
+    },
+    [searchFoldersById, searchIndex?.folders.length],
+  );
+  const matchingTasks = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase();
+    if (!needle || !searchIndex) return [];
+    return searchIndex.tasks.filter(
+      (task) =>
+        !task.deletedAt &&
+        task.status !== 'DONE' &&
+        (task.title.toLocaleLowerCase().includes(needle) ||
+          task.referenceId.toLocaleLowerCase().includes(needle) ||
+          taskLocation(task).toLocaleLowerCase().includes(needle)),
+    );
+  }, [query, searchIndex, taskLocation]);
+  const searchLoading = Boolean(query.trim()) && !searchIndex && !searchError;
+
+  const openFolder = (id: string | null) => {
+    setQuery('');
+    setFolderId(id);
+  };
+  const toggleTaskSelection = (task: TreeTaskDto) => {
+    setSelectedTasks((current) => {
+      const next = new Map(current);
+      if (next.has(task.id)) next.delete(task.id);
+      else next.set(task.id, task);
+      return next;
+    });
+  };
+  const addSelected = async () => {
+    if (addingSelected || selectedTasks.size === 0) return;
+    const tasks = [...selectedTasks.values()];
+    setAddingSelected(true);
+    setError('');
+    const addedIds = new Set<string>();
+    const failures: unknown[] = [];
+    try {
+      for (const task of tasks) {
+        try {
+          await mutationV2('POST', '/placements', { taskId: task.id, timePointId: pointId });
+          addedIds.add(task.id);
+        } catch (cause) {
+          failures.push(cause);
+        }
+      }
+      if (addedIds.size) {
+        setSelectedTasks((current) => new Map([...current].filter(([id]) => !addedIds.has(id))));
+        setExistingTaskIds((current) => new Set([...current, ...addedIds]));
+        window.dispatchEvent(new Event('devtodo:data-changed'));
+      }
+      if (failures.length) {
+        const cause = failures[0];
+        const detail = cause instanceof ApiError ? cause.message : '请检查后重试';
+        setError(`已加入 ${addedIds.size} 项，${failures.length} 项失败：${detail}`);
+      } else {
+        onAdded();
+      }
+    } finally {
+      setAddingSelected(false);
+    }
+  };
+  const renderTaskRow = (task: TreeTaskDto, showLocation: boolean) => {
+    const selected = selectedTasks.has(task.id);
+    const alreadyAdded = existingTaskIds.has(task.id);
+    return (
+      <TaskHoverPreviewRow key={task.id} task={task} enabled={!isTouch}>
+        {(anchorProps) => (
+          <ListItem
+            {...anchorProps}
+            className={`m3e-list-item--picker m3e-list-item--tree-row${
+              alreadyAdded ? ' is-already-added' : ''
+            }`}
+            headline={task.title}
+            supporting={
+              showLocation ? (
+                <span className="task-picker-location">{taskLocation(task)}</span>
+              ) : undefined
+            }
+            leading={
+              <span
+                className={`task-picker-selection${selected || alreadyAdded ? ' is-selected' : ''}${
+                  alreadyAdded ? ' is-existing' : ''
+                }`}
+                aria-hidden="true"
+              >
+                {(selected || alreadyAdded) && <Check size={15} strokeWidth={3} />}
+              </span>
+            }
+            trailing={
+              alreadyAdded ? (
+                <Chip kind="assist" label="已加入" className="task-picker-added-chip" />
+              ) : (
+                !selected && <Plus size={18} aria-hidden="true" />
+              )
+            }
+            selected={selected}
+            onClick={alreadyAdded ? undefined : () => toggleTaskSelection(task)}
+            disabled={!alreadyAdded && addingSelected}
+            ariaLabel={
+              alreadyAdded
+                ? `任务 ${task.title} 已加入当前日程`
+                : `${selected ? '取消选择' : '选择'}任务 ${task.title}`
+            }
+          />
+        )}
+      </TaskHoverPreviewRow>
+    );
+  };
+  const renderTreeItem = (item: TreeItemDto) =>
+    item.kind === 'FOLDER' ? (
+      <ListItem
+        className="m3e-list-item--tree-row"
+        key={`folder-${item.folder.id}`}
+        leading={<Folder size={20} />}
+        headline={item.folder.title}
+        supporting={
+          <>
+            <Chip
+              kind="assist"
+              label={taskStatusLabel(item.aggregate.status)}
+              className={`m3e-chip--task-status m3e-chip--task-status-${taskStatusClass(item.aggregate.status)}`}
+            />
+            <span className="tree-count">
+              {item.aggregate.doneCount}/{item.aggregate.totalCount} 已完成
+            </span>
+          </>
+        }
+        trailing={<ChevronRight size={16} aria-hidden="true" />}
+        ariaLabel={`打开文件夹 ${item.folder.title}`}
+        onClick={() => openFolder(item.folder.id)}
+      />
+    ) : (
+      renderTaskRow(item.task, false)
+    );
+
   return (
-    <TaskDirectoryPickerModal
+    <Modal
       title="安排任务"
-      confirmLabel={(count) => `加入日程${count ? `（${count}）` : ''}`}
       onClose={onClose}
-      onConfirm={async (tasks) => {
-        const addedIds = new Set<string>();
-        const failures: unknown[] = [];
-        for (const task of tasks) {
-          try {
-            await mutationV2('POST', '/placements', { taskId: task.id, timePointId: pointId });
-            addedIds.add(task.id);
-          } catch (cause) {
-            failures.push(cause);
+      footer={
+        <>
+          <span className="task-picker-selection-count" aria-live="polite">
+            已选择 {selectedTasks.size} 项
+          </span>
+          <Button
+            variant="text"
+            size="s"
+            disabled={selectedTasks.size === 0 || addingSelected}
+            onClick={() => setSelectedTasks(new Map())}
+          >
+            清空选择
+          </Button>
+          <Button
+            variant="filled"
+            disabled={selectedTasks.size === 0 || addingSelected}
+            onClick={() => void addSelected()}
+          >
+            {addingSelected
+              ? '正在加入…'
+              : `加入日程${selectedTasks.size ? `（${selectedTasks.size}）` : ''}`}
+          </Button>
+        </>
+      }
+    >
+      <SearchBar
+        label="搜索任务或目录"
+        variant="view"
+        autoFocus
+        value={query}
+        onChange={(value) => {
+          setSearchError('');
+          setQuery(value);
+        }}
+        placeholder="搜索标题、引用 ID 或目录"
+        leadingIcon={<Search size={20} />}
+      />
+      {error && (
+        <Alert tone="error" title="任务操作失败">
+          {error}
+        </Alert>
+      )}
+      {pickerError && (
+        <Alert
+          tone="error"
+          action={
+            <Button variant="text" size="s" onClick={() => void loadPicker()}>
+              重试
+            </Button>
           }
-        }
-        if (addedIds.size) {
-          window.dispatchEvent(new Event('devtodo:data-changed'));
-        }
-        if (failures.length) {
-          const cause = failures[0];
-          const detail = cause instanceof ApiError ? cause.message : '请检查后重试';
-          throw new Error(`已加入 ${addedIds.size} 项，${failures.length} 项失败：${detail}`);
-        } else {
-          onAdded();
-        }
-      }}
-    />
+        >
+          {pickerError}
+        </Alert>
+      )}
+      {searchError && query.trim() && (
+        <Alert
+          tone="error"
+          title="搜索目录失败"
+          action={
+            <Button
+              variant="text"
+              size="s"
+              onClick={() => {
+                setSearchError('');
+                setSearchRetry((count) => count + 1);
+              }}
+            >
+              重试
+            </Button>
+          }
+        >
+          {searchError}
+        </Alert>
+      )}
+      {!query.trim() && (
+        <p className="field-help picker-hint">
+          点选任务可同时选择多项；选择会在切换目录时保留。已加入当前日程的任务会显示为已勾选，不会重复加入。
+        </p>
+      )}
+      {query.trim() ? (
+        <div className="task-picker-scroll" role="region" aria-label="任务搜索结果">
+          {searchLoading ? (
+            <LoadingState label="正在搜索任务目录" />
+          ) : searchError && !searchIndex ? null : matchingTasks.length ? (
+            <List className="m3e-list--picker m3e-list--tree-group" gap>
+              {matchingTasks.map((task) => renderTaskRow(task, true))}
+            </List>
+          ) : (
+            <M3EmptyState
+              compact
+              icon={<ListChecksIcon size={20} />}
+              title="没有可选择的任务"
+              description="换一个标题、引用 ID 或目录名称再试。"
+            />
+          )}
+        </div>
+      ) : (
+        <>
+          <nav className="tree-breadcrumbs" aria-label="目录路径">
+            <Button
+              variant={!folderId ? 'tonal' : 'text'}
+              size="s"
+              type="button"
+              aria-current={!folderId ? 'page' : undefined}
+              className="m3e-button--tree-breadcrumb"
+              onClick={() => openFolder(null)}
+            >
+              根目录
+            </Button>
+            {path.map((crumb) => (
+              <span key={crumb.id} className="tree-breadcrumbs__segment">
+                <ChevronRight size={16} aria-hidden="true" />
+                <Button
+                  variant={crumb.id === folderId ? 'tonal' : 'text'}
+                  size="s"
+                  type="button"
+                  aria-current={crumb.id === folderId ? 'page' : undefined}
+                  className="m3e-button--tree-breadcrumb"
+                  onClick={() => openFolder(crumb.id)}
+                >
+                  {crumb.title}
+                </Button>
+              </span>
+            ))}
+          </nav>
+          <div
+            key={folderId ?? 'root'}
+            className="task-picker-scroll"
+            role="region"
+            aria-label="当前目录"
+          >
+            {pickerLoading && loadedPickerFolder.current !== folderId ? (
+              <LoadingState label="正在加载目录" />
+            ) : pickerError && !activeItems.length ? null : (
+              <Card
+                as="section"
+                variant="outlined"
+                className="m3e-card--tree-group"
+                aria-labelledby="task-picker-current-folder"
+              >
+                <div className="tree-group-heading">
+                  <span id="task-picker-current-folder">当前目录</span>
+                  <span>{activeItems.length}</span>
+                </div>
+                {activeItems.length ? (
+                  <List className="m3e-list--picker m3e-list--tree-group" gap>
+                    {activeItems.map(renderTreeItem)}
+                  </List>
+                ) : (
+                  <M3EmptyState
+                    compact
+                    icon={<ListChecksIcon size={20} />}
+                    title={folderId ? '此目录没有可安排的任务' : '没有未完成任务'}
+                    description={
+                      folderId
+                        ? '当前目录中没有未完成任务；可以返回上级目录。'
+                        : '根目录下没有未完成任务。'
+                    }
+                  />
+                )}
+              </Card>
+            )}
+          </div>
+        </>
+      )}
+    </Modal>
   );
 }
 
