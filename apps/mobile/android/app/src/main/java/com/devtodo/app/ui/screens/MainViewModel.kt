@@ -628,6 +628,42 @@ class MainViewModel(
         }
     }
 
+    fun updateFolderStatusV2(folder: FolderEntity, nextStatus: TaskStatus) {
+        viewModelScope.launch {
+            try {
+                db.withOwnerTransaction { ownerId ->
+                    require(folder.ownerId == ownerId) { "文件夹不属于当前账户" }
+                    val current = db.folderDao().getById(folder.id, ownerId) ?: error("文件夹已不存在")
+                    require(current.deletedAt == null && current.archivedAt == null) { "文件夹已不可用" }
+                    if (current.status == nextStatus) {
+                        return@withOwnerTransaction
+                    }
+                    val now = nowIso()
+                    db.folderDao().upsert(
+                        current.copy(
+                            status = nextStatus,
+                            completedAt = if (nextStatus == TaskStatus.DONE) (current.completedAt ?: now) else null,
+                            version = current.version + 1,
+                            updatedAt = now,
+                            pendingSync = true,
+                        ),
+                    )
+                    syncEngine.recordLocalMutation(
+                        command = "folder.update",
+                        entityId = current.id,
+                        baseVersion = current.version,
+                        payload = mapOf("status" to nextStatus.name),
+                        ownerId = ownerId,
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _messages.tryEmit(error.userMessage("更新文件夹状态失败"))
+            }
+        }
+    }
+
     fun createTreeTaskV2(parentFolderId: String?, title: String, onComplete: (String?) -> Unit = {}) {
         captureTaskV2(parentFolderId, title, null, onComplete)
     }

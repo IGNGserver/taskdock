@@ -45,7 +45,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     // sequential: pg clients do not support Promise.all on one active query
     // stream, and queued concurrent calls become an execution hazard in pg 9.
     const folders = await this.postgres.v2Query(
-      'SELECT id, owner_id, parent_folder_id, title, rank::text, version, created_at, updated_at, deleted_at FROM folders WHERE owner_id = $1',
+      'SELECT id, owner_id, parent_folder_id, title, status, completed_at, rank::text, version, created_at, updated_at, deleted_at FROM folders WHERE owner_id = $1',
       [ownerId],
     );
     const tasks = await this.postgres.v2Query(
@@ -93,6 +93,8 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
         ...row,
         ownerId: String(row.owner_id),
         parentFolderId: nullableString(row.parent_folder_id),
+        status: (row.status ? String(row.status) : 'TODO') as TreeTaskDto['status'],
+        completedAt: isoOrNull(row.completed_at),
         rank: String(row.rank),
         createdAt: iso(row.created_at),
         updatedAt: iso(row.updated_at),
@@ -384,15 +386,17 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     switch (change.entityType) {
       case 'folder':
         await this.postgres.v2Query(
-          `INSERT INTO folders (id,owner_id,parent_folder_id,title,rank,version,created_at,updated_at,deleted_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-           ON CONFLICT (id) DO UPDATE SET parent_folder_id=EXCLUDED.parent_folder_id,title=EXCLUDED.title,rank=EXCLUDED.rank,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
+          `INSERT INTO folders (id,owner_id,parent_folder_id,title,status,completed_at,rank,version,created_at,updated_at,deleted_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+           ON CONFLICT (id) DO UPDATE SET parent_folder_id=EXCLUDED.parent_folder_id,title=EXCLUDED.title,status=EXCLUDED.status,completed_at=EXCLUDED.completed_at,rank=EXCLUDED.rank,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
            WHERE folders.owner_id = EXCLUDED.owner_id`,
           [
             change.entityId,
             ownerId,
             nullableValue(row.parentFolderId),
             row.title,
+            row.status ?? 'TODO',
+            nullableValue(row.completedAt),
             row.rank,
             row.version,
             row.createdAt,

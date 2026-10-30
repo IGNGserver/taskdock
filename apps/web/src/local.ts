@@ -255,7 +255,14 @@ export async function readCachedV2(path: string): Promise<unknown | undefined> {
             continue;
           items.push(
             item.kind === 'FOLDER'
-              ? { ...item, folder: row as LocalFolder }
+              ? {
+                  ...item,
+                  folder: row as LocalFolder,
+                  aggregate: {
+                    ...item.aggregate,
+                    status: (row as LocalFolder).status ?? item.aggregate.status,
+                  },
+                }
               : { ...item, task: row as LocalTreeTask },
           );
         }
@@ -1001,33 +1008,56 @@ async function applyOfflineV2Write(
       body['parentFolderId'] === null ? null : requiredString(body['parentFolderId']);
     if (parentFolderId) await folder(parentFolderId);
     const title = boundedTrimmedString(body['title'], 160, '文件夹名称无效');
+    const nextStatus =
+      body['status'] === 'TODO' || body['status'] === 'IN_PROGRESS' || body['status'] === 'DONE'
+        ? body['status']
+        : 'TODO';
     const folders = await db.folders.toArray();
     const created: LocalFolder = {
       id,
       parentFolderId,
       title,
+      status: nextStatus,
+      completedAt: nextStatus === 'DONE' ? now : null,
       rank: nextRank(folders.filter((candidate) => candidate.parentFolderId === parentFolderId)),
       version: 1,
       createdAt: now,
       updatedAt: now,
       pendingSync: true,
     };
-    return enqueueV2('folder.create', id, null, { parentFolderId, title }, async () => {
-      await db.folders.put(created);
-      return created;
-    });
+    return enqueueV2(
+      'folder.create',
+      id,
+      null,
+      {
+        parentFolderId,
+        title,
+        ...(body['status'] !== undefined ? { status: nextStatus } : {}),
+      },
+      async () => {
+        await db.folders.put(created);
+        return created;
+      },
+    );
   }
 
   const folderUpdate = /^\/folders\/([^/]+)$/.exec(path);
   if (method === 'PATCH' && folderUpdate) {
     const current = await folder(folderUpdate[1]!);
     assertBaseVersion(current.version, baseVersion);
+    const currentStatus = current.status ?? 'TODO';
+    const nextStatus =
+      body['status'] === 'TODO' || body['status'] === 'IN_PROGRESS' || body['status'] === 'DONE'
+        ? body['status']
+        : currentStatus;
     const next: LocalFolder = {
       ...current,
       title:
         body['title'] === undefined
           ? current.title
           : boundedTrimmedString(body['title'], 160, '文件夹名称无效'),
+      status: nextStatus,
+      completedAt: nextStatus === 'DONE' ? (current.completedAt ?? timestamp()) : null,
       version: current.version + 1,
       updatedAt: timestamp(),
       pendingSync: true,
@@ -1036,7 +1066,10 @@ async function applyOfflineV2Write(
       'folder.update',
       current.id,
       current.version,
-      { title: next.title },
+      {
+        ...(body['title'] !== undefined ? { title: next.title } : {}),
+        ...(body['status'] !== undefined ? { status: next.status } : {}),
+      },
       async () => {
         await db.folders.put(next);
         return next;
@@ -2240,6 +2273,13 @@ async function cacheV2ResponseInTransaction(
       } else if (typeof item['id'] === 'string' && typeof item['type'] === 'string')
         await db.timePoints.put(item as unknown as LocalTimePoint);
       else if (
+        pathname === '/v2/folders' &&
+        typeof item['parentFolderId'] !== 'undefined' &&
+        typeof item['title'] === 'string' &&
+        typeof item['rank'] === 'string'
+      )
+        await db.folders.put(item as unknown as LocalFolder);
+      else if (
         typeof item['parentFolderId'] !== 'undefined' &&
         typeof item['status'] === 'string' &&
         typeof item['title'] === 'string'
@@ -2280,6 +2320,13 @@ async function cacheV2ResponseInTransaction(
   if (typeof value['id'] === 'string' && typeof value['type'] === 'string' && 'localDate' in value)
     await db.timePoints.put(value as unknown as LocalTimePoint);
   if (
+    pathname.startsWith('/v2/folders') &&
+    typeof value['id'] === 'string' &&
+    typeof value['parentFolderId'] !== 'undefined' &&
+    typeof value['title'] === 'string'
+  )
+    await db.folders.put(value as unknown as LocalFolder);
+  else if (
     typeof value['id'] === 'string' &&
     typeof value['parentFolderId'] !== 'undefined' &&
     typeof value['title'] === 'string' &&
@@ -2567,14 +2614,10 @@ async function readV2LocalInTransaction(
         }
         if (valid) counts[task.status] += 1;
       }
+    const folderRow = folders.find((candidate) => candidate.id === folderId);
     const totalCount = counts.TODO + counts.IN_PROGRESS + counts.DONE;
     return {
-      status:
-        totalCount === 0 || counts.TODO === totalCount
-          ? 'TODO'
-          : counts.DONE === totalCount
-            ? 'DONE'
-            : 'IN_PROGRESS',
+      status: folderRow?.status ?? 'TODO',
       todoCount: counts.TODO,
       inProgressCount: counts.IN_PROGRESS,
       doneCount: counts.DONE,

@@ -101,6 +101,9 @@ fun TreeScreen(
     fun displayTask(row: TreeRow): TaskEntity? =
         row.task?.let { task -> statusOverrides[task.id]?.let { task.copy(status = it) } ?: task }
 
+    fun displayFolder(row: TreeRow): FolderEntity? =
+        row.folder?.let { folder -> statusOverrides[folder.id]?.let { folder.copy(status = it) } ?: folder }
+
     fun releasePins() {
         statusOverrides.clear()
         groupPins.clear()
@@ -135,6 +138,14 @@ fun TreeScreen(
         statusOverrides[task.id] = nextStatus
         if (task.id !in groupPins) groupPins[task.id] = row.status
         viewModel.updateTaskStatus(task, nextStatus)
+    }
+
+    fun changeFolderStatus(row: TreeRow, nextStatus: TaskStatus) {
+        val folder = row.folder ?: return
+        if (orderLock == null) orderLock = rows.map { "${it.kind}:${it.id}" }
+        statusOverrides[folder.id] = nextStatus
+        if (folder.id !in groupPins) groupPins[folder.id] = row.status
+        viewModel.updateFolderStatusV2(folder, nextStatus)
     }
 
     fun moveAdjacent(row: TreeRow, direction: Int) {
@@ -370,13 +381,24 @@ fun TreeScreen(
                                 }
 
                                 if (row.folder != null) {
-                                    val folder = row.folder
+                                    val folder = displayFolder(row)!!
+                                    val folderStatus = folder.status
 
                                     ExpressiveFolderCard(
                                         folder = folder,
                                         itemCount = row.taskCount,
                                         onClick = { onOpenFolder(folder.id) },
-                                        actions = actions + listOf(
+                                        actions = listOf(
+                                            RowAction("设为待开始", enabled = folderStatus != TaskStatus.TODO) {
+                                                changeFolderStatus(row, TaskStatus.TODO)
+                                            },
+                                            RowAction("设为进行中", enabled = folderStatus != TaskStatus.IN_PROGRESS) {
+                                                changeFolderStatus(row, TaskStatus.IN_PROGRESS)
+                                            },
+                                            RowAction("设为已完成", enabled = folderStatus != TaskStatus.DONE) {
+                                                changeFolderStatus(row, TaskStatus.DONE)
+                                            },
+                                        ) + actions + listOf(
                                             RowAction("重命名") { editingFolder = folder },
                                             RowAction("删除目录树", destructive = true) {
                                                 pendingDeleteFolder = folder
@@ -902,7 +924,7 @@ internal data class TreeRow(
  * visit (the web directory pins rows the same way).
  */
 internal fun treeGroupingStatus(row: TreeRow, groupPins: Map<String, TaskStatus>): TaskStatus =
-    if (row.kind == "FOLDER") row.status else groupPins[row.id] ?: row.status
+    groupPins[row.id] ?: row.status
 
 /**
  * Rows in draw order: default grouping by status then rank, unless an order
@@ -939,12 +961,12 @@ private fun buildTreeRows(
 ): List<TreeRow> {
     val folderRows =
         folders.map { folder ->
-            val aggregate = aggregates[folder.id] ?: (TaskStatus.TODO to 0)
+            val aggregate = aggregates[folder.id] ?: (folder.status to 0)
             TreeRow(
                 "FOLDER",
                 folder.id,
                 folder = folder,
-                status = aggregate.first,
+                status = folder.status,
                 version = folder.version,
                 rank = folder.rank,
                 taskCount = aggregate.second,

@@ -77,7 +77,9 @@ export const folders = pgTable(
       .references(() => users.id),
     parentFolderId: uuid('parent_folder_id'),
     title: varchar('title', { length: 160 }).notNull(),
+    status: text('status').notNull().default('TODO'),
     rank: bigint('rank', { mode: 'bigint' }).notNull().default(1024n),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
     ...timestamps,
   },
   (table) => [

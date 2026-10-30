@@ -287,6 +287,7 @@ export type ConflictStrategy = 'server' | 'local' | 'merged' | 'discard' | 'rest
 
 const MERGEABLE_CONFLICT_COMMANDS = new Set([
   'project.update',
+  'folder.update',
   'task.update',
   'note.update',
   'timePoint.update',
@@ -2032,6 +2033,26 @@ async function applyMergedOptimisticValue(
         ? { priority: payload['priority'] as LocalTaskDto['priority'] }
         : {}),
       ...(typeof payload['rank'] === 'string' ? { rank: payload['rank'] } : {}),
+      version: version + 1,
+      updatedAt: now,
+      pendingSync: true,
+    });
+    return;
+  }
+  if (item.command === 'folder.update') {
+    const current = await db.folders.get(item.entityId);
+    if (!current) throw new Error('本地文件夹不存在');
+    const nextStatus =
+      payload['status'] === 'TODO' ||
+      payload['status'] === 'IN_PROGRESS' ||
+      payload['status'] === 'DONE'
+        ? payload['status']
+        : (current.status ?? 'TODO');
+    await db.folders.put({
+      ...current,
+      ...(typeof payload['title'] === 'string' ? { title: payload['title'] } : {}),
+      status: nextStatus,
+      completedAt: nextStatus === 'DONE' ? (current.completedAt ?? now) : null,
       version: version + 1,
       updatedAt: now,
       pendingSync: true,

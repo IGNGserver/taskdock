@@ -19,12 +19,14 @@ function directoryDto(row: Record<string, unknown>, kind: 'FOLDER' | 'TASK') {
     'id',
     'parent_folder_id',
     'title',
+    'status',
+    'completed_at',
     'rank',
     'version',
     'created_at',
     'updated_at',
     'deleted_at',
-    ...(kind === 'TASK' ? ['reference_id', 'status', 'completed_at'] : []),
+    ...(kind === 'TASK' ? ['reference_id'] : []),
   ];
   return dto(Object.fromEntries(keys.map((key) => [key, row[key]])));
 }
@@ -86,8 +88,8 @@ export class DirectoryReads {
           GROUP BY b.root
         ), rows AS (
           SELECT f.id,f.rank AS r,0 AS k,
-            CASE WHEN c.total=0 OR c.todo=c.total THEN 1 WHEN c.done=c.total THEN 2 ELSE 0 END AS g,
-            jsonb_build_object('status',CASE WHEN c.total=0 OR c.todo=c.total THEN 'TODO' WHEN c.done=c.total THEN 'DONE' ELSE 'IN_PROGRESS' END,
+            CASE f.status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END AS g,
+            jsonb_build_object('status',f.status,
                 'todoCount',c.todo,'inProgressCount',c.progress,'doneCount',c.done,'totalCount',c.total) AS aggregate
           FROM folders f JOIN counts c ON c.root=f.id WHERE f.owner_id=$1 AND f.deleted_at IS NULL AND ${parentWhere}
           UNION ALL

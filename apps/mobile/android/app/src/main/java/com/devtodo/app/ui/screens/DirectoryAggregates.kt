@@ -46,10 +46,8 @@ fun directoryAggregates(folders: List<FolderEntity>, tasks: List<TaskLocation>):
         component.forEach { member -> for (i in 0..2) sum[i] += counts.getValue(member)[i] }
         component.forEach { counts[it] = sum.copyOf() }
     }
-    return active.mapValues { (id, _) ->
+    return active.mapValues { (id, folder) ->
         val value = counts[id] ?: IntArray(3)
-        val status = when { value[0] == 0 || value[0] == value[1] -> TaskStatus.TODO
-            value[0] == value[2] -> TaskStatus.DONE; else -> TaskStatus.IN_PROGRESS }
-        status to value[0]
+        folder.status to value[0]
     }
 }

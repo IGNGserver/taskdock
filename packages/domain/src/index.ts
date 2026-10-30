@@ -59,6 +59,25 @@ export function transitionTask(
   return { status: next, completedAt: next === 'DONE' ? now : null };
 }
 
+export function transitionFolder(
+  current: FolderStatus,
+  next: FolderStatus,
+  now: Date,
+  currentCompletedAt?: Date | string | null,
+): { status: FolderStatus; completedAt: Date | null } {
+  if (current === next) {
+    if (current === 'DONE') {
+      const existing = currentCompletedAt ? new Date(currentCompletedAt) : now;
+      return { status: current, completedAt: Number.isNaN(existing.getTime()) ? now : existing };
+    }
+    return { status: current, completedAt: null };
+  }
+  if (!['TODO', 'IN_PROGRESS', 'DONE'].includes(next)) {
+    throw new DomainError('INVALID_STATE_TRANSITION', '文件夹状态转换无效');
+  }
+  return { status: next, completedAt: next === 'DONE' ? now : null };
+}
+
 export type EventState = 'WAITING' | 'REACHED';
 
 export function deriveEventState(
@@ -200,6 +219,7 @@ export async function renderSafeMarkdown(markdown: string): Promise<string> {
 export interface FolderTreeNode {
   id: string;
   parentFolderId: string | null;
+  status?: FolderStatus;
   deletedAt?: string | null;
 }
 
@@ -211,9 +231,9 @@ export interface FolderTaskForAggregate {
 }
 
 /**
- * Computes the v2 folder aggregate from active descendants. It is deliberately
- * iterative and carries a visited set so malformed imported data cannot blow
- * the JS stack or loop forever.
+ * Computes the v2 folder aggregate from active descendants. Folder status is
+ * owned explicitly by the folder (defaulting to TODO), while descendant task
+ * counts are still aggregated iteratively with cycle protection.
  */
 export function deriveFolderAggregate(
   folderId: string,
@@ -260,12 +280,8 @@ export function deriveFolderAggregate(
     if (valid) counts[task.status] += 1;
   }
   const totalCount = counts.TODO + counts.IN_PROGRESS + counts.DONE;
-  const status: FolderStatus =
-    totalCount === 0 || counts.TODO === totalCount
-      ? 'TODO'
-      : counts.DONE === totalCount
-        ? 'DONE'
-        : 'IN_PROGRESS';
+  const currentFolder = folderMap.get(folderId);
+  const status: FolderStatus = currentFolder?.status ?? 'TODO';
   return {
     status,
     todoCount: counts.TODO,

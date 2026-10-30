@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DevTodoDatabase } from '@devtodo/sync-client';
 import { uuidv7 } from '@devtodo/contracts';
-import { requestV2 } from '../src/api.js';
+import { mutationV2, requestV2 } from '../src/api.js';
 import {
   activateLocalCache,
   cacheResponse,
@@ -387,5 +387,54 @@ describe('v2 local-first reads', () => {
       deactivateLocalCache(other);
       await other.delete();
     }
+  });
+
+  it('defaults offline folders to TODO and updates explicit folder status via PATCH', async () => {
+    await db.syncMeta.put({ key: 'v2:cursor', value: '1' });
+    const storage = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+    });
+    vi.stubGlobal('navigator', { onLine: false });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('offline');
+      }),
+    );
+    const created = (await mutationV2('POST', '/folders', {
+      parentFolderId: null,
+      title: '迭代目录',
+    })) as {
+      id: string;
+      status: string;
+      completedAt: string | null;
+      version: number;
+    };
+    expect(created).toMatchObject({
+      status: 'TODO',
+      completedAt: null,
+      version: 1,
+    });
+    const updated = (await mutationV2('PATCH', `/folders/${created.id}`, {
+      status: 'DONE',
+      baseVersion: 1,
+    })) as {
+      id: string;
+      status: string;
+      completedAt: string | null;
+      version: number;
+    };
+    expect(updated.status).toBe('DONE');
+    expect(updated.completedAt).toEqual(expect.any(String));
+    expect(updated.version).toBe(2);
+    const children = await requestV2<{
+      items: Array<{ kind: string; aggregate?: { status: string } }>;
+    }>('/tree/children?parentFolderId=root&limit=100');
+    expect(children.items[0]).toMatchObject({
+      kind: 'FOLDER',
+      aggregate: { status: 'DONE' },
+    });
   });
 });

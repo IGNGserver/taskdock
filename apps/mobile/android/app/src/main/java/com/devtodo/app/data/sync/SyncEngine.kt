@@ -1555,7 +1555,22 @@ class SyncEngine(
         includeDirectoryChanges(returned)
     }
 
-    private fun folderEntity(dto: FolderDto, ownerId: String, now: String) = FolderEntity(dto.id, dto.ownerId ?: ownerId, dto.parentFolderId, dto.title, dto.rank, dto.version, dto.archivedAt, dto.archivedByOperationId, dto.createdAt ?: now, dto.updatedAt ?: now, null, false)
+    private fun folderEntity(dto: FolderDto, ownerId: String, now: String) = FolderEntity(
+        dto.id,
+        dto.ownerId ?: ownerId,
+        dto.parentFolderId,
+        dto.title,
+        dto.rank,
+        dto.version,
+        dto.archivedAt,
+        dto.archivedByOperationId,
+        dto.createdAt ?: now,
+        dto.updatedAt ?: now,
+        null,
+        false,
+        TaskStatus.valueOf(dto.status.name),
+        dto.completedAt,
+    )
     private fun treeTaskEntity(dto: TreeTaskDto, ownerId: String, now: String) = TaskEntity(dto.id, dto.ownerId ?: ownerId, null, dto.referenceId, dto.title, dto.status, TaskCategory.MISC, TaskPriority.NONE, dto.rank, dto.version, dto.archivedAt, dto.createdAt ?: now, dto.updatedAt ?: now, dto.parentFolderId, dto.completedAt, dto.archivedByOperationId, dto.deletedAt, false)
     private fun noteEntity(dto: NoteDto, ownerId: String, now: String) = NoteEntity(dto.id, dto.ownerId ?: ownerId, dto.taskId, dto.contentMarkdown, dto.version, dto.createdAt ?: now, dto.updatedAt ?: now, dto.deletedAt, false)
     private fun stepEntity(dto: TaskStepDto, ownerId: String, now: String) = TaskStepEntity(dto.id, dto.ownerId ?: ownerId, dto.taskId, dto.title, dto.noteMarkdown, dto.status, dto.rank, dto.completedAt, dto.version, dto.createdAt ?: now, dto.updatedAt ?: now, dto.deletedAt, false)
