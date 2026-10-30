@@ -281,10 +281,11 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  min-inline-size: 0;
 }
 
 .workflow-stage__name {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-inline-size: 0;
   margin: 0;
   overflow: hidden;
@@ -306,6 +307,10 @@
   background-color: var(--m3-surface-container-high);
   color: var(--m3-on-surface-variant);
   font-size: var(--m3-type-label-small-size);
+}
+
+.workflow-stage__header .workflow-menu {
+  margin-inline-start: auto;
 }
 
 .workflow-stage__notice,
@@ -332,6 +337,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
+  grid-column: 1 / -1;
   min-block-size: 48px;
   padding: 12px;
   border: 1px dashed var(--m3-outline);
