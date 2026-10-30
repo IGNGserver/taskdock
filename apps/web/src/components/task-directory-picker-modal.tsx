@@ -1,12 +1,5 @@
 import type { FolderDto, TreeItemDto, TreeTaskDto } from '@devtodo/contracts';
-import {
-  Check,
-  ChevronRight,
-  Folder,
-  ListChecksIcon,
-  Plus,
-  Search,
-} from 'lucide-react';
+import { Check, ChevronRight, Folder, ListChecksIcon, Plus, Search } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ApiError, mutationV2, requestV2 } from '../api.js';
 import type { TaskStatus } from '@devtodo/contracts';
@@ -290,11 +283,11 @@ export function TaskDirectoryPickerModal({
       renderTaskRow(item.task, false)
     );
 
-  const defaultConfirmLabel = (count: number) =>
-    `加入日程${count ? `（${count}）` : ''}`;
+  const defaultConfirmLabel = (count: number) => `加入日程${count ? `（${count}）` : ''}`;
 
   return (
-    <Dialog open
+    <Dialog
+      open
       title={title}
       onClose={onClose}
       footer={
@@ -316,9 +309,7 @@ export function TaskDirectoryPickerModal({
               disabled={selectedTasks.size === 0 || submitting}
               onClick={() => void handleConfirmSelected()}
             >
-              {submitting
-                ? '正在加入…'
-                : (confirmLabel ?? defaultConfirmLabel)(selectedTasks.size)}
+              {submitting ? '正在加入…' : (confirmLabel ?? defaultConfirmLabel)(selectedTasks.size)}
             </Button>
           </>
         ) : (
@@ -415,7 +406,9 @@ export function TaskDirectoryPickerModal({
             </Alert>
           )}
           {!query.trim() && (
-            <p className="field-help picker-hint">点选任务可同时选择多项；选择会在切换目录时保留。</p>
+            <p className="field-help picker-hint">
+              点选任务可同时选择多项；选择会在切换目录时保留。
+            </p>
           )}
           {query.trim() ? (
             <div className="task-picker-scroll" role="region" aria-label="任务搜索结果">

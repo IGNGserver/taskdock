@@ -211,9 +211,7 @@ function WorkflowAddTaskDialog({
         // 通过动态判断：若不在候选列表中，则代表已在流程中，应被排除
         // 但 TaskDirectoryPickerModal 接收的是 excludedTaskIds
         // 所以我们可以在组件中使用 excludedTaskIds，或者直接传已在流程中的 ID 集合
-        return new Set(
-          (stage.tasks ?? []).map((t) => t.id)
-        );
+        return new Set((stage.tasks ?? []).map((t) => t.id));
       }, [stage.tasks])}
       onClose={onClose}
       createTaskSupport={{
