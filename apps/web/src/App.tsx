@@ -4,7 +4,6 @@ import type {
   TaskStatus,
   TimePointDto,
   TimePointPlacementCountDto,
-  TreeItemDto,
   TreeTaskDto,
   V2SettingsDto,
 } from '@devtodo/contracts';
@@ -27,7 +26,6 @@ import {
   Command,
   Copy,
   LayoutList,
-  ListChecks as ListChecksIcon,
   LoaderCircle,
   LogOut,
   Menu,
