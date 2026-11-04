@@ -85,6 +85,48 @@ describe('PostgresTreeStore batch push', () => {
     expect(tree.listFolders('owner-1').map((folder) => folder.title)).toEqual(['Not yet visible']);
   });
 
+  it('maps the SQL time_points alias into the owner projection', async () => {
+    const postgres = {
+      v2Query: async (text: string) => {
+        if (text.includes('AS owner_ok')) {
+          return { rows: [{ owner_ok: true, cursor: '0' }], rowCount: 1 };
+        }
+        if (text.includes('AS next_task_number')) {
+          return {
+            rows: [
+              {
+                ...emptyOwnerRow('0'),
+                time_points: [
+                  {
+                    id: '00000000-0000-7000-8000-000000000031',
+                    owner_id: 'owner-1',
+                    type: 'DATE',
+                    local_date: '2026-09-04',
+                    title: null,
+                    rank: '1024',
+                    version: 1,
+                    reached_at: null,
+                    created_at: '2026-09-04T00:00:00.000Z',
+                    updated_at: '2026-09-04T00:00:00.000Z',
+                    deleted_at: null,
+                  },
+                ],
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+      v2ReadSnapshot: async <T>(fn: () => T | Promise<T>) => fn(),
+    } as unknown as PostgresStore;
+    const tree = new PostgresTreeStore(postgres);
+    await tree.prepare('owner-1');
+    expect(tree.listTimePoints('owner-1', 'DATE').map((point) => point.localDate)).toEqual([
+      '2026-09-04',
+    ]);
+  });
+
   it('applies a delta snapshot without ownerId to the owner-scoped projection', async () => {
     let cursor = '0';
     let delta: Array<Record<string, unknown>> = [];

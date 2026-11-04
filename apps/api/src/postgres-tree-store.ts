@@ -179,19 +179,19 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     if (!row || row['next_task_number'] === null || row['next_task_number'] === undefined)
       throw new Error('Owner is not available');
     const collections = [
-      'folders',
-      'tasks',
-      'notes',
-      'steps',
-      'workflows',
-      'stages',
-      'memberships',
-      'timePoints',
-      'placements',
+      ['folders', 'folders'],
+      ['tasks', 'tasks'],
+      ['notes', 'notes'],
+      ['steps', 'steps'],
+      ['workflows', 'workflows'],
+      ['stages', 'stages'],
+      ['memberships', 'memberships'],
+      ['time_points', 'timePoints'],
+      ['placements', 'placements'],
     ] as const;
     const state: Record<string, unknown> = {};
-    for (const key of collections) {
-      const value = row[key];
+    for (const [source, key] of collections) {
+      const value = row[source];
       state[key] = Array.isArray(value)
         ? value.map((item) => {
             const mapped = v2SqlDto(item as Record<string, unknown>);
