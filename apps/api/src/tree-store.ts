@@ -430,7 +430,18 @@ export class MemoryTreeStore implements V2TreeStore {
     if (state.settings && typeof state.settings === 'object')
       this.settings.set(ownerId, state.settings as V2SettingsDto);
     if (typeof state.nextTaskNumber === 'number')
-      this.nextTaskNumber.set(ownerId, state.nextTaskNumber);
+      this.nextTaskNumber.set(
+        ownerId,
+        Math.max(this.nextTaskNumber.get(ownerId) ?? 1, state.nextTaskNumber),
+      );
+  }
+
+  getNextTaskNumber(ownerId: string): number {
+    return this.nextTaskNumber.get(ownerId) ?? 1;
+  }
+
+  setNextTaskNumber(ownerId: string, value: number): void {
+    if (Number.isInteger(value) && value > 0) this.nextTaskNumber.set(ownerId, value);
   }
 
   /**

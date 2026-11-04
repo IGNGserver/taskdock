@@ -85,6 +85,58 @@ describe('PostgresTreeStore batch push', () => {
     expect(tree.listFolders('owner-1').map((folder) => folder.title)).toEqual(['Not yet visible']);
   });
 
+  it('keeps nextTaskNumber across sequential task creates', async () => {
+    let cursor = '0';
+    const postgres = {
+      withMutation: async <T>(fn: () => T | Promise<T>): Promise<T> => fn(),
+      withIdempotency: async <T>(
+        _ownerId: string,
+        _clientId: string,
+        _mutationId: string,
+        _input: unknown,
+        action: () => T | Promise<T>,
+      ) => ({ replayed: false, result: await action() }),
+      v2LockOwner: async () => undefined,
+      v2ReadSnapshot: async <T>(fn: () => T | Promise<T>) => fn(),
+      v2Query: async (text: string) => {
+        if (text.includes('AS owner_ok')) {
+          return {
+            rows: [{ owner_ok: true, cursor, next_task_number: 1 }],
+            rowCount: 1,
+          };
+        }
+        if (text.includes('AS next_task_number')) {
+          return { rows: [emptyOwnerRow(cursor)], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+      appendV2Changes: async () => {
+        cursor = String(Number(cursor) + 1);
+        return cursor;
+      },
+      subscribeChanges: () => () => undefined,
+    } as unknown as PostgresStore;
+    const tree = new PostgresTreeStore(postgres);
+    const first = await tree.applyMutationIdempotent('owner-1', 'client-1', {
+      mutationId: '00000000-0000-7000-8000-000000000041',
+      command: 'task.create',
+      entityId: '00000000-0000-7000-8000-000000000042',
+      baseVersion: null,
+      occurredAt: new Date().toISOString(),
+      payload: { title: 'First task', parentFolderId: null },
+    } as V2Mutation);
+    expect((first.result as { task: { referenceId: string } }).task.referenceId).toBe('TASK-1');
+    const second = await tree.applyMutationIdempotent('owner-1', 'client-1', {
+      mutationId: '00000000-0000-7000-8000-000000000043',
+      command: 'task.create',
+      entityId: '00000000-0000-7000-8000-000000000044',
+      baseVersion: null,
+      occurredAt: new Date().toISOString(),
+      payload: { title: 'Second task', parentFolderId: null },
+    } as V2Mutation);
+    expect((second.result as { task: { referenceId: string } }).task.referenceId).toBe('TASK-2');
+  });
+
   it('maps the SQL time_points alias into the owner projection', async () => {
     const postgres = {
       v2Query: async (text: string) => {

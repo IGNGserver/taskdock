@@ -38,11 +38,17 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     // a repeatable-read transaction so all tables come from the same snapshot.
     const current = await this.postgres.v2Query(
       `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND disabled_at IS NULL) AS owner_ok,
+              (SELECT next_task_number FROM users WHERE id = $1 AND disabled_at IS NULL) AS next_task_number,
               (SELECT COALESCE(MAX(seq), 0)::text FROM sync_changes WHERE owner_id = $1) AS cursor`,
       [ownerId],
     );
     const currentRow = current.rows[0];
     if (!currentRow || currentRow['owner_ok'] !== true) throw new Error('Owner is not available');
+    // next_task_number only moves forward. A read racing a commit must not
+    // overwrite a newer value with the pre-commit snapshot.
+    const databaseNextTaskNumber = Number(currentRow['next_task_number']);
+    if (databaseNextTaskNumber > this.getNextTaskNumber(ownerId))
+      this.setNextTaskNumber(ownerId, databaseNextTaskNumber);
     const currentCursor = String(currentRow['cursor'] ?? '0');
     const previous = this.loaded.get(ownerId);
     if (previous === currentCursor) return;
@@ -217,6 +223,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     }
     let committedCursor: string | undefined;
     let changes: V2SyncChange[] = [];
+    let nextTaskNumber: number | undefined;
     // Mutate a private draft, persist its delta, and only publish it to the
     // shared read projection after COMMIT. Readers therefore never observe an
     // uncommitted mutation, and a COMMIT failure leaves the projection intact
@@ -235,6 +242,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
             draft.loadOwnerState(ownerId, this.dumpOwnerState(ownerId));
             const result = draft.applyMutationForPersistence(ownerId, mutation);
             changes = draft.changesFrom(0);
+            nextTaskNumber = draft.getNextTaskNumber(ownerId);
             await this.persistChanges(ownerId, changes);
             committedCursor = await this.postgres.appendV2Changes(ownerId, changes);
             return result;
@@ -242,6 +250,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
         ),
       ),
     );
+    if (nextTaskNumber !== undefined) this.setNextTaskNumber(ownerId, nextTaskNumber);
     if (committedCursor) {
       let published = true;
       for (const change of changes) {
@@ -273,6 +282,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     const results: V2MutationBatchResult[] = [];
     const published: V2SyncChange[] = [];
     let committedCursor: string | undefined;
+    let nextTaskNumber: number | undefined;
     await super.withMutationLock(() =>
       this.postgres.withMutation(async () => {
         await this.postgres.v2LockOwner(ownerId);
@@ -327,10 +337,12 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
             });
           }
         }
+        nextTaskNumber = draft.getNextTaskNumber(ownerId);
       }),
     );
     // Publish only after the outer transaction committed. A rollback above
     // therefore never changed what readers see.
+    if (nextTaskNumber !== undefined) this.setNextTaskNumber(ownerId, nextTaskNumber);
     if (committedCursor) {
       let applied = true;
       for (const change of published) {
