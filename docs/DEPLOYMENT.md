@@ -54,6 +54,24 @@ docker compose up -d app
 
 初始化命令会读取部署环境中的 `BOOTSTRAP_TOKEN`，不会把令牌交给 Web、桌面或手机客户端。初始化成功后，建议从 `.env` 中删除 `OWNER_PASSWORD`，并轮换或移除 `BOOTSTRAP_TOKEN`。`app` 依赖迁移 job 成功后才会进入 ready；`/health/live` 只证明进程存活，不能替代迁移和数据库就绪检查。
 
+## 外部 PostgreSQL / 共享数据库服务器
+
+如果 PostgreSQL 已经运行在 NAS、共享服务器或托管服务上，不要使用 `compose.yaml` 的内置数据库，改用 `compose.external-db.yaml`。每个 TaskDock 中枢必须使用独立 database；多个应用可以共用同一台 PostgreSQL 服务器。
+
+```bash
+cp .env.example .env
+# 填写 DATABASE_URL、MIGRATION_DATABASE_URL、APP_ORIGIN 和密钥
+docker compose -f compose.external-db.yaml pull
+docker compose -f compose.external-db.yaml run --rm migrate
+docker compose -f compose.external-db.yaml --profile operations run --rm bootstrap
+docker compose -f compose.external-db.yaml up -d app
+curl -fsS http://your-host.example:48731/health/ready
+```
+
+外部库建议使用 `DATABASE_SSL_MODE=verify-full` 和 CA secret；应用角色与迁移角色分开。连接池、PgBouncer、TLS、备份和“一个服务器多个 database”的完整说明见 [外部 PostgreSQL 与共享数据库服务器](EXTERNAL_DATABASE.md)。
+
+可选 Redis 只用于共享限流和多副本冷启动缓存，默认关闭；Redis 断开时 API 会自动回退，不影响写入。内置 Compose 可使用 `--profile cache`，外部 Redis 通过 `CACHE_URL` 指向。
+
 ## 升级/回滚
 
 升级前先按 [BACKUP_RESTORE.md](BACKUP_RESTORE.md) 生成并校验备份，再把 `.env` 中的 `APP_VERSION` 改为目标版本：

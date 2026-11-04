@@ -156,6 +156,7 @@ TaskDock 的版本采用语义化版本号，例如 `0.1.0`、`0.2.0-rc.1`。
 ## 项目文档
 
 - [部署说明](docs/DEPLOYMENT.md)
+- [外部 PostgreSQL 与共享数据库服务器](docs/EXTERNAL_DATABASE.md)
 - [备份与恢复](docs/BACKUP_RESTORE.md)
 - [安全说明](docs/SECURITY.md)
 - [同步说明](docs/SYNC_PROTOCOL.md)

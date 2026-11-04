@@ -17,6 +17,19 @@ services:
       retries: 20
     networks: [devtodo]
 
+  redis:
+    profiles: [cache]
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    # Cache-only: no AOF/RDB, because entities and sync cursors live in PostgreSQL.
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [devtodo]
+
   migrate:
     image: *taskdock_image
     restart: 'no'
@@ -25,7 +38,29 @@ services:
       APP_VERSION: ${APP_VERSION:?set APP_VERSION to an immutable image tag}
       APP_PORT: 3000
       APP_ORIGIN: ${APP_ORIGIN:?set the public HTTP or HTTPS origin in .env}
-      DATABASE_URL: postgres://${POSTGRES_USER:-devtodo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-devtodo}
+      # Discrete PG* values avoid breaking the URL when the password contains
+      # @, :, / or #. External deployments use DATABASE_URL instead.
+      PGHOST: postgres
+      PGPORT: '5432'
+      PGUSER: ${POSTGRES_USER:-devtodo}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-devtodo}
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      DB_POOL_WARM: ${DB_POOL_WARM:-0}
+      DB_APPLICATION_NAME: ${DB_APPLICATION_NAME:-taskdock-api}
+      DB_LISTEN_ENABLED: ${DB_LISTEN_ENABLED:-true}
+      DB_CONNECT_TIMEOUT_MS: ${DB_CONNECT_TIMEOUT_MS:-5000}
+      DB_IDLE_TIMEOUT_MS: ${DB_IDLE_TIMEOUT_MS:-300000}
+      DB_QUERY_TIMEOUT_MS: ${DB_QUERY_TIMEOUT_MS:-30000}
+      DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-30000}
+      DB_LOCK_TIMEOUT_MS: ${DB_LOCK_TIMEOUT_MS:-5000}
+      DB_STARTUP_MAX_WAIT_MS: ${DB_STARTUP_MAX_WAIT_MS:-60000}
+      MIGRATION_STATEMENT_TIMEOUT_MS: ${MIGRATION_STATEMENT_TIMEOUT_MS:-300000}
+      CACHE_URL: ${CACHE_URL:-}
+      CACHE_KEY_PREFIX: ${CACHE_KEY_PREFIX:-taskdock}
+      CACHE_SNAPSHOT_TTL_SECONDS: ${CACHE_SNAPSHOT_TTL_SECONDS:-60}
+      CACHE_REQUIRED: ${CACHE_REQUIRED:-false}
+      CACHE_TLS_CA: ${CACHE_TLS_CA:-}
       BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?set a random bootstrap token in .env}
       ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:?set an access token secret in .env}
       REFRESH_TOKEN_PEPPER: ${REFRESH_TOKEN_PEPPER:?set a refresh token pepper in .env}

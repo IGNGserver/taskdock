@@ -2,6 +2,10 @@
 
 ## 未发布
 
+- 新增外部 PostgreSQL 部署：`DATABASE_URL`/离散 `PG*`、SSL CA、连接池、启动重试；提供 `compose.external-db.yaml`，可连接 NAS、共享数据库服务器或托管 PostgreSQL。一个 PostgreSQL 服务器可承载多个应用，但每个 TaskDock 中枢必须使用独立 database。
+- 降低远端数据库延迟下的请求开销：v2 投影冷加载由 11 条 SELECT 改为 1 条、缓存失效改为 change feed 增量追赶；mutation 按实体类型批量 upsert/append；`/sync/push` 改为单事务 + 每 mutation savepoint；retention 清理移出请求事务。
+- 新增可选 Redis：多 API 副本共享登录限流、冷启动投影缓存；Redis 故障时 fail-open，回退到进程内缓存/数据库，不进入权威写路径。
+- 新增迁移专用 `MIGRATION_DATABASE_URL`、`MIGRATION_STATEMENT_TIMEOUT_MS` 和 PgBouncer 兼容开关 `DB_LISTEN_ENABLED`；外部库部署、TLS、连接预算和备份说明见 `docs/EXTERNAL_DATABASE.md`。
 - 设置页精简：Android 移除「已登录设备」撤销入口与「添加到桌面」快捷操作，桌面小组件分组只保留标题隐私开关；Web 将已登录设备收进设置页底部的「账户与安全」折叠区，展开时才加载设备列表。
 - 登录会话改为 365 天滑动不活动窗口：每次 refresh 都会续期，常用设备不会因时间掉登录，连续一年未使用才会失效；新增 `REFRESH_TOKEN_IDLE_TTL_DAYS`（0 表示不按时间过期）。Web Cookie 同步按该窗口重设，并受浏览器约 400 天的持久 Cookie 上限约束。存量会话不做一次性清退，在下一次 refresh 时开始按新窗口滑动。
 - 设置页新增“已登录设备”列表与撤销入口；`DELETE /api/v1/devices/:id` 会立即撤销该设备的全部 refresh session。Web 与 Android 登录现在会复用稳定的设备 ID，避免每次登录都生成一台新设备记录。

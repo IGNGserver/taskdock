@@ -342,6 +342,30 @@ describe('DevTodo store invariants', () => {
     const client = {
       query: async (text: string, values: unknown[] = []) => {
         queries.push({ text, values });
+        if (text.includes('AS owner_ok') && text.includes('AS cursor')) {
+          return { rows: [{ owner_ok: true, cursor: '9' }], rowCount: 1 };
+        }
+        if (text.includes('AS next_task_number') && text.includes('AS folders')) {
+          return {
+            rows: [
+              {
+                next_task_number: 1,
+                cursor: '9',
+                folders: [],
+                tasks: [],
+                notes: [],
+                steps: [],
+                workflows: [],
+                stages: [],
+                memberships: [],
+                time_points: [],
+                placements: [],
+                settings: null,
+              },
+            ],
+            rowCount: 1,
+          };
+        }
         if (text.includes('SELECT') && text.includes('FROM users')) {
           return {
             rows: [

@@ -1,4 +1,4 @@
-import { createPool } from '@devtodo/database';
+import { createPoolFromEnv } from '@devtodo/database';
 import { DomainError } from '@devtodo/domain';
 import { z } from 'zod';
 import { AuthService } from './auth.js';
@@ -11,7 +11,6 @@ const requiredEnv = (name: string): string => {
 };
 
 async function main(): Promise<void> {
-  const databaseUrl = requiredEnv('DATABASE_URL');
   const bootstrapToken = requiredEnv('BOOTSTRAP_TOKEN');
   const username = requiredEnv('OWNER_USERNAME');
   const password = requiredEnv('OWNER_PASSWORD');
@@ -20,7 +19,7 @@ async function main(): Promise<void> {
     .parse({ username, password });
   const accessTokenSecret = requiredEnv('ACCESS_TOKEN_SECRET');
   const refreshTokenPepper = requiredEnv('REFRESH_TOKEN_PEPPER');
-  const pool = createPool(databaseUrl);
+  const { pool } = createPoolFromEnv(process.env);
   const store = new PostgresStore(pool);
   try {
     await store.init();

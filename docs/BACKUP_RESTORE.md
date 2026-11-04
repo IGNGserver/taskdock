@@ -65,4 +65,19 @@ docker volume rm "$RESTORE_VOLUME"
 
 生产回滚先停止新版本并保留原卷，再按新卷恢复流程恢复到单独卷，核对数据不变量后切换 Compose 配置。不要在生产卷上执行 `pg_restore --clean` 或删除卷。
 
+## 外部 PostgreSQL
+
+使用 `compose.external-db.yaml` 时，备份命令不经过内置 `postgres` 容器，直接指向外部库：
+
+```bash
+BACKUP_FILE="$PWD/backups/taskdock-$(date +%Y%m%d-%H%M%S).dump"
+pg_dump --format=custom --no-owner --no-acl \
+  --dbname="$MIGRATION_DATABASE_URL" \
+  --file="$BACKUP_FILE"
+test -s "$BACKUP_FILE"
+pg_restore --list "$BACKUP_FILE" > "$BACKUP_FILE.list"
+```
+
+恢复到独立临时 database 后，先执行 `docker compose -f compose.external-db.yaml run --rm migrate`，再启动 app 并检查 `/health/ready`。每个 TaskDock 中枢使用独立 database，因此可以按 database 单独备份/恢复，不会影响同一服务器上的其他应用。Redis 是可丢弃缓存，不需要备份。
+
 客户端迁移同样是原地、可重试边界：Dexie v3 从 projects 复制 Folder 并保留旧 stores 直到 v1 outbox 已逐项转换或标记为 `CLIENT_UPGRADE_REQUIRED`；Room v4 使用完整 `MIGRATION_3_4`，不允许 `fallbackToDestructiveMigration`。回滚客户端时不得删除本地 outbox、conflict、deferred change 或 v2 tombstone。

@@ -29,8 +29,9 @@ import {
   uuidSchema,
   type ErrorCode,
 } from '@devtodo/contracts';
-import { createPool } from '@devtodo/database';
+import { createPoolFromEnv } from '@devtodo/database';
 import { DomainError } from '@devtodo/domain';
+import { createCacheFromEnv, type CacheStore } from './cache.js';
 import { DirectoryReads } from './directory-reads.js';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
@@ -77,6 +78,13 @@ export interface AppConfig extends AuthConfig {
   dbQueryTimeoutMs: number;
   dbStatementTimeoutMs: number;
   dbLockTimeoutMs: number;
+  dbPoolMax: number;
+  dbPoolWarm: number;
+  dbApplicationName: string;
+  dbListenEnabled: boolean;
+  dbStartupMaxWaitMs: number;
+  databaseSslMode?: string;
+  databaseSslCa?: string;
   httpRequestTimeoutMs: number;
   httpConnectionTimeoutMs: number;
   /**
@@ -92,6 +100,7 @@ export interface AppConfig extends AuthConfig {
 export interface BuildServerOptions {
   config?: Partial<AppConfig>;
   store?: Store;
+  cache?: CacheStore;
 }
 
 const v2StoreCache = new WeakMap<object, V2TreeStore>();
@@ -99,7 +108,7 @@ const websocketConnections = new Map<string, number>();
 const websocketMaxPerOriginAndIp = 32;
 const websocketMaxBufferedBytes = 1_000_000;
 
-function treeStoreFor(store: Store): V2TreeStore {
+function treeStoreFor(store: Store, cache: CacheStore): V2TreeStore {
   const cached = v2StoreCache.get(store);
   if (cached) return cached;
   // MemoryTreeStore performs the v1 -> v2 projection lazily and keeps the
@@ -108,7 +117,7 @@ function treeStoreFor(store: Store): V2TreeStore {
   // from ever reaching across Owner scopes.
   const tree =
     store instanceof PostgresStore
-      ? new PostgresTreeStore(store)
+      ? new PostgresTreeStore(store, cache)
       : new MemoryTreeStore(store instanceof MemoryStore ? store : undefined);
   v2StoreCache.set(store, tree);
   return tree;
@@ -151,6 +160,13 @@ const defaultConfig: AppConfig = {
   dbQueryTimeoutMs: Number(process.env['DB_QUERY_TIMEOUT_MS'] ?? 30_000),
   dbStatementTimeoutMs: Number(process.env['DB_STATEMENT_TIMEOUT_MS'] ?? 30_000),
   dbLockTimeoutMs: Number(process.env['DB_LOCK_TIMEOUT_MS'] ?? 5_000),
+  dbPoolMax: Number(process.env['DB_POOL_MAX'] ?? 10),
+  dbPoolWarm: Number(process.env['DB_POOL_WARM'] ?? 0),
+  dbApplicationName: process.env['DB_APPLICATION_NAME'] ?? 'taskdock-api',
+  dbListenEnabled: process.env['DB_LISTEN_ENABLED'] !== 'false',
+  dbStartupMaxWaitMs: Number(process.env['DB_STARTUP_MAX_WAIT_MS'] ?? 60_000),
+  databaseSslMode: process.env['DATABASE_SSL_MODE'],
+  databaseSslCa: process.env['DATABASE_SSL_CA'],
   httpRequestTimeoutMs: Number(process.env['HTTP_REQUEST_TIMEOUT_MS'] ?? 30_000),
   httpConnectionTimeoutMs: Number(process.env['HTTP_CONNECTION_TIMEOUT_MS'] ?? 10_000),
   authLoginRateLimit: Number(process.env['AUTH_LOGIN_RATE_LIMIT'] ?? 10),
@@ -162,7 +178,9 @@ export async function buildServer(
   const config = { ...defaultConfig, ...options.config };
   validateRuntimeConfig(config);
   const store = options.store ?? (await createStore(config));
-  await store.init();
+  await initStore(store, config);
+  const cache = options.cache ?? (await createCacheFromEnv());
+  const ownsCache = options.cache === undefined;
   const hubId =
     store instanceof PostgresStore
       ? String(
@@ -170,7 +188,7 @@ export async function buildServer(
         )
       : cryptoUuid();
   const auth = new AuthService(store, config);
-  const rateLimiter = new AuthRateLimiter();
+  const rateLimiter = new AuthRateLimiter(cache);
   let appOrigin: string | null = null;
   try {
     appOrigin = new URL(config.appOrigin).origin;
@@ -251,7 +269,18 @@ export async function buildServer(
     }
     return payload;
   });
+  let maintenanceTimer: ReturnType<typeof setInterval> | undefined;
+  if (store instanceof PostgresStore) {
+    maintenanceTimer = setInterval(() => {
+      void store.runMaintenance().catch((error: unknown) => {
+        app.log.warn({ err: error, event: 'maintenance.cleanup_failed' }, 'maintenance failed');
+      });
+    }, 5 * 60_000);
+    maintenanceTimer.unref?.();
+  }
   app.addHook('onClose', async () => {
+    if (maintenanceTimer) clearInterval(maintenanceTimer);
+    if (ownsCache) await cache.close();
     websocketConnections.clear();
   });
 
@@ -370,7 +399,11 @@ export async function buildServer(
   app.get('/health/ready', async (_request, reply) => {
     const ready = store instanceof PostgresStore ? await store.checkReady() : true;
     if (!ready) return reply.code(503).send({ status: 'not_ready' });
-    return { status: 'ready' };
+    const cacheOk = cache.enabled ? await cache.ping() : true;
+    return {
+      status: 'ready',
+      cache: cache.enabled ? (cacheOk ? 'ok' : 'degraded') : 'disabled',
+    };
   });
   app.get('/version', async () => ({
     appVersion: config.appVersion,
@@ -389,7 +422,7 @@ export async function buildServer(
         const body = z
           .object({ ...bootstrapSchema.shape, token: z.string().min(1) })
           .parse(request.body);
-        rateLimiter.check(request, 'bootstrap', body.username, 5, 15 * 60_000);
+        await rateLimiter.check(request, 'bootstrap', body.username, 5, 15 * 60_000);
         const user = await auth.bootstrap(body.token, body.username, body.password);
         return reply.code(201).send({ user });
       });
@@ -398,7 +431,13 @@ export async function buildServer(
         const body = loginSchema
           .extend({ nativeChallenge: uuidSchema.optional() })
           .parse(request.body);
-        rateLimiter.check(request, 'login', body.username, config.authLoginRateLimit, 15 * 60_000);
+        await rateLimiter.check(
+          request,
+          'login',
+          body.username,
+          config.authLoginRateLimit,
+          15 * 60_000,
+        );
         const nativeExchange = await requireNativeExchange(
           request,
           config,
@@ -427,7 +466,7 @@ export async function buildServer(
               .optional(),
           })
           .parse(request.body ?? {});
-        rateLimiter.check(request, 'refresh', undefined, 30, 60_000);
+        await rateLimiter.check(request, 'refresh', undefined, 30, 60_000);
         const nativeExchange = await requireNativeExchange(
           request,
           config,
@@ -460,7 +499,7 @@ export async function buildServer(
         const clientId = request.headers['x-client-id'];
         const rateIdentity =
           typeof clientId === 'string' ? clientId : (request.headers.origin ?? undefined);
-        rateLimiter.check(request, 'native-challenge', rateIdentity, 30, 60_000);
+        await rateLimiter.check(request, 'native-challenge', rateIdentity, 30, 60_000);
         const origin = requestOrigin(request);
         if (!nativeClient(request, config) || !origin)
           throw new DomainError('AUTH_CHALLENGE_INVALID', '原生客户端来源未获允许');
@@ -978,7 +1017,7 @@ export async function buildServer(
     { prefix: '/api/v1' },
   );
 
-  registerV2Routes(app, auth, treeStoreFor(store));
+  registerV2Routes(app, auth, treeStoreFor(store, cache));
 
   if (webBuildAvailable) {
     app.addHook('onSend', async (request, reply, payload) => {
@@ -1779,37 +1818,55 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
         if (raw?.protocolVersion !== 2)
           throw new DomainError('SYNC_PROTOCOL_UNSUPPORTED', '只支持同步协议 v2');
         const body = v2PushSchema.parse(request.body);
-        const results: unknown[] = [];
-        for (const mutation of body.mutations) {
-          try {
-            const result = await tree.applyMutationIdempotent(
-              request.auth!.ownerId,
-              body.clientId,
-              mutation,
-            );
-            results.push({
-              mutationId: mutation.mutationId,
-              status: 'applied',
-              replayed: result.replayed,
-              result: result.result,
-            });
-          } catch (error) {
-            const domain =
-              error instanceof DomainError
-                ? error
-                : new DomainError('MUTATION_REJECTED', 'mutation 被拒绝');
-            results.push({
-              mutationId: mutation.mutationId,
-              status: domain.code === 'VERSION_CONFLICT' ? 'conflict' : 'rejected',
-              error: {
-                code: domain.code,
-                message: domain.message,
-                details: domain.details,
-              },
-            });
+        const ownerId = request.auth!.ownerId;
+        let batch: Awaited<ReturnType<NonNullable<typeof tree.applyMutationBatch>>>;
+        if (tree.applyMutationBatch) {
+          batch = await tree.applyMutationBatch(ownerId, body.clientId, body.mutations);
+        } else {
+          batch = [];
+          for (const mutation of body.mutations) {
+            try {
+              const result = await tree.applyMutationIdempotent(ownerId, body.clientId, mutation);
+              batch.push({
+                mutation,
+                status: 'applied',
+                replayed: result.replayed,
+                result: result.result,
+              });
+            } catch (error) {
+              const domain =
+                error instanceof DomainError
+                  ? error
+                  : new DomainError('MUTATION_REJECTED', 'mutation 被拒绝');
+              batch.push({
+                mutation,
+                status: domain.code === 'VERSION_CONFLICT' ? 'conflict' : 'rejected',
+                error: {
+                  code: domain.code,
+                  message: domain.message,
+                  details: domain.details,
+                },
+              });
+            }
           }
         }
-        return { protocolVersion: 2, results };
+        return {
+          protocolVersion: 2,
+          results: batch.map((result) =>
+            result.status === 'applied'
+              ? {
+                  mutationId: result.mutation.mutationId,
+                  status: 'applied',
+                  replayed: result.replayed,
+                  result: result.result,
+                }
+              : {
+                  mutationId: result.mutation.mutationId,
+                  status: result.status,
+                  error: result.error,
+                },
+          ),
+        };
       });
       api.get('/ws', { websocket: true }, (socket, request) => {
         const tracked = trackWebSocket(socket, request);
@@ -1966,20 +2023,85 @@ async function versionedV2Action(
   );
 }
 
+function databaseConfigured(config: AppConfig): boolean {
+  return Boolean(config.databaseUrl || (process.env['PGHOST'] && process.env['PGDATABASE']));
+}
+
 async function createStore(config: AppConfig): Promise<Store> {
-  if (config.devMemoryStore || !config.databaseUrl) return new MemoryStore();
-  const pool = createPool(config.databaseUrl, {
-    connectionTimeoutMillis: config.dbConnectionTimeoutMs,
-    idleTimeoutMillis: config.dbIdleTimeoutMs,
-    queryTimeoutMillis: config.dbQueryTimeoutMs,
-    statementTimeoutMillis: config.dbStatementTimeoutMs,
-    lockTimeoutMillis: config.dbLockTimeoutMs,
-  });
+  if (config.devMemoryStore) {
+    if (databaseConfigured(config))
+      console.warn(
+        JSON.stringify({
+          event: 'database.memory_store_override',
+          message:
+            'DEV_MEMORY_STORE=true; the configured PostgreSQL URL is ignored. Set DEV_MEMORY_STORE=false to persist data.',
+        }),
+      );
+    return new MemoryStore();
+  }
+  if (!databaseConfigured(config)) return new MemoryStore();
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    ...(config.databaseUrl ? { DATABASE_URL: config.databaseUrl } : {}),
+    DATABASE_SSL_MODE: config.databaseSslMode,
+    DATABASE_SSL_CA: config.databaseSslCa,
+    DB_POOL_MAX: String(config.dbPoolMax),
+    DB_CONNECT_TIMEOUT_MS: String(config.dbConnectionTimeoutMs),
+    DB_IDLE_TIMEOUT_MS: String(config.dbIdleTimeoutMs),
+    DB_QUERY_TIMEOUT_MS: String(config.dbQueryTimeoutMs),
+    DB_STATEMENT_TIMEOUT_MS: String(config.dbStatementTimeoutMs),
+    DB_LOCK_TIMEOUT_MS: String(config.dbLockTimeoutMs),
+    DB_APPLICATION_NAME: config.dbApplicationName,
+    DB_LISTEN_ENABLED: String(config.dbListenEnabled),
+  };
+  const { pool } = createPoolFromEnv(env);
   return new PostgresStore(pool, {
     changeRetentionDays: config.syncChangeRetentionDays,
     mutationReceiptRetentionDays: config.mutationReceiptRetentionDays,
     transactionTimeoutMs: config.dbStatementTimeoutMs,
+    listenEnabled: config.dbListenEnabled,
   });
+}
+
+async function initStore(store: Store, config: AppConfig): Promise<void> {
+  if (!(store instanceof PostgresStore)) {
+    await store.init();
+    return;
+  }
+  const deadline = Date.now() + config.dbStartupMaxWaitMs;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await store.init();
+      if (config.dbPoolWarm > 0) {
+        try {
+          await store.warmConnections(config.dbPoolWarm);
+        } catch (error) {
+          console.warn(
+            JSON.stringify({
+              event: 'postgres.warm_failed',
+              message: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        }
+      }
+      return;
+    } catch (error) {
+      if (Date.now() >= deadline) {
+        await store.close().catch(() => undefined);
+        throw error;
+      }
+      const delay = Math.min(5_000, 500 * 2 ** Math.min(attempt - 1, 4));
+      console.warn(
+        JSON.stringify({
+          event: 'postgres.startup_retry',
+          attempt,
+          delayMs: delay,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
 }
 
 function validateRuntimeConfig(config: AppConfig): void {
@@ -2016,6 +2138,38 @@ function validateRuntimeConfig(config: AppConfig): void {
     throw new Error('retention windows and timeout values must be integers between 1 and 120000');
   if (!Number.isInteger(config.authLoginRateLimit) || config.authLoginRateLimit < 1)
     throw new Error('AUTH_LOGIN_RATE_LIMIT must be an integer of at least 1');
+  if (!Number.isInteger(config.dbPoolMax) || config.dbPoolMax < 1 || config.dbPoolMax > 100)
+    throw new Error('DB_POOL_MAX must be an integer between 1 and 100');
+  if (
+    !Number.isInteger(config.dbPoolWarm) ||
+    config.dbPoolWarm < 0 ||
+    config.dbPoolWarm > config.dbPoolMax
+  )
+    throw new Error('DB_POOL_WARM must be an integer between 0 and DB_POOL_MAX');
+  if (!config.dbApplicationName || config.dbApplicationName.length > 63)
+    throw new Error('DB_APPLICATION_NAME must contain between 1 and 63 characters');
+  if (
+    !Number.isInteger(config.dbStartupMaxWaitMs) ||
+    config.dbStartupMaxWaitMs < 0 ||
+    config.dbStartupMaxWaitMs > 300_000
+  )
+    throw new Error('DB_STARTUP_MAX_WAIT_MS must be an integer between 0 and 300000');
+  if (
+    config.databaseSslMode !== undefined &&
+    ![
+      'disable',
+      'require',
+      'verify-ca',
+      'verify-full',
+      'prefer',
+      'allow',
+      'off',
+      'on',
+      'true',
+      'false',
+    ].includes(config.databaseSslMode.toLowerCase())
+  )
+    throw new Error('DATABASE_SSL_MODE must be disable, require, verify-ca or verify-full');
   if (
     !Number.isInteger(config.refreshTokenIdleTtlDays) ||
     config.refreshTokenIdleTtlDays < 0 ||
@@ -2030,7 +2184,7 @@ function validateRuntimeConfig(config: AppConfig): void {
   const insecureMarkers = ['change-me', 'local-access-secret', 'local-refresh-pepper'];
   if (
     config.devMemoryStore ||
-    !config.databaseUrl ||
+    !databaseConfigured(config) ||
     config.bootstrapToken.length < 32 ||
     config.accessTokenSecret.length < 32 ||
     config.refreshTokenPepper.length < 32 ||
@@ -2102,16 +2256,31 @@ function parseTrustProxy(
 class AuthRateLimiter {
   private readonly buckets = new Map<string, { count: number; resetAt: number }>();
 
-  check(
+  constructor(private readonly cache?: CacheStore) {}
+
+  async check(
     request: FastifyRequest,
     scope: string,
     username: string | undefined,
     limit: number,
     windowMs: number,
-  ): void {
+  ): Promise<void> {
     const now = Date.now();
     const normalizedUsername = username?.trim().toLocaleLowerCase('en-US') ?? '';
     const key = `${scope}:${request.ip}:${normalizedUsername}`;
+    // A shared counter makes the limit meaningful across API replicas. When
+    // Redis is absent or unhealthy, fall back to the per-process bucket.
+    if (this.cache?.enabled) {
+      const count = await this.cache.incr(`ratelimit:${key}`, windowMs);
+      if (count !== null) {
+        if (count > limit) {
+          throw new DomainError('RATE_LIMITED', '请求过于频繁，请稍后重试', {
+            retryAfterSeconds: Math.ceil(windowMs / 1000),
+          });
+        }
+        return;
+      }
+    }
     const existing = this.buckets.get(key);
     const bucket =
       existing && existing.resetAt > now ? existing : { count: 0, resetAt: now + windowMs };

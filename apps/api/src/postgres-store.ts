@@ -72,6 +72,15 @@ interface TxContext {
   pending: Map<string, string>;
 }
 
+export interface V2ChangeWrite {
+  entityType: SyncChange['entityType'];
+  entityId: string;
+  entityVersion: number;
+  operation: SyncChange['operation'];
+  snapshot: unknown;
+  committedAt: string;
+}
+
 export interface PostgresPage<T> {
   items: T[];
   nextCursor: string | null;
@@ -94,6 +103,7 @@ export class PostgresStore implements Store {
   private readonly changeRetentionDays: number;
   private readonly mutationReceiptRetentionDays: number;
   private readonly transactionTimeoutMs: number;
+  private readonly listenEnabled: boolean;
   private readonly listeners = new Set<(ownerId: string, cursor: string) => void>();
   private listener: PoolClient | null = null;
   private listenerReconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -110,12 +120,14 @@ export class PostgresStore implements Store {
       changeRetentionDays?: number;
       mutationReceiptRetentionDays?: number;
       transactionTimeoutMs?: number;
+      listenEnabled?: boolean;
     } = {},
   ) {
     this.clock = options.clock ?? (() => new Date());
     this.changeRetentionDays = options.changeRetentionDays ?? 90;
     this.mutationReceiptRetentionDays = options.mutationReceiptRetentionDays ?? 90;
     this.transactionTimeoutMs = options.transactionTimeoutMs ?? 30_000;
+    this.listenEnabled = options.listenEnabled ?? true;
   }
 
   async init(): Promise<void> {
@@ -123,15 +135,17 @@ export class PostgresStore implements Store {
     this.attachPoolErrorHandler();
     if (!(await databaseReady(this.pool)))
       throw new Error('PostgreSQL schema is not ready; run the migrate job first');
-    const listener = await this.pool.connect();
-    try {
-      await listener.query('LISTEN devtodo_sync_changes');
-    } catch (error) {
-      listener.release(error instanceof Error ? error : new Error(String(error)));
-      throw error;
+    if (this.listenEnabled) {
+      const listener = await this.pool.connect();
+      try {
+        await listener.query('LISTEN devtodo_sync_changes');
+      } catch (error) {
+        listener.release(error instanceof Error ? error : new Error(String(error)));
+        throw error;
+      }
+      this.listener = listener;
+      this.attachListener(listener);
     }
-    this.listener = listener;
-    this.attachListener(listener);
     this.ready = true;
   }
 
@@ -196,7 +210,7 @@ export class PostgresStore implements Store {
   }
 
   private async reconnectListener(): Promise<void> {
-    if (this.closed || this.listener || this.listenerConnecting) return;
+    if (!this.listenEnabled || this.closed || this.listener || this.listenerConnecting) return;
     this.listenerConnecting = true;
     try {
       const listener = await this.pool.connect();
@@ -236,6 +250,59 @@ export class PostgresStore implements Store {
       this.ready = false;
       return false;
     }
+  }
+
+  /** Best-effort warm-up after the schema check has succeeded. */
+  async warmConnections(count: number): Promise<void> {
+    const warm = Math.max(0, Math.min(Math.trunc(count), this.pool.options.max ?? 0));
+    if (!warm) return;
+    const clients = await Promise.all(Array.from({ length: warm }, () => this.pool.connect()));
+    for (const client of clients) client.release();
+  }
+
+  /**
+   * Retention cleanup is deliberately outside the request transaction. Keeping
+   * three DELETE statements on every mutation cost a high-latency deployment
+   * 3 round trips even when there was nothing to delete.
+   */
+  async runMaintenance(): Promise<{
+    syncChanges: number;
+    mutationReceipts: number;
+    nativeChallenges: number;
+  }> {
+    const result = await this.pool.query<{
+      changes: number;
+      receipts: number;
+      challenges: number;
+    }>(
+      `WITH deleted_changes AS (
+         DELETE FROM sync_changes WHERE seq IN (
+           SELECT seq FROM sync_changes
+           WHERE committed_at < now() - ($1::double precision * interval '1 day')
+           ORDER BY seq LIMIT 1000 FOR UPDATE SKIP LOCKED
+         ) RETURNING 1
+       ), deleted_receipts AS (
+         DELETE FROM client_mutations WHERE (owner_id, client_id, mutation_id) IN (
+           SELECT owner_id, client_id, mutation_id FROM client_mutations
+           WHERE expires_at <= now() ORDER BY expires_at LIMIT 1000 FOR UPDATE SKIP LOCKED
+         ) RETURNING 1
+       ), deleted_challenges AS (
+         DELETE FROM native_auth_challenges WHERE id IN (
+           SELECT id FROM native_auth_challenges
+           WHERE expires_at <= now() ORDER BY expires_at LIMIT 1000 FOR UPDATE SKIP LOCKED
+         ) RETURNING 1
+       )
+       SELECT (SELECT count(*) FROM deleted_changes)::int AS changes,
+              (SELECT count(*) FROM deleted_receipts)::int AS receipts,
+              (SELECT count(*) FROM deleted_challenges)::int AS challenges`,
+      [this.changeRetentionDays],
+    );
+    const row = result.rows[0];
+    return {
+      syncChanges: row?.changes ?? 0,
+      mutationReceipts: row?.receipts ?? 0,
+      nativeChallenges: row?.challenges ?? 0,
+    };
   }
 
   async close(): Promise<void> {
@@ -292,29 +359,6 @@ export class PostgresStore implements Store {
       );
       const value = await this.tx.run(context, async () => {
         const result = await fn();
-        const changeCleanup = await client.query(
-          'DELETE FROM sync_changes WHERE seq IN (' +
-            "SELECT seq FROM sync_changes WHERE committed_at < now() - ($1::double precision * interval '1 day') " +
-            'ORDER BY seq LIMIT 1000) RETURNING seq',
-          [this.changeRetentionDays],
-        );
-        const receiptCleanup = await client.query(
-          'DELETE FROM client_mutations WHERE (owner_id, client_id, mutation_id) IN (' +
-            'SELECT owner_id, client_id, mutation_id FROM client_mutations WHERE expires_at <= now() ' +
-            'ORDER BY expires_at LIMIT 1000) RETURNING mutation_id',
-        );
-        const challengeCleanup = await client.query(
-          'DELETE FROM native_auth_challenges WHERE id IN (' +
-            'SELECT id FROM native_auth_challenges WHERE expires_at <= now() ' +
-            'ORDER BY expires_at LIMIT 1000) RETURNING id',
-        );
-        const cleanup = {
-          syncChanges: changeCleanup.rowCount ?? 0,
-          mutationReceipts: receiptCleanup.rowCount ?? 0,
-          nativeChallenges: challengeCleanup.rowCount ?? 0,
-        };
-        if (cleanup.syncChanges || cleanup.mutationReceipts || cleanup.nativeChallenges)
-          console.info(JSON.stringify({ event: 'maintenance.cleanup', ...cleanup }));
         for (const [ownerId, cursor] of context.pending)
           await client.query('SELECT pg_notify($1, $2)', [
             'devtodo_sync_changes',
@@ -397,6 +441,63 @@ export class PostgresStore implements Store {
     snapshot: unknown,
   ): Promise<string> {
     return this.appendChange(ownerId, entityType, entityId, entityVersion, operation, snapshot, 2);
+  }
+
+  /**
+   * Insert a whole mutation's change rows in one round trip. A single-row
+   * batch deliberately goes through appendV2Change() so existing failure
+   * injection and instrumentation keep working.
+   */
+  async appendV2Changes(ownerId: string, changes: V2ChangeWrite[]): Promise<string | undefined> {
+    if (!changes.length) return undefined;
+    const first = changes[0]!;
+    if (changes.length === 1)
+      return this.appendV2Change(
+        ownerId,
+        first.entityType,
+        first.entityId,
+        first.entityVersion,
+        first.operation,
+        first.snapshot,
+      );
+    const payload = changes.map((change) => ({
+      entity_type: change.entityType,
+      entity_id: change.entityId,
+      entity_version: change.entityVersion,
+      operation: change.operation,
+      snapshot: change.snapshot,
+      committed_at: change.committedAt,
+    }));
+    const result = await this.query(
+      `INSERT INTO sync_changes (owner_id, entity_type, entity_id, entity_version, operation, snapshot, committed_at, protocol_version)
+       SELECT $1, x.entity_type, x.entity_id, x.entity_version, x.operation, x.snapshot, x.committed_at, 2
+       FROM jsonb_to_recordset($2::jsonb) AS x(
+         entity_type text, entity_id uuid, entity_version integer, operation text,
+         snapshot jsonb, committed_at timestamptz
+       )
+       RETURNING seq`,
+      [ownerId, JSON.stringify(payload)],
+    );
+    let cursor = '0';
+    for (const row of result.rows)
+      if (BigInt(String(row['seq'])) > BigInt(cursor)) cursor = String(row['seq']);
+    if (cursor === '0') return undefined;
+    const context = this.tx.getStore();
+    if (context) context.pending.set(ownerId, cursor);
+    else this.notify(ownerId, cursor);
+    return cursor;
+  }
+
+  async createSavepoint(name: string): Promise<void> {
+    await this.query(`SAVEPOINT ${savepointName(name)}`);
+  }
+
+  async releaseSavepoint(name: string): Promise<void> {
+    await this.query(`RELEASE SAVEPOINT ${savepointName(name)}`);
+  }
+
+  async rollbackToSavepoint(name: string): Promise<void> {
+    await this.query(`ROLLBACK TO SAVEPOINT ${savepointName(name)}`);
   }
 
   private now(): string {
@@ -1777,12 +1878,10 @@ export class PostgresStore implements Store {
     const key = ownerId + ':' + clientId + ':' + mutationId;
     const requestHash = hash(input);
     await this.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [key]);
-    await this.query(
-      'DELETE FROM client_mutations WHERE owner_id = $1 AND client_id = $2 AND mutation_id = $3 AND expires_at <= now()',
-      [ownerId, clientId, mutationId],
-    );
+    // Expired receipts are removed by runMaintenance(). Treating them as
+    // absent here avoids a DELETE round trip on every mutation.
     const existing = await this.query(
-      'SELECT request_hash, result FROM client_mutations WHERE owner_id = $1 AND client_id = $2 AND mutation_id = $3',
+      'SELECT request_hash, result FROM client_mutations WHERE owner_id = $1 AND client_id = $2 AND mutation_id = $3 AND expires_at > now()',
       [ownerId, clientId, mutationId],
     );
     if (existing.rows[0]) {
@@ -1794,7 +1893,12 @@ export class PostgresStore implements Store {
     const now = this.now();
     await this.query(
       'INSERT INTO client_mutations (owner_id, client_id, mutation_id, request_hash, result, first_processed_at, expires_at) ' +
-        'VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)',
+        'VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7) ' +
+        // An expired receipt is logically absent; overwrite it so the primary
+        // key does not reject a legitimate retry after the retention window.
+        'ON CONFLICT (owner_id, client_id, mutation_id) DO UPDATE SET ' +
+        'request_hash = EXCLUDED.request_hash, result = EXCLUDED.result, ' +
+        'first_processed_at = EXCLUDED.first_processed_at, expires_at = EXCLUDED.expires_at',
       [
         ownerId,
         clientId,
@@ -2020,53 +2124,85 @@ export class PostgresStore implements Store {
     cursor: string,
     limit: number,
   ): Promise<{ changes: SyncChange[]; nextCursor: string; hasMore: boolean }> {
-    return this.v2ReadSnapshot(async () => {
-      await this.owner(ownerId);
-      if (!/^\d+$/.test(cursor)) throw new DomainError('VALIDATION_FAILED', 'cursor 无效');
-      const requested = BigInt(cursor);
-      const oldest = await this.query(
-        'SELECT seq FROM sync_changes WHERE protocol_version = 2 ORDER BY seq LIMIT 1',
-      );
-      // A v2 client starts at cursor 0 even when older v1 rows occupy the
-      // global sequence range before the first retained v2 change. Treat that
-      // sentinel as valid; non-zero cursors still honor the retention boundary.
-      if (requested > 0n && oldest.rows[0] && requested < BigInt(String(oldest.rows[0].seq)) - 1n)
+    if (!/^\d+$/.test(cursor)) throw new DomainError('VALIDATION_FAILED', 'cursor 无效');
+    const requested = BigInt(cursor);
+    // One statement gives a consistent owner check, retention boundary, page
+    // and has-more flag. The previous implementation used 6 sequential queries
+    // inside a repeatable-read transaction on every client pull.
+    const result = await this.query(
+      `WITH owner AS (
+         SELECT 1 FROM users WHERE id = $1 AND disabled_at IS NULL
+       ), oldest AS (
+         SELECT seq FROM sync_changes WHERE protocol_version = 2 ORDER BY seq LIMIT 1
+       ), page AS (
+         SELECT seq, owner_id, entity_type, entity_id, entity_version, operation, snapshot, committed_at
+         FROM sync_changes
+         WHERE owner_id = $1 AND protocol_version = 2 AND seq > $2
+         ORDER BY seq LIMIT $3
+       )
+       SELECT EXISTS(SELECT 1 FROM owner) AS owner_ok,
+              (SELECT seq FROM oldest) AS oldest,
+              COALESCE((
+                SELECT jsonb_agg(jsonb_build_object(
+                  'seq', p.seq::text,
+                  'owner_id', p.owner_id,
+                  'entity_type', p.entity_type,
+                  'entity_id', p.entity_id,
+                  'entity_version', p.entity_version,
+                  'operation', p.operation,
+                  'snapshot', p.snapshot,
+                  'committed_at', p.committed_at
+                ) ORDER BY p.seq)
+                FROM page p
+              ), '[]'::jsonb) AS changes,
+              EXISTS(
+                SELECT 1 FROM sync_changes
+                WHERE owner_id = $1 AND protocol_version = 2
+                  AND seq > COALESCE((SELECT MAX(seq) FROM page), $2)
+                LIMIT 1
+              ) AS has_more`,
+      [ownerId, cursor, Math.min(limit, 500)],
+    );
+    const row = result.rows[0];
+    if (!row || row['owner_ok'] !== true) throw new DomainError('AUTH_REQUIRED', '账户不可用');
+    const oldest = row['oldest'];
+    // A v2 client starts at cursor 0 even when older v1 rows occupy the
+    // global sequence range before the first retained v2 change. Treat that
+    // sentinel as valid; non-zero cursors still honor the retention boundary.
+    if (requested > 0n && oldest !== null && oldest !== undefined) {
+      if (requested < BigInt(String(oldest)) - 1n)
         throw new DomainError('SYNC_CURSOR_EXPIRED', '同步游标已超过保留窗口');
-      const result = await this.query(
-        'SELECT seq, owner_id, entity_type, entity_id, entity_version, operation, snapshot, committed_at ' +
-          'FROM sync_changes WHERE owner_id = $1 AND protocol_version = 2 AND seq > $2 ' +
-          'ORDER BY seq LIMIT $3',
-        [ownerId, cursor, Math.min(limit, 500)],
-      );
-      const changes = result.rows.map((row) => syncChange(row));
-      const nextCursor = changes.at(-1)?.seq ?? requested;
-      const more = await this.query(
-        'SELECT 1 FROM sync_changes WHERE owner_id = $1 AND protocol_version = 2 AND seq > $2 LIMIT 1',
-        [ownerId, nextCursor.toString()],
-      );
-      return { changes, nextCursor: nextCursor.toString(), hasMore: more.rowCount === 1 };
-    });
+    }
+    const changes = Array.isArray(row['changes'])
+      ? (row['changes'] as Row[]).map((change) => syncChange(change))
+      : [];
+    const nextCursor = changes.at(-1)?.seq ?? requested;
+    return {
+      changes,
+      nextCursor: nextCursor.toString(),
+      hasMore: row['has_more'] === true,
+    };
   }
 
   async syncStatusV2(
     ownerId: string,
   ): Promise<{ cursor: string; oldestCursor: string; protocolVersion: 2 }> {
-    return this.v2ReadSnapshot(async () => {
-      await this.owner(ownerId);
-      const current = await this.query(
-        'SELECT COALESCE(MAX(seq), 0)::text AS cursor FROM sync_changes ' +
-          'WHERE owner_id = $1 AND protocol_version = 2',
-        [ownerId],
-      );
-      const first = await this.query(
-        'SELECT seq FROM sync_changes WHERE protocol_version = 2 ORDER BY seq LIMIT 1',
-      );
-      const cursor = String(current.rows[0]?.cursor ?? '0');
-      const oldestCursor = first.rows[0]
-        ? (BigInt(String(first.rows[0].seq)) - 1n).toString()
+    const result = await this.query(
+      `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND disabled_at IS NULL) AS owner_ok,
+              (SELECT COALESCE(MAX(seq), 0)::text FROM sync_changes
+               WHERE owner_id = $1 AND protocol_version = 2) AS cursor,
+              (SELECT seq FROM sync_changes WHERE protocol_version = 2
+               ORDER BY seq LIMIT 1) AS oldest`,
+      [ownerId],
+    );
+    const row = result.rows[0];
+    if (!row || row['owner_ok'] !== true) throw new DomainError('AUTH_REQUIRED', '账户不可用');
+    const cursor = String(row['cursor'] ?? '0');
+    const oldestCursor =
+      row['oldest'] !== null && row['oldest'] !== undefined
+        ? (BigInt(String(row['oldest'])) - 1n).toString()
         : cursor;
-      return { cursor, oldestCursor, protocolVersion: 2 };
-    });
+    return { cursor, oldestCursor, protocolVersion: 2 };
   }
 
   eventState(point: TimePointDto): string | null {
@@ -2347,6 +2483,11 @@ export class PostgresStore implements Store {
 
 function normalizeUsername(value: string): string {
   return value.trim().toLocaleLowerCase('en-US');
+}
+
+function savepointName(value: string): string {
+  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(value)) throw new Error('Invalid savepoint name');
+  return value;
 }
 
 function iso(value: unknown): string {

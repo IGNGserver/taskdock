@@ -112,6 +112,14 @@ export interface DeletePreviewDto {
   confirmationToken: string;
 }
 
+export interface V2MutationBatchResult {
+  mutation: V2Mutation;
+  status: 'applied' | 'conflict' | 'rejected';
+  replayed?: boolean;
+  result?: unknown;
+  error?: { code: string; message: string; details?: unknown };
+}
+
 export interface V2Snapshot {
   folders: FolderDto[];
   tasks: TreeTaskDto[];
@@ -340,6 +348,11 @@ export interface V2TreeStore {
     clientId: string,
     mutation: V2Mutation,
   ): Promise<{ replayed: boolean; result: unknown }>;
+  applyMutationBatch?(
+    ownerId: string,
+    clientId: string,
+    mutations: V2Mutation[],
+  ): Promise<V2MutationBatchResult[]>;
   subscribeChanges?(listener: (ownerId: string, cursor: string) => void): () => void;
 }
 
@@ -420,6 +433,59 @@ export class MemoryTreeStore implements V2TreeStore {
       this.nextTaskNumber.set(ownerId, state.nextTaskNumber);
   }
 
+  /**
+   * Apply one persisted v2 change snapshot to the projection. Used by the
+   * PostgreSQL adapter to catch up from the change feed instead of reloading
+   * every owner table after another replica writes.
+   */
+  applySyncChange(
+    ownerId: string,
+    entityType: V2SyncChange['entityType'],
+    snapshot: unknown,
+  ): boolean {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return false;
+    const row = snapshot as Record<string, unknown>;
+    if (typeof row['id'] !== 'string' && entityType !== 'settings') return false;
+    if (row['ownerId'] !== undefined && row['ownerId'] !== ownerId) return false;
+    // v2 mutation snapshots intentionally omit ownerId (the API never exposes
+    // it), but the in-memory projection is owner-scoped. Add it before storing.
+    const scoped: Record<string, unknown> = { ...row, ownerId };
+    switch (entityType) {
+      case 'folder':
+        this.folders.set(String(scoped['id']), scoped as unknown as FolderRecord);
+        return true;
+      case 'task':
+        this.tasks.set(String(scoped['id']), scoped as unknown as TreeTaskRecord);
+        return true;
+      case 'note':
+        this.notes.set(String(scoped['id']), scoped as unknown as NoteRecord);
+        return true;
+      case 'taskStep':
+        this.steps.set(String(scoped['id']), scoped as unknown as StepRecord);
+        return true;
+      case 'workflow':
+        this.workflows.set(String(scoped['id']), scoped as unknown as WorkflowRecord);
+        return true;
+      case 'workflowStage':
+        this.stages.set(String(scoped['id']), scoped as unknown as StageRecord);
+        return true;
+      case 'workflowTaskMembership':
+        this.memberships.set(String(scoped['id']), scoped as unknown as MembershipRecord);
+        return true;
+      case 'timePoint':
+        this.timePoints.set(String(scoped['id']), scoped as unknown as TimePointRecord);
+        return true;
+      case 'placement':
+        this.placements.set(String(scoped['id']), scoped as unknown as PlacementRecord);
+        return true;
+      case 'settings':
+        this.settings.set(ownerId, scoped as unknown as V2SettingsDto);
+        return true;
+      default:
+        return false;
+    }
+  }
+
   changeCount(): number {
     return this.changes.length;
   }
@@ -451,6 +517,55 @@ export class MemoryTreeStore implements V2TreeStore {
       release();
       throw error;
     }
+  }
+
+  /**
+   * Serialize local mutations without cloning the projection. The PostgreSQL
+   * adapter mutates a private draft and only publishes it after COMMIT, so it
+   * needs the ordering guarantee but not the in-memory rollback snapshot.
+   */
+  async withMutationLock<T>(fn: () => T | Promise<T>): Promise<T> {
+    const previous = this.mutationLock;
+    let release!: () => void;
+    this.mutationLock = new Promise<void>((resolve) => (release = resolve));
+    await previous;
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
+
+  /**
+   * Apply a mutation to a draft projection for the PostgreSQL adapter. The
+   * caller persists the emitted change delta and publishes it to the shared
+   * projection only after the database transaction commits.
+   */
+  applyMutationForPersistence(ownerId: string, mutation: V2Mutation): unknown {
+    this.ensureOwner(ownerId);
+    return this.dispatchMutation(ownerId, mutation);
+  }
+
+  /** Snapshot a draft before one mutation inside a batch transaction. */
+  captureDraft(ownerId: string): {
+    state: Record<string, unknown>;
+    cursor: string;
+    changeCount: number;
+  } {
+    return {
+      state: this.dumpOwnerState(ownerId),
+      cursor: this.cursor.toString(),
+      changeCount: this.changes.length,
+    };
+  }
+
+  restoreDraft(
+    ownerId: string,
+    snapshot: { state: Record<string, unknown>; cursor: string; changeCount: number },
+  ): void {
+    this.loadOwnerState(ownerId, snapshot.state);
+    this.cursor = BigInt(snapshot.cursor);
+    this.changes.splice(snapshot.changeCount);
   }
 
   listTreeChildren(ownerId: string, parentFolderId: string | null): TreeItemDto[] {
@@ -1759,6 +1874,36 @@ export class MemoryTreeStore implements V2TreeStore {
     const result = await this.withMutation(() => this.dispatchMutation(ownerId, mutation));
     this.receipts.set(key, { hash: requestHash, result, expiresAt: Date.now() + 90 * 86_400_000 });
     return { replayed: false, result };
+  }
+
+  async applyMutationBatch(
+    ownerId: string,
+    clientId: string,
+    mutations: V2Mutation[],
+  ): Promise<V2MutationBatchResult[]> {
+    const results: V2MutationBatchResult[] = [];
+    for (const mutation of mutations) {
+      try {
+        const result = await this.applyMutationIdempotent(ownerId, clientId, mutation);
+        results.push({
+          mutation,
+          status: 'applied',
+          replayed: result.replayed,
+          result: result.result,
+        });
+      } catch (error) {
+        const domain =
+          error instanceof DomainError
+            ? error
+            : new DomainError('MUTATION_REJECTED', 'mutation 被拒绝');
+        results.push({
+          mutation,
+          status: domain.code === 'VERSION_CONFLICT' ? 'conflict' : 'rejected',
+          error: { code: domain.code, message: domain.message, details: domain.details },
+        });
+      }
+    }
+    return results;
   }
 
   /**
