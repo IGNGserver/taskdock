@@ -891,9 +891,7 @@ export function TreePage() {
     const latestItems = items.map(latestItem);
     const group = latestItems.filter((candidate) => itemStatus(candidate) === status);
     const index = group.findIndex(
-      (candidate) =>
-        candidate.kind === latest.kind &&
-        treeItemId(candidate) === treeItemId(latest),
+      (candidate) => candidate.kind === latest.kind && treeItemId(candidate) === treeItemId(latest),
     );
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (index < 0 || targetIndex < 0 || targetIndex >= group.length) return;
