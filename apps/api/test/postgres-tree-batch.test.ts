@@ -203,6 +203,7 @@ describe('PostgresTreeStore batch push', () => {
     let inTransaction = false;
     const transactions: string[] = [];
     const savepoints: string[] = [];
+    const batchSql: string[] = [];
     const postgres = {
       withMutation: async <T>(fn: () => T | Promise<T>): Promise<T> => {
         if (inTransaction) return fn();
@@ -229,6 +230,7 @@ describe('PostgresTreeStore batch push', () => {
       v2LockOwner: async () => undefined,
       v2ReadSnapshot: async <T>(fn: () => T | Promise<T>) => fn(),
       v2Query: async (text: string) => {
+        batchSql.push(text);
         if (text.includes('AS owner_ok')) {
           return { rows: [{ owner_ok: true, cursor }], rowCount: 1 };
         }
@@ -271,5 +273,10 @@ describe('PostgresTreeStore batch push', () => {
     expect(savepoints).toContain('release:mutation_0');
     expect(savepoints).toContain('create:mutation_1');
     expect(savepoints).toContain('rollback:mutation_1');
+    expect(
+      batchSql.some(
+        (sql) => sql.includes('INSERT INTO folders') && sql.includes('SELECT x.id, $1,'),
+      ),
+    ).toBe(true);
   });
 });

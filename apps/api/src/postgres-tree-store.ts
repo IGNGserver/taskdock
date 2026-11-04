@@ -482,7 +482,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
       case 'folder':
         await this.postgres.v2Query(
           `INSERT INTO folders (id,owner_id,parent_folder_id,title,status,completed_at,rank,version,created_at,updated_at,deleted_at)
-           SELECT $1, x.id, x.parent_folder_id, x.title, x.status, x.completed_at, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
+           SELECT x.id, $1, x.parent_folder_id, x.title, x.status, x.completed_at, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
            FROM jsonb_to_recordset($2::jsonb) AS x(
              id uuid, parent_folder_id uuid, title text, status text, completed_at timestamptz,
              rank bigint, version integer, created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
@@ -511,7 +511,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
       case 'task': {
         await this.postgres.v2Query(
           `INSERT INTO tasks (id,owner_id,project_id,category,reference_id,title,status,priority,rank,completed_at,version,created_at,updated_at,deleted_at,parent_folder_id)
-           SELECT $1, x.id, NULL, 'MISC', x.reference_id, x.title, x.status, 'NONE', x.rank, x.completed_at, x.version, x.created_at, x.updated_at, x.deleted_at, x.parent_folder_id
+           SELECT x.id, $1, NULL, 'MISC', x.reference_id, x.title, x.status, 'NONE', x.rank, x.completed_at, x.version, x.created_at, x.updated_at, x.deleted_at, x.parent_folder_id
            FROM jsonb_to_recordset($2::jsonb) AS x(
              id uuid, reference_id text, title text, status text, rank bigint,
              completed_at timestamptz, version integer, created_at timestamptz,
@@ -553,7 +553,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
       case 'note':
         await this.postgres.v2Query(
           `INSERT INTO notes (id,owner_id,task_id,content_markdown,version,created_at,updated_at,deleted_at)
-           SELECT $1, x.id, x.task_id, x.content_markdown, x.version, x.created_at, x.updated_at, x.deleted_at
+           SELECT x.id, $1, x.task_id, x.content_markdown, x.version, x.created_at, x.updated_at, x.deleted_at
            FROM jsonb_to_recordset($2::jsonb) AS x(
              id uuid, task_id uuid, content_markdown text, version integer,
              created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
@@ -579,7 +579,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
       case 'taskStep':
         await this.postgres.v2Query(
           `INSERT INTO task_steps (id,owner_id,task_id,title,note_markdown,status,rank,completed_at,version,created_at,updated_at,deleted_at)
-           SELECT $1, x.id, x.task_id, x.title, x.note_markdown, x.status, x.rank, x.completed_at, x.version, x.created_at, x.updated_at, x.deleted_at
+           SELECT x.id, $1, x.task_id, x.title, x.note_markdown, x.status, x.rank, x.completed_at, x.version, x.created_at, x.updated_at, x.deleted_at
            FROM jsonb_to_recordset($2::jsonb) AS x(
              id uuid, task_id uuid, title text, note_markdown text, status text, rank bigint,
              completed_at timestamptz, version integer, created_at timestamptz,
@@ -610,7 +610,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
       case 'workflow':
         await this.postgres.v2Query(
           `INSERT INTO workflows (id,owner_id,name,rank,version,created_at,updated_at,deleted_at)
-           SELECT $1, x.id, x.name, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
+           SELECT x.id, $1, x.name, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
            FROM jsonb_to_recordset($2::jsonb) AS x(
              id uuid, name text, rank bigint, version integer,
              created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
@@ -636,7 +636,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
       case 'workflowStage':
         await this.postgres.v2Query(
           `INSERT INTO workflow_stages (id,owner_id,workflow_id,name,rank,version,created_at,updated_at,deleted_at)
-           SELECT $1, x.id, x.workflow_id, x.name, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
+           SELECT x.id, $1, x.workflow_id, x.name, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
            FROM jsonb_to_recordset($2::jsonb) AS x(
              id uuid, workflow_id uuid, name text, rank bigint, version integer,
              created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
@@ -663,7 +663,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
       case 'workflowTaskMembership':
         await this.postgres.v2Query(
           `INSERT INTO workflow_task_memberships (id,owner_id,workflow_id,stage_id,task_id,rank,version,created_at,updated_at,deleted_at)
-           SELECT $1, x.id, x.workflow_id, x.stage_id, x.task_id, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
+           SELECT x.id, $1, x.workflow_id, x.stage_id, x.task_id, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
            FROM jsonb_to_recordset($2::jsonb) AS x(
              id uuid, workflow_id uuid, stage_id uuid, task_id uuid, rank bigint, version integer,
              created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
@@ -691,7 +691,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
       case 'timePoint':
         await this.postgres.v2Query(
           `INSERT INTO time_points (id,owner_id,type,local_date,title,rank,version,reached_at,created_at,updated_at,deleted_at)
-           SELECT $1, x.id, x.type, x.local_date, x.title, x.rank, x.version, x.reached_at, x.created_at, x.updated_at, x.deleted_at
+           SELECT x.id, $1, x.type, x.local_date, x.title, x.rank, x.version, x.reached_at, x.created_at, x.updated_at, x.deleted_at
            FROM jsonb_to_recordset($2::jsonb) AS x(
              id uuid, type text, local_date date, title text, rank bigint, version integer,
              reached_at timestamptz, created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
@@ -720,7 +720,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
       case 'placement':
         await this.postgres.v2Query(
           `INSERT INTO placements (id,owner_id,task_id,time_point_id,rank,version,created_at,updated_at,deleted_at)
-           SELECT $1, x.id, x.task_id, x.time_point_id, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
+           SELECT x.id, $1, x.task_id, x.time_point_id, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
            FROM jsonb_to_recordset($2::jsonb) AS x(
              id uuid, task_id uuid, time_point_id uuid, rank bigint, version integer,
              created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
