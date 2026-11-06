@@ -236,6 +236,9 @@ export function useFocusTrap(
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || focusTrapStack[focusTrapStack.length - 1] !== container) return;
+      // Escape during an IME composition cancels the candidate window, not the
+      // overlay; closing here would swallow the first Escape of a Chinese edit.
+      if (event.isComposing) return;
       if (event.key === 'Escape' && escapeRef.current) {
         event.preventDefault();
         escapeRef.current();

@@ -1,8 +1,9 @@
 import type { FolderDto, TaskDetailV2Dto, TaskStatus, TaskStepDto } from '@devtodo/contracts';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { MoreHorizontal } from 'lucide-react';
+import { Maximize2, MoreHorizontal } from 'lucide-react';
 import { mutationV2, requestV2 } from '../api.js';
 import { useAuth } from '../auth.js';
+import { useDevice } from '../device.js';
 import {
   createTaskEditorDraft,
   mergeTaskEditorDraft,
@@ -10,6 +11,7 @@ import {
   type StepDraft,
 } from '../task-editor-draft.js';
 import { FolderPicker } from './folder-picker.js';
+import { NoteEditorDialog } from './note-editor-dialog.js';
 import {
   Alert,
   Button,
@@ -38,6 +40,7 @@ export function TaskDetailEditor({
   focusTitle?: boolean;
 }) {
   const { settings } = useAuth();
+  const { isTouch } = useDevice();
   const [draft] = useState(() => {
     const existing = drafts.get(detail.task.id);
     if (existing) {
@@ -61,6 +64,7 @@ export function TaskDetailEditor({
   const [moveFolderId, setMoveFolderId] = useState(detail.task.parentFolderId ?? '');
   const [deletingTask, setDeletingTask] = useState(false);
   const [deletingStep, setDeletingStep] = useState<TaskStepDto | null>(null);
+  const [noteExpanded, setNoteExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useDismissibleMenu(menuOpen, () => setMenuOpen(false));
   const flushRef = useRef<() => void>(() => undefined);
@@ -290,6 +294,13 @@ export function TaskDetailEditor({
       : dirty
         ? '编辑中'
         : '已保存';
+  const noteSaveLabel = draft.failures.note
+    ? '保存失败 · 内容已保留'
+    : draft.pending
+      ? '正在保存…'
+      : draft.note !== draft.record.note.contentMarkdown
+        ? '编辑中'
+        : '已保存';
 
   return (
     <div ref={editorRef} className="task-detail-v2 workspace-editor">
@@ -396,7 +407,41 @@ export function TaskDetailEditor({
           onBlur={() => {
             if (draft.note !== draft.record.note.contentMarkdown) void saveNote(draft.note);
           }}
+          cornerAction={
+            <IconButton
+              className="note-expand-button"
+              label="展开备注编辑"
+              aria-haspopup="dialog"
+              size={isTouch ? 's' : 'xs'}
+              shape="square"
+              onClick={(event) => {
+                event.currentTarget.focus({ preventScroll: true });
+                setNoteExpanded(true);
+              }}
+            >
+              <Maximize2 size={16} />
+            </IconButton>
+          }
           rows={3}
+        />
+        <NoteEditorDialog
+          open={noteExpanded}
+          taskTitle={draft.title.trim() || '未命名任务'}
+          value={draft.note}
+          saveLabel={noteSaveLabel}
+          error={draft.failures.note}
+          onChange={(value) => {
+            draft.note = value;
+            notify();
+          }}
+          onRetry={() => {
+            const retry = draft.retries.get('note');
+            if (retry) void retry();
+          }}
+          onClose={() => {
+            setNoteExpanded(false);
+            if (draft.note !== draft.record.note.contentMarkdown) void saveNote(draft.note);
+          }}
         />
       </section>
       <section className="task-detail-v2-section">

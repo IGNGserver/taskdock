@@ -85,6 +85,7 @@ async function workspace(page: Page) {
     rejectTitle: false,
     rejectMove: false,
     rejectDelete: false,
+    rejectNote: false,
     rejectSearch: false,
     titleGate: Promise.resolve(),
     captureGate: Promise.resolve(),
@@ -272,6 +273,10 @@ async function workspace(page: Page) {
     }
     if (path.endsWith('/note') && method === 'PATCH' && item) {
       const body = request.postDataJSON() as { contentMarkdown: string; baseVersion: number };
+      if (state.rejectNote) {
+        state.rejectNote = false;
+        return rejected(route, '备注暂时无法保存');
+      }
       const note = notes.get(item.id)!;
       if (note.version !== body.baseVersion) return rejected(route, '备注版本已变化');
       note.contentMarkdown = body.contentMarkdown;
@@ -401,6 +406,73 @@ test('failed title saves retain the draft and retry only after a visible error',
   await page.getByRole('button', { name: '重试保存', exact: true }).click();
   await expect.poll(() => tasks[0]!.title).toBe('保留这条编辑');
   await expect(page.locator('.workspace-editor .m3e-alert--error')).toHaveCount(0);
+});
+
+test('task note expands into a large editor and keeps one shared draft', async ({
+  page,
+  isMobile,
+}) => {
+  const { notes, tasks } = await workspace(page);
+  await page.getByRole('button', { name: '打开任务 整理发布清单', exact: true }).click();
+  const note = page.getByRole('textbox', { name: '任务备注', exact: true });
+  await note.fill('第一行');
+  const expand = page.getByRole('button', { name: '展开备注编辑', exact: true });
+  await expand.click();
+  const dialog = page.getByRole('dialog', { name: '编辑备注', exact: true });
+  await expect(dialog).toBeVisible();
+  const editor = dialog.getByRole('textbox', { name: '编辑任务备注', exact: true });
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveValue('第一行');
+  await expect(dialog).toContainText('修改会自动保存');
+  await expect(dialog).toHaveCSS('opacity', '1');
+  const box = await dialog.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.width).toBeGreaterThan(isMobile ? 300 : 600);
+  expect(box!.height).toBeGreaterThan(400);
+  await editor.fill('第一行\n第二行\n第三行');
+  if (process.env['TASKDOCK_VISUAL_ARTIFACT_DIR'])
+    await page.screenshot({
+      path: `${process.env['TASKDOCK_VISUAL_ARTIFACT_DIR']}/note-editor-${isMobile ? 'mobile' : 'desktop'}.png`,
+    });
+  await dialog.getByRole('button', { name: '完成', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(note).toHaveValue('第一行\n第二行\n第三行');
+  await expect(expand).toBeFocused();
+  await expect.poll(() => notes.get(tasks[0]!.id)!.contentMarkdown).toBe('第一行\n第二行\n第三行');
+
+  await expand.click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(expand).toBeFocused();
+
+  if (!isMobile) {
+    await expand.click();
+    await expect(dialog).toBeVisible();
+    await page.mouse.click(8, 8);
+    await expect(dialog).toHaveCount(0);
+    await expect(expand).toBeFocused();
+  }
+});
+
+test('failed note saves keep the draft in the compact field for retry', async ({ page }) => {
+  const { state, notes, tasks } = await workspace(page);
+  await page.getByRole('button', { name: '打开任务 整理发布清单', exact: true }).click();
+  await page.getByRole('button', { name: '展开备注编辑', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '编辑备注', exact: true });
+  const editor = dialog.getByRole('textbox', { name: '编辑任务备注', exact: true });
+  await editor.fill('不会丢失的备注');
+  state.rejectNote = true;
+  await dialog.getByRole('button', { name: '完成', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('.workspace-editor .m3e-alert--error')).toContainText(
+    '备注暂时无法保存',
+  );
+  await expect(page.getByRole('textbox', { name: '任务备注', exact: true })).toHaveValue(
+    '不会丢失的备注',
+  );
+  await page.getByRole('button', { name: '重试保存', exact: true }).click();
+  await expect.poll(() => notes.get(tasks[0]!.id)!.contentMarkdown).toBe('不会丢失的备注');
 });
 
 test('step capture survives task switches and clears only after a successful retry', async ({

@@ -5,6 +5,7 @@ import {
   useState,
   type InputHTMLAttributes,
   type ReactNode,
+  type Ref,
   type TextareaHTMLAttributes,
 } from 'react';
 
@@ -101,10 +102,20 @@ export function TextArea({
   error,
   hideLabel = false,
   className,
+  cornerAction,
   id,
+  initialFocus = false,
+  ref,
   value,
   ...props
-}: TextFieldBaseProps & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'className'>) {
+}: TextFieldBaseProps &
+  Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'className'> & {
+    /** Extra control pinned to the field's bottom-end corner. */
+    cornerAction?: ReactNode;
+    /** Lets an overlay's focus trap own the initial focus instead of autoFocus. */
+    initialFocus?: boolean;
+    ref?: Ref<HTMLTextAreaElement>;
+  }) {
   const generatedId = useId();
   const fieldId = id ?? generatedId;
   const helperId = `${fieldId}-helper`;
@@ -126,11 +137,13 @@ export function TextArea({
       <div className="m3e-field__box">
         <textarea
           {...props}
+          ref={ref}
           id={fieldId}
           value={value}
           aria-invalid={error ? true : undefined}
           aria-describedby={helperText || error ? helperId : undefined}
           placeholder={props.placeholder ?? ' '}
+          data-autofocus={initialFocus ? '' : undefined}
           className="m3e-field__input m3e-field__input--multiline"
         />
         <label
@@ -139,6 +152,7 @@ export function TextArea({
         >
           {label}
         </label>
+        {cornerAction && <div className="m3e-field__corner-action">{cornerAction}</div>}
       </div>
       {(helperText || error) && (
         <p className="m3e-field__helper" id={helperId} role={error ? 'alert' : undefined}>

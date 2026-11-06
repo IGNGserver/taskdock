@@ -426,6 +426,7 @@ export function Dialog({
   footer,
   state,
   size = 'basic',
+  className,
 }: {
   open: boolean;
   onClose: () => void;
@@ -436,6 +437,8 @@ export function Dialog({
   /** Overrides the internal presence state, for callers that own the lifecycle. */
   state?: DialogState;
   size?: 'basic' | 'full-screen';
+  /** Layout hook for page-owned surfaces that need a larger writing area. */
+  className?: string;
 }) {
   const internal = usePresence(open);
   const presence = state ? { mounted: state !== 'exiting' || open, state } : internal;
@@ -456,13 +459,19 @@ export function Dialog({
         if (interactive && event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="m3e-dialog-scrim" aria-hidden="true" />
+      <div
+        className="m3e-dialog-scrim"
+        aria-hidden="true"
+        onMouseDown={() => {
+          if (interactive) onClose();
+        }}
+      />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={joinClasses('m3e-dialog', `m3e-dialog--${size}`)}
+        className={joinClasses('m3e-dialog', `m3e-dialog--${size}`, className)}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="m3e-dialog__header">

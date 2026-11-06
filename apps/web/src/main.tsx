@@ -9,6 +9,7 @@ import './styles/type.css';
 import './components/m3e/button.css';
 import './components/m3e/field.css';
 import './components/m3e/container.css';
+import './components/note-editor.css';
 import './components/m3e/navigation.css';
 import './components/m3e/patterns.css';
 import './styles/base.css';
