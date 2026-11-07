@@ -1,0 +1,121 @@
+/*
+ * Expanded task-note editor.
+ *
+ * The compact field stays a normal M3E text area; this surface only widens the
+ * writing area and lets the textarea own the remaining height. Responsive
+ * sizing reuses the existing Dialog rules (full-width, bottom-aligned on
+ * compact screens; `--dt-viewport-height` keeps the footer above the keyboard).
+ */
+
+.note-editor-dialog {
+  inline-size: min(760px, 100%);
+  block-size: min(80dvh, 760px);
+}
+
+.note-editor-dialog .m3e-dialog__body {
+  display: flex;
+  overflow: hidden;
+  padding-block: 4px 16px;
+}
+
+.note-editor-dialog__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-block-size: 0;
+}
+
+.note-editor-dialog__context {
+  margin: 0;
+  overflow: hidden;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+  line-height: var(--m3-type-body-small-line);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-editor-dialog__hint {
+  margin: 0;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+  line-height: var(--m3-type-body-small-line);
+}
+
+.note-editor-dialog__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--m3-shape-xs);
+  background: color-mix(in srgb, var(--m3-error) 10%, transparent);
+  color: var(--m3-error);
+  font-size: var(--m3-type-body-small-size);
+  line-height: var(--m3-type-body-small-line);
+}
+
+.note-editor-dialog__field {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+.note-editor-dialog__field .m3e-field__box {
+  flex: 1 1 auto;
+  align-items: stretch;
+  min-block-size: 0;
+}
+
+.note-editor-dialog__field .m3e-field__input {
+  block-size: 100%;
+  min-block-size: 0;
+  padding: 14px 16px;
+  resize: none;
+}
+
+.note-editor-dialog__status {
+  margin-inline-end: auto;
+  color: var(--m3-on-surface-variant);
+  font-size: var(--m3-type-body-small-size);
+}
+
+.note-editor-dialog__status.has-error {
+  color: var(--m3-error);
+}
+
+.note-expand-button {
+  color: var(--m3-on-surface-variant);
+}
+
+.note-expand-button:hover:not(:disabled) {
+  color: var(--m3-on-surface);
+}
+
+@media (pointer: coarse) {
+  .note-expand-button {
+    inline-size: 40px;
+    block-size: 40px;
+  }
+}
+
+@media (max-width: 599.98px) {
+  .note-editor-dialog {
+    block-size: 100%;
+    max-block-size: 100%;
+  }
+
+  .note-editor-dialog .m3e-dialog__header {
+    padding-inline: 16px 8px;
+  }
+
+  .note-editor-dialog .m3e-dialog__body {
+    padding-inline: 16px;
+  }
+
+  .note-editor-dialog .m3e-dialog__footer {
+    padding-inline: 16px;
+  }
+}

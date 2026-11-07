@@ -88,6 +88,16 @@
   color: transparent;
 }
 
+/* A corner action lives in the field's end padding so it never competes with
+   the text; multiline fields reserve that space where they use it. */
+.m3e-field__corner-action {
+  position: absolute;
+  z-index: 1;
+  inset-block-end: 4px;
+  inset-inline-end: 4px;
+  display: flex;
+}
+
 /* A hidden label needs a visible placeholder and no reserved label space. */
 .m3e-field--label-hidden .m3e-field__input {
   padding-block: 12px;
@@ -505,6 +515,13 @@
 .m3e-field--task-detail-note .m3e-field__input {
   min-block-size: 96px;
   padding: 10px 12px;
+}
+
+/* The task note's corner action replaces the native resize grip. Reserve the
+   inline-end padding so the button stays clear of wrapped text. */
+.m3e-field--task-detail-note .m3e-field__input {
+  padding-inline-end: 48px;
+  resize: none;
 }
 
 /*
