@@ -430,6 +430,7 @@ test('task note expands into a large editor and keeps one shared draft', async (
   expect(box!.width).toBeGreaterThan(isMobile ? 300 : 600);
   expect(box!.height).toBeGreaterThan(400);
   await editor.fill('第一行\n第二行\n第三行');
+  await expect.poll(() => notes.get(tasks[0]!.id)!.contentMarkdown).toBe('第一行\n第二行\n第三行');
   if (process.env['TASKDOCK_VISUAL_ARTIFACT_DIR'])
     await page.screenshot({
       path: `${process.env['TASKDOCK_VISUAL_ARTIFACT_DIR']}/note-editor-${isMobile ? 'mobile' : 'desktop'}.png`,
@@ -461,8 +462,8 @@ test('failed note saves keep the draft in the compact field for retry', async ({
   await page.getByRole('button', { name: '展开备注编辑', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '编辑备注', exact: true });
   const editor = dialog.getByRole('textbox', { name: '编辑任务备注', exact: true });
-  await editor.fill('不会丢失的备注');
   state.rejectNote = true;
+  await editor.fill('不会丢失的备注');
   await dialog.getByRole('button', { name: '完成', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('.workspace-editor .m3e-alert--error')).toContainText(
@@ -473,6 +474,20 @@ test('failed note saves keep the draft in the compact field for retry', async ({
   );
   await page.getByRole('button', { name: '重试保存', exact: true }).click();
   await expect.poll(() => notes.get(tasks[0]!.id)!.contentMarkdown).toBe('不会丢失的备注');
+});
+
+test('note retry inside expanded editor uses the latest draft', async ({ page }) => {
+  const { state, notes, tasks } = await workspace(page);
+  await page.getByRole('button', { name: '打开任务 整理发布清单', exact: true }).click();
+  await page.getByRole('button', { name: '展开备注编辑', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '编辑备注', exact: true });
+  const editor = dialog.getByRole('textbox', { name: '编辑任务备注', exact: true });
+  state.rejectNote = true;
+  await editor.fill('第一次内容');
+  await expect(dialog.getByRole('alert')).toContainText('备注暂时无法保存');
+  await editor.fill('修改后的当前内容');
+  await dialog.getByRole('button', { name: '重试', exact: true }).click();
+  await expect.poll(() => notes.get(tasks[0]!.id)!.contentMarkdown).toBe('修改后的当前内容');
 });
 
 test('step capture survives task switches and clears only after a successful retry', async ({
