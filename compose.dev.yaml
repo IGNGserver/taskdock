@@ -50,7 +50,7 @@ services:
   gateway:
     image: caddy:2.10.2-alpine
     environment:
-      APP_ORIGIN: https://localhost:18443
+      APP_ORIGIN: https://localhost
     ports: ['127.0.0.1:18443:443']
     volumes:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
