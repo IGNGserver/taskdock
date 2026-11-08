@@ -10,9 +10,9 @@ TaskDock 的生产部署使用 GitHub Container Registry 中已经构建好的 D
 openssl rand -base64 48
 ```
 
-填写真实 HTTP 或 HTTPS `APP_ORIGIN`、数据库密码和显式 `CORS_ALLOWED_ORIGINS`。默认 Docker 对外 HTTP 端口是 `48731`，可通过 `TASKDOCK_PORT` 改成其他五位端口。实际秘密不进入 Git、镜像或日志。
+填写真实 HTTP 或 HTTPS `APP_ORIGIN`、数据库密码和显式 `CORS_ALLOWED_ORIGINS`。默认应用容器端口为 `48731`，可通过 `TASKDOCK_PORT` 修改；Compose 默认只绑定宿主机 `127.0.0.1`，避免绕过反向代理直接暴露。实际秘密不进入 Git、镜像或日志。
 
-生产环境必须设置 `DEV_MEMORY_STORE=false`（Compose 已设置），并使用随机的 `BOOTSTRAP_TOKEN`、`ACCESS_TOKEN_SECRET` 和 `REFRESH_TOKEN_PEPPER`。`APP_ORIGIN` 与允许的 CORS origin 必须是完整的 HTTP 或 HTTPS 地址；使用 HTTP 时页面会显示安全警告，密码和会话信息会明文传输，公网环境建议使用 HTTPS。默认部署直接由 TaskDock 应用提供 HTTP 服务，公开入口是 `TASKDOCK_PORT`（默认 `48731`）；PostgreSQL 不发布到宿主机。需要 Caddy 反向代理时，再使用 `--profile gateway`，不要同时让两个服务占用同一个宿主机端口。
+生产环境必须设置 `DEV_MEMORY_STORE=false`（Compose 已设置），并使用随机的 `BOOTSTRAP_TOKEN`、`ACCESS_TOKEN_SECRET` 和 `REFRESH_TOKEN_PEPPER`。`APP_ORIGIN` 与允许的 CORS origin 必须是完整的 HTTP 或 HTTPS 地址；公网必须使用 HTTPS。需要 Caddy 反向代理时使用 `--profile gateway`，由 Caddy 发布公开入口；只有明确接受明文 HTTP 风险时，才设置 `TASKDOCK_BIND_ADDRESS=0.0.0.0` 直接发布应用端口。使用网关时不要同时让两个服务占用同一个宿主机端口。
 
 Web 端同时提供 PWA manifest、Service Worker 和离线更新提示。浏览器只有在 HTTPS（或本机 `localhost`）安全上下文中才会启用 Service Worker 和安装能力；因此可信局域网可以继续用 HTTP 访问，但要安装 PWA 或离线打开，需让 `APP_ORIGIN` 使用 HTTPS，并通过反向代理提供有效证书。HTTP 部署不会再把页面资源强制升级到 HTTPS。
 
@@ -44,7 +44,7 @@ ghcr.io/igngserver/taskdock:${APP_VERSION}
 
 如果需要使用其他镜像仓库，可以设置 `TASKDOCK_IMAGE`。不要把生产 Compose 改回 `build:`，也不要在生产服务器上执行 `git pull` 后从源代码构建。
 
-默认情况下 app 发布 `48731:3000`，直接提供 HTTP 服务；使用 HTTP 时页面会显示安全警告，密码和会话信息会明文传输，公网环境建议使用 HTTPS。PostgreSQL 没有宿主机端口。在 `.env` 中填写 `OWNER_USERNAME`、`OWNER_PASSWORD`，然后由部署中枢执行一次 Owner 初始化：
+默认应用端口仅绑定 `127.0.0.1:48731`；直接提供 HTTP 服务时必须显式设置 `TASKDOCK_BIND_ADDRESS=0.0.0.0`，公网仍应改用 HTTPS 网关。使用 HTTP 时页面会显示安全警告，密码和会话信息会明文传输。PostgreSQL 没有宿主机端口。在 `.env` 中填写 `OWNER_USERNAME`、`OWNER_PASSWORD`，然后由部署中枢执行一次 Owner 初始化：
 
 ```bash
 docker compose --profile operations run --rm migrate
@@ -70,7 +70,7 @@ curl -fsS http://your-host.example:48731/health/ready
 
 外部库建议使用 `DATABASE_SSL_MODE=verify-full` 和 CA secret；应用角色与迁移角色分开。连接池、PgBouncer、TLS、备份和“一个服务器多个 database”的完整说明见 [外部 PostgreSQL 与共享数据库服务器](EXTERNAL_DATABASE.md)。
 
-可选 Redis 只用于共享限流和多副本冷启动缓存，默认关闭；Redis 断开时 API 会自动回退，不影响写入。内置 Compose 可使用 `--profile cache`，外部 Redis 通过 `CACHE_URL` 指向。
+可选 Redis 用于共享认证限流和多副本冷启动缓存。内置 Compose 可使用 `--profile cache`，外部 Redis 通过 `CACHE_URL` 指向；多副本必须配置同一个高可用 Redis。生产环境中只要配置了 `CACHE_URL`，Redis 故障就始终使认证请求 fail-closed，而不是退回各副本独立的本地计数；Compose 还默认设置 `AUTH_RATE_LIMIT_REQUIRE_SHARED=true`，该变量可在非生产环境强制同样行为。未配置 Redis 时使用本地限流，只适合单进程部署。权威任务写入、同步和冷启动投影缓存回退均不依赖 Redis 可用性。
 
 ## 升级/回滚
 

@@ -3,8 +3,9 @@ import { createPool, databaseReady, runMigrations } from '../packages/database/s
 import { PostgresStore } from '../apps/api/src/postgres-store.js';
 import { uuidv7, type Mutation } from '../packages/contracts/src/index.js';
 import { DomainError } from '../packages/domain/src/index.js';
+import { assertIsolatedEmptyDatabase, isolatedTestDatabaseUrl } from './test-database-safety.js';
 
-const databaseUrl = process.env['DATABASE_URL'];
+const databaseUrl = isolatedTestDatabaseUrl();
 const root = process.cwd();
 const workerCount = 20;
 
@@ -96,7 +97,7 @@ function runConcurrencyWorker(
 async function main(): Promise<void> {
   if (!databaseUrl) {
     console.log(
-      'NOT RUN: DATABASE_URL is not configured; the integration smoke requires a real PostgreSQL server.',
+      'NOT RUN: TASKDOCK_TEST_DATABASE_URL is not configured; the integration smoke requires a dedicated empty PostgreSQL database.',
     );
     process.exitCode = 2;
     return;
@@ -112,12 +113,11 @@ async function main(): Promise<void> {
   };
   let ownerIds: string[] = [];
   try {
+    await assertIsolatedEmptyDatabase(cleanupPool, 'integration smoke');
     await runMigrations(cleanupPool);
     await runMigrations(cleanupPool);
     assert(await databaseReady(cleanupPool), 'PostgreSQL schema is not ready after migrations');
-    const existingOwners = await cleanupPool.query<{ id: string }>(
-      'SELECT id FROM users WHERE disabled_at IS NULL LIMIT 1',
-    );
+    const existingOwners = await cleanupPool.query<{ id: string }>('SELECT id FROM users LIMIT 1');
     if (existingOwners.rowCount) {
       throw new Error(
         'integration smoke requires an isolated empty database; refusing to modify an existing Owner',

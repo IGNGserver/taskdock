@@ -63,7 +63,11 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     // an unexpectedly large burst.
     if (previous !== undefined) {
       const applied = await this.applyDelta(ownerId, previous);
-      if (applied !== undefined) {
+      // The validation query and delta query are separate round trips. If feed
+      // retention or a concurrent change makes the delta end before the cursor
+      // we just observed, the hot projection is incomplete and must not be
+      // published as caught up.
+      if (applied !== undefined && BigInt(applied) >= BigInt(currentCursor)) {
         this.loaded.set(ownerId, applied);
         this.writeCache(ownerId, applied);
         return;
@@ -228,7 +232,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     // shared read projection after COMMIT. Readers therefore never observe an
     // uncommitted mutation, and a COMMIT failure leaves the projection intact
     // without a full-state rollback clone.
-    const response = await super.withMutationLock(() =>
+    const response = await super.withOwnerMutationLock(ownerId, () =>
       this.postgres.withMutation(() =>
         this.postgres.withIdempotency(
           ownerId,
@@ -283,15 +287,15 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     const published: V2SyncChange[] = [];
     let committedCursor: string | undefined;
     let nextTaskNumber: number | undefined;
-    await super.withMutationLock(() =>
+    await super.withOwnerMutationLock(ownerId, () =>
       this.postgres.withMutation(async () => {
         await this.postgres.v2LockOwner(ownerId);
         await this.prepare(ownerId);
         const draft = new MemoryTreeStore();
-        draft.loadOwnerState(ownerId, this.dumpOwnerState(ownerId));
+        const baseState = this.dumpOwnerState(ownerId);
+        draft.loadOwnerState(ownerId, structuredClone(baseState));
         for (const [index, mutation] of mutations.entries()) {
           const savepoint = `mutation_${index}`;
-          const draftBefore = draft.captureDraft(ownerId);
           const changeStart = draft.changeCount();
           await this.postgres.createSavepoint(savepoint);
           try {
@@ -321,18 +325,22 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
             published.push(...actionChanges);
           } catch (error) {
             await this.postgres.rollbackToSavepoint(savepoint);
-            draft.restoreDraft(ownerId, draftBefore);
-            const domain =
-              error instanceof DomainError
-                ? error
-                : new DomainError('MUTATION_REJECTED', 'mutation 被拒绝');
+            // A rejected item rolls back only its savepoint. Rebuild from the
+            // one batch base plus successful deltas instead of cloning the
+            // entire owner before every mutation (the former O(batch²) path).
+            draft.restoreDraftFromChanges(ownerId, baseState, '0', 0, published);
+            // Only domain validation/conflict failures are permanent per-item
+            // outcomes. Database/network/serialization failures must abort the
+            // outer transaction so the client retries instead of permanently
+            // rejecting an otherwise valid mutation.
+            if (!(error instanceof DomainError)) throw error;
             results.push({
               mutation,
-              status: domain.code === 'VERSION_CONFLICT' ? 'conflict' : 'rejected',
+              status: error.code === 'VERSION_CONFLICT' ? 'conflict' : 'rejected',
               error: {
-                code: domain.code,
-                message: domain.message,
-                details: domain.details,
+                code: error.code,
+                message: error.message,
+                details: error.details,
               },
             });
           }

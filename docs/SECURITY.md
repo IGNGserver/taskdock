@@ -6,6 +6,7 @@
 - refresh token 单次使用并重放即撤销整条链；客户端在请求前先落盘自己生成的后继密钥，因此「中枢已轮转但响应丢失」可以用同一对 token 幂等恢复，而不必依赖宽限期，也不会让不知道后继密钥的重放者受益。
 - Web 使用 HttpOnly refresh Cookie、显式 CORS、CSP/安全响应头、请求体限制和 Owner 范围查询。支持 HTTP 或 HTTPS 入口；HTTP 登录页会显示安全警告，但密码和会话信息仍会明文传输，公网应使用 HTTPS。
 - 认证接口按「客户端地址（按 `TRUST_PROXY` 还原）+ 用户名」限流，超限返回 `RATE_LIMITED`（HTTP 429，带 `retryAfterSeconds`）：`/auth/login` 默认 15 分钟 10 次，`/bootstrap` 15 分钟 5 次，`/auth/refresh` 与原生客户端挑战每 60 秒 30 次。登录上限可由 `AUTH_LOGIN_RATE_LIMIT` 调整，供大量用户共享同一出口地址（NAT、企业代理）的部署放宽；生产环境取值大于 1000 时中枢拒绝启动，避免把它变成关闭暴破防护的开关。
+- `TRUST_PROXY=true` 会被拒绝，必须配置明确代理跳数或地址列表，防止伪造转发头绕过限流。本地限流桶有容量上限，饱和时 fail-closed；生产环境配置了 Redis 时认证限流始终 fail-closed；多副本必须配置共享 Redis。`AUTH_RATE_LIMIT_REQUIRE_SHARED=true` 可在其他环境强制该行为，未配置 Redis 的本地回退只适用于单进程部署。
 - 所有 REST/WebSocket 输入通过 Zod 或显式参数校验；写入要求 Idempotency-Key，更新要求 baseVersion。
 - Markdown 原始 HTML、脚本、事件属性和危险 URL scheme 禁止；预览再次 sanitize，外链强制安全打开。
 - Android 生产实现必须接入 Keystore 支持的 Secure Storage；不能写 Web localStorage、普通 Preferences、日志或截图报告。

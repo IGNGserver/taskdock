@@ -69,12 +69,12 @@ internal fun groupTimePoints(
 
     fun byDateThenRank(values: List<TimePointEntity>) =
         values.sortedWith(
-            compareBy<TimePointEntity>({ it.localDate.orEmpty() }, { it.rank.toLongOrNull() ?: Long.MAX_VALUE })
+            compareBy<TimePointEntity>({ it.localDate.orEmpty() }, { it.rank.toBigInteger() })
         )
     fun pastDateThenRank(values: List<TimePointEntity>) =
         values.sortedWith(
             compareByDescending<TimePointEntity> { it.localDate.orEmpty() }
-                .thenBy { it.rank.toLongOrNull() ?: Long.MAX_VALUE }
+                .thenBy { it.rank.toBigInteger() }
         )
 
     val todayAndUpcoming =

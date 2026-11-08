@@ -20,13 +20,14 @@ import type {
 } from '@devtodo/contracts';
 import { uuidSchema, uuidv7 } from '@devtodo/contracts';
 import {
-  allocateRank,
   assertFolderMoveAllowed,
   assertTreeParentIsActiveFolder,
   deriveFolderAggregate,
+  deriveFolderAggregates,
   DomainError,
   folderPath,
   nextLocalDate,
+  planSiblingRankMove,
   sortTreeItems,
   stepTransition,
   transitionFolder,
@@ -372,12 +373,9 @@ export class MemoryTreeStore implements V2TreeStore {
     string,
     { hash: string; result: unknown; expiresAt: number }
   >();
-  private readonly deleteTokens = new Map<
-    string,
-    { ownerId: string; rootFolderId: string; fingerprint: string; expiresAt: number }
-  >();
   private readonly migratedOwners = new Set<string>();
   private mutationLock: Promise<void> = Promise.resolve();
+  private readonly ownerMutationLocks = new Map<string, Promise<void>>();
   private cursor = 0n;
   private nextTaskNumber = new Map<string, number>();
   private readonly changeListeners = new Set<(ownerId: string, cursor: string) => void>();
@@ -394,7 +392,10 @@ export class MemoryTreeStore implements V2TreeStore {
     this.ensureOwner(ownerId);
     const own = <T extends { ownerId: string }>(rows: Iterable<T>) =>
       [...rows].filter((row) => row.ownerId === ownerId);
-    return {
+    // Drafts must never share mutable row objects with the live projection.
+    // A shallow array copy lets an uncommitted update leak into readers and also
+    // makes savepoint restoration mutate the very snapshot meant to undo it.
+    return structuredClone({
       folders: own(this.folders.values()),
       tasks: own(this.tasks.values()),
       notes: own(this.notes.values()),
@@ -406,7 +407,7 @@ export class MemoryTreeStore implements V2TreeStore {
       placements: own(this.placements.values()),
       settings: this.settings.get(ownerId) ?? this.defaultSettings(ownerId),
       nextTaskNumber: this.nextTaskNumber.get(ownerId) ?? 1,
-    };
+    });
   }
 
   loadOwnerState(ownerId: string, state: Record<string, unknown>): void {
@@ -547,6 +548,21 @@ export class MemoryTreeStore implements V2TreeStore {
     }
   }
 
+  /** PostgreSQL serializes one owner's projection, not unrelated accounts. */
+  async withOwnerMutationLock<T>(ownerId: string, fn: () => T | Promise<T>): Promise<T> {
+    const previous = this.ownerMutationLocks.get(ownerId) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => (release = resolve));
+    this.ownerMutationLocks.set(ownerId, current);
+    await previous;
+    try {
+      return await fn();
+    } finally {
+      release();
+      if (this.ownerMutationLocks.get(ownerId) === current) this.ownerMutationLocks.delete(ownerId);
+    }
+  }
+
   /**
    * Apply a mutation to a draft projection for the PostgreSQL adapter. The
    * caller persists the emitted change delta and publishes it to the shared
@@ -570,6 +586,26 @@ export class MemoryTreeStore implements V2TreeStore {
     };
   }
 
+  restoreDraftFromChanges(
+    ownerId: string,
+    baseState: Record<string, unknown>,
+    baseCursor: string,
+    baseChangeCount: number,
+    published: readonly V2SyncChange[],
+  ): void {
+    this.loadOwnerState(ownerId, structuredClone(baseState));
+    if (typeof baseState['nextTaskNumber'] === 'number')
+      this.nextTaskNumber.set(ownerId, baseState['nextTaskNumber']);
+    this.cursor = BigInt(baseCursor);
+    this.changes.splice(baseChangeCount);
+    for (const change of published) {
+      if (!this.applySyncChange(ownerId, change.entityType, change.snapshot))
+        throw new Error('无法重建已提交的批量变更');
+      this.changes.push(change);
+      this.cursor = BigInt(change.seq);
+    }
+  }
+
   restoreDraft(
     ownerId: string,
     snapshot: { state: Record<string, unknown>; cursor: string; changeCount: number },
@@ -582,17 +618,18 @@ export class MemoryTreeStore implements V2TreeStore {
   listTreeChildren(ownerId: string, parentFolderId: string | null): TreeItemDto[] {
     this.ensureOwner(ownerId);
     const items: TreeItemDto[] = [];
-    for (const folder of this.folders.values()) {
-      if (
-        folder.ownerId !== ownerId ||
-        folder.deletedAt ||
-        folder.parentFolderId !== parentFolderId
-      )
-        continue;
+    const allFolders = this.ownerFolders(ownerId);
+    const childFolders = allFolders.filter((folder) => folder.parentFolderId === parentFolderId);
+    const aggregates = deriveFolderAggregates(
+      childFolders.map((folder) => folder.id),
+      allFolders,
+      [...this.tasks.values()].filter((task) => task.ownerId === ownerId),
+    );
+    for (const folder of childFolders) {
       items.push({
         kind: 'FOLDER',
         folder: this.folderDto(folder),
-        aggregate: this.aggregate(ownerId, folder.id),
+        aggregate: aggregates.get(folder.id)!,
       });
     }
     for (const task of this.tasks.values()) {
@@ -717,7 +754,7 @@ export class MemoryTreeStore implements V2TreeStore {
       assertFolderMoveAllowed(input.item.id, input.parentFolderId, this.ownerFolders(ownerId));
     const currentStatus =
       input.item.kind === 'FOLDER'
-        ? this.aggregate(ownerId, input.item.id).status
+        ? (current as FolderRecord).status
         : (current as TreeTaskRecord).status;
     if (currentStatus !== input.expectedStatus)
       throw new DomainError('VERSION_CONFLICT', '目录状态已变化', { server: currentStatus });
@@ -726,7 +763,7 @@ export class MemoryTreeStore implements V2TreeStore {
       const anchorItem = this.findTreeItem(ownerId, anchor);
       const anchorStatus =
         anchor.kind === 'FOLDER'
-          ? this.aggregate(ownerId, anchor.id).status
+          ? (anchorItem as FolderRecord).status
           : (anchorItem as TreeTaskRecord).status;
       const anchorParent =
         anchor.kind === 'FOLDER'
@@ -752,27 +789,62 @@ export class MemoryTreeStore implements V2TreeStore {
             (item.kind === 'FOLDER' ? item.folder.id : item.task.id) === input.item.id
           ),
       );
-    const rank = this.rankForMove(siblings, input.before ?? null, input.after ?? null);
+    const plan = planSiblingRankMove(
+      [
+        ...siblings.map((item) => ({
+          id: item.kind === 'FOLDER' ? item.folder.id : item.task.id,
+          rank: item.kind === 'FOLDER' ? item.folder.rank : item.task.rank,
+        })),
+        { id: current.id, rank: current.rank },
+      ],
+      current.id,
+      input.before?.id,
+      input.after?.id,
+    );
+    current.parentFolderId = input.parentFolderId;
+    const now = this.now();
+    for (const [changedId, rank] of plan) {
+      const sibling = siblings.find((item) =>
+        item.kind === 'FOLDER' ? item.folder.id === changedId : item.task.id === changedId,
+      );
+      const kind = changedId === current.id ? input.item.kind : sibling?.kind;
+      const changed =
+        changedId === current.id
+          ? current
+          : kind === 'FOLDER'
+            ? this.folder(ownerId, changedId)
+            : this.taskRecord(ownerId, changedId);
+      changed.rank = rank;
+      changed.version += 1;
+      changed.updatedAt = now;
+      if (kind === 'FOLDER')
+        this.record(
+          ownerId,
+          'folder',
+          changed.id,
+          changed.version,
+          'upsert',
+          this.folderDto(changed as FolderRecord),
+        );
+      else
+        this.record(
+          ownerId,
+          'task',
+          changed.id,
+          changed.version,
+          'upsert',
+          this.taskDto(changed as TreeTaskRecord),
+        );
+    }
     if (input.item.kind === 'FOLDER') {
       const folder = current as FolderRecord;
-      folder.parentFolderId = input.parentFolderId;
-      folder.rank = rank;
-      folder.version += 1;
-      folder.updatedAt = this.now();
-      this.record(ownerId, 'folder', folder.id, folder.version, 'upsert', this.folderDto(folder));
       return {
         kind: 'FOLDER',
         folder: this.folderDto(folder),
         aggregate: this.aggregate(ownerId, folder.id),
       };
     }
-    const task = current as TreeTaskRecord;
-    task.parentFolderId = input.parentFolderId;
-    task.rank = rank;
-    task.version += 1;
-    task.updatedAt = this.now();
-    this.record(ownerId, 'task', task.id, task.version, 'upsert', this.taskDto(task));
-    return { kind: 'TASK', task: this.taskDto(task) };
+    return { kind: 'TASK', task: this.taskDto(current as TreeTaskRecord) };
   }
 
   previewDelete(ownerId: string, id: string): DeletePreviewDto {
@@ -810,12 +882,6 @@ export class MemoryTreeStore implements V2TreeStore {
     );
     const expiresAt = new Date(Date.now() + 60_000).toISOString();
     const token = this.generateDeleteToken(ownerId, id, fingerprint, Date.parse(expiresAt));
-    this.deleteTokens.set(token, {
-      ownerId,
-      rootFolderId: id,
-      fingerprint,
-      expiresAt: Date.parse(expiresAt),
-    });
     return {
       rootFolderId: id,
       title: root.title,
@@ -875,7 +941,6 @@ export class MemoryTreeStore implements V2TreeStore {
       (a, b) => this.depth(ownerId, b.id) - this.depth(ownerId, a.id),
     ))
       this.tombstone(ownerId, 'folder', folder, now);
-    this.deleteTokens.delete(confirmationToken);
     return { folderCount: folders.length, taskCount: tasks.length };
   }
 
@@ -928,14 +993,16 @@ export class MemoryTreeStore implements V2TreeStore {
   listTasks(ownerId: string, query = ''): TreeTaskDto[] {
     this.ensureOwner(ownerId);
     const needle = query.trim().toLocaleLowerCase();
+    const notesByTask = new Map<string, NoteRecord>();
+    if (needle)
+      for (const note of this.notes.values())
+        if (note.ownerId === ownerId && !note.deletedAt && !notesByTask.has(note.taskId))
+          notesByTask.set(note.taskId, note);
     return [...this.tasks.values()]
       .filter((row) => row.ownerId === ownerId && !row.deletedAt)
       .filter((row) => {
         if (!needle) return true;
-        const note = [...this.notes.values()].find(
-          (candidate) =>
-            candidate.ownerId === ownerId && candidate.taskId === row.id && !candidate.deletedAt,
-        );
+        const note = notesByTask.get(row.id);
         return [row.title, row.referenceId, note?.contentMarkdown ?? ''].some((value) =>
           value.toLocaleLowerCase().includes(needle),
         );
@@ -1178,10 +1245,22 @@ export class MemoryTreeStore implements V2TreeStore {
       throw new DomainError('VERSION_CONFLICT', '步骤锚点已变化');
     if (afterId && !siblings.some((row) => row.id === afterId))
       throw new DomainError('VERSION_CONFLICT', '步骤锚点已变化');
-    step.rank = this.rankForRecordMove(siblings, beforeId ?? null, afterId ?? null);
-    step.version += 1;
-    step.updatedAt = this.now();
-    this.record(ownerId, 'taskStep', id, step.version, 'upsert', this.stepDto(step));
+    const plan = planSiblingRankMove([...siblings, step], id, beforeId, afterId);
+    const now = this.now();
+    for (const [changedId, rank] of plan) {
+      const changed = changedId === id ? step : siblings.find((row) => row.id === changedId)!;
+      changed.rank = rank;
+      changed.version += 1;
+      changed.updatedAt = now;
+      this.record(
+        ownerId,
+        'taskStep',
+        changed.id,
+        changed.version,
+        'upsert',
+        this.stepDto(changed),
+      );
+    }
     return this.stepDto(step);
   }
 
@@ -1632,22 +1711,22 @@ export class MemoryTreeStore implements V2TreeStore {
     if (afterId && !siblings.some((row) => row.id === afterId))
       throw new DomainError('VERSION_CONFLICT', '阶段锚点已变化');
     const ordered = siblings.sort(rankSort);
-    const anchorId = beforeId ?? afterId;
-    if (!anchorId) stage.rank = this.nextStageRank(ownerId, stage.workflowId);
-    else {
-      const index = ordered.findIndex((row) => row.id === anchorId);
-      const anchor = ordered[index]!;
-      const lower = beforeId
-        ? (ordered[index - 1]?.rank ?? (BigInt(anchor.rank) - 1024n).toString())
-        : anchor.rank;
-      const upper = beforeId
-        ? anchor.rank
-        : (ordered[index + 1]?.rank ?? (BigInt(anchor.rank) + 1024n).toString());
-      stage.rank = allocateRank([BigInt(lower), BigInt(upper)], 1).toString();
+    const plan = planSiblingRankMove([...ordered, stage], id, beforeId, afterId);
+    const now = this.now();
+    for (const [changedId, rank] of plan) {
+      const changed = changedId === id ? stage : ordered.find((row) => row.id === changedId)!;
+      changed.rank = rank;
+      changed.version += 1;
+      changed.updatedAt = now;
+      this.record(
+        ownerId,
+        'workflowStage',
+        changed.id,
+        changed.version,
+        'upsert',
+        this.stageDto(changed),
+      );
     }
-    stage.version += 1;
-    stage.updatedAt = this.now();
-    this.record(ownerId, 'workflowStage', id, stage.version, 'upsert', this.stageDto(stage));
     return this.stageDto(stage);
   }
 
@@ -1753,29 +1832,22 @@ export class MemoryTreeStore implements V2TreeStore {
     if (afterId && !siblings.some((row) => row.id === afterId))
       throw new DomainError('VERSION_CONFLICT', '流程任务排序锚点已变化');
     membership.stageId = stageId;
-    if (!beforeId && !afterId) membership.rank = this.nextMembershipRank(ownerId, stageId);
-    else {
-      const anchorId = beforeId ?? afterId;
-      const index = siblings.findIndex((row) => row.id === anchorId);
-      const anchor = siblings[index]!;
-      const lower = beforeId
-        ? (siblings[index - 1]?.rank ?? (BigInt(anchor.rank) - 1024n).toString())
-        : anchor.rank;
-      const upper = beforeId
-        ? anchor.rank
-        : (siblings[index + 1]?.rank ?? (BigInt(anchor.rank) + 1024n).toString());
-      membership.rank = allocateRank([BigInt(lower), BigInt(upper)], 1).toString();
+    const plan = planSiblingRankMove([...siblings, membership], id, beforeId, afterId);
+    const now = this.now();
+    for (const [changedId, rank] of plan) {
+      const changed = changedId === id ? membership : siblings.find((row) => row.id === changedId)!;
+      changed.rank = rank;
+      changed.version += 1;
+      changed.updatedAt = now;
+      this.record(
+        ownerId,
+        'workflowTaskMembership',
+        changed.id,
+        changed.version,
+        'upsert',
+        this.membershipDto(changed),
+      );
     }
-    membership.version += 1;
-    membership.updatedAt = this.now();
-    this.record(
-      ownerId,
-      'workflowTaskMembership',
-      id,
-      membership.version,
-      'upsert',
-      this.membershipDto(membership),
-    );
     return this.membershipDto(membership);
   }
 
@@ -1964,13 +2036,30 @@ export class MemoryTreeStore implements V2TreeStore {
           expectedStatus: enumValue(p.expectedStatus, ['TODO', 'IN_PROGRESS', 'DONE']),
           baseVersion: numberValue(base),
         });
-      case 'task.create':
-        return this.createTask(ownerId, {
+      case 'task.create': {
+        const created = this.createTask(ownerId, {
           id: mutation.entityId,
           parentFolderId: nullableUuid(p.parentFolderId),
           title: stringValue(p.title),
           noteId: optionalString(p.noteId),
         });
+        const localDate = optionalString(p.localDate);
+        const timePointId = optionalString(p.timePointId);
+        if (localDate === undefined && timePointId === undefined) return created;
+        if (localDate !== undefined && timePointId !== undefined)
+          throw new DomainError('VALIDATION_FAILED', '快速收集只能指定一个目标时间点');
+        const point =
+          localDate !== undefined
+            ? this.createDate(ownerId, localDate, optionalString(p.datePointId))
+            : this.getTimePoint(ownerId, timePointId!);
+        const { placement } = this.addPlacement(
+          ownerId,
+          created.task.id,
+          point.id,
+          optionalString(p.placementId),
+        );
+        return { ...created, point, placement };
+      }
       case 'task.update':
         return this.updateTask(
           ownerId,
@@ -2465,53 +2554,6 @@ export class MemoryTreeStore implements V2TreeStore {
     this.record(ownerId, 'timePoint', id, 1, 'upsert', this.timePointDto(point));
     return this.timePointDto(point);
   }
-  private rankForMove(
-    items: TreeItemDto[],
-    before: { kind: 'FOLDER' | 'TASK'; id: string } | null,
-    after: { kind: 'FOLDER' | 'TASK'; id: string } | null,
-  ): string {
-    const itemRank = (item: TreeItemDto): bigint =>
-      BigInt(item.kind === 'FOLDER' ? item.folder.rank : item.task.rank);
-    const itemId = (item: TreeItemDto): string =>
-      item.kind === 'FOLDER' ? item.folder.id : item.task.id;
-    if (!before && !after) {
-      const maximum = items.length
-        ? items.map(itemRank).reduce((max, value) => (value > max ? value : max), 0n)
-        : 0n;
-      return (maximum + 1024n).toString();
-    }
-    const id = before?.id ?? after?.id;
-    const index = items.findIndex((item) => itemId(item) === id);
-    if (index < 0) throw new DomainError('VERSION_CONFLICT', '排序锚点已变化');
-    const anchor = itemRank(items[index]!);
-    const lower = before
-      ? items[index - 1]
-        ? itemRank(items[index - 1]!)
-        : anchor - 1024n
-      : anchor;
-    const upper = before ? anchor : items[index + 1] ? itemRank(items[index + 1]!) : anchor + 1024n;
-    return allocateRank([lower, upper], 1).toString();
-  }
-  private rankForRecordMove(
-    items: StepRecord[],
-    before: string | null,
-    after: string | null,
-  ): string {
-    const byId = new Map(items.map((row) => [row.id, row]));
-    const anchorId = before ?? after;
-    if (!anchorId) return this.nextStepRank(items[0]?.ownerId ?? '', items[0]?.taskId ?? '');
-    const anchor = byId.get(anchorId);
-    if (!anchor) throw new DomainError('VERSION_CONFLICT', '步骤锚点已变化');
-    const ordered = [...items].sort(rankSort);
-    const index = ordered.findIndex((row) => row.id === anchorId);
-    const lower = before
-      ? (ordered[index - 1]?.rank ?? (BigInt(anchor.rank) - 1024n).toString())
-      : anchor.rank;
-    const upper = before
-      ? anchor.rank
-      : (ordered[index + 1]?.rank ?? (BigInt(anchor.rank) + 1024n).toString());
-    return allocateRank([BigInt(lower), BigInt(upper)], 1).toString();
-  }
   private depth(ownerId: string, id: string): number {
     let depth = 0;
     let current = this.folder(ownerId, id).parentFolderId;
@@ -2585,7 +2627,6 @@ export class MemoryTreeStore implements V2TreeStore {
       cursor: this.cursor,
       nextTaskNumber: this.nextTaskNumber,
       receipts: this.receipts,
-      deleteTokens: this.deleteTokens,
       migratedOwners: this.migratedOwners,
     });
   }
@@ -2625,19 +2666,8 @@ export class MemoryTreeStore implements V2TreeStore {
     ownerId: string,
     rootFolderId: string,
   ): { ownerId: string; rootFolderId: string; fingerprint: string; expiresAt: number } | null {
-    // Also check memory map first if present
-    const memory = this.deleteTokens.get(token);
-    if (memory) {
-      if (
-        memory.ownerId === ownerId &&
-        memory.rootFolderId === rootFolderId &&
-        memory.expiresAt > Date.now()
-      ) {
-        return memory;
-      }
-      return null;
-    }
-
+    // The signed, expiring token is self-contained so previews work across
+    // replicas and do not accumulate an unbounded process-local token map.
     const parts = token.split('.');
     if (parts.length !== 2) return null;
     const payloadStr = Buffer.from(parts[0]!, 'base64url').toString('utf8');

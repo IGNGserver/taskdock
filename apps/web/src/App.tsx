@@ -76,6 +76,7 @@ import {
   loadConfiguredHubOrigin,
   normalizeHubOrigin,
   mutationV2,
+  quickCaptureV2,
   requestV2,
   revokeDevice,
   setHubOrigin,
@@ -352,26 +353,13 @@ function AuthenticatedApp() {
       targetFolderId = null;
     }
 
-    const { task: createdTask } = (await mutationV2('POST', '/tasks', {
+    await quickCaptureV2({
       parentFolderId: targetFolderId,
       title,
-    })) as { task: TreeTaskDto };
-
-    // If currently on /today, also place into today's timeline
-    if (location.pathname.startsWith('/today')) {
-      try {
-        const localDate = todayInTimezone(auth.settings?.timezone ?? 'Asia/Shanghai');
-        const point = (await mutationV2('POST', '/time-points/date', {
-          localDate,
-        })) as TimePointDto;
-        await mutationV2('POST', '/placements', {
-          taskId: createdTask.id,
-          timePointId: point.id,
-        });
-      } catch {
-        // Placement failure non-blocking
-      }
-    }
+      ...(location.pathname.startsWith('/today')
+        ? { localDate: todayInTimezone(auth.settings?.timezone ?? 'Asia/Shanghai') }
+        : {}),
+    });
 
     window.dispatchEvent(new Event('devtodo:data-changed'));
     setToast('已创建任务');
@@ -1635,17 +1623,7 @@ function TodayPage({ onOpenTask }: { onOpenTask: (id: string) => void }) {
         title="添加今日任务"
         placeholder="今天要做什么？"
         onSubmit={async (title) => {
-          const point = await ensureTodayPoint();
-          // Create task first
-          const { task: createdTask } = (await mutationV2('POST', '/tasks', {
-            parentFolderId: null,
-            title,
-          })) as { task: TreeTaskDto };
-          // Place into today's timePoint
-          await mutationV2('POST', '/placements', {
-            taskId: createdTask.id,
-            timePointId: point.id,
-          });
+          await quickCaptureV2({ parentFolderId: null, title, localDate });
           await reload();
           notifyDataChanged(reload);
         }}

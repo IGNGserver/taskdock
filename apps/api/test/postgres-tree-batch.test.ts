@@ -2,6 +2,7 @@ import type { V2Mutation } from '@devtodo/contracts';
 import { describe, expect, it } from 'vitest';
 import type { PostgresStore } from '../src/postgres-store.js';
 import { PostgresTreeStore } from '../src/postgres-tree-store.js';
+import { MemoryTreeStore } from '../src/tree-store.js';
 
 function mutation(
   mutationId: string,
@@ -38,6 +39,74 @@ function emptyOwnerRow(cursor: string) {
 }
 
 describe('PostgresTreeStore batch push', () => {
+  it('serializes each owner independently without a process-global write barrier', async () => {
+    const store = new MemoryTreeStore();
+    const events: string[] = [];
+    let releaseFirst!: () => void;
+    const gate = new Promise<void>((resolve) => (releaseFirst = resolve));
+    const first = store.withOwnerMutationLock('owner-a', async () => {
+      events.push('a:start');
+      await gate;
+      events.push('a:end');
+    });
+    await Promise.resolve();
+    const sameOwner = store.withOwnerMutationLock('owner-a', async () => {
+      events.push('a:second');
+    });
+    const otherOwner = store.withOwnerMutationLock('owner-b', async () => {
+      events.push('b:start');
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(events).toEqual(['a:start', 'b:start']);
+    releaseFirst();
+    await Promise.all([first, sameOwner, otherOwner]);
+    expect(events).toEqual(['a:start', 'b:start', 'a:end', 'a:second']);
+  });
+
+  it('detaches draft rows and savepoint snapshots from the live projection', () => {
+    const ownerId = '00000000-0000-7000-8000-000000000020';
+    const shared = new MemoryTreeStore();
+    const { task } = shared.createTask(ownerId, { parentFolderId: null, title: 'Committed' });
+    const draft = new MemoryTreeStore();
+    draft.loadOwnerState(ownerId, shared.dumpOwnerState(ownerId));
+    const before = draft.captureDraft(ownerId);
+
+    draft.applyMutationForPersistence(
+      ownerId,
+      mutation(task.id, 'task.update', task.id, 1, { title: 'Uncommitted' }),
+    );
+
+    expect(shared.getTask(ownerId, task.id).title).toBe('Committed');
+    draft.restoreDraft(ownerId, before);
+    expect(draft.getTask(ownerId, task.id).title).toBe('Committed');
+    expect(shared.getTask(ownerId, task.id).title).toBe('Committed');
+
+    const exported = shared.dumpOwnerState(ownerId);
+    (exported.tasks as Array<{ title: string }>)[0]!.title = 'External mutation';
+    expect(shared.getTask(ownerId, task.id).title).toBe('Committed');
+  });
+
+  it('persists and versions every sibling changed by rank rebalancing', () => {
+    const ownerId = '00000000-0000-7000-8000-000000000023';
+    const store = new MemoryTreeStore();
+    const { task } = store.createTask(ownerId, { parentFolderId: null, title: 'Ranked steps' });
+    const steps = ['a', 'b', 'c'].map((title) =>
+      store.createStep(ownerId, task.id, { title, noteMarkdown: '' }),
+    );
+    const state = store.dumpOwnerState(ownerId);
+    (state.steps as Array<{ rank: string }>).forEach((step, index) => {
+      step.rank = String(index + 1);
+    });
+    store.loadOwnerState(ownerId, state);
+
+    store.moveStep(ownerId, steps[2]!.id, steps[1]!.id, null, 1);
+
+    const ordered = store.getTaskDetails(ownerId, task.id).steps;
+    expect(ordered.map((step) => step.title)).toEqual(['a', 'c', 'b']);
+    expect(ordered.map((step) => step.rank)).toEqual(['1024', '2048', '3072']);
+    expect(ordered.map((step) => step.version)).toEqual([2, 2, 2]);
+  });
+
   it('does not expose a mutation to readers before the transaction commits', async () => {
     let gate: (() => void) | undefined;
     const blocked = new Promise<void>((resolve) => (gate = resolve));
@@ -226,6 +295,51 @@ describe('PostgresTreeStore batch push', () => {
     expect(tree.listFolders('owner-1').map((folder) => folder.title)).toEqual(['Delta folder']);
   });
 
+  it('falls back to a full reload when the delta ends before the observed cursor', async () => {
+    let cursor = '0';
+    let fullLoads = 0;
+    const postgres = {
+      v2Query: async (text: string) => {
+        if (text.includes('AS owner_ok'))
+          return { rows: [{ owner_ok: true, cursor }], rowCount: 1 };
+        if (text.includes('AS next_task_number')) {
+          fullLoads += 1;
+          return { rows: [emptyOwnerRow(cursor)], rowCount: 1 };
+        }
+        if (text.includes('FROM sync_changes') && text.includes('LIMIT 201'))
+          return {
+            rows: [
+              {
+                seq: '1',
+                protocol_version: 2,
+                entity_type: 'folder',
+                operation: 'upsert',
+                snapshot: {
+                  id: '00000000-0000-7000-8000-000000000001',
+                  parentFolderId: null,
+                  title: 'Incomplete delta',
+                  status: 'TODO',
+                  rank: '1024',
+                  version: 1,
+                  createdAt: '2026-01-01T00:00:00.000Z',
+                  updatedAt: '2026-01-01T00:00:00.000Z',
+                },
+              },
+            ],
+            rowCount: 1,
+          };
+        return { rows: [], rowCount: 0 };
+      },
+      v2ReadSnapshot: async <T>(fn: () => T | Promise<T>) => fn(),
+    } as unknown as PostgresStore;
+    const tree = new PostgresTreeStore(postgres);
+    await tree.prepare('owner-1');
+    cursor = '2';
+    await tree.prepare('owner-1');
+    expect(fullLoads).toBe(2);
+    expect(tree.listFolders('owner-1')).toEqual([]);
+  });
+
   it('hydrates a cold projection from Redis when the cursor matches', async () => {
     const cache = {
       enabled: true,
@@ -359,9 +473,23 @@ describe('PostgresTreeStore batch push', () => {
       mutation('00000000-0000-7000-8000-000000000012', 'folder.update', folderId, 999, {
         title: 'Conflict',
       }),
+      mutation(
+        '00000000-0000-7000-8000-000000000013',
+        'folder.create',
+        '00000000-0000-7000-8000-000000000002',
+        null,
+        {
+          title: 'After rejected savepoint',
+          parentFolderId: folderId,
+        },
+      ),
     ]);
 
-    expect(results.map((result) => result.status)).toEqual(['applied', 'conflict']);
+    expect(results.map((result) => result.status)).toEqual(['applied', 'conflict', 'applied']);
+    expect(tree.listFolders('owner-1').map((folder) => folder.title)).toEqual([
+      'Batch folder',
+      'After rejected savepoint',
+    ]);
     expect(transactions).toEqual(['begin', 'commit']);
     expect(savepoints).toContain('create:mutation_0');
     expect(savepoints).toContain('release:mutation_0');
@@ -372,5 +500,62 @@ describe('PostgresTreeStore batch push', () => {
         (sql) => sql.includes('INSERT INTO folders') && sql.includes('SELECT x.id, $1,'),
       ),
     ).toBe(true);
+  });
+
+  it('aborts the whole batch for transient persistence failures instead of rejecting the mutation', async () => {
+    const transactions: string[] = [];
+    const savepoints: string[] = [];
+    const postgres = {
+      withMutation: async <T>(fn: () => T | Promise<T>): Promise<T> => {
+        transactions.push('begin');
+        try {
+          const result = await fn();
+          transactions.push('commit');
+          return result;
+        } catch (error) {
+          transactions.push('rollback');
+          throw error;
+        }
+      },
+      withIdempotency: async <T>(
+        _ownerId: string,
+        _clientId: string,
+        _mutationId: string,
+        _input: unknown,
+        action: () => T | Promise<T>,
+      ) => ({ replayed: false, result: await action() }),
+      v2LockOwner: async () => undefined,
+      v2ReadSnapshot: async <T>(fn: () => T | Promise<T>) => fn(),
+      v2Query: async (text: string) => {
+        if (text.includes('AS owner_ok'))
+          return { rows: [{ owner_ok: true, cursor: '0' }], rowCount: 1 };
+        if (text.includes('AS next_task_number'))
+          return { rows: [emptyOwnerRow('0')], rowCount: 1 };
+        return { rows: [], rowCount: 0 };
+      },
+      appendV2Changes: async () => {
+        throw new Error('database unavailable');
+      },
+      createSavepoint: async (name: string) => {
+        savepoints.push(`create:${name}`);
+      },
+      releaseSavepoint: async () => undefined,
+      rollbackToSavepoint: async (name: string) => {
+        savepoints.push(`rollback:${name}`);
+      },
+    } as unknown as PostgresStore;
+    const tree = new PostgresTreeStore(postgres);
+    const folderId = '00000000-0000-7000-8000-000000000001';
+    await expect(
+      tree.applyMutationBatch('owner-1', 'client-1', [
+        mutation('00000000-0000-7000-8000-000000000011', 'folder.create', folderId, null, {
+          title: 'Retry me',
+          parentFolderId: null,
+        }),
+      ]),
+    ).rejects.toThrow('database unavailable');
+    expect(transactions).toEqual(['begin', 'rollback']);
+    expect(savepoints).toEqual(['create:mutation_0', 'rollback:mutation_0']);
+    expect(tree.listFolders('owner-1')).toEqual([]);
   });
 });

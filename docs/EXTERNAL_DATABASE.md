@@ -142,9 +142,15 @@ pg_dump --format=custom --no-owner --no-acl \
   --dbname="postgres://taskdock_migrator:...@db.example.lan:5432/taskdock_home" \
   --file=taskdock_home.dump
 
-pg_restore --no-owner --no-acl \
+pg_restore --exit-on-error --no-owner --no-acl \
   --dbname="postgres://taskdock_migrator:...@db.example.lan:5432/taskdock_home_restore" \
   taskdock_home.dump
+
+# 必须显式覆盖两个变量；否则会继承 .env 并可能迁移生产库。
+RESTORE_DATABASE_URL='postgres://taskdock_migrator:...@db.example.lan:5432/taskdock_home_restore'
+DATABASE_URL="$RESTORE_DATABASE_URL" \
+MIGRATION_DATABASE_URL="$RESTORE_DATABASE_URL" \
+  docker compose -f compose.external-db.yaml run --rm migrate
 ```
 
 恢复后先跑 `migrate`，再启动 `app`，最后用 `/health/ready` 和一次真实登录/同步验证。
@@ -167,7 +173,7 @@ CACHE_REQUIRED=false
 
 规则：
 
-- Redis 故障必须 fail-open：回退到进程内缓存/数据库，`/health/ready` 报告 `cache: degraded` 但仍返回 200。
+- Redis 故障时，若配置了 `CACHE_URL`，认证请求必须 fail-closed；投影缓存等非权威能力可以回退数据库。`/health/ready` 会报告 `cache: degraded`，认证不会退回各副本独立的本地计数。
 - 不要用 Redis 存实体、mutation receipt 或 sync cursor。
 - 多个中枢共享 Redis 时必须给每个中枢不同的 `CACHE_KEY_PREFIX`。
 - 内置 `compose.yaml` 的 Redis 是可选 profile：`docker compose --profile cache up -d`，并设置 `CACHE_URL=redis://redis:6379/0`。

@@ -11,13 +11,19 @@ import type {
   TreeItemDto,
 } from '@devtodo/contracts';
 import { paginateDirectory, uuidSchema, uuidv7 } from '@devtodo/contracts';
-import { isValidIanaTimezone, validateLocalDate } from '@devtodo/domain';
+import {
+  deriveFolderAggregates,
+  isValidIanaTimezone,
+  planSiblingRankMove,
+  validateLocalDate,
+} from '@devtodo/domain';
 import { ApiError } from './api.js';
 import {
   applyLocalStateImage,
   captureLocalStateImage,
   type DevTodoDatabase,
   type LocalFolder,
+  type LocalImageIds,
   type LocalNote,
   type LocalPlacement,
   type LocalTaskStep,
@@ -1000,7 +1006,19 @@ async function applyOfflineV2Write(
     version: number | null,
     commandPayload: Record<string, unknown>,
     write: () => Promise<unknown>,
-  ) => enqueue(context, mutationId, clientId, command, entityId, version, commandPayload, write);
+    additionalImageIds: LocalImageIds = {},
+  ) =>
+    enqueue(
+      context,
+      mutationId,
+      clientId,
+      command,
+      entityId,
+      version,
+      commandPayload,
+      write,
+      additionalImageIds,
+    );
 
   if (method === 'POST' && path === '/folders') {
     const id = typeof body['id'] === 'string' ? body['id'] : uuidv7();
@@ -1089,33 +1107,75 @@ async function applyOfflineV2Write(
     if (targetParent) await folder(targetParent);
     const current = kind === 'FOLDER' ? await folder(id) : await task(id);
     assertBaseVersion(current.version, baseVersion);
-    const nextRankValue = nextRank([
-      ...(await db.folders.toArray())
-        .filter((candidate) => candidate.parentFolderId === targetParent && candidate.id !== id)
-        .map((candidate) => ({ rank: candidate.rank })),
-      ...(await db.tasks.toArray())
-        .map((candidate) => candidate as LocalTreeTask)
-        .filter((candidate) => candidate.parentFolderId === targetParent && candidate.id !== id)
-        .map((candidate) => ({ rank: candidate.rank })),
-    ]);
-    const next = {
-      ...current,
-      parentFolderId: targetParent,
-      rank: nextRankValue,
-      version: current.version + 1,
-      updatedAt: timestamp(),
-      pendingSync: true,
-    };
+    const beforeId =
+      isRecord(body['before']) && typeof body['before']['id'] === 'string'
+        ? body['before']['id']
+        : null;
+    const afterId =
+      isRecord(body['after']) && typeof body['after']['id'] === 'string'
+        ? body['after']['id']
+        : null;
+    const expectedStatus = body['expectedStatus'];
+    if (expectedStatus !== 'TODO' && expectedStatus !== 'IN_PROGRESS' && expectedStatus !== 'DONE')
+      throw new Error('目录状态无效');
+    const folderCandidates = (await db.folders.toArray()).filter(
+      (candidate) =>
+        candidate.parentFolderId === targetParent &&
+        candidate.id !== id &&
+        !candidate.deletedAt &&
+        (candidate.status ?? 'TODO') === expectedStatus,
+    );
+    const taskCandidates = (await db.tasks.toArray())
+      .map((candidate) => candidate as LocalTreeTask)
+      .filter(
+        (candidate) =>
+          candidate.parentFolderId === targetParent &&
+          candidate.id !== id &&
+          !candidate.deletedAt &&
+          candidate.status === expectedStatus,
+      );
+    const ordered = [
+      ...folderCandidates.map((row) => ({ id: row.id, rank: row.rank, kind: 'FOLDER' as const })),
+      ...taskCandidates.map((row) => ({ id: row.id, rank: row.rank, kind: 'TASK' as const })),
+    ].sort(
+      (left, right) =>
+        compareRank(left, right) ||
+        (left.kind === right.kind ? 0 : left.kind === 'FOLDER' ? -1 : 1) ||
+        left.id.localeCompare(right.id),
+    );
+    const moved = { ...current, parentFolderId: targetParent };
+    const plan = planSiblingRankMove(
+      [...ordered, { id: current.id, rank: current.rank }],
+      id,
+      beforeId,
+      afterId,
+    );
+    const allRows: Array<LocalFolder | LocalTreeTask> = [
+      ...folderCandidates,
+      ...taskCandidates,
+      moved,
+    ];
+    const changed = withPlannedRanks(allRows, plan, timestamp());
+    const next = changed.find((row) => row.id === id)!;
+    const kindById = new Map(ordered.map((row) => [row.id, row.kind]));
+    kindById.set(id, kind);
+    const folderIds = changed
+      .filter((row) => kindById.get(row.id) === 'FOLDER')
+      .map((row) => row.id);
+    const taskIds = changed.filter((row) => kindById.get(row.id) === 'TASK').map((row) => row.id);
     return enqueueV2(
       'tree.move',
       id,
       current.version,
       { ...payload, item: { kind, id }, parentFolderId: targetParent },
       async () => {
-        if (kind === 'FOLDER') await db.folders.put(next as LocalFolder);
-        else await db.tasks.put(next as LocalTreeTask);
+        for (const row of changed) {
+          if (kindById.get(row.id) === 'FOLDER') await db.folders.put(row as LocalFolder);
+          else await db.tasks.put(row as LocalTreeTask);
+        }
         return next;
       },
+      { folders: folderIds, tasks: taskIds },
     );
   }
 
@@ -1180,22 +1240,74 @@ async function applyOfflineV2Write(
       pendingSync: true,
     };
     const note: LocalNote = {
-      id: uuidv7(),
+      id: typeof body['noteId'] === 'string' ? body['noteId'] : uuidv7(),
       taskId: id,
       contentMarkdown: '',
       version: 1,
       updatedAt: now,
       pendingSync: true,
     };
+    const localDate =
+      body['localDate'] === undefined ? undefined : requiredString(body['localDate']);
+    if (localDate !== undefined) validateLocalDate(localDate);
+    const existingPoint = localDate
+      ? (await db.timePoints.toArray()).find(
+          (candidate) =>
+            candidate.type === 'DATE' && candidate.localDate === localDate && !candidate.deletedAt,
+        )
+      : undefined;
+    const point = localDate
+      ? (existingPoint ??
+        createLocalTimePoint(
+          typeof body['datePointId'] === 'string' ? body['datePointId'] : uuidv7(),
+          'DATE',
+          localDate,
+          undefined,
+          now,
+        ))
+      : undefined;
+    const placement: LocalPlacement | undefined = point
+      ? {
+          id: typeof body['placementId'] === 'string' ? body['placementId'] : uuidv7(),
+          taskId: id,
+          timePointId: point.id,
+          rank: nextRank(
+            (await db.placements.toArray()).filter(
+              (candidate) => candidate.timePointId === point.id && !candidate.deletedAt,
+            ),
+          ),
+          version: 1,
+          createdAt: now,
+          updatedAt: now,
+          pendingSync: true,
+        }
+      : undefined;
     return enqueueV2(
       'task.create',
       id,
       null,
-      { parentFolderId, title, __localNoteId: note.id },
+      {
+        parentFolderId,
+        title,
+        noteId: note.id,
+        localDate,
+        datePointId: point?.id,
+        placementId: placement?.id,
+        __localNoteId: note.id,
+        __localTimePointId: point?.id,
+        __localPlacementId: placement?.id,
+      },
       async () => {
         await db.tasks.put(created);
         await db.notes.put(note);
-        return { task: created, note };
+        if (point && !existingPoint) await db.timePoints.put({ ...point, pendingSync: true });
+        if (placement) await db.placements.put(placement);
+        return {
+          task: created,
+          note,
+          ...(point ? { point } : {}),
+          ...(placement ? { placement } : {}),
+        };
       },
     );
   }
@@ -1472,22 +1584,24 @@ async function applyOfflineV2Write(
     const siblings = (await db.taskSteps.where('taskId').equals(current.taskId).toArray()).filter(
       (step) => step.id !== current.id && !step.deletedAt,
     );
-    const next: LocalTaskStep = {
-      ...current,
-      rank: rankForMove(siblings, beforeId, afterId),
-      version: current.version + 1,
-      updatedAt: timestamp(),
-      pendingSync: true,
-    };
+    const plan = planSiblingRankMove(
+      [...siblings, current].sort(compareRank),
+      current.id,
+      beforeId,
+      afterId,
+    );
+    const changed = withPlannedRanks([...siblings, current], plan, timestamp());
+    const next = changed.find((step) => step.id === current.id)!;
     return enqueueV2(
       'taskStep.move',
       current.id,
       current.version,
       { beforeId, afterId },
       async () => {
-        await db.taskSteps.put(next);
+        await db.taskSteps.bulkPut(changed);
         return next;
       },
+      { taskSteps: [...plan.keys()] },
     );
   }
   const stepDelete = /^\/task-steps\/([^/]+)$/.exec(path);
@@ -1673,22 +1787,24 @@ async function applyOfflineV2Write(
     const siblings = (
       await db.workflowStages.where('workflowId').equals(current.workflowId).toArray()
     ).filter((stage) => stage.id !== current.id && !stage.deletedAt);
-    const next: LocalWorkflowStage = {
-      ...current,
-      rank: rankForMove(siblings, beforeId, afterId),
-      version: current.version + 1,
-      updatedAt: timestamp(),
-      pendingSync: true,
-    };
+    const plan = planSiblingRankMove(
+      [...siblings, current].sort(compareRank),
+      current.id,
+      beforeId,
+      afterId,
+    );
+    const changed = withPlannedRanks([...siblings, current], plan, timestamp());
+    const next = changed.find((stage) => stage.id === current.id)!;
     return enqueueV2(
       'workflowStage.move',
       current.id,
       current.version,
       { beforeId, afterId },
       async () => {
-        await db.workflowStages.put(next);
+        await db.workflowStages.bulkPut(changed);
         return next;
       },
+      { workflowStages: [...plan.keys()] },
     );
   }
   const stageDelete = /^\/workflow-stages\/([^/]+)$/.exec(path);
@@ -1783,24 +1899,28 @@ async function applyOfflineV2Write(
         : typeof body['afterId'] === 'string'
           ? body['afterId']
           : undefined;
-    const siblings = await db.workflowTaskMemberships.where('stageId').equals(stageId).toArray();
-    const next: LocalWorkflowTaskMembership = {
-      ...current,
-      stageId,
-      rank: rankForMove(siblings, beforeId, afterId),
-      version: current.version + 1,
-      updatedAt: timestamp(),
-      pendingSync: true,
-    };
+    const siblings = (
+      await db.workflowTaskMemberships.where('stageId').equals(stageId).toArray()
+    ).filter((membership) => membership.id !== current.id && !membership.deletedAt);
+    const moved = { ...current, stageId };
+    const plan = planSiblingRankMove(
+      [...siblings, moved].sort(compareRank),
+      current.id,
+      beforeId,
+      afterId,
+    );
+    const changed = withPlannedRanks([...siblings, moved], plan, timestamp());
+    const next = changed.find((membership) => membership.id === current.id)!;
     return enqueueV2(
       'workflowTask.move',
       current.id,
       current.version,
       { stageId, beforeId, afterId },
       async () => {
-        await db.workflowTaskMemberships.put(next);
+        await db.workflowTaskMemberships.bulkPut(changed);
         return next;
       },
+      { workflowTaskMemberships: [...plan.keys()] },
     );
   }
   const membershipDelete = /^\/workflow-memberships\/([^/]+)$/.exec(path);
@@ -1973,9 +2093,16 @@ async function applyOfflineV2Write(
     const current = await db.placements.get(placementDelete[1]!);
     if (!current) throw new Error('本地安排不存在');
     assertBaseVersion(current.version, baseVersion);
+    const next = {
+      ...current,
+      deletedAt: timestamp(),
+      version: current.version + 1,
+      updatedAt: timestamp(),
+      pendingSync: true,
+    };
     return enqueueV2('placement.remove', current.id, current.version, {}, async () => {
-      await db.placements.delete(current.id);
-      return current;
+      await db.placements.put(next);
+      return next;
     });
   }
   const placementAction = /^\/placements\/([^/]+)\/(move|copy)$/.exec(path);
@@ -2091,6 +2218,7 @@ async function enqueue(
   baseVersion: number | null,
   payload: Record<string, unknown>,
   write: () => Promise<unknown>,
+  additionalImageIds: LocalImageIds = {},
 ): Promise<OfflineResult> {
   const item: OutboxItem = {
     mutationId,
@@ -2105,7 +2233,13 @@ async function enqueue(
   };
   const value = await context.db.transaction('rw', entityTables(context.db), async () => {
     if (activeContext !== context) throw new DOMException('会话已变化', 'AbortError');
-    const beforeImage = await captureLocalStateImage(context.db, command, entityId, payload);
+    const beforeImage = await captureLocalStateImage(
+      context.db,
+      command,
+      entityId,
+      payload,
+      additionalImageIds,
+    );
     if (command === 'task.update' || command === 'note.update') {
       const table = command === 'task.update' ? 'tasks' : 'notes';
       const row = beforeImage.rows.find((candidate) => candidate.table === table);
@@ -2113,7 +2247,13 @@ async function enqueue(
         throw new ApiError('VERSION_CONFLICT', '本地数据已变化，请重新打开后编辑', null, 409);
     }
     const result = await write();
-    const afterImage = await captureLocalStateImage(context.db, command, entityId, payload);
+    const afterImage = await captureLocalStateImage(
+      context.db,
+      command,
+      entityId,
+      payload,
+      additionalImageIds,
+    );
     item.beforeImage = beforeImage;
     item.afterImage = afterImage;
     await context.db.outbox.add(item);
@@ -2572,82 +2712,45 @@ async function readV2LocalInTransaction(
   pathname: string,
   params: URLSearchParams,
 ): Promise<unknown> {
+  if (pathname === '/settings') return db.settings.toCollection().first();
   const folders = (await db.folders.toArray()) as LocalFolder[];
   const tasks = (await db.tasks.toArray())
     .map((row) => row as LocalTreeTask)
     .filter((row) => row.parentFolderId !== undefined);
   const visibleFolder = (folder: LocalFolder) => !folder.deletedAt;
   const visibleTask = (task: LocalTreeTask) => !task.deletedAt;
-  const descendantFolders = (rootId: string): Set<string> => {
-    const ids = new Set<string>();
-    const stack = [rootId];
-    while (stack.length) {
-      const current = stack.pop()!;
-      if (ids.has(current)) continue;
-      ids.add(current);
-      folders
-        .filter((folder) => folder.parentFolderId === current)
-        .forEach((folder) => stack.push(folder.id));
-    }
-    return ids;
-  };
-  const aggregate = (folderId: string) => {
-    const ids = descendantFolders(folderId);
-    const counts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
-    for (const task of tasks)
-      if (task.parentFolderId && ids.has(task.parentFolderId) && !task.deletedAt) {
-        let parent: string | null = task.parentFolderId;
-        let valid = true;
-        const seen = new Set<string>();
-        while (parent) {
-          if (seen.has(parent)) {
-            valid = false;
-            break;
-          }
-          seen.add(parent);
-          const ancestor = folders.find((candidate) => candidate.id === parent);
-          if (!ancestor || ancestor.deletedAt) {
-            valid = false;
-            break;
-          }
-          parent = ancestor.parentFolderId;
-        }
-        if (valid) counts[task.status] += 1;
-      }
-    const folderRow = folders.find((candidate) => candidate.id === folderId);
-    const totalCount = counts.TODO + counts.IN_PROGRESS + counts.DONE;
-    return {
-      status: folderRow?.status ?? 'TODO',
-      todoCount: counts.TODO,
-      inProgressCount: counts.IN_PROGRESS,
-      doneCount: counts.DONE,
-      totalCount,
-    };
-  };
-  if (pathname === '/settings') return db.settings.toCollection().first();
+  const folderById = new Map(folders.map((folder) => [folder.id, folder]));
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
   if (pathname === '/folders')
     return { items: sortByRank(folders.filter(visibleFolder)), nextCursor: null };
   const folderPath = /^\/folders\/([^/]+)\/path$/.exec(pathname);
   if (folderPath) {
     const pathItems: Array<{ id: string; title: string }> = [];
-    let current = folders.find((folder) => folder.id === folderPath[1]);
+    let current = folderById.get(folderPath[1]!);
     const seen = new Set<string>();
     while (current && !seen.has(current.id)) {
       seen.add(current.id);
       pathItems.unshift({ id: current.id, title: current.title });
-      current = current.parentFolderId
-        ? folders.find((folder) => folder.id === current!.parentFolderId)
-        : undefined;
+      current = current.parentFolderId ? folderById.get(current!.parentFolderId) : undefined;
     }
     return { items: pathItems };
   }
   if (pathname === '/tree/children') {
     const parentFolderId =
       params.get('parentFolderId') === 'root' ? null : params.get('parentFolderId');
+    const activeFolders = folders.filter(visibleFolder);
+    const childFolders = activeFolders.filter((folder) => folder.parentFolderId === parentFolderId);
+    const aggregates = deriveFolderAggregates(
+      childFolders.map((folder) => folder.id),
+      activeFolders,
+      tasks,
+    );
     const items = [
-      ...folders
-        .filter((folder) => visibleFolder(folder) && folder.parentFolderId === parentFolderId)
-        .map((folder) => ({ kind: 'FOLDER' as const, folder, aggregate: aggregate(folder.id) })),
+      ...childFolders.map((folder) => ({
+        kind: 'FOLDER' as const,
+        folder,
+        aggregate: aggregates.get(folder.id)!,
+      })),
       ...tasks
         .filter((task) => visibleTask(task) && task.parentFolderId === parentFolderId)
         .map((task) => ({ kind: 'TASK' as const, task })),
@@ -2703,24 +2806,20 @@ async function readV2LocalInTransaction(
     return { items: sortByRank(tasks.filter(visibleTask)), nextCursor: null };
   const taskDetail = /^\/tasks\/([^/]+)$/.exec(pathname);
   if (taskDetail) {
-    const task = tasks.find((candidate) => candidate.id === taskDetail[1]);
+    const task = taskById.get(taskDetail[1]!);
     if (!task) return undefined;
     const note = await db.notes.where('taskId').equals(task.id).first();
-    const placements = (await db.placements.toArray()).filter(
-      (placement) => placement.taskId === task.id,
-    );
+    const placements = await db.placements.where('taskId').equals(task.id).toArray();
     const steps = sortByRank(
-      (await db.taskSteps.toArray()).filter((step) => step.taskId === task.id && !step.deletedAt),
+      (await db.taskSteps.where('taskId').equals(task.id).toArray()).filter(
+        (step) => !step.deletedAt,
+      ),
     );
     const folderItems: Array<{ id: string; title: string }> = [];
-    let current = task.parentFolderId
-      ? folders.find((folder) => folder.id === task.parentFolderId)
-      : undefined;
+    let current = task.parentFolderId ? folderById.get(task.parentFolderId) : undefined;
     while (current) {
       folderItems.unshift({ id: current.id, title: current.title });
-      current = current.parentFolderId
-        ? folders.find((folder) => folder.id === current!.parentFolderId)
-        : undefined;
+      current = current.parentFolderId ? folderById.get(current!.parentFolderId) : undefined;
     }
     const workflowRows = await db.workflows.toArray();
     const stageRows = await db.workflowStages.toArray();
@@ -2775,24 +2874,26 @@ async function readV2LocalInTransaction(
         (!params.get('to') || (point.localDate ?? '') <= params.get('to')!),
     );
     const taskMap = new Map(tasks.filter(visibleTask).map((task) => [task.id, task]));
-    const allPlacements = await db.placements.toArray();
+    const pointIds = new Set(points.map((point) => point.id));
+    const counts = new Map<string, { total: number; done: number }>();
+    for (const placement of await db.placements.toArray()) {
+      if (placement.deletedAt || !pointIds.has(placement.timePointId)) continue;
+      const task = taskMap.get(placement.taskId);
+      if (!task) continue;
+      const count = counts.get(placement.timePointId) ?? { total: 0, done: 0 };
+      count.total += 1;
+      if (task.status === 'DONE') count.done += 1;
+      counts.set(placement.timePointId, count);
+    }
     return {
       items: points.map((point) => {
-        const pointPlacements = allPlacements.filter(
-          (placement) =>
-            placement.timePointId === point.id &&
-            !placement.deletedAt &&
-            taskMap.has(placement.taskId),
-        );
-        const doneCount = pointPlacements.filter(
-          (placement) => taskMap.get(placement.taskId)?.status === 'DONE',
-        ).length;
+        const count = counts.get(point.id) ?? { total: 0, done: 0 };
         return {
           timePointId: point.id,
           localDate: point.localDate,
-          totalCount: pointPlacements.length,
-          openCount: pointPlacements.length - doneCount,
-          doneCount,
+          totalCount: count.total,
+          openCount: count.total - count.done,
+          doneCount: count.done,
         };
       }),
     };
@@ -2831,26 +2932,34 @@ async function readV2LocalInTransaction(
       (membership) => !membership.deletedAt,
     );
     const taskMap = new Map(tasks.filter(visibleTask).map((task) => [task.id, task]));
+    const stagesByWorkflow = new Map<string, typeof stages>();
+    for (const stage of stages) {
+      const group = stagesByWorkflow.get(stage.workflowId);
+      if (group) group.push(stage);
+      else stagesByWorkflow.set(stage.workflowId, [stage]);
+    }
+    const membershipsByStage = new Map<string, typeof memberships>();
+    for (const membership of memberships) {
+      const group = membershipsByStage.get(membership.stageId);
+      if (group) group.push(membership);
+      else membershipsByStage.set(membership.stageId, [membership]);
+    }
     return {
       items: sortByRank(workflows).map((workflow) => ({
         ...workflow,
-        stages: sortByRank(stages.filter((stage) => stage.workflowId === workflow.id)).map(
-          (stage) => {
-            const stageMemberships = sortByRank(
-              memberships.filter((membership) => membership.stageId === stage.id),
-            );
-            const stageTasks = stageMemberships.flatMap((membership) => {
-              const task = taskMap.get(membership.taskId);
-              return task ? [task] : [];
-            });
-            return {
-              ...stage,
-              memberships: stageMemberships,
-              hiddenTaskCount: stageMemberships.length - stageTasks.length,
-              tasks: stageTasks,
-            };
-          },
-        ),
+        stages: sortByRank(stagesByWorkflow.get(workflow.id) ?? []).map((stage) => {
+          const stageMemberships = sortByRank(membershipsByStage.get(stage.id) ?? []);
+          const stageTasks = stageMemberships.flatMap((membership) => {
+            const task = taskMap.get(membership.taskId);
+            return task ? [task] : [];
+          });
+          return {
+            ...stage,
+            memberships: stageMemberships,
+            hiddenTaskCount: stageMemberships.length - stageTasks.length,
+            tasks: stageTasks,
+          };
+        }),
       })),
     };
   }
@@ -3112,32 +3221,28 @@ function compareRank(left: { rank: string }, right: { rank: string }): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-function rankForMove(
-  siblings: Array<{ rank: string }>,
-  beforeId: string | null | undefined,
-  afterId: string | null | undefined,
-): string {
-  const ordered = [...siblings].sort(compareRank);
-  const before = beforeId
-    ? ordered.find((row) => (row as { id?: string }).id === beforeId)
-    : undefined;
-  const after = afterId
-    ? ordered.find((row) => (row as { id?: string }).id === afterId)
-    : undefined;
-  const anchor = before ?? after;
-  if (anchor) {
-    const index = ordered.indexOf(anchor);
-    const anchorRank = BigInt(anchor.rank);
-    const lower = before
-      ? BigInt(ordered[index - 1]?.rank ?? (anchorRank - 1024n).toString())
-      : anchorRank;
-    const upper = before
-      ? anchorRank
-      : BigInt(ordered[index + 1]?.rank ?? (anchorRank + 1024n).toString());
-    if (upper > lower + 1n) return ((lower + upper) / 2n).toString();
-    return (before ? upper - 1n : upper + 1n).toString();
-  }
-  return nextRank(ordered);
+function withPlannedRanks<
+  T extends {
+    id: string;
+    rank: string;
+    version: number;
+    updatedAt: string;
+    pendingSync?: boolean;
+  },
+>(rows: readonly T[], plan: ReadonlyMap<string, string>, updatedAt: string): T[] {
+  return rows.flatMap((row) => {
+    const rank = plan.get(row.id);
+    if (rank === undefined) return [];
+    return [
+      {
+        ...row,
+        rank,
+        version: row.version + 1,
+        updatedAt,
+        pendingSync: true,
+      },
+    ];
+  });
 }
 
 function timePointSort(left: TimePointDto, right: TimePointDto): number {

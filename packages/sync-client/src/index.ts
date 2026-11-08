@@ -1430,7 +1430,7 @@ export class V2SyncEngine {
           command: item.command,
           entityType: entityTypeForV2Command(item.command, item.payload),
           entityId: item.entityId,
-          local: item.afterImage ?? item.payload,
+          local: item.payload,
           server: result.error?.details ?? null,
           createdAt: new Date().toISOString(),
         });
@@ -1467,8 +1467,7 @@ export class V2SyncEngine {
   async discardRejectedMutation(mutationId: string): Promise<void> {
     const item = await this.db.outbox.where('mutationId').equals(mutationId).first();
     if (!item?.id) return;
-    if (item.beforeImage) await applyLocalStateImage(this.db, item.beforeImage);
-    await this.db.outbox.delete(item.id);
+    await this.discardWithAuthoritativeSnapshot(item, false);
   }
 
   async resolveConflict(
@@ -1482,13 +1481,10 @@ export class V2SyncEngine {
     if (!item?.id) throw new Error('冲突缺少可重试的 mutation');
     const server = conflictServerSnapshot(conflict.server);
     if (strategy === 'server' || strategy === 'discard') {
-      if (strategy === 'server' && server) {
-        const table = v2EntityTable(this.db, conflict.entityType);
-        if (table) await table.put(server as never);
-      } else if (strategy === 'discard' && item.beforeImage)
-        await applyLocalStateImage(this.db, item.beforeImage);
-      await this.db.outbox.delete(item.id);
-      await this.db.conflicts.update(conflictId, { resolvedAt: new Date().toISOString() });
+      // A before-image can pre-date changes already covered by the local pull
+      // cursor. Always start from a fresh authoritative snapshot, then replay
+      // only mutations that were not discarded.
+      await this.discardWithAuthoritativeSnapshot(item, !server);
       return;
     }
     if (!server || typeof server['version'] !== 'number') throw new Error('服务端冲突版本无效');
@@ -1496,20 +1492,117 @@ export class V2SyncEngine {
       strategy === 'merged'
         ? mergedConflictPayload(item, merged)
         : withoutBaseVersion(item.payload);
-    const next: OutboxItem = {
-      ...item,
-      id: undefined,
-      mutationId: uuidv7(),
-      baseVersion: Number(server['version']),
-      occurredAt: new Date().toISOString(),
-      payload: nextPayload,
-      attempts: 0,
-      nextAttemptAt: Date.now(),
-      lastError: undefined,
-    };
-    await this.db.outbox.delete(item.id);
-    await this.db.outbox.add(next);
-    await this.db.conflicts.update(conflictId, { resolvedAt: new Date().toISOString() });
+    await this.db.transaction(
+      'rw',
+      [
+        this.db.projects,
+        this.db.folders,
+        this.db.tasks,
+        this.db.notes,
+        this.db.taskSteps,
+        this.db.timePoints,
+        this.db.placements,
+        this.db.workflows,
+        this.db.workflowStages,
+        this.db.workflowTaskMemberships,
+        this.db.settings,
+        this.db.outbox,
+        this.db.conflicts,
+        this.db.syncMeta,
+      ],
+      async () => {
+        const table = v2EntityTable(this.db, conflict.entityType);
+        if (!table) throw new Error(`未知同步实体: ${conflict.entityType}`);
+        await table.put(server as never);
+        const beforeImage = await captureLocalStateImage(
+          this.db,
+          item.command,
+          item.entityId,
+          item.payload,
+        );
+        if (isMergeableConflictCommand(item.command))
+          await applyMergedOptimisticValue(this.db, item, server, nextPayload);
+        else if (item.afterImage) await applyLocalStateImage(this.db, item.afterImage);
+        else throw new Error('本地冲突缺少可恢复的 after-image');
+        const afterImage = await captureLocalStateImage(
+          this.db,
+          item.command,
+          item.entityId,
+          nextPayload,
+        );
+        const next: OutboxItem = {
+          ...item,
+          id: undefined,
+          mutationId: uuidv7(),
+          baseVersion: Number(server['version']),
+          occurredAt: new Date().toISOString(),
+          payload: nextPayload,
+          attempts: 0,
+          nextAttemptAt: Date.now(),
+          lastError: undefined,
+          beforeImage,
+          afterImage,
+        };
+        // The replacement is intentionally inside the same Dexie transaction:
+        // a crash cannot delete the old intent before the new one is durable.
+        await this.db.outbox.delete(item.id!);
+        await this.db.outbox.add(next);
+        await this.db.conflicts.update(conflictId, { resolvedAt: new Date().toISOString() });
+      },
+    );
+  }
+
+  private async discardWithAuthoritativeSnapshot(
+    item: OutboxItem,
+    includeEntityDependents: boolean,
+  ): Promise<void> {
+    const all = await this.db.outbox.orderBy('id').toArray();
+    const discarded = conflictMutationClosure(item, all, includeEntityDependents);
+    const discardedIds = new Set(discarded.map((candidate) => candidate.mutationId));
+    const remaining = all.filter((candidate) => !discardedIds.has(candidate.mutationId));
+    let snapshot: V2SnapshotResult;
+    try {
+      snapshot = await this.transport.snapshot();
+    } catch (error) {
+      throw new Error('无法取得服务端权威快照；本地改动和待同步记录均未丢弃', {
+        cause: error,
+      });
+    }
+    await this.db.transaction(
+      'rw',
+      [
+        this.db.projects,
+        this.db.folders,
+        this.db.tasks,
+        this.db.notes,
+        this.db.taskSteps,
+        this.db.timePoints,
+        this.db.placements,
+        this.db.workflows,
+        this.db.workflowStages,
+        this.db.workflowTaskMemberships,
+        this.db.settings,
+        this.db.outbox,
+        this.db.conflicts,
+        this.db.deferredChanges,
+        this.db.syncMeta,
+      ],
+      async () => {
+        await replaceV2Snapshot(this.db, snapshot);
+        await this.db.outbox.clear();
+        for (const pending of remaining) {
+          await this.db.outbox.put(pending);
+          if (pending.afterImage) await applyLocalStateImage(this.db, pending.afterImage);
+        }
+        const now = new Date().toISOString();
+        const conflicts = await this.db.conflicts.toArray();
+        for (const conflict of conflicts) {
+          if (discardedIds.has(conflict.mutationId) && conflict.id !== undefined)
+            await this.db.conflicts.update(conflict.id, { resolvedAt: now });
+        }
+      },
+    );
+    this.dataChanged();
   }
 
   async applySnapshot(snapshot: V2SnapshotResult): Promise<void> {
@@ -1757,13 +1850,24 @@ export class V2SyncEngine {
   }
 }
 
+export type LocalImageIds = Partial<Record<LocalImageTable, readonly string[]>>;
+
 export async function captureLocalStateImage(
   db: DevTodoDatabase,
   command: string,
   entityId: string,
   payload: Record<string, unknown>,
+  additionalIds: LocalImageIds = {},
 ): Promise<LocalStateImage> {
   const keys = await mutationImageKeys(db, command, entityId, payload);
+  const seen = new Set(keys.map((key) => `${key.table}:${key.id}`));
+  for (const table of Object.keys(additionalIds) as LocalImageTable[]) {
+    for (const id of additionalIds[table] ?? []) {
+      if (!id || seen.has(`${table}:${id}`)) continue;
+      seen.add(`${table}:${id}`);
+      keys.push({ table, id });
+    }
+  }
   const rows: LocalImageRow[] = [];
   for (const key of keys) {
     const table = imageTable(db, key.table);
@@ -1838,13 +1942,27 @@ async function mutationImageKeys(
           .filter((folder) => folderIds.has(folder.id))
           .forEach((folder) => add('folders', folder.id));
         const tasks = await db.tasks.toArray();
-        for (const task of tasks.filter((candidate) => {
-          const treeTask = candidate as LocalTreeTask;
-          return treeTask.parentFolderId && folderIds.has(treeTask.parentFolderId);
-        })) {
-          add('tasks', task.id);
-          const notes = await db.notes.where('taskId').equals(task.id).toArray();
+        const taskIds = new Set(
+          tasks
+            .filter((candidate) => {
+              const treeTask = candidate as LocalTreeTask;
+              return treeTask.parentFolderId && folderIds.has(treeTask.parentFolderId);
+            })
+            .map((task) => task.id),
+        );
+        taskIds.forEach((id) => add('tasks', id));
+        if (taskIds.size) {
+          const ids = [...taskIds];
+          const [notes, steps, placements, memberships] = await Promise.all([
+            db.notes.where('taskId').anyOf(ids).toArray(),
+            db.taskSteps.where('taskId').anyOf(ids).toArray(),
+            db.placements.where('taskId').anyOf(ids).toArray(),
+            db.workflowTaskMemberships.where('taskId').anyOf(ids).toArray(),
+          ]);
           notes.forEach((note) => add('notes', note.id));
+          steps.forEach((step) => add('taskSteps', step.id));
+          placements.forEach((placement) => add('placements', placement.id));
+          memberships.forEach((membership) => add('workflowTaskMemberships', membership.id));
         }
       }
     }
@@ -1858,16 +1976,35 @@ async function mutationImageKeys(
     add('taskSteps', payload['__localId']);
   } else if (command.startsWith('workflowStage.')) {
     add('workflowStages', entityId);
+    if (command === 'workflowStage.delete') {
+      const memberships = await db.workflowTaskMemberships
+        .where('stageId')
+        .equals(entityId)
+        .toArray();
+      memberships.forEach((membership) => add('workflowTaskMemberships', membership.id));
+    }
   } else if (command.startsWith('workflowTask.')) {
     add('workflowTaskMemberships', entityId);
   } else if (command.startsWith('workflow.')) {
     add('workflows', entityId);
     if (command === 'workflow.create') add('workflowStages', payload['defaultStageId']);
+    if (command === 'workflow.delete') {
+      const [stages, memberships] = await Promise.all([
+        db.workflowStages.where('workflowId').equals(entityId).toArray(),
+        db.workflowTaskMemberships.where('workflowId').equals(entityId).toArray(),
+      ]);
+      stages.forEach((stage) => add('workflowStages', stage.id));
+      memberships.forEach((membership) => add('workflowTaskMemberships', membership.id));
+    }
   } else if (command.startsWith('task.')) {
     if (command === 'task.reorder') addIds('tasks');
     else add('tasks', entityId);
     add('tasks', payload['__localTaskId']);
     add('notes', payload['__localNoteId']);
+    if (command === 'task.create') {
+      add('timePoints', payload['__localTimePointId']);
+      add('placements', payload['__localPlacementId']);
+    }
     if (command === 'task.delete') {
       const notes = await db.notes.where('taskId').equals(entityId).toArray();
       notes.forEach((note) => add('notes', note.id));
@@ -1889,6 +2026,10 @@ async function mutationImageKeys(
   } else if (command.startsWith('timePoint.')) {
     if (command === 'timePoint.reorder') addIds('timePoints');
     else add('timePoints', entityId);
+    if (command === 'timePoint.delete') {
+      const placements = await db.placements.where('timePointId').equals(entityId).toArray();
+      placements.forEach((placement) => add('placements', placement.id));
+    }
   } else if (command.startsWith('placement.')) {
     if (command === 'placement.reorder') addIds('placements');
     else {
@@ -1990,7 +2131,18 @@ function mergedConflictPayload(item: OutboxItem, merged: unknown): Record<string
     return { contentMarkdown: merged };
   }
   if (!isRecord(merged)) throw new Error('合并后的实体内容无效');
-  return { ...merged };
+  const editableFields: Record<string, readonly string[]> = {
+    'project.update': ['name', 'taskPrefix'],
+    'folder.update': ['title', 'status'],
+    'task.update': ['title', 'projectId', 'category', 'status', 'priority', 'rank'],
+    'timePoint.update': ['title'],
+    'settings.update': ['timezone', 'weekStartsOn', 'defaultCaptureTarget'],
+  };
+  const allowed = editableFields[item.command];
+  if (!allowed) throw new Error('当前冲突类型不支持合并编辑');
+  const payload = withoutBaseVersion(item.payload);
+  for (const field of allowed) if (field in merged) payload[field] = merged[field];
+  return payload;
 }
 
 async function applyMergedOptimisticValue(
@@ -2203,6 +2355,36 @@ function earliestBeforeImage(items: OutboxItem[]): LocalStateImage | null {
     }
   }
   return rows.size ? { rows: [...rows.values()] } : null;
+}
+
+async function replaceV2Snapshot(db: DevTodoDatabase, snapshot: V2SnapshotResult): Promise<void> {
+  await Promise.all([
+    db.projects.clear(),
+    db.folders.clear(),
+    db.tasks.clear(),
+    db.notes.clear(),
+    db.taskSteps.clear(),
+    db.timePoints.clear(),
+    db.placements.clear(),
+    db.workflows.clear(),
+    db.workflowStages.clear(),
+    db.workflowTaskMemberships.clear(),
+    db.settings.clear(),
+    db.deferredChanges.clear(),
+  ]);
+  await db.folders.bulkPut(snapshot.folders);
+  await db.tasks.bulkPut(snapshot.tasks);
+  await db.notes.bulkPut(snapshot.notes);
+  await db.taskSteps.bulkPut(snapshot.taskSteps);
+  await db.timePoints.bulkPut(snapshot.timePoints);
+  await db.placements.bulkPut(snapshot.placements);
+  await db.workflows.bulkPut(snapshot.workflows);
+  await db.workflowStages.bulkPut(snapshot.workflowStages);
+  await db.workflowTaskMemberships.bulkPut(snapshot.workflowTaskMemberships);
+  await db.settings.put(snapshot.settings);
+  await db.syncMeta.put({ key: 'v2:cursor', value: snapshot.cursor });
+  const pageKeys = await db.syncMeta.where('key').startsWith('v2:seen:').primaryKeys();
+  await db.syncMeta.bulkDelete(['v2:bootstrap', ...pageKeys]);
 }
 
 async function replaceWithSnapshot(db: DevTodoDatabase, snapshot: SnapshotResult): Promise<void> {

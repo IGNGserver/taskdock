@@ -3,6 +3,7 @@ import { DomainError } from '@devtodo/domain';
 import { z } from 'zod';
 import { AuthService } from './auth.js';
 import { PostgresStore } from './postgres-store.js';
+import { assertProductionSecrets } from './runtime-secrets.js';
 
 const requiredEnv = (name: string): string => {
   const value = process.env[name]?.trim();
@@ -19,6 +20,20 @@ async function main(): Promise<void> {
     .parse({ username, password });
   const accessTokenSecret = requiredEnv('ACCESS_TOKEN_SECRET');
   const refreshTokenPepper = requiredEnv('REFRESH_TOKEN_PEPPER');
+  if (process.env['NODE_ENV'] === 'production') {
+    assertProductionSecrets({
+      BOOTSTRAP_TOKEN: bootstrapToken,
+      OWNER_PASSWORD: password,
+      ACCESS_TOKEN_SECRET: accessTokenSecret,
+      REFRESH_TOKEN_PEPPER: refreshTokenPepper,
+    });
+    if (
+      bootstrapToken.length < 32 ||
+      accessTokenSecret.length < 32 ||
+      refreshTokenPepper.length < 32
+    )
+      throw new Error('production token secrets must contain at least 32 characters');
+  }
   const { pool } = createPoolFromEnv(process.env);
   const store = new PostgresStore(pool);
   try {

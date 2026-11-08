@@ -5,10 +5,11 @@ import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { createPool, type Pool } from '../packages/database/src/index.js';
+import { isolatedTestDatabaseUrl } from './test-database-safety.js';
 
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
-const databaseUrl = process.env['DATABASE_URL'];
+const databaseUrl = isolatedTestDatabaseUrl();
 const pgCtl = process.env['PG_CTL'];
 const pgData = process.env['PGDATA'] ?? process.env['PG_DATA'];
 const apiEntry = join(root, 'apps', 'api', 'dist', 'main.js');
@@ -252,7 +253,9 @@ async function cleanupOwner(pool: Pool, ownerId: string): Promise<void> {
 
 async function main(): Promise<void> {
   if (!databaseUrl) {
-    console.log('NOT RUN: DATABASE_URL is required for real PostgreSQL runtime smoke.');
+    console.log(
+      'NOT RUN: TASKDOCK_TEST_DATABASE_URL is required for real PostgreSQL runtime smoke.',
+    );
     process.exitCode = 2;
     return;
   }

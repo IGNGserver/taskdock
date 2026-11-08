@@ -22,6 +22,11 @@ RUN corepack enable
 COPY --from=build /workspace/package.json /workspace/pnpm-lock.yaml /workspace/pnpm-workspace.yaml /workspace/.npmrc ./
 COPY --from=build /workspace/apps ./apps
 COPY --from=build /workspace/packages ./packages
-RUN pnpm install --prod --frozen-lockfile
+RUN pnpm install --prod --frozen-lockfile && pnpm store prune
+# The application only needs a writable temporary directory; never run the hub
+# as root in the deployment image.
+RUN chown -R node:node /app
+USER node
+STOPSIGNAL SIGTERM
 EXPOSE 3000
 CMD ["node", "apps/api/dist/main.js"]

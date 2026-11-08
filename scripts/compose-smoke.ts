@@ -7,6 +7,8 @@ import { execFileSync, spawnSync } from 'node:child_process';
 const root = process.cwd();
 const composeFile = join(root, 'compose.dev.yaml');
 const project = `devtodo-smoke-${process.pid}`;
+const restoreContainer = `${project}-restore`;
+const restoreVolume = `${project}-restore-data`;
 const baseUrl = 'http://127.0.0.1:3000';
 const bootstrapToken = 'dev-only-bootstrap-token-change-before-use';
 const password = 'compose-smoke-password-change-me';
@@ -31,6 +33,15 @@ function compose(
       timeout: 10 * 60_000,
     },
   ) as Buffer | void;
+}
+
+function docker(args: string[], options: { capture?: boolean } = {}): Buffer | void {
+  return execFileSync('docker', args, {
+    cwd: root,
+    encoding: options.capture ? 'buffer' : undefined,
+    stdio: options.capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',
+    timeout: 120_000,
+  }) as Buffer | void;
 }
 
 function curl(
@@ -93,9 +104,51 @@ async function main(): Promise<void> {
   let backupDir: string | undefined;
   try {
     compose(['build']);
-    compose(['up', '--detach', 'postgres', 'migrate', 'app']);
+    compose(['up', '--detach', 'postgres', 'migrate', 'app', 'gateway']);
     await waitForHealth('/health/live');
     await waitForHealth('/health/ready');
+
+    backupDir = await mkdtemp(join(tmpdir(), 'devtodo-compose-smoke-'));
+    execFileSync(
+      'curl',
+      [
+        '--fail',
+        '--silent',
+        '--show-error',
+        '--insecure',
+        '--retry',
+        '20',
+        '--retry-all-errors',
+        '--retry-connrefused',
+        '--retry-delay',
+        '1',
+        'https://localhost:18443/health/ready',
+      ],
+      { cwd: root, stdio: 'ignore', timeout: 60_000 },
+    );
+    const certificate = compose(
+      ['exec', '--no-TTY', 'gateway', 'cat', '/data/caddy/pki/authorities/local/root.crt'],
+      { capture: true },
+    ) as Buffer;
+    const certificatePath = join(backupDir, 'caddy-root.crt');
+    await writeFile(certificatePath, certificate, { mode: 0o600 });
+    const tlsHeaders = execFileSync(
+      'curl',
+      [
+        '--fail-with-body',
+        '--silent',
+        '--show-error',
+        '--cacert',
+        certificatePath,
+        '--head',
+        'https://localhost:18443/health/ready',
+      ],
+      { cwd: root, encoding: 'utf8', timeout: 30_000 },
+    );
+    assert(
+      /strict-transport-security:\s*max-age=31536000/i.test(tlsHeaders),
+      'trusted TLS gateway did not emit HSTS',
+    );
 
     const before = JSON.parse(curl('/api/v1/bootstrap/status')) as { initialized?: unknown };
     assert(before.initialized === false, 'fresh Compose volume was already initialized');
@@ -178,7 +231,6 @@ async function main(): Promise<void> {
       'v2 task did not survive PostgreSQL restart',
     );
 
-    backupDir = await mkdtemp(join(tmpdir(), 'devtodo-compose-smoke-'));
     const backup = compose(
       [
         'exec',
@@ -200,38 +252,75 @@ async function main(): Promise<void> {
     await writeFile(backupPath, backup, { mode: 0o600 });
     console.log(`BACKUP: ${backupPath} ${createHash('sha256').update(backup).digest('hex')}`);
 
-    compose(
+    docker([
+      'run',
+      '--detach',
+      '--name',
+      restoreContainer,
+      '--network',
+      'none',
+      '--env',
+      'POSTGRES_DB=devtodo',
+      '--env',
+      'POSTGRES_USER=devtodo',
+      '--env',
+      'POSTGRES_PASSWORD=devtodo-restore-smoke-only',
+      '--volume',
+      `${restoreVolume}:/var/lib/postgresql`,
+      '--volume',
+      `${backupDir}:/backup:ro`,
+      'postgres:18.6-alpine3.24@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2',
+    ]);
+    let restored = false;
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      if (
+        spawnSync(
+          'docker',
+          ['exec', restoreContainer, 'pg_isready', '-U', 'devtodo', '-d', 'devtodo'],
+          { stdio: 'ignore', timeout: 5_000 },
+        ).status === 0
+      ) {
+        restored = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
+    assert(restored, 'fresh-volume PostgreSQL restore instance did not become ready');
+    docker([
+      'exec',
+      restoreContainer,
+      'pg_restore',
+      '--no-owner',
+      '--no-acl',
+      '-U',
+      'devtodo',
+      '--dbname=devtodo',
+      '/backup/devtodo-smoke.dump',
+    ]);
+    const restoredContent = docker(
       [
         'exec',
-        '--no-TTY',
-        'postgres',
-        'pg_restore',
-        '--clean',
-        '--if-exists',
-        '--no-owner',
+        restoreContainer,
+        'psql',
         '-U',
         'devtodo',
-        '--dbname=devtodo',
+        '-d',
+        'devtodo',
+        '-t',
+        '-A',
+        '-c',
+        `SELECT (SELECT count(*) FROM folders WHERE id='${folderId}' AND title='Compose smoke') + (SELECT count(*) FROM tasks WHERE id='${taskId}' AND title='Compose task')`,
       ],
-      { input: backup },
-    );
-    await waitForHealth('/health/ready');
-    const afterRestore = JSON.parse(
-      curl('/api/v2/sync/snapshot', { token: login.accessToken }),
-    ) as {
-      folders?: Array<{ id?: string }>;
-      tasks?: Array<{ id?: string }>;
-    };
+      { capture: true },
+    ) as Buffer;
     assert(
-      afterRestore.folders?.some((folder) => folder.id === folderId),
-      'backup restore lost the v2 folder',
+      restoredContent.toString('utf8').trim() === '2',
+      'fresh-volume restore did not preserve exact folder/task content',
     );
-    assert(
-      afterRestore.tasks?.some((task) => task.id === taskId),
-      'backup restore lost the v2 task',
-    );
+    docker(['rm', '--force', '--volumes', restoreContainer]);
+    docker(['volume', 'rm', restoreVolume]);
     console.log(
-      'PASS: Compose build, migration, health, bootstrap, PostgreSQL writes, app/DB restart, and backup restore.',
+      'PASS: Compose build, trusted TLS/HSTS, migration, health, bootstrap, PostgreSQL writes, app/DB restart, and fresh-volume content restore.',
     );
   } catch (error) {
     console.error('FAIL: Compose smoke failed.');
@@ -246,6 +335,8 @@ async function main(): Promise<void> {
     }
     process.exitCode = 1;
   } finally {
+    spawnSync('docker', ['rm', '--force', '--volumes', restoreContainer], { stdio: 'ignore' });
+    spawnSync('docker', ['volume', 'rm', restoreVolume], { stdio: 'ignore' });
     if (backupDir) await rm(backupDir, { recursive: true, force: true });
     spawnSync(
       'docker',

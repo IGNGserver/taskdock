@@ -1,4 +1,11 @@
 x-taskdock-image: &taskdock_image '${TASKDOCK_IMAGE:-ghcr.io/igngserver/taskdock}:${APP_VERSION:?set APP_VERSION to an immutable image tag}'
+x-app-security: &app_security
+  read_only: true
+  init: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m
 
 # External PostgreSQL deployment. Use this file when PostgreSQL is managed
 # outside this Compose project (a NAS, a shared database server, or a managed
@@ -10,6 +17,7 @@ x-taskdock-image: &taskdock_image '${TASKDOCK_IMAGE:-ghcr.io/igngserver/taskdock
 #   docker compose -f compose.external-db.yaml up -d app
 services:
   migrate:
+    <<: *app_security
     image: *taskdock_image
     restart: 'no'
     environment: &app-env
@@ -38,6 +46,7 @@ services:
       CACHE_KEY_PREFIX: ${CACHE_KEY_PREFIX:-taskdock}
       CACHE_SNAPSHOT_TTL_SECONDS: ${CACHE_SNAPSHOT_TTL_SECONDS:-60}
       CACHE_REQUIRED: ${CACHE_REQUIRED:-false}
+      AUTH_RATE_LIMIT_REQUIRE_SHARED: ${AUTH_RATE_LIMIT_REQUIRE_SHARED:-true}
       CACHE_TLS_CA: ${CACHE_TLS_CA:-}
       BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?set a random bootstrap token in .env}
       ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:?set an access token secret in .env}
@@ -54,6 +63,7 @@ services:
     command: ['node', 'apps/api/dist/migrate.js']
 
   bootstrap:
+    <<: *app_security
     image: *taskdock_image
     profiles: [operations]
     environment:
@@ -65,13 +75,14 @@ services:
       migrate: { condition: service_completed_successfully }
 
   app:
+    <<: *app_security
     image: *taskdock_image
     restart: unless-stopped
     environment: *app-env
     depends_on:
       migrate: { condition: service_completed_successfully }
     ports:
-      - '${TASKDOCK_PORT:-48731}:3000'
+      - '${TASKDOCK_BIND_ADDRESS:-127.0.0.1}:${TASKDOCK_PORT:-48731}:3000'
     healthcheck:
       test:
         [

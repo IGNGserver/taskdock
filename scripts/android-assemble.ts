@@ -2,19 +2,7 @@ import { access, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-
-function findApkSigner(sdkRoot: string): string | null {
-  const buildToolsRoot = join(sdkRoot, 'build-tools');
-  const result = spawnSync(
-    'bash',
-    ['-lc', `find "${buildToolsRoot}" -type f -name apksigner -print | sort -V | tail -1`],
-    {
-      encoding: 'utf8',
-    },
-  );
-  const path = result.status === 0 ? result.stdout.trim() : '';
-  return path || null;
-}
+import { findApkSigner } from './android-signer.js';
 
 async function main(): Promise<void> {
   const androidDir = fileURLToPath(new URL('../apps/mobile/android/', import.meta.url));
@@ -41,7 +29,7 @@ async function main(): Promise<void> {
     process.exitCode = 2;
     return;
   }
-  const apksigner = findApkSigner(sdkRoot);
+  const apksigner = await findApkSigner(sdkRoot);
   if (!apksigner) {
     throw new Error(`Android SDK build-tools 中未找到 apksigner：${sdkRoot}`);
   }

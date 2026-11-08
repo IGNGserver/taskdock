@@ -281,7 +281,7 @@ export const mutationSchema = z.object({
   entityId: uuidSchema,
   baseVersion: z.number().int().nonnegative().nullable(),
   occurredAt: z.string().datetime({ offset: true }),
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
 });
 export type Mutation = z.infer<typeof mutationSchema>;
 
@@ -298,7 +298,7 @@ export const v2MutationSchema = z.object({
   entityId: uuidSchema,
   baseVersion: z.number().int().nonnegative().nullable(),
   occurredAt: z.string().datetime({ offset: true }),
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
 });
 export type V2Mutation = z.infer<typeof v2MutationSchema>;
 

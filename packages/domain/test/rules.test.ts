@@ -5,10 +5,12 @@ import {
   assertFolderMoveAllowed,
   assertTaskPlacement,
   deriveFolderAggregate,
+  deriveFolderAggregates,
   deriveEventState,
   folderPath,
   nextLocalDate,
   parseTaskReferences,
+  planSiblingRankMove,
   renderSafeMarkdown,
   sortTreeItems,
   stepTransition,
@@ -47,6 +49,61 @@ describe('task rules', () => {
   it('allocates stable references and gap ranks', () => {
     expect(allocateReference('DSH', 32)).toBe('DSH-32');
     expect(allocateRank([1024n, 2048n], 1)).toBe(1536n);
+  });
+
+  it('rebalances adjacent and exhausted rank gaps without reversing the requested move', () => {
+    const siblings = [
+      { id: 'a', rank: '1' },
+      { id: 'b', rank: '2' },
+      { id: 'c', rank: '3' },
+    ];
+    const plan = planSiblingRankMove(siblings, 'c', 'b');
+    expect(plan.get('c')).toBe('2048');
+    expect(plan.get('b')).toBe('3072');
+    expect(plan.get('a')).toBe('1024');
+    expect(planSiblingRankMove(siblings, 'a', null, 'c').get('a')).toBe('1027');
+    expect(() => planSiblingRankMove(siblings, 'a', 'missing')).toThrow('排序锚点已变化');
+  });
+
+  it('rebalances instead of emitting a negative rank before a low first sibling', () => {
+    const plan = planSiblingRankMove(
+      [
+        { id: 'a', rank: '1' },
+        { id: 'b', rank: '2048' },
+      ],
+      'b',
+      'a',
+    );
+    expect(plan).toEqual(
+      new Map([
+        ['b', '1024'],
+        ['a', '2048'],
+      ]),
+    );
+    expect([...plan.values()].every((rank) => BigInt(rank) > 0n)).toBe(true);
+  });
+
+  it('keeps every planned order strictly increasing across duplicate-rank moves', () => {
+    const original = ['a', 'b', 'c', 'd'].map((id) => ({ id, rank: '1' }));
+    for (const moving of original) {
+      for (const anchor of original) {
+        if (moving.id === anchor.id) continue;
+        for (const direction of ['before', 'after'] as const) {
+          const plan = planSiblingRankMove(
+            original,
+            moving.id,
+            direction === 'before' ? anchor.id : null,
+            direction === 'after' ? anchor.id : null,
+          );
+          const expected = original.filter((row) => row.id !== moving.id);
+          const anchorIndex = expected.findIndex((row) => row.id === anchor.id);
+          expected.splice(anchorIndex + (direction === 'after' ? 1 : 0), 0, moving);
+          const ranks = expected.map((row) => BigInt(plan.get(row.id) ?? row.rank));
+          for (let index = 1; index < ranks.length; index += 1)
+            expect(ranks[index]! > ranks[index - 1]!).toBe(true);
+        }
+      }
+    }
   });
 
   it('handles dates and references', () => {
@@ -95,6 +152,24 @@ describe('task rules', () => {
       doneCount: 1,
       totalCount: 2,
     });
+  });
+
+  it('shares aggregate indexes across folder pages and rejects cyclic descendants', () => {
+    const folders = [
+      { id: 'root', parentFolderId: null },
+      { id: 'child', parentFolderId: 'root' },
+      { id: 'cycle-a', parentFolderId: 'cycle-b' },
+      { id: 'cycle-b', parentFolderId: 'cycle-a' },
+    ];
+    const tasks = [
+      { id: 'valid', parentFolderId: 'child', status: 'TODO' as const },
+      { id: 'cyclic', parentFolderId: 'cycle-a', status: 'DONE' as const },
+      { id: 'orphan', parentFolderId: 'missing', status: 'DONE' as const },
+    ];
+    const result = deriveFolderAggregates(['root', 'child', 'cycle-a'], folders, tasks);
+    expect(result.get('root')).toMatchObject({ totalCount: 1, todoCount: 1 });
+    expect(result.get('child')).toMatchObject({ totalCount: 1, todoCount: 1 });
+    expect(result.get('cycle-a')).toMatchObject({ totalCount: 0 });
   });
 
   it('rejects folder cycles and keeps mixed tree ordering deterministic', () => {

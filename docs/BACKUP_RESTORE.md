@@ -21,7 +21,7 @@ chmod 600 "$BACKUP_FILE"
 
 docker run --rm \
   --mount "type=bind,src=$BACKUP_DIR,dst=/backups,readonly" \
-  postgres:18.0-alpine \
+  postgres:18.6-alpine3.24@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2 \
   pg_restore --list "/backups/$(basename "$BACKUP_FILE")" \
   > "$BACKUP_FILE.list"
 chmod 600 "$BACKUP_FILE.list"
@@ -45,13 +45,13 @@ docker run -d --name "$RESTORE_CONTAINER" \
   -e POSTGRES_DB=devtodo \
   -e POSTGRES_USER=devtodo \
   -e POSTGRES_PASSWORD=temporary-only \
-  -v "$RESTORE_VOLUME:/var/lib/postgresql/data" \
-  postgres:18.0-alpine
+  -v "$RESTORE_VOLUME:/var/lib/postgresql" \
+  postgres:18.6-alpine3.24@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
 
 until docker exec "$RESTORE_CONTAINER" pg_isready -U devtodo -d devtodo; do sleep 1; done
 docker cp "$BACKUP_FILE" "$RESTORE_CONTAINER:/tmp/restore.dump"
 docker exec "$RESTORE_CONTAINER" \
-  pg_restore --clean --if-exists --no-owner --no-acl -U devtodo -d devtodo /tmp/restore.dump
+  pg_restore --exit-on-error --clean --if-exists --no-owner --no-acl -U devtodo -d devtodo /tmp/restore.dump
 docker exec "$RESTORE_CONTAINER" psql -U devtodo -d devtodo -c \
   "SELECT count(*) AS users FROM users; SELECT count(*) AS projects FROM projects; SELECT count(*) AS tasks FROM tasks; SELECT count(*) AS notes FROM notes; SELECT count(*) AS time_points FROM time_points; SELECT count(*) AS placements FROM placements;"
 ```
@@ -78,6 +78,18 @@ test -s "$BACKUP_FILE"
 pg_restore --list "$BACKUP_FILE" > "$BACKUP_FILE.list"
 ```
 
-恢复到独立临时 database 后，先执行 `docker compose -f compose.external-db.yaml run --rm migrate`，再启动 app 并检查 `/health/ready`。每个 TaskDock 中枢使用独立 database，因此可以按 database 单独备份/恢复，不会影响同一服务器上的其他应用。Redis 是可丢弃缓存，不需要备份。
+恢复到独立临时 database 后，必须显式把 **DATABASE_URL 和 MIGRATION_DATABASE_URL 同时指向临时库** 再执行迁移；不要让命令继承 `.env` 中的生产地址：
+
+```bash
+RESTORE_DATABASE_URL='postgres://taskdock_migrator:临时密码@db.example.lan:5432/taskdock_home_restore'
+DATABASE_URL="$RESTORE_DATABASE_URL" \
+MIGRATION_DATABASE_URL="$RESTORE_DATABASE_URL" \
+  docker compose -f compose.external-db.yaml run --rm migrate
+DATABASE_URL="$RESTORE_DATABASE_URL" \
+MIGRATION_DATABASE_URL="$RESTORE_DATABASE_URL" \
+  docker compose -f compose.external-db.yaml up -d app
+```
+
+启动后检查该临时实例的 `/health/ready`。每个 TaskDock 中枢使用独立 database，因此可以按 database 单独备份/恢复，不会影响同一服务器上的其他应用。Redis 是可丢弃缓存，不需要备份。
 
 客户端迁移同样是原地、可重试边界：Dexie v3 从 projects 复制 Folder 并保留旧 stores 直到 v1 outbox 已逐项转换或标记为 `CLIENT_UPGRADE_REQUIRED`；Room v4 使用完整 `MIGRATION_3_4`，不允许 `fallbackToDestructiveMigration`。回滚客户端时不得删除本地 outbox、conflict、deferred change 或 v2 tombstone。

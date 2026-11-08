@@ -9,6 +9,7 @@ import type {
   SettingsDto,
   TaskDto,
   TimePointDto,
+  TreeTaskDto,
   UserDto,
 } from '@devtodo/contracts';
 import {
@@ -295,7 +296,7 @@ async function requestNetworkBound<T>(
     });
   } catch (error) {
     if (generation !== localCacheGeneration()) throw new DOMException('会话已变化', 'AbortError');
-    if (init.signal?.aborted) throw error;
+    if (init.signal?.aborted) throw init.signal.reason ?? error;
     if (isNetworkError(error)) {
       const pathname = path.split('?')[0] ?? path;
       if (
@@ -678,6 +679,23 @@ export function mutationV2<T extends Record<string, unknown>>(
   body: T,
 ): Promise<unknown> {
   return requestV2(path, { method, body: JSON.stringify(body) });
+}
+
+export function quickCaptureV2(input: {
+  parentFolderId: string | null;
+  title: string;
+  localDate?: string;
+}): Promise<{ task: TreeTaskDto; point?: TimePointDto; placement?: PlacementDto }> {
+  const taskId = uuidv7();
+  return mutationV2('POST', '/tasks', {
+    id: taskId,
+    noteId: uuidv7(),
+    parentFolderId: input.parentFolderId,
+    title: input.title,
+    ...(input.localDate
+      ? { localDate: input.localDate, datePointId: uuidv7(), placementId: uuidv7() }
+      : {}),
+  }) as Promise<{ task: TreeTaskDto; point?: TimePointDto; placement?: PlacementDto }>;
 }
 
 export interface DeviceSummary extends DeviceDto {

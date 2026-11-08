@@ -22,6 +22,7 @@ import com.devtodo.app.data.remote.ApiClient
 import com.devtodo.app.data.security.SecureAuthManager
 import com.devtodo.app.data.sync.SyncEngine
 import com.devtodo.app.data.sync.SyncOutcome
+import com.devtodo.app.data.sync.appendRank
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -95,7 +96,10 @@ class WidgetTaskCommands(context: Context) {
                 }
             }
             if (localDate != null) {
-                val format = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+                val format = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                    isLenient = false
+                    timeZone = java.util.TimeZone.getTimeZone("UTC")
+                }
                 require(format.format(format.parse(localDate) ?: error("日期无效")) == localDate) {
                     "日期无效"
                 }
@@ -105,10 +109,10 @@ class WidgetTaskCommands(context: Context) {
             val noteId = UUID.randomUUID().toString()
             db.withTransaction {
                 val now = nowIso()
-                val rank = ((db.taskDao().getAllTreeTasks(ownerId).filter {
+                val rank = appendRank(db.taskDao().getAllTreeTasks(ownerId).filter {
                     it.parentFolderId == parentFolderId && it.status == TaskStatus.TODO &&
                         it.archivedAt == null && it.deletedAt == null
-                }.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L) + 1024L).toString()
+                }.map { it.rank })
                 db.taskDao().upsertTask(
                     TaskEntity(
                         id = taskId,
@@ -140,46 +144,46 @@ class WidgetTaskCommands(context: Context) {
                         pendingSync = true,
                     )
                 )
-                recorder.recordLocalMutation(
-                    command = "task.create",
-                    entityId = taskId,
-                    baseVersion = null,
-                    payload = mapOf(
-                        "parentFolderId" to parentFolderId,
-                        "title" to normalized,
-                        "noteId" to noteId,
-                    ),
-                    ownerId = ownerId,
-                )
-
                 val point = localDate?.let { datePoint(ownerId, it) }
-                if (point != null) {
-                    val placementId = UUID.randomUUID().toString()
+                val placementId = point?.let { UUID.randomUUID().toString() }
+                if (point != null && placementId != null) {
+                    val nextRank = appendRank(db.placementDao().getPlacementsByTimePoint(point.id, ownerId)
+                        .filter { it.deletedAt == null }
+                        .map { it.rank })
                     db.placementDao().upsertPlacement(
                         PlacementEntity(
                             id = placementId,
                             ownerId = ownerId,
                             taskId = taskId,
                             timePointId = point.id,
-                            rank = "1024",
+                            rank = nextRank,
                             version = 1,
                             createdAt = now,
                             updatedAt = now,
                             pendingSync = true,
                         )
                     )
-                    recorder.recordLocalMutation(
-                        command = "placement.create",
-                        entityId = placementId,
-                        baseVersion = null,
-                        payload = mapOf(
-                            "taskId" to taskId,
-                            "timePointId" to point.id,
-                            "__localId" to placementId,
-                        ),
-                        ownerId = ownerId,
-                    )
                 }
+                recorder.recordLocalMutation(
+                    command = "task.create",
+                    entityId = taskId,
+                    baseVersion = null,
+                    payload = buildMap {
+                        put("parentFolderId", parentFolderId)
+                        put("title", normalized)
+                        put("noteId", noteId)
+                        if (localDate != null && point != null) {
+                            put("localDate", localDate)
+                            put("datePointId", point.id)
+                        }
+                        if (placementId != null) put("placementId", placementId)
+                    },
+                    ownerId = ownerId,
+                    additionalEntityKeys = buildSet {
+                        if (point != null) add("timePoint" to point.id)
+                        if (placementId != null) add("placement" to placementId)
+                    },
+                )
                 require(auth.ownerId == ownerId) { "当前账户已变化" }
             }
             WidgetUpdater.refreshAll(appContext)
@@ -206,18 +210,13 @@ class WidgetTaskCommands(context: Context) {
             pendingSync = true,
         )
         db.timePointDao().upsertTimePoint(point)
-        recorder.recordLocalMutation(
-            command = "timePoint.date.create",
-            entityId = point.id,
-            baseVersion = null,
-            payload = mapOf("localDate" to localDate),
-            ownerId = ownerId,
-        )
         return point
     }
 
     private fun nowIso(): String =
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date())
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }.format(Date())
 }
 
 class WidgetSyncWorker(
@@ -273,7 +272,9 @@ class WidgetSyncWorker(
                 )
                 .build()
             WorkManager.getInstance(context.applicationContext)
-                .enqueueUniqueWork(UNIQUE_NAME, if (continuation) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.KEEP, request)
+                // KEEP drops a mutation that arrives while the current worker
+                // has already read the outbox. Append one reconciliation instead.
+                .enqueueUniqueWork(UNIQUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
         }
     }
 }

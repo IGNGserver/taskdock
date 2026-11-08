@@ -588,7 +588,7 @@ fun TreeScreen(
                 .sortedWith(
                     compareBy<FolderEntity>(
                         { it.parentFolderId != null },
-                        { it.rank.toLongOrNull() ?: 0L },
+                        { it.rank.toBigInteger() },
                         { it.id },
                     )
                 )
@@ -940,7 +940,7 @@ internal fun resolveTreeRows(
     val defaultRows = baseRows.sortedWith(
         compareBy<TreeRow>(
             { statusOrder(treeGroupingStatus(it, groupPins)) },
-            { it.rank.toLongOrNull() ?: 0L },
+            { it.rank.toBigInteger() },
             { if (it.kind == "FOLDER") 0 else 1 },
             { it.id },
         )

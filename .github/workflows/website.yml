@@ -18,8 +18,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: website-${{ github.ref }}
-  cancel-in-progress: false
+  group: website-deploy
+  cancel-in-progress: true
 
 jobs:
   website:
@@ -46,8 +46,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Test metadata validation
-        run: node --test scripts/meta-tags.test.mjs
+      - name: Test metadata and release selection
+        run: node --test scripts/*.test.mjs
 
       - name: Check static site
         run: node scripts/check-site.mjs dist

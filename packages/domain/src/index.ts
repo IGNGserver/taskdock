@@ -143,6 +143,58 @@ export function ranksForIds(ids: string[]): Map<string, bigint> {
   return new Map(ids.map((id, index) => [id, BigInt(index + 1) * RANK_STEP]));
 }
 
+export interface RankSibling {
+  id: string;
+  rank: string;
+}
+
+const INT64_MAX = (1n << 63n) - 1n;
+
+/**
+ * Plan a move inside an already canonically ordered sibling list. The common
+ * case changes only the moved row; adjacent/exhausted integer gaps rebalance
+ * the complete sibling list deterministically so "before" can never become
+ * "after". Callers persist every returned rank as part of the same mutation.
+ */
+export function planSiblingRankMove(
+  siblings: readonly RankSibling[],
+  movingId: string,
+  beforeId?: string | null,
+  afterId?: string | null,
+): Map<string, string> {
+  const moving = siblings.find((row) => row.id === movingId);
+  if (!moving) throw new DomainError('VALIDATION_FAILED', '排序节点不存在');
+  if (beforeId === movingId || afterId === movingId)
+    throw new DomainError('VERSION_CONFLICT', '排序锚点已变化');
+  const remaining = siblings.filter((row) => row.id !== movingId);
+  const anchorId = beforeId ?? afterId;
+  const anchorIndex = anchorId ? remaining.findIndex((row) => row.id === anchorId) : -1;
+  if (anchorId && anchorIndex < 0) throw new DomainError('VERSION_CONFLICT', '排序锚点已变化');
+  const insertionIndex = anchorId ? anchorIndex + (afterId ? 1 : 0) : remaining.length;
+  const lower = insertionIndex > 0 ? BigInt(remaining[insertionIndex - 1]!.rank) : null;
+  const upper = insertionIndex < remaining.length ? BigInt(remaining[insertionIndex]!.rank) : null;
+  let desired: bigint | null = null;
+  if (lower === null && upper === null) desired = RANK_STEP;
+  else if (upper === null) desired = lower! + RANK_STEP;
+  else if (lower === null) desired = upper - RANK_STEP;
+  else if (upper - lower > 1n) desired = lower + (upper - lower) / 2n;
+  const hasInvalidOrder = remaining.some(
+    (row, index) => index > 0 && BigInt(row.rank) <= BigInt(remaining[index - 1]!.rank),
+  );
+  if (!hasInvalidOrder && desired !== null && desired > 0n && desired <= INT64_MAX)
+    return new Map([[movingId, desired.toString()]]);
+
+  const ordered = [...remaining];
+  ordered.splice(insertionIndex, 0, moving);
+  const rebalanced = ranksForIds(ordered.map((row) => row.id));
+  const plan = new Map<string, string>();
+  for (const row of ordered) {
+    const rank = rebalanced.get(row.id)!.toString();
+    if (row.rank !== rank) plan.set(row.id, rank);
+  }
+  return plan;
+}
+
 export function allocateReference(prefix: string, number: number): string {
   if (!/^[A-Z][A-Z0-9]{1,9}$/.test(prefix)) {
     throw new DomainError('VALIDATION_FAILED', '项目代号无效');
@@ -240,6 +292,15 @@ export function deriveFolderAggregate(
   folders: readonly FolderTreeNode[],
   tasks: readonly FolderTaskForAggregate[],
 ): FolderAggregateDto {
+  return deriveFolderAggregates([folderId], folders, tasks).get(folderId)!;
+}
+
+/** Build shared indexes once for a directory page instead of once per child. */
+export function deriveFolderAggregates(
+  folderIds: readonly string[],
+  folders: readonly FolderTreeNode[],
+  tasks: readonly FolderTaskForAggregate[],
+): Map<string, FolderAggregateDto> {
   const folderMap = new Map(folders.map((folder) => [folder.id, folder]));
   const children = new Map<string, string[]>();
   for (const folder of folders) {
@@ -248,47 +309,72 @@ export function deriveFolderAggregate(
     list.push(folder.id);
     children.set(folder.parentFolderId, list);
   }
-  const reachable = new Set<string>();
-  const stack = [folderId];
-  while (stack.length) {
-    const current = stack.pop()!;
-    if (reachable.has(current)) continue;
-    reachable.add(current);
-    for (const child of children.get(current) ?? []) stack.push(child);
-  }
-  const counts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 } as Record<TaskStatus, number>;
-  for (const task of tasks) {
-    if (task.deletedAt || !task.parentFolderId || !reachable.has(task.parentFolderId)) continue;
-    // A task is only valid when every folder in its path is active. Walk the
-    // path iteratively and reject cycles/missing parents as invalid descendants.
-    const pathSeen = new Set<string>();
-    let parent: string | null = task.parentFolderId;
+  const validity = new Map<string, boolean>();
+  const validFolder = (id: string): boolean => {
+    const cached = validity.get(id);
+    if (cached !== undefined) return cached;
+    const path: string[] = [];
+    const seen = new Set<string>();
+    let current: string | null = id;
     let valid = true;
-    while (parent) {
-      if (pathSeen.has(parent)) {
+    while (current) {
+      const known = validity.get(current);
+      if (known !== undefined) {
+        valid = known;
+        break;
+      }
+      if (seen.has(current)) {
         valid = false;
         break;
       }
-      pathSeen.add(parent);
-      const folder = folderMap.get(parent);
+      seen.add(current);
+      path.push(current);
+      const folder = folderMap.get(current);
       if (!folder || folder.deletedAt) {
         valid = false;
         break;
       }
-      parent = folder.parentFolderId;
+      current = folder.parentFolderId;
     }
-    if (valid) counts[task.status] += 1;
-  }
-  const totalCount = counts.TODO + counts.IN_PROGRESS + counts.DONE;
-  const currentFolder = folderMap.get(folderId);
-  const status: FolderStatus = currentFolder?.status ?? 'TODO';
-  return {
-    status,
-    todoCount: counts.TODO,
-    inProgressCount: counts.IN_PROGRESS,
-    doneCount: counts.DONE,
-    totalCount,
+    for (const pathId of path) validity.set(pathId, valid);
+    validity.set(id, valid);
+    return valid;
   };
+  const direct = new Map<string, Record<TaskStatus, number>>();
+  for (const task of tasks) {
+    const parent = task.parentFolderId;
+    if (task.deletedAt || !parent || !validFolder(parent)) continue;
+    const counts = direct.get(parent) ?? { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
+    counts[task.status] += 1;
+    direct.set(parent, counts);
+  }
+  const result = new Map<string, FolderAggregateDto>();
+  for (const folderId of folderIds) {
+    const reachable = new Set<string>();
+    const stack = [folderId];
+    while (stack.length) {
+      const current = stack.pop()!;
+      if (reachable.has(current)) continue;
+      reachable.add(current);
+      for (const child of children.get(current) ?? []) stack.push(child);
+    }
+    const counts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 } as Record<TaskStatus, number>;
+    for (const reachableId of reachable) {
+      const row = direct.get(reachableId);
+      if (!row) continue;
+      counts.TODO += row.TODO;
+      counts.IN_PROGRESS += row.IN_PROGRESS;
+      counts.DONE += row.DONE;
+    }
+    result.set(folderId, {
+      status: folderMap.get(folderId)?.status ?? 'TODO',
+      todoCount: counts.TODO,
+      inProgressCount: counts.IN_PROGRESS,
+      doneCount: counts.DONE,
+      totalCount: counts.TODO + counts.IN_PROGRESS + counts.DONE,
+    });
+  }
+  return result;
 }
 
 export function assertFolderMoveAllowed(

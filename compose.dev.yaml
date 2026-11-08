@@ -47,5 +47,18 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+  gateway:
+    image: caddy:2.10.2-alpine
+    environment:
+      APP_ORIGIN: https://localhost:18443
+    ports: ['127.0.0.1:18443:443']
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - devtodo_dev_caddy_data:/data
+      - devtodo_dev_caddy_config:/config
+    depends_on:
+      app: { condition: service_healthy }
 volumes:
   devtodo_dev_pgdata:
+  devtodo_dev_caddy_data:
+  devtodo_dev_caddy_config:
