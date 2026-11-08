@@ -475,6 +475,8 @@ export function TaskDetailEditor({
           }}
           onClose={async () => {
             await flushNote();
+            await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+            notify();
             setNoteExpanded(false);
             if (noteCloseRestoreRef.current) {
               noteCloseRestoreRef.current = false;
