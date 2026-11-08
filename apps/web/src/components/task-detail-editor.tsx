@@ -54,6 +54,7 @@ export function TaskDetailEditor({
   const [, render] = useState(0);
   const editorRef = useRef<HTMLDivElement>(null);
   const noteSaveTimerRef = useRef<number | undefined>(undefined);
+  const noteSavePromiseRef = useRef<Promise<boolean> | null>(null);
   const noteSaveRef = useRef<() => Promise<boolean> | undefined>(() => undefined);
   const changed = useRef(onChanged);
   changed.current = onChanged;
@@ -171,7 +172,13 @@ export function TaskDetailEditor({
     );
   const saveCurrentNote = (): Promise<boolean> | undefined => {
     if (draft.deleted || draft.note === draft.record.note.contentMarkdown) return undefined;
-    return saveNote(draft.note);
+    if (noteSavePromiseRef.current) return noteSavePromiseRef.current;
+    const promise = saveNote(draft.note);
+    const tracked = promise.finally(() => {
+      if (noteSavePromiseRef.current === tracked) noteSavePromiseRef.current = null;
+    });
+    noteSavePromiseRef.current = tracked;
+    return tracked;
   };
   noteSaveRef.current = saveCurrentNote;
   const scheduleNoteSave = () => {
