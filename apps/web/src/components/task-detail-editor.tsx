@@ -126,6 +126,7 @@ export function TaskDetailEditor({
           const message = cause instanceof Error ? cause.message : '保存失败，请重试';
           draft.failures[key] = message;
           draft.retries.set(key, retryOperation ?? (() => save(key, operation)));
+          render((version) => version + 1);
           notify();
           window.dispatchEvent(
             new CustomEvent('devtodo:toast', {
