@@ -177,7 +177,18 @@ jobs:
       - name: 构建并验证已签名 Android APK
         env:
           TASKDOCK_VERSION: ${{ inputs.version }}
-        run: pnpm android:assembleRelease
+        run: |
+          set -o pipefail
+          for attempt in 1 2 3; do
+            echo "Android release attempt ${attempt}/3"
+            if pnpm android:assembleRelease; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 15))
+            fi
+          done
+          exit 1
       - name: 整理 Android 安装包
         env:
           RELEASE_VERSION: ${{ inputs.version }}
