@@ -77,8 +77,11 @@ class CaptureMutationTest {
         val placement = db.placementDao().getPlacementsByTaskIdForOwner(owner, created.id).single()
         assertEquals("2026-10-04", db.timePointDao().getTimePointById(placement.timePointId, owner)?.localDate)
         val outbox = db.outboxDao().getPendingItems(owner)
-        assertEquals(1, outbox.count { it.command == "task.create" && it.entityId == created.id })
-        assertEquals(1, outbox.count { it.command == "placement.create" && it.entityId == placement.id })
+        val captureMutation = outbox.single { it.command == "task.create" && it.entityId == created.id }
+        assertTrue(captureMutation.payloadJson.contains("\"noteId\":\"${db.noteDao().getNoteByTaskId(created.id, owner)!!.id}\""))
+        assertTrue(captureMutation.payloadJson.contains("\"datePointId\":\"${placement.timePointId}\""))
+        assertTrue(captureMutation.payloadJson.contains("\"placementId\":\"${placement.id}\""))
+        assertEquals(0, outbox.count { it.command == "placement.create" })
     }
 
     @Test fun lateCaptureFailureRollsBackTaskNoteAndOutbox() = runBlocking {
