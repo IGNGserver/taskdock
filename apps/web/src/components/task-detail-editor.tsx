@@ -69,6 +69,8 @@ export function TaskDetailEditor({
   const [noteExpanded, setNoteExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useDismissibleMenu(menuOpen, () => setMenuOpen(false));
+  const noteExpandRef = useRef<HTMLButtonElement | null>(null);
+  const noteCloseRestoreRef = useRef(false);
   const flushRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
@@ -445,6 +447,8 @@ export function TaskDetailEditor({
               size={isTouch ? 's' : 'xs'}
               shape="square"
               onClick={(event) => {
+                noteExpandRef.current = event.currentTarget;
+                noteCloseRestoreRef.current = true;
                 event.currentTarget.focus({ preventScroll: true });
                 setNoteExpanded(true);
               }}
@@ -472,6 +476,12 @@ export function TaskDetailEditor({
           onClose={() => {
             flushNote();
             setNoteExpanded(false);
+            if (noteCloseRestoreRef.current) {
+              noteCloseRestoreRef.current = false;
+              window.requestAnimationFrame(() =>
+                noteExpandRef.current?.focus({ preventScroll: true }),
+              );
+            }
           }}
         />
       </section>
