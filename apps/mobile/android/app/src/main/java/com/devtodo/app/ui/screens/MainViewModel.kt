@@ -17,6 +17,10 @@ import com.devtodo.app.data.sync.SyncEngine
 import com.devtodo.app.data.sync.SyncOutcome
 import com.devtodo.app.data.sync.SyncState
 import com.devtodo.app.data.sync.LoadProgress
+import com.devtodo.app.data.sync.MutationGuards
+import com.devtodo.app.data.sync.RankSibling
+import com.devtodo.app.data.sync.appendRank
+import com.devtodo.app.data.sync.planSiblingRankMove
 import com.devtodo.app.ui.theme.ThemeMode
 import com.devtodo.app.widget.WidgetPreviewPublisher
 import com.devtodo.app.widget.WidgetUpdater
@@ -694,36 +698,55 @@ class MainViewModel(
                         }
                     }
                     if (localDate != null) {
-                        val format = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+                        val format = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                            isLenient = false
+                            timeZone = TimeZone.getTimeZone("UTC")
+                        }
                         require(format.format(format.parse(localDate) ?: error("日期无效")) == localDate) { "日期无效" }
                     }
                     val taskId = UUID.randomUUID().toString()
                     val noteId = UUID.randomUUID().toString()
                     val now = nowIso()
-                    val rank = ((db.taskDao().getAllTreeTasks(ownerId).filter {
+                    val rank = appendRank(db.taskDao().getAllTreeTasks(ownerId).filter {
                         it.parentFolderId == parentFolderId && it.status == TaskStatus.TODO &&
                             it.archivedAt == null && it.deletedAt == null
-                    }.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L) + 1024L).toString()
+                    }.map { it.rank })
                     db.taskDao().upsertTask(TaskEntity(taskId, ownerId, null, null, normalized,
                         TaskStatus.TODO, TaskCategory.MISC, TaskPriority.NONE, rank, 1,
                         null, now, now, parentFolderId, null, null, null, true))
                     db.noteDao().upsertNote(NoteEntity(noteId, ownerId, taskId, "", 1, now, now, null, true))
-                    syncEngine.recordLocalMutation("task.create", taskId, null,
-                        mapOf("parentFolderId" to parentFolderId, "title" to normalized, "noteId" to noteId), ownerId = ownerId)
                     val point = when {
-                        localDate != null -> getOrCreateDatePoint(ownerId, localDate)
+                        localDate != null -> getOrCreateDatePoint(ownerId, localDate, recordMutation = false)
                         eventId != null -> db.timePointDao().getTimePointById(eventId, ownerId)
                             ?.takeIf { it.deletedAt == null && it.archivedAt == null && it.type == TimePointType.EVENT }
                             ?: error("事件节点不存在")
                         else -> null
                     }
-                    if (point != null) {
-                        val placementId = UUID.randomUUID().toString()
+                    val placementId = point?.let { UUID.randomUUID().toString() }
+                    if (point != null && placementId != null) {
+                        val nextRank = ((db.placementDao().getPlacementsByTimePoint(point.id, ownerId)
+                            .filter { it.deletedAt == null }
+                            .maxOfOrNull { it.rank.toBigInteger() } ?: java.math.BigInteger.ZERO) +
+                            "1024".toBigInteger()).toString()
                         db.placementDao().upsertPlacement(PlacementEntity(placementId, ownerId,
-                            taskId, point.id, "1024", 1, now, now, null, true))
-                        syncEngine.recordLocalMutation("placement.create", placementId, null,
-                            mapOf("taskId" to taskId, "timePointId" to point.id, "__localId" to placementId), ownerId = ownerId)
+                            taskId, point.id, nextRank, 1, now, now, null, true))
                     }
+                    syncEngine.recordLocalMutation("task.create", taskId, null,
+                        buildMap {
+                            put("parentFolderId", parentFolderId)
+                            put("title", normalized)
+                            put("noteId", noteId)
+                            if (localDate != null && point != null) {
+                                put("localDate", localDate)
+                                put("datePointId", point.id)
+                            }
+                            if (eventId != null && point != null) put("timePointId", point.id)
+                            if (placementId != null) put("placementId", placementId)
+                        }, ownerId = ownerId,
+                        additionalEntityKeys = buildSet {
+                            if (point != null) add("timePoint" to point.id)
+                            if (placementId != null) add("placement" to placementId)
+                        })
                     require(authManager.ownerId == ownerId) { "当前账户已变化" }
                 }
                 loadTodayData()
@@ -751,7 +774,7 @@ class MainViewModel(
                     val existingSiblings = db.taskDao().getAllTreeTasks(ownerId).filter {
                         it.parentFolderId == task.parentFolderId && it.status == TaskStatus.TODO && it.deletedAt == null
                     }
-                    val nextRank = ((existingSiblings.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L) + 1024L).toString()
+                    val nextRank = appendRank(existingSiblings.map { it.rank })
                     val copy = task.copy(id = taskId, referenceId = null, status = TaskStatus.TODO, completedAt = null, archivedAt = null, archivedByOperationId = null, deletedAt = null, rank = nextRank, version = 1, createdAt = now, updatedAt = now, pendingSync = true)
                     db.taskDao().upsertTask(copy)
                     db.noteDao().upsertNote(NoteEntity(noteId, ownerId, taskId, sourceNote?.contentMarkdown ?: "", 1, now, now, null, true))
@@ -795,22 +818,40 @@ class MainViewModel(
                     require(currentFolder != null || currentTask != null) { "树节点不存在" }
                     val currentVersion = currentFolder?.version ?: currentTask!!.version
                     require(currentVersion == baseVersion) { "树节点已变化，请刷新后重试" }
-                    val anchor = (beforeId ?: afterId)?.let { anchorId ->
-                        folders.firstOrNull { it.id == anchorId }?.rank
-                            ?: tasks.firstOrNull { it.id == anchorId }?.rank
+                    val targetFolders = folders.filter {
+                        it.id != id && it.parentFolderId == parentFolderId && it.deletedAt == null &&
+                            it.archivedAt == null && it.status == expectedStatus
                     }
-                    val nextRank = when {
-                        anchor == null -> ((folders.filter { it.parentFolderId == parentFolderId }.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L)
-                            .coerceAtLeast(tasks.filter { it.parentFolderId == parentFolderId }.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L) + 1024L).toString()
-                        beforeId != null -> ((anchor.toLongOrNull() ?: 1024L) - 1L).coerceAtLeast(0L).toString()
-                        else -> ((anchor.toLongOrNull() ?: 0L) + 1L).toString()
+                    val targetTasks = tasks.filter {
+                        it.id != id && it.parentFolderId == parentFolderId && it.deletedAt == null &&
+                            it.archivedAt == null && it.status == expectedStatus
                     }
+                    val kindById = (targetFolders.map { it.id to "FOLDER" } + targetTasks.map { it.id to "TASK" }).toMap()
+                    val ordered = (targetFolders.map { RankSibling(it.id, it.rank) } + targetTasks.map { RankSibling(it.id, it.rank) })
+                        .sortedWith { left, right ->
+                            val rankOrder = left.rank.toBigInteger().compareTo(right.rank.toBigInteger())
+                            if (rankOrder != 0) rankOrder
+                            else if (kindById[left.id] != kindById[right.id]) {
+                                if (kindById[left.id] == "FOLDER") -1 else 1
+                            } else left.id.compareTo(right.id)
+                        }
+                    val currentRank = currentFolder?.rank ?: currentTask!!.rank
+                    val plan = planSiblingRankMove(ordered + RankSibling(id, currentRank), id, beforeId, afterId)
                     val now = nowIso()
-                    if (currentFolder != null) {
-                        db.folderDao().upsert(currentFolder.copy(parentFolderId = parentFolderId, rank = nextRank, version = currentFolder.version + 1, updatedAt = now, pendingSync = true))
-                    } else {
-                        db.taskDao().upsertTask(currentTask!!.copy(parentFolderId = parentFolderId, rank = nextRank, version = currentTask.version + 1, updatedAt = now, pendingSync = true))
+                    val changedFolders = (targetFolders + listOfNotNull(currentFolder)).mapNotNull { row ->
+                        plan[row.id]?.let { rank -> row.copy(
+                            parentFolderId = if (row.id == id) parentFolderId else row.parentFolderId,
+                            rank = rank, version = row.version + 1, updatedAt = now, pendingSync = true,
+                        ) }
                     }
+                    val changedTasks = (targetTasks + listOfNotNull(currentTask)).mapNotNull { row ->
+                        plan[row.id]?.let { rank -> row.copy(
+                            parentFolderId = if (row.id == id) parentFolderId else row.parentFolderId,
+                            rank = rank, version = row.version + 1, updatedAt = now, pendingSync = true,
+                        ) }
+                    }
+                    changedFolders.forEach { db.folderDao().upsert(it) }
+                    changedTasks.forEach { db.taskDao().upsertTask(it) }
                     syncEngine.recordLocalMutation(
                         command = "tree.move",
                         entityId = id,
@@ -823,6 +864,7 @@ class MainViewModel(
                             "expectedStatus" to expectedStatus.name,
                         ),
                         ownerId = ownerId,
+                        additionalEntityKeys = (changedFolders.map { "folder" to it.id } + changedTasks.map { "task" to it.id }).toSet(),
                     )
                     require(authManager.ownerId == ownerId) { "当前账户已变化" }
                 }
@@ -941,7 +983,7 @@ class MainViewModel(
                     val id = UUID.randomUUID().toString()
                     val now = nowIso()
                     val existing = db.workflowDao().getStagesFlow(workflow.id, ownerId).first()
-                    val rank = ((existing.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L) + 1024L).toString()
+                    val rank = appendRank(existing.map { it.rank })
                     db.workflowDao().upsertStages(listOf(WorkflowStageEntity(id, ownerId, workflow.id, normalized, rank, 1, now, now, null, true)))
                     syncEngine.recordLocalMutation(
                         "workflowStage.create",
@@ -1110,19 +1152,26 @@ class MainViewModel(
                     val currentSiblings = db.workflowDao().getStagesFlow(current.workflowId, ownerId).first()
                     val index = currentSiblings.indexOfFirst { it.id == current.id }
                     val target = currentSiblings.getOrNull(index + direction) ?: return@withOwnerTransaction
-                    val anchorRank = target.rank.toLongOrNull() ?: 1024L
-                    val nextRank = if (direction < 0) (anchorRank - 1L).coerceAtLeast(0L) else anchorRank + 1L
+                    val beforeId = if (direction < 0) target.id else null
+                    val afterId = if (direction > 0) target.id else null
+                    val plan = planSiblingRankMove(
+                        currentSiblings.map { RankSibling(it.id, it.rank) }, current.id, beforeId, afterId,
+                    )
                     val now = nowIso()
-                    db.workflowDao().upsertStages(listOf(current.copy(rank = nextRank.toString(), version = current.version + 1, updatedAt = now, pendingSync = true)))
+                    val changed = currentSiblings.mapNotNull { row ->
+                        plan[row.id]?.let { rank -> row.copy(rank = rank, version = row.version + 1, updatedAt = now, pendingSync = true) }
+                    }
+                    db.workflowDao().upsertStages(changed)
                     syncEngine.recordLocalMutation(
                         "workflowStage.move",
                         current.id,
                         current.version,
                         mapOf(
-                            "beforeId" to if (direction < 0) target.id else null,
-                            "afterId" to if (direction > 0) target.id else null,
+                            "beforeId" to beforeId,
+                            "afterId" to afterId,
                         ),
                         ownerId = ownerId,
+                        additionalEntityKeys = changed.map { "workflowStage" to it.id }.toSet(),
                     )
                 }
             } catch (error: Exception) {
@@ -1139,7 +1188,7 @@ class MainViewModel(
                     val existing = db.workflowDao().getMembershipsFlow(workflow.id, ownerId).first()
                     require(existing.none { it.taskId == task.id }) { "任务已经在该流程中" }
                     val id = UUID.randomUUID().toString()
-                    val rank = ((existing.filter { it.stageId == stage.id }.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L) + 1024L).toString()
+                    val rank = appendRank(existing.filter { it.stageId == stage.id }.map { it.rank })
                     val now = nowIso()
                     db.workflowDao().upsertMemberships(listOf(WorkflowTaskMembershipEntity(id, ownerId, workflow.id, stage.id, task.id, rank, 1, now, now, null, true)))
                     syncEngine.recordLocalMutation("workflowTask.add", id, null, mapOf("workflowId" to workflow.id, "stageId" to stage.id, "taskId" to task.id), ownerId = ownerId)
@@ -1164,23 +1213,23 @@ class MainViewModel(
                     val siblings = db.workflowDao().getMembershipsFlow(current.workflowId, ownerId).first()
                     val targetSiblings = siblings.filter { it.stageId == targetStage.id && it.id != current.id }
                     require(siblings.none { it.id != current.id && it.taskId == current.taskId && it.workflowId == current.workflowId && it.stageId != targetStage.id }) { "任务已经在该流程中" }
-                    val rank = when {
-                        beforeId != null -> {
-                            val anchorRank = targetSiblings.firstOrNull { it.id == beforeId }?.rank?.toLongOrNull() ?: 1024L
-                            (anchorRank - 1L).coerceAtLeast(0L).toString()
-                        }
-                        afterId != null -> {
-                            val anchorRank = targetSiblings.firstOrNull { it.id == afterId }?.rank?.toLongOrNull() ?: 1024L
-                            (anchorRank + 1L).toString()
-                        }
-                        else -> ((targetSiblings.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L) + 1024L).toString()
-                    }
+                    val moved = current.copy(stageId = targetStage.id)
+                    val plan = planSiblingRankMove(
+                        (targetSiblings + moved).sortedBy { it.rank.toBigInteger() }.map { RankSibling(it.id, it.rank) },
+                        current.id, beforeId, afterId,
+                    )
                     val now = nowIso()
-                    db.workflowDao().upsertMemberships(listOf(current.copy(stageId = targetStage.id, rank = rank, version = current.version + 1, updatedAt = now, pendingSync = true)))
+                    val changed = (targetSiblings + moved).mapNotNull { row ->
+                        plan[row.id]?.let { rank -> row.copy(rank = rank, version = row.version + 1, updatedAt = now, pendingSync = true) }
+                    }
+                    db.workflowDao().upsertMemberships(changed)
                     val payload = mutableMapOf<String, Any?>("stageId" to targetStage.id)
                     if (beforeId != null) payload["beforeId"] = beforeId
                     if (afterId != null) payload["afterId"] = afterId
-                    syncEngine.recordLocalMutation("workflowTask.move", current.id, current.version, payload, ownerId = ownerId)
+                    syncEngine.recordLocalMutation(
+                        "workflowTask.move", current.id, current.version, payload, ownerId = ownerId,
+                        additionalEntityKeys = changed.map { "workflowTaskMembership" to it.id }.toSet(),
+                    )
                 }
             } catch (error: Exception) {
                 _messages.tryEmit(error.userMessage("移动流程任务失败"))
@@ -1280,16 +1329,21 @@ class MainViewModel(
                     val siblings = db.taskStepDao().getByTaskFlow(current.taskId, ownerId).first()
                     val index = siblings.indexOfFirst { it.id == current.id }
                     val target = siblings.getOrNull(index + direction) ?: return@withOwnerTransaction
-                    val targetRank = target.rank.toLongOrNull() ?: 1024L
-                    val rank = if (direction < 0) (targetRank - 1L).coerceAtLeast(0L) else targetRank + 1L
+                    val beforeId = if (direction < 0) target.id else null
+                    val afterId = if (direction > 0) target.id else null
+                    val plan = planSiblingRankMove(siblings.map { RankSibling(it.id, it.rank) }, current.id, beforeId, afterId)
                     val now = nowIso()
-                    db.taskStepDao().upsert(current.copy(rank = rank.toString(), version = current.version + 1, updatedAt = now, pendingSync = true))
+                    val changed = siblings.mapNotNull { row ->
+                        plan[row.id]?.let { rank -> row.copy(rank = rank, version = row.version + 1, updatedAt = now, pendingSync = true) }
+                    }
+                    changed.forEach { db.taskStepDao().upsert(it) }
                     syncEngine.recordLocalMutation(
                         "taskStep.move",
                         current.id,
                         current.version,
-                        mapOf("beforeId" to if (direction < 0) target.id else null, "afterId" to if (direction > 0) target.id else null),
+                        mapOf("beforeId" to beforeId, "afterId" to afterId),
                         ownerId = ownerId,
+                        additionalEntityKeys = changed.map { "taskStep" to it.id }.toSet(),
                     )
                 }
             } catch (error: Exception) {
@@ -1611,12 +1665,15 @@ class MainViewModel(
             try {
                 db.withTransaction {
                     val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
-                    val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+                    val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                        isLenient = false
+                        timeZone = TimeZone.getTimeZone("UTC")
+                    }
                     require(parser.format(parser.parse(localDate) ?: error("日期无效")) == localDate) { "日期无效" }
                     val datePoint = getOrCreateDatePoint(ownerId, localDate)
                     val currentPlacements = db.placementDao().getPlacementsByTimePoint(datePoint.id, ownerId)
                     val existingTaskIds = currentPlacements.map { it.taskId }.toSet()
-                    var nextRank = currentPlacements.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L
+                    var nextRank = currentPlacements.maxOfOrNull { it.rank.toBigInteger() } ?: java.math.BigInteger.ZERO
                     val now = nowIso()
 
                     tasks.distinctBy { it.id }.forEach { task ->
@@ -1625,7 +1682,7 @@ class MainViewModel(
                         val current = db.taskDao().getTaskById(task.id, ownerId) ?: error("任务已不存在")
                         require(current.archivedAt == null && current.deletedAt == null) { "任务已不可用" }
 
-                        nextRank += 1024L
+                        nextRank += java.math.BigInteger.valueOf(1024)
                         val id = UUID.randomUUID().toString()
                         db.placementDao().upsertPlacement(
                             PlacementEntity(
@@ -1681,7 +1738,10 @@ class MainViewModel(
                     require(task.ownerId == ownerId) { "任务不属于当前账户" }
                     val current = db.taskDao().getTaskById(task.id, ownerId) ?: error("任务已不存在")
                     require(current.archivedAt == null && current.deletedAt == null) { "任务已不可用" }
-                    val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+                    val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                        isLenient = false
+                        timeZone = TimeZone.getTimeZone("UTC")
+                    }
                     require(parser.format(parser.parse(localDate) ?: error("日期无效")) == localDate) { "日期无效" }
                     val datePoint = getOrCreateDatePoint(ownerId, localDate)
                     val placements = db.placementDao().getPlacementsByTaskIdForOwner(ownerId, task.id)
@@ -1732,7 +1792,7 @@ class MainViewModel(
                     require(normalized.isNotEmpty()) { "事件名称不能为空" }
                     require(normalized.length <= 200) { "事件名称不能超过 200 个字符" }
                     val events = db.timePointDao().getActiveEventsFlow(ownerId).first()
-                    val rank = ((events.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L) + 1024L).toString()
+                    val rank = appendRank(events.map { it.rank })
                     val now = nowIso()
                     val event = TimePointEntity(
                         id = UUID.randomUUID().toString(),
@@ -1973,14 +2033,14 @@ class MainViewModel(
                         ?: error("安排位置不存在")
                     val current = db.placementDao().getPlacementsByTimePoint(timePointId, ownerId)
                     val existingTaskIds = current.map { it.taskId }.toSet()
-                    var nextRank = current.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L
+                    var nextRank = current.maxOfOrNull { it.rank.toBigInteger() } ?: java.math.BigInteger.ZERO
                     val now = nowIso()
                     taskIds.distinct().forEach { taskId ->
                         if (taskId in existingTaskIds) return@forEach
                         val task = db.taskDao().getTaskById(taskId, ownerId)
                             ?: error("任务不存在或已归档")
                         require(task.archivedAt == null && task.deletedAt == null) { "任务不可安排" }
-                        nextRank += 1024L
+                        nextRank += java.math.BigInteger.valueOf(1024)
                         val placementId = UUID.randomUUID().toString()
                         db.placementDao().upsertPlacement(
                             PlacementEntity(
@@ -2142,7 +2202,7 @@ class MainViewModel(
 
         val now = nowIso()
         val targetId = UUID.randomUUID().toString()
-        val nextRank = ((targetPlacements.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L) + 1024L).toString()
+        val nextRank = appendRank(targetPlacements.map { it.rank })
         db.placementDao().upsertPlacement(
             PlacementEntity(
                 id = targetId,
@@ -2262,7 +2322,7 @@ class MainViewModel(
                     val activeSourcePlacements = db.placementDao().getPlacementsByTimePoint(sourcePoint.id, ownerId)
                     val targetPlacements = db.placementDao().getPlacementsByTimePoint(targetPoint.id, ownerId)
                     val targetTaskIds = targetPlacements.map { it.taskId }.toSet()
-                    var nextRank = targetPlacements.maxOfOrNull { it.rank.toLongOrNull() ?: 0L } ?: 0L
+                    var nextRank = targetPlacements.maxOfOrNull { it.rank.toBigInteger() } ?: java.math.BigInteger.ZERO
                     val now = nowIso()
 
                     for (placement in activeSourcePlacements) {
@@ -2274,7 +2334,7 @@ class MainViewModel(
                             continue
                         }
 
-                        nextRank += 1024L
+                        nextRank += java.math.BigInteger.valueOf(1024)
                         val newPlacementId = UUID.randomUUID().toString()
                         createdIds.add(newPlacementId)
                         db.placementDao().upsertPlacement(
@@ -2380,6 +2440,24 @@ class MainViewModel(
     ) {
         viewModelScope.launch {
             try {
+                if (strategy == "server" || strategy == "discard") {
+                    val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
+                    require(conflict.ownerId == ownerId) { "冲突不属于当前账户" }
+                    val currentConflict = db.conflictDao().getById(conflict.id, ownerId)
+                        ?: error("冲突记录已不存在或已解决")
+                    val outboxItem = db.outboxDao().getByMutationId(currentConflict.mutationId, ownerId)
+                    if (outboxItem != null) {
+                        syncEngine.discardLocalMutation(outboxItem)
+                    } else {
+                        db.withTransaction {
+                            db.conflictDao().markResolved(currentConflict.id, ownerId, nowIso())
+                        }
+                    }
+                    syncEngine.triggerSync()
+                    _messages.tryEmit("已采用中枢快照并解决冲突")
+                    onComplete?.invoke(true)
+                    return@launch
+                }
                 db.withOwnerTransaction { ownerId ->
                     require(conflict.ownerId == ownerId) { "冲突不属于当前账户" }
                     val currentConflict = db.conflictDao().getById(conflict.id, ownerId)
@@ -2395,21 +2473,6 @@ class MainViewModel(
                     }
 
                     when (strategy) {
-                        "server" -> {
-                            if (outboxItem != null) {
-                                db.outboxDao().deleteByMutationId(outboxItem.mutationId, ownerId)
-                            }
-                            db.conflictDao().markResolved(currentConflict.id, ownerId, now)
-                            // Re-sync entity from server by dropping cursor so next pull will restore authority
-                            db.syncMetaDao().remove(SyncEngine.v2SyncCursorKey(ownerId))
-                        }
-                        "discard" -> {
-                            if (outboxItem != null) {
-                                syncEngine.discardLocalMutation(outboxItem)
-                            } else {
-                                db.conflictDao().markResolved(currentConflict.id, ownerId, now)
-                            }
-                        }
                         "local", "merged" -> {
                             val serverObj = serverElement as? JsonObject
                             val serverVersion = serverObj?.get("version")?.jsonPrimitive?.longOrNull
@@ -2440,6 +2503,8 @@ class MainViewModel(
                                 lastError = null,
                             )
                             db.outboxDao().insert(nextOutbox)
+                            db.syncJournalDao().reassignGuards(currentConflict.mutationId, newMutationId)
+                            MutationGuards(db, api.json).track(nextOutbox)
                             db.conflictDao().markResolved(currentConflict.id, ownerId, now)
                         }
                         else -> error("未知冲突解决策略: $strategy")
@@ -2685,7 +2750,7 @@ class MainViewModel(
         WidgetUpdater.refreshAll(authManager.appContext)
     }
 
-    private suspend fun getOrCreateDatePoint(ownerId: String, localDate: String): TimePointEntity {
+    private suspend fun getOrCreateDatePoint(ownerId: String, localDate: String, recordMutation: Boolean = true): TimePointEntity {
         return db.withTransaction { db.timePointDao().getTimePointByDate(ownerId, localDate) ?: run {
             val now = nowIso()
             TimePointEntity(
@@ -2703,13 +2768,15 @@ class MainViewModel(
                 pendingSync = true
             ).also { newPoint ->
                 db.timePointDao().upsertTimePoint(newPoint)
-                syncEngine.recordLocalMutation(
-                    command = "timePoint.date.create",
-                    entityId = newPoint.id,
-                    baseVersion = null,
-                    payload = mapOf("localDate" to localDate),
-                    ownerId = ownerId,
-                )
+                if (recordMutation) {
+                    syncEngine.recordLocalMutation(
+                        command = "timePoint.date.create",
+                        entityId = newPoint.id,
+                        baseVersion = null,
+                        payload = mapOf("localDate" to localDate),
+                        ownerId = ownerId,
+                    )
+                }
             }
         } }
     }
@@ -2719,10 +2786,15 @@ class MainViewModel(
         ?: ThemeMode.SYSTEM
 
     private fun nowIso(): String =
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date())
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.format(Date())
 
     private fun requireValidLocalDate(localDate: String) {
-        val parser = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { isLenient = false }
+        val parser = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+            isLenient = false
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
         val parsed = parser.parse(localDate)
         require(parsed != null && parser.format(parsed) == localDate) { "日期无效" }
     }

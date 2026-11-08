@@ -319,6 +319,18 @@ describe('Dexie v2 migration', () => {
       value: { onLine: true },
     });
     const taskId = uuidv7();
+    const serverTask = {
+      id: taskId,
+      referenceId: 'TASK-1',
+      parentFolderId: null,
+      title: 'Server Task Title',
+      status: 'TODO' as const,
+      rank: '1024',
+      version: 3,
+      completedAt: null,
+      createdAt: '2026-09-13T00:00:00.000Z',
+      updatedAt: '2026-09-13T00:00:00.000Z',
+    };
 
     const engine = new V2SyncEngine(db, uuidv7(), {
       async push(request) {
@@ -330,7 +342,7 @@ describe('Dexie v2 migration', () => {
             error: {
               code: 'VERSION_CONFLICT',
               message: '版本冲突',
-              details: { id: taskId, title: 'Server Task Title', version: 3 },
+              details: { server: serverTask },
             },
           })),
         };
@@ -341,7 +353,7 @@ describe('Dexie v2 migration', () => {
       async snapshot() {
         return {
           folders: [],
-          tasks: [],
+          tasks: [serverTask],
           notes: [],
           taskSteps: [],
           timePoints: [],

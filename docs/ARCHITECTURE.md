@@ -2,7 +2,7 @@
 
 ## 拓扑
 
-Web/PWA 直接加载 React Web 产物，并通过浏览器的 Fetch、Cookie、IndexedDB 和 WebSocket 访问中枢；Android 使用独立 Jetpack Compose 原生 UI、Room、OkHttp 和同一 v2 API/同步协议。所有客户端通过 Fastify REST 推送/拉取；WebSocket 只发送认证后的 `sync.required` 失效通知。生产入口是 Caddy → Fastify → PostgreSQL。PostgreSQL 可以是 Compose 内置服务，也可以是外部/共享数据库服务器；每个 TaskDock 中枢使用独立 database。可选 Redis 只做共享限流和冷启动投影缓存，故障时 fail-open，不进入权威写路径。
+Web/PWA 直接加载 React Web 产物，并通过浏览器的 Fetch、Cookie、IndexedDB 和 WebSocket 访问中枢；Android 使用独立 Jetpack Compose 原生 UI、Room、OkHttp 和同一 v2 API/同步协议。所有客户端通过 Fastify REST 推送/拉取；WebSocket 只发送认证后的 `sync.required` 失效通知。生产入口是 Caddy → Fastify → PostgreSQL。PostgreSQL 可以是 Compose 内置服务，也可以是外部/共享数据库服务器；每个 TaskDock 中枢使用独立 database。可选 Redis 只做共享限流和冷启动投影缓存，不进入权威写路径；生产 Compose 默认要求共享认证限流，已配置 Redis 但不可用时认证请求 fail-closed。
 
 ## 包边界
 
@@ -15,7 +15,7 @@ Web/PWA 直接加载 React Web 产物，并通过浏览器的 Fetch、Cookie、I
 - `apps/mobile`：Capacitor 工程与 `apps/mobile/android` 原生 Compose/Room 客户端；原生客户端不依赖 React 页面来满足 v2 功能。
 - `apps/api/src/tree-store.ts`：Owner-scoped v2 目录树、归档操作、Workflow、TaskStep、时间点/Placement 以及内存迁移投影。
 - `apps/api/src/postgres-tree-store.ts`：PostgreSQL v2 projection 的单查询加载、增量 change-feed 追赶、批量持久化和 v2 change feed 适配。
-- `apps/api/src/cache.ts`：可选 Redis 共享限流/冷启动缓存；未配置或故障时回退到进程内缓存和数据库。
+- `apps/api/src/cache.ts`：可选 Redis 共享限流/冷启动缓存；缓存投影故障回退数据库，认证限流是否允许进程内回退由 `AUTH_RATE_LIMIT_REQUIRE_SHARED` 决定。
 - 主题：Web 使用 `prefers-color-scheme`，Android 使用 `Configuration.uiMode` 同步系统栏并向 WebView 派发主题事件；主题是设备运行时状态，不进入账号同步设置。
 
 路由只做解析、认证和响应映射；Task 与 Placement 语义集中在 Store 调用的领域函数中。所有资源取值先检查 `ownerId`，随机 UUID 不能代替授权检查。

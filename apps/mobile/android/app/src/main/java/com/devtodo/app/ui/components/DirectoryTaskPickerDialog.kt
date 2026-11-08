@@ -109,7 +109,7 @@ fun DirectoryTaskPickerDialog(
             .filter { it.parentFolderId == currentFolderId }
             .sortedWith(
                 compareBy<FolderEntity>(
-                    { it.rank.toLongOrNull() ?: 0L },
+                    { it.rank.toBigInteger() },
                     { it.id },
                 )
             )
@@ -122,7 +122,7 @@ fun DirectoryTaskPickerDialog(
             .sortedWith(
                 compareBy<TaskEntity>(
                     { it.status == TaskStatus.DONE },
-                    { it.rank.toLongOrNull() ?: 0L },
+                    { it.rank.toBigInteger() },
                     { it.id },
                 )
             )

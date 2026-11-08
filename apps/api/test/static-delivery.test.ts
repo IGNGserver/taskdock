@@ -37,7 +37,7 @@ describe('static delivery cache contract', () => {
       expect(asset.statusCode).toBe(200);
       expect(asset.headers['content-encoding']).toBe('gzip');
       expect(asset.headers['cache-control']).toBe('public, max-age=31536000, immutable');
-      expect(asset.headers['vary']).toContain('Accept-Encoding');
+      expect(asset.headers['vary']).toMatch(/(?:^|,\s*)accept-encoding(?:,|$)/i);
       expect(
         (await app.inject('/icons/0123456789abcdef/pwa-192.png')).headers['cache-control'],
       ).toBe('public, max-age=31536000, immutable');

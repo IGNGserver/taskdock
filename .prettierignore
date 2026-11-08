@@ -3,4 +3,9 @@ pnpm-lock.yaml
 apps/web/dist
 archive/desktop-client/**
 apps/mobile/android
+website/dist
+playwright-report
+test-results
+.env
+.env.*
 node_modules

@@ -738,17 +738,11 @@ class SyncEngine(
                     pushFailure = failure
                     null
                 }
-                if (blockedMutation != null) {
-                    // Rejected/unsupported mutations have just been released
-                    // from their pending guards. Reconcile against the
-                    // authoritative snapshot now so a locally-created ghost
-                    // is not left behind until cursor retention expires.
-                    bootstrap(ownerId)
-                }
+                val reconciledRejected = reconcileRejectedMutations(ownerId)
 
                 // Each successful upload batch already pulled its changes. Only
                 // an uncertain response or a reconciliation needs a final pull.
-                if ((hadPending && pushFailure != null) || blockedMutation != null) pullRemote(ownerId)
+                if ((hadPending && pushFailure != null) || reconciledRejected) pullRemote(ownerId)
                 replayDeferred(ownerId)
                 _loadProgress.value = LoadProgress("ready", complete = true)
                 pushFailure?.let { throw it }
@@ -943,22 +937,52 @@ class SyncEngine(
         MutationGuards(db, api.json).release(item)
     }
 
+    private suspend fun reconcileRejectedMutations(ownerId: String): Boolean {
+        val pending = db.outboxDao().getPendingItems(ownerId)
+        val guards = db.syncJournalDao().guards()
+        val rejected = pending.filter {
+            it.lastError?.startsWith("TERMINAL:") == true && guards.any { guard -> guard.mutationId == it.mutationId }
+        }.map { it.mutationId }.toSet()
+        if (rejected.isEmpty()) return false
+        val closure = mutationClosure(pending, guards, rejected)
+        val affected = pending.filter { it.mutationId in closure }
+        // Fetch before changing guards or optimistic rows. Any network/database
+        // failure leaves the rejected intent and the remaining outbox intact.
+        val snapshot = api.getSnapshotV2().getOrThrow()
+        db.withTransaction {
+            ensureSession()
+            affected.forEach { item ->
+                if (item.lastError?.startsWith("TERMINAL:") != true) {
+                    db.outboxDao().recordAttempt(item.id, ownerId, Long.MAX_VALUE,
+                        "TERMINAL:DEPENDENCY_REJECTED: 前置操作被中枢拒绝")
+                }
+                markEntitySynced(ownerId, item)
+            }
+            applyV2Snapshot(snapshot, ownerId)
+        }
+        return true
+    }
+
     /**
-     * Drops a local mutation without leaving its optimistic rows permanently
-     * protected from future snapshots. The caller uses this for an explicit
-     * user discard; rejected oversized/unsupported mutations use the same
-     * cleanup path internally.
+     * Drops a mutation and its dependants only after a complete authoritative
+     * snapshot has been obtained. A failed refresh preserves both local intent
+     * and the visible optimistic state for an explicit later retry.
      */
     suspend fun discardLocalMutation(item: OutboxEntity) {
         val ownerId = authManager.ownerId ?: error("登录状态已失效，请重新登录")
         require(item.ownerId == ownerId) { "操作不属于当前账户" }
+        val pending = db.outboxDao().getPendingItems(ownerId)
+        val closure = mutationClosure(pending, db.syncJournalDao().guards(), setOf(item.mutationId))
+        val affected = pending.filter { it.mutationId in closure }
+        val snapshot = api.getSnapshotV2().getOrThrow()
         db.withTransaction {
-            markEntitySynced(ownerId, item)
-            db.outboxDao().deleteByMutationId(item.mutationId, ownerId)
-            db.conflictDao().markResolvedByMutationId(item.mutationId, ownerId, isoFormat.format(Date()))
-            // Discard abandons an optimistic version; rebuild from authority,
-            // not an incremental cursor that already skipped that version.
-            db.syncMetaDao().remove(v2SyncCursorKey(ownerId))
+            ensureSession()
+            affected.forEach { markEntitySynced(ownerId, it) }
+            applyV2Snapshot(snapshot, ownerId)
+            affected.forEach {
+                db.outboxDao().deleteByMutationId(it.mutationId, ownerId)
+                db.conflictDao().markResolvedByMutationId(it.mutationId, ownerId, isoFormat.format(Date()))
+            }
         }
     }
 
@@ -1050,7 +1074,6 @@ class SyncEngine(
                 db.withTransaction {
                     ensureSession()
                     db.outboxDao().recordAttempt(source.id, ownerId, Long.MAX_VALUE, message)
-                    markEntitySynced(ownerId, source)
                 }
                 blockedMessage = blockedMessage ?: message.removePrefix("TERMINAL:")
                 continue
@@ -1117,7 +1140,6 @@ class SyncEngine(
                         db.withTransaction {
                             ensureSession()
                             db.outboxDao().recordAttempt(original.id, ownerId, Long.MAX_VALUE, message)
-                            markEntitySynced(ownerId, original)
                         }
                         blockedMessage = blockedMessage ?: "有同步操作被中枢拒绝"
                     }
@@ -1183,6 +1205,10 @@ class SyncEngine(
                         put("parentFolderId", parent)
                         put("title", title)
                         payload["noteId"]?.let { put("noteId", it) }
+                        payload["localDate"]?.let { put("localDate", it) }
+                        payload["timePointId"]?.let { put("timePointId", it) }
+                        payload["datePointId"]?.let { put("datePointId", it) }
+                        payload["placementId"]?.let { put("placementId", it) }
                     })
             }
             "task.update" -> {
@@ -1215,7 +1241,6 @@ class SyncEngine(
         db.withTransaction {
             ensureSession()
             db.outboxDao().recordAttempt(item.id, item.ownerId, Long.MAX_VALUE, "TERMINAL:CLIENT_UPGRADE_REQUIRED: ${item.command} 需要确认后转换")
-            markEntitySynced(item.ownerId, item)
         }
         return null
     }
@@ -1789,6 +1814,7 @@ class SyncEngine(
         payload: Map<String, Any?>,
         ownerId: String = authManager.ownerId
             ?: throw IllegalStateException("登录状态已失效，请重新登录"),
+        additionalEntityKeys: Set<Pair<String, String>> = emptySet(),
     ) {
         require(authManager.ownerId == ownerId) { "当前账户已变化" }
         val jsonPayload = api.json.encodeToString(payload.mapValues { (_, value) -> jsonElement(value) })
@@ -1803,7 +1829,7 @@ class SyncEngine(
             payloadJson = jsonPayload
         )
         db.outboxDao().insert(item)
-        MutationGuards(db, api.json).track(item)
+        MutationGuards(db, api.json).track(item, additionalEntityKeys)
         // Retain locally accepted rows even if an older in-flight first page
         // returns after their ACK. Membership is not permission to drop edits.
         if (command.substringBefore('.') in setOf("task", "tree", "folder")) {

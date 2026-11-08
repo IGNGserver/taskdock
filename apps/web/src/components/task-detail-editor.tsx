@@ -54,7 +54,8 @@ export function TaskDetailEditor({
   const [, render] = useState(0);
   const editorRef = useRef<HTMLDivElement>(null);
   const noteSaveTimerRef = useRef<number | undefined>(undefined);
-  const noteSaveRef = useRef<() => void>(() => undefined);
+  const noteSavePromiseRef = useRef<Promise<boolean> | null>(null);
+  const noteSaveRef = useRef<() => Promise<boolean> | undefined>(() => undefined);
   const changed = useRef(onChanged);
   changed.current = onChanged;
   const notify = () => {
@@ -69,6 +70,8 @@ export function TaskDetailEditor({
   const [noteExpanded, setNoteExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useDismissibleMenu(menuOpen, () => setMenuOpen(false));
+  const noteExpandRef = useRef<HTMLButtonElement | null>(null);
+  const noteCloseRestoreRef = useRef(false);
   const flushRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
@@ -123,6 +126,8 @@ export function TaskDetailEditor({
           const message = cause instanceof Error ? cause.message : '保存失败，请重试';
           draft.failures[key] = message;
           draft.retries.set(key, retryOperation ?? (() => save(key, operation)));
+          render((version) => version + 1);
+          notify();
           window.dispatchEvent(
             new CustomEvent('devtodo:toast', {
               detail: { message: `“${draft.title}”保存失败，编辑内容已保留` },
@@ -167,9 +172,15 @@ export function TaskDetailEditor({
       },
       () => saveNote(draft.note),
     );
-  const saveCurrentNote = () => {
-    if (draft.deleted || draft.note === draft.record.note.contentMarkdown) return;
-    void saveNote(draft.note);
+  const saveCurrentNote = (): Promise<boolean> | undefined => {
+    if (draft.deleted || draft.note === draft.record.note.contentMarkdown) return undefined;
+    if (noteSavePromiseRef.current) return noteSavePromiseRef.current;
+    const promise = saveNote(draft.note);
+    const tracked = promise.finally(() => {
+      if (noteSavePromiseRef.current === tracked) noteSavePromiseRef.current = null;
+    });
+    noteSavePromiseRef.current = tracked;
+    return tracked;
   };
   noteSaveRef.current = saveCurrentNote;
   const scheduleNoteSave = () => {
@@ -179,12 +190,12 @@ export function TaskDetailEditor({
       noteSaveRef.current();
     }, 600);
   };
-  const flushNote = () => {
+  const flushNote = (): Promise<boolean> | undefined => {
     if (noteSaveTimerRef.current !== undefined) {
       window.clearTimeout(noteSaveTimerRef.current);
       noteSaveTimerRef.current = undefined;
     }
-    noteSaveRef.current();
+    return noteSaveRef.current();
   };
   const saveStep = (id: string, patch: Partial<StepDraft>) =>
     save(`step:${id}`, async () => {
@@ -445,6 +456,8 @@ export function TaskDetailEditor({
               size={isTouch ? 's' : 'xs'}
               shape="square"
               onClick={(event) => {
+                noteExpandRef.current = event.currentTarget;
+                noteCloseRestoreRef.current = true;
                 event.currentTarget.focus({ preventScroll: true });
                 setNoteExpanded(true);
               }}
@@ -469,9 +482,17 @@ export function TaskDetailEditor({
             const retry = draft.retries.get('note');
             if (retry) void retry();
           }}
-          onClose={() => {
-            flushNote();
+          onClose={async () => {
+            await flushNote();
+            await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+            notify();
             setNoteExpanded(false);
+            if (noteCloseRestoreRef.current) {
+              noteCloseRestoreRef.current = false;
+              window.requestAnimationFrame(() =>
+                noteExpandRef.current?.focus({ preventScroll: true }),
+              );
+            }
           }}
         />
       </section>

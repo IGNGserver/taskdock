@@ -4,10 +4,12 @@ import { PostgresStore } from '../apps/api/src/postgres-store.js';
 import { PostgresTreeStore } from '../apps/api/src/postgres-tree-store.js';
 import { BootstrapSnapshots } from '../apps/api/src/sync-bootstrap.js';
 import { DirectoryReads } from '../apps/api/src/directory-reads.js';
+import { assertIsolatedEmptyDatabase, isolatedTestDatabaseUrl } from './test-database-safety.js';
 
 // Only isolated test databases: never add benchmark data to a production Hub.
-const databaseUrl = process.env['DATABASE_URL'];
-if (!databaseUrl) throw new Error('DATABASE_URL must point to an isolated empty test database');
+const databaseUrl = isolatedTestDatabaseUrl();
+if (!databaseUrl)
+  throw new Error('TASKDOCK_TEST_DATABASE_URL must point to an isolated empty test database');
 const pool = createPool(databaseUrl);
 const store = new PostgresStore(pool);
 const taskCount = Number(process.env['BOOTSTRAP_BENCH_TASKS'] ?? 10_000);
@@ -15,6 +17,7 @@ if (!Number.isInteger(taskCount) || taskCount < 100 || taskCount > 100_000)
   throw new Error('invalid task count');
 let ownerId: string | undefined;
 try {
+  await assertIsolatedEmptyDatabase(pool, 'bootstrap benchmark');
   await runMigrations(pool);
   if ((await pool.query('SELECT 1 FROM users LIMIT 1')).rowCount)
     throw new Error('refusing to modify a database with existing users');

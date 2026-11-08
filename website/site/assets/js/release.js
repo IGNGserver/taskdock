@@ -1,3 +1,5 @@
+import { selectLatestRelease } from './release-selection.js';
+
 // 版本信息：页面里写着最后一次核对过的版本作为兜底，
 // 加载后向 GitHub 公共 API 读取最新发布；失败时保持兜底内容，不影响页面。
 
@@ -53,22 +55,17 @@ async function fetchLatest() {
     });
     if (!res.ok) return null;
     const list = await res.json();
-    const latest = Array.isArray(list) ? list.find((r) => !r.draft) : null;
-    if (!latest || typeof latest.tag_name !== 'string') return null;
-    if (!SAFE_SEGMENT.test(latest.tag_name)) return null;
-    const apk = (latest.assets || []).find(
-      (a) => /\.apk$/i.test(a.name) && SAFE_SEGMENT.test(a.name),
-    );
-    const apkName = apk ? apk.name : null;
+    const selected = selectLatestRelease(list);
+    if (!selected) return null;
+    const { release: latest, apk, prerelease } = selected;
+    if (!SAFE_SEGMENT.test(latest.tag_name) || !SAFE_SEGMENT.test(apk.name)) return null;
     const release = {
       tag: latest.tag_name,
-      prerelease: Boolean(latest.prerelease),
+      prerelease,
       publishedAt: latest.published_at,
       url: `${RELEASE_PREFIX}tag/${encodeURIComponent(latest.tag_name)}`,
-      apk: apkName
-        ? `${RELEASE_PREFIX}download/${encodeURIComponent(latest.tag_name)}/${encodeURIComponent(apkName)}`
-        : null,
-      apkName,
+      apk: `${RELEASE_PREFIX}download/${encodeURIComponent(latest.tag_name)}/${encodeURIComponent(apk.name)}`,
+      apkName: apk.name,
     };
     writeCache(release);
     return release;

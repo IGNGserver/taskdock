@@ -19,7 +19,9 @@ import kotlinx.coroutines.launch
  */
 object WidgetUpdater {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val requests = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
+    // replay=1 closes the cold-process race where refreshAll emits before the
+    // launched collector has subscribed; extra capacity still coalesces bursts.
+    private val requests = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 16)
     private var started = false
 
     @Volatile

@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DevTodoDatabase } from '@devtodo/sync-client';
 import { uuidv7 } from '@devtodo/contracts';
-import { mutationV2, requestV2 } from '../src/api.js';
+import { mutationV2, quickCaptureV2, requestV2 } from '../src/api.js';
 import {
   activateLocalCache,
   cacheResponse,
@@ -137,6 +137,46 @@ describe('v2 local-first reads', () => {
     expect(await readCachedV2(`/today?localDate=${date}`)).toBeUndefined();
   });
 
+  it('distinguishes deleted Today placements from incomplete cached rows', async () => {
+    const date = '2026-10-20';
+    const pointId = uuidv7();
+    const taskId = uuidv7();
+    const placementId = uuidv7();
+    await db.syncMeta.put({ key: 'v2:bootstrap', value: '{"page":0}' });
+    await cacheResponse(`/v2/today?localDate=${date}`, {
+      point: { id: pointId, type: 'DATE', localDate: date, rank: '1', version: 1 },
+      items: [
+        {
+          id: placementId,
+          taskId,
+          timePointId: pointId,
+          rank: '1',
+          version: 1,
+          task: {
+            id: taskId,
+            parentFolderId: null,
+            title: 'cached',
+            status: 'TODO',
+            rank: '1',
+            version: 1,
+          },
+        },
+      ],
+    });
+    vi.stubGlobal('navigator', { onLine: false });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('offline');
+      }),
+    );
+    await mutationV2('DELETE', `/placements/${placementId}`, { baseVersion: 1 });
+    expect(await readCachedV2(`/today?localDate=${date}`)).toMatchObject({ items: [] });
+
+    await db.placements.delete(placementId);
+    expect(await readCachedV2(`/today?localDate=${date}`)).toBeUndefined();
+  });
+
   it('extends a covered empty Today with offline edits and survives reopening the database', async () => {
     const date = '2026-10-20';
     await cacheResponse(`/v2/today?localDate=${date}`, { point: null, items: [] });
@@ -152,24 +192,27 @@ describe('v2 local-first reads', () => {
         throw new TypeError('offline');
       }),
     );
-    const point = await requestV2<{ id: string }>('/time-points/date', {
-      method: 'POST',
-      body: JSON.stringify({ localDate: date }),
+    const result = await quickCaptureV2({
+      parentFolderId: null,
+      title: 'offline capture',
+      localDate: date,
     });
-    const result = await requestV2<{ task: { id: string } }>('/tasks', {
-      method: 'POST',
-      body: JSON.stringify({ parentFolderId: null, title: 'offline capture' }),
-    });
-    await requestV2('/placements', {
-      method: 'POST',
-      body: JSON.stringify({ taskId: result.task.id, timePointId: point.id }),
-    });
+    expect(result.point?.localDate).toBe(date);
+    expect(result.placement?.taskId).toBe(result.task.id);
     db.close();
     await db.open();
     expect(await readCachedV2(`/today?localDate=${date}`)).toMatchObject({
       items: [{ task: { title: 'offline capture' } }],
     });
-    expect(await db.outbox.count()).toBe(3);
+    expect(await db.outbox.count()).toBe(1);
+    const queued = (await db.outbox.toArray())[0]!;
+    expect(queued.command).toBe('task.create');
+    expect(queued.afterImage?.rows.map((row) => row.table).sort()).toEqual([
+      'notes',
+      'placements',
+      'tasks',
+      'timePoints',
+    ]);
     expect(await db.syncMeta.get('v2:cursor')).toBeUndefined();
   });
 
@@ -364,6 +407,27 @@ describe('v2 local-first reads', () => {
     expect(aborted).toBe(true);
   });
 
+  it('never queues an ambiguous timed-out write as a new offline mutation', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: unknown, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => reject(new TypeError('Failed to fetch')));
+          }),
+      ),
+    );
+    const result = expect(
+      mutationV2('POST', '/folders', { parentFolderId: null, title: 'ambiguous' }),
+    ).rejects.toThrow('请求超时');
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(15_001);
+    await result;
+    expect(await db.outbox.count()).toBe(0);
+    expect(await db.folders.count()).toBe(0);
+  });
+
   it('does not write an old response into a newly active account', async () => {
     let finish: ((response: Response) => void) | undefined;
     vi.stubGlobal(
@@ -436,5 +500,108 @@ describe('v2 local-first reads', () => {
       kind: 'FOLDER',
       aggregate: { status: 'DONE' },
     });
+  });
+
+  it('aggregates nested directories without counting orphan or cyclic tasks', async () => {
+    const now = new Date().toISOString();
+    const folder = (id: string, parentFolderId: string | null) => ({
+      id,
+      parentFolderId,
+      title: id,
+      status: 'TODO' as const,
+      completedAt: null,
+      rank: '1024',
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    });
+    await db.folders.bulkPut([
+      folder('root', null),
+      folder('child', 'root'),
+      folder('leaf', 'child'),
+      folder('cycle-a', 'cycle-b'),
+      folder('cycle-b', 'cycle-a'),
+    ]);
+    const task = (id: string, parentFolderId: string) => ({
+      id,
+      referenceId: `TASK-${id}`,
+      parentFolderId,
+      title: id,
+      status: 'TODO' as const,
+      rank: '2048',
+      version: 1,
+      completedAt: null,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    });
+    await db.tasks.bulkPut([task('valid', 'leaf'), task('cyclic', 'cycle-a')]);
+    await db.syncMeta.put({ key: 'v2:cursor', value: '10' });
+    vi.stubGlobal('navigator', { onLine: false });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('offline');
+      }),
+    );
+    const children = await requestV2<{
+      items: Array<{ kind: string; folder: { id: string }; aggregate: { totalCount: number } }>;
+    }>('/tree/children?parentFolderId=root');
+    expect(children.items).toHaveLength(1);
+    expect(children.items[0]).toMatchObject({
+      folder: { id: 'root' },
+      aggregate: { totalCount: 1 },
+    });
+  });
+
+  it('rebalances offline steps atomically and captures every changed sibling', async () => {
+    const taskId = uuidv7();
+    const ids = [uuidv7(), uuidv7(), uuidv7()];
+    const now = new Date().toISOString();
+    await db.taskSteps.bulkPut(
+      ids.map((id, index) => ({
+        id,
+        taskId,
+        title: String.fromCharCode(97 + index),
+        noteMarkdown: '',
+        status: 'TODO' as const,
+        rank: String(index + 1),
+        completedAt: null,
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+      })),
+    );
+    vi.stubGlobal('navigator', { onLine: false });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('offline');
+      }),
+    );
+
+    await mutationV2('POST', `/task-steps/${ids[2]}/move`, {
+      beforeId: ids[1],
+      afterId: null,
+      baseVersion: 1,
+    });
+
+    const changed = await db.taskSteps.toArray();
+    const ordered = changed.sort((left, right) =>
+      BigInt(left.rank) < BigInt(right.rank) ? -1 : 1,
+    );
+    expect(ordered.map((step) => step.id)).toEqual([ids[0], ids[2], ids[1]]);
+    expect(ordered.map((step) => step.rank)).toEqual(['1024', '2048', '3072']);
+    expect(ordered.map((step) => step.version)).toEqual([2, 2, 2]);
+    const outbox = await db.outbox.toArray();
+    expect(outbox).toHaveLength(1);
+    expect(
+      outbox[0]!.afterImage?.rows
+        .filter((row) => row.table === 'taskSteps')
+        .map((row) => row.id)
+        .sort(),
+    ).toEqual([...ids].sort());
   });
 });

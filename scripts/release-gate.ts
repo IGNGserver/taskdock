@@ -14,7 +14,7 @@ const checks = [
   // Keep the destructive, large-fixture benchmark before browser E2E.  The
   // real E2E server bootstraps a test Owner and must not make the later
   // capacity fixture fail with BOOTSTRAP_ALREADY_COMPLETED when both checks
-  // intentionally share one DATABASE_URL in a local release run.
+  // intentionally share one isolated test database in a local release run.
   ['capacity-postgres', ['perf:capacity']],
   ['build', ['build']],
   ['built-server-process', ['server:smoke']],
@@ -53,7 +53,7 @@ function runCheck(
 
 async function cleanupBrowserFixture(username: string): Promise<GateResult | undefined> {
   if (process.env['E2E_REAL'] !== '1') return undefined;
-  const databaseUrl = process.env['E2E_DATABASE_URL'] ?? process.env['DATABASE_URL'];
+  const databaseUrl = process.env['E2E_DATABASE_URL'] ?? process.env['TASKDOCK_TEST_DATABASE_URL'];
   if (!databaseUrl) return undefined;
 
   const pool = createPool(databaseUrl);
@@ -83,8 +83,8 @@ async function main(): Promise<void> {
             E2E_USERNAME: browserE2EUsername,
             ...(process.env['E2E_REAL'] === '1' &&
             !process.env['E2E_DATABASE_URL'] &&
-            process.env['DATABASE_URL']
-              ? { E2E_DATABASE_URL: process.env['DATABASE_URL'] }
+            process.env['TASKDOCK_TEST_DATABASE_URL']
+              ? { E2E_DATABASE_URL: process.env['TASKDOCK_TEST_DATABASE_URL'] }
               : {}),
           }
         : {};
@@ -93,6 +93,13 @@ async function main(): Promise<void> {
     if (name === 'browser-e2e') {
       const cleanupFailure = await cleanupBrowserFixture(browserE2EUsername);
       if (cleanupFailure) results.push(cleanupFailure);
+    }
+    // Never run later destructive or environment-sensitive checks after an
+    // earlier prerequisite failed. In particular, a rejected integration
+    // database must not be followed by the large capacity fixture.
+    if (results.at(-1)?.status !== 'PASS') {
+      console.error(`FAIL FAST: stopping release gate after ${name}.`);
+      break;
     }
   }
   console.log('\n=== release gate summary ===');

@@ -518,7 +518,7 @@ private fun ExpressiveStageBlock(
     onNavigateToDetail: (String) -> Unit,
 ) {
     val sortedMemberships = remember(memberships) {
-        memberships.sortedWith(compareBy<WorkflowTaskMembershipEntity> { it.rank.toLongOrNull() ?: 0L }.thenBy { it.id })
+        memberships.sortedWith(compareBy<WorkflowTaskMembershipEntity> { it.rank.toBigInteger() }.thenBy { it.id })
     }
     val taskMap = remember(allTasks) { allTasks.associateBy { it.id } }
     val visibleMemberships = remember(sortedMemberships, taskMap) {

@@ -3,6 +3,37 @@ package com.devtodo.app.data.sync
 import com.devtodo.app.data.local.*
 import kotlinx.serialization.json.*
 
+internal fun mutationClosure(
+    items: List<OutboxEntity>,
+    guards: List<SyncGuardEntity>,
+    initialMutationIds: Set<String>,
+): Set<String> {
+    val byMutation = guards.groupBy { it.mutationId }
+    val itemOrder = items.associate { it.mutationId to it.id }
+    val selected = initialMutationIds.toMutableSet()
+    val introducedAt = mutableMapOf<Pair<String, String>, Long>()
+    for (mutationId in initialMutationIds) {
+        val order = itemOrder[mutationId] ?: Long.MIN_VALUE
+        for (guard in byMutation[mutationId].orEmpty()) {
+            val target = guard.entityType to guard.entityId
+            introducedAt[target] = minOf(introducedAt[target] ?: Long.MAX_VALUE, order)
+        }
+    }
+    // A rejection only cancels later operations. Earlier mutations may already
+    // have applied successfully in the same ordered batch.
+    for (item in items.sortedBy { it.id }) {
+        if (item.mutationId in selected) continue
+        val targets = byMutation[item.mutationId].orEmpty().map { it.entityType to it.entityId }
+        if (targets.any { (introducedAt[it] ?: Long.MAX_VALUE) < item.id }) {
+            selected += item.mutationId
+            for (target in targets) {
+                introducedAt[target] = minOf(introducedAt[target] ?: Long.MAX_VALUE, item.id)
+            }
+        }
+    }
+    return selected
+}
+
 /** Reference-counted protection, including the entities affected by cascades. */
 class MutationGuards(private val db: AppDatabase, private val json: Json) {
     companion object {
@@ -12,9 +43,9 @@ class MutationGuards(private val db: AppDatabase, private val json: Json) {
             "workflowTaskMembership" to "workflow_task_memberships", "project" to "projects")
     }
 
-    suspend fun track(item: OutboxEntity) {
+    suspend fun track(item: OutboxEntity, additionalTargets: Set<Pair<String, String>> = emptySet()) {
         val payload = json.parseToJsonElement(item.payloadJson).jsonObject
-        val targets = mutableSetOf<Pair<String, String>>()
+        val targets = additionalTargets.toMutableSet()
         fun add(type: String, id: String?) { if (id != null) targets += type to id }
         var type = item.command.substringBefore('.')
         if (type == "workflowTask") type = "workflowTaskMembership"
@@ -24,6 +55,8 @@ class MutationGuards(private val db: AppDatabase, private val json: Json) {
         if (item.command == "task.create") {
             add("note", payload["noteId"]?.jsonPrimitive?.contentOrNull)
             add("note", db.noteDao().getNoteByTaskId(item.entityId, item.ownerId)?.id)
+            add("timePoint", payload["datePointId"]?.jsonPrimitive?.contentOrNull)
+            add("placement", payload["placementId"]?.jsonPrimitive?.contentOrNull)
         }
         if (item.command in setOf("folder.archiveTree", "folder.restoreTree", "folder.deleteTree")) {
             val folders = db.folderDao().getAll(item.ownerId)

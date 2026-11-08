@@ -43,6 +43,7 @@ import { z, ZodError } from 'zod';
 import { AuthService, type AuthConfig } from './auth.js';
 import { DatabaseConstraintError, PostgresStore } from './postgres-store.js';
 import { PostgresTreeStore } from './postgres-tree-store.js';
+import { assertProductionSecrets } from './runtime-secrets.js';
 import { MemoryStore, type Store } from './store.js';
 import { MemoryTreeStore, type V2TreeStore } from './tree-store.js';
 import { BootstrapSnapshots } from './sync-bootstrap.js';
@@ -338,7 +339,7 @@ export async function buildServer(
         const hashedAsset =
           /[/\\]assets[/\\][^/\\]+-[A-Za-z0-9_-]{8,}\.(?:js|css)(?:\.(?:br|gz))?$/.test(filePath) ||
           /[/\\]icons[/\\][a-f0-9]{16}[/\\][^/\\]+\.png$/.test(filePath);
-        response.setHeader(
+        response.header(
           'Cache-Control',
           hashedAsset
             ? 'public, max-age=31536000, immutable'
@@ -1232,6 +1233,14 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
             id: uuidSchema.optional(),
             parentFolderId: uuidSchema.nullable().default(null),
             title: z.string().trim().min(1).max(500),
+            noteId: uuidSchema.optional(),
+            localDate: z
+              .string()
+              .regex(/^\d{4}-\d{2}-\d{2}$/)
+              .optional(),
+            timePointId: uuidSchema.optional(),
+            datePointId: uuidSchema.optional(),
+            placementId: uuidSchema.optional(),
           })
           .strict()
           .parse(request.body);
@@ -1243,7 +1252,15 @@ function registerV2Routes(app: FastifyInstance, auth: AuthService, tree: V2TreeS
           'task.create',
           body.id ?? meta.mutationId,
           null,
-          { parentFolderId: body.parentFolderId, title: body.title },
+          {
+            parentFolderId: body.parentFolderId,
+            title: body.title,
+            noteId: body.noteId,
+            localDate: body.localDate,
+            timePointId: body.timePointId,
+            datePointId: body.datePointId,
+            placementId: body.placementId,
+          },
         );
         return reply.code(201).send(result);
       });
@@ -2181,21 +2198,19 @@ function validateRuntimeConfig(config: AppConfig): void {
   if (config.nodeEnv === 'production' && config.authLoginRateLimit > 1_000)
     throw new Error('AUTH_LOGIN_RATE_LIMIT must stay at or below 1000 in production');
   if (config.nodeEnv !== 'production') return;
-  const insecureMarkers = ['change-me', 'local-access-secret', 'local-refresh-pepper'];
   if (
     config.devMemoryStore ||
     !databaseConfigured(config) ||
     config.bootstrapToken.length < 32 ||
     config.accessTokenSecret.length < 32 ||
-    config.refreshTokenPepper.length < 32 ||
-    insecureMarkers.some(
-      (marker) =>
-        config.bootstrapToken.includes(marker) ||
-        config.accessTokenSecret.includes(marker) ||
-        config.refreshTokenPepper.includes(marker),
-    )
+    config.refreshTokenPepper.length < 32
   )
     throw new Error('production requires PostgreSQL and non-default token secrets');
+  assertProductionSecrets({
+    BOOTSTRAP_TOKEN: config.bootstrapToken,
+    ACCESS_TOKEN_SECRET: config.accessTokenSecret,
+    REFRESH_TOKEN_PEPPER: config.refreshTokenPepper,
+  });
   let origin: URL;
   try {
     origin = new URL(config.appOrigin);
@@ -2234,11 +2249,14 @@ function validateRuntimeConfig(config: AppConfig): void {
     throw new Error('NATIVE_ALLOWED_ORIGINS must contain controlled native origins');
 }
 
-function parseTrustProxy(
+export function parseTrustProxy(
   value: string,
 ): boolean | string | string[] | ((address: string, hop: number) => boolean) {
   const normalized = value.trim();
-  if (normalized === 'true') return true;
+  if (normalized === 'true')
+    throw new Error(
+      'TRUST_PROXY=true trusts every proxy; use an explicit hop count or address list',
+    );
   if (normalized === 'false' || normalized === '0') return false;
   if (/^\d+$/.test(normalized)) {
     const hops = Number(normalized);
@@ -2253,7 +2271,8 @@ function parseTrustProxy(
   return addresses;
 }
 
-class AuthRateLimiter {
+export class AuthRateLimiter {
+  private static readonly MAX_LOCAL_BUCKETS = 10_000;
   private readonly buckets = new Map<string, { count: number; resetAt: number }>();
 
   constructor(private readonly cache?: CacheStore) {}
@@ -2268,8 +2287,8 @@ class AuthRateLimiter {
     const now = Date.now();
     const normalizedUsername = username?.trim().toLocaleLowerCase('en-US') ?? '';
     const key = `${scope}:${request.ip}:${normalizedUsername}`;
-    // A shared counter makes the limit meaningful across API replicas. When
-    // Redis is absent or unhealthy, fall back to the per-process bucket.
+    // A shared counter makes the limit meaningful across API replicas. Cache
+    // outages only fall back locally when the deployment explicitly permits it.
     if (this.cache?.enabled) {
       const count = await this.cache.incr(`ratelimit:${key}`, windowMs);
       if (count !== null) {
@@ -2280,8 +2299,32 @@ class AuthRateLimiter {
         }
         return;
       }
+      if (
+        count === null &&
+        (process.env['AUTH_RATE_LIMIT_REQUIRE_SHARED'] === 'true' ||
+          (process.env['NODE_ENV'] === 'production' && this.cache.enabled))
+      ) {
+        // A configured shared limiter must not silently turn a Redis outage
+        // into one independent allowance per API replica.
+        throw new DomainError('RATE_LIMITED', '限流服务暂不可用，请稍后重试', {
+          retryAfterSeconds: 30,
+        });
+      }
     }
-    const existing = this.buckets.get(key);
+    let existing = this.buckets.get(key);
+    if (!existing || existing.resetAt <= now) {
+      if (this.buckets.size >= AuthRateLimiter.MAX_LOCAL_BUCKETS) {
+        for (const [candidateKey, candidate] of this.buckets)
+          if (candidate.resetAt <= now) this.buckets.delete(candidateKey);
+        existing = this.buckets.get(key);
+      }
+      if (!existing && this.buckets.size >= AuthRateLimiter.MAX_LOCAL_BUCKETS) {
+        // Never evict a live bucket to make room for attacker-chosen keys.
+        throw new DomainError('RATE_LIMITED', '请求过于频繁，请稍后重试', {
+          retryAfterSeconds: 30,
+        });
+      }
+    }
     const bucket =
       existing && existing.resetAt > now ? existing : { count: 0, resetAt: now + windowMs };
     if (bucket.count >= limit) {
@@ -2291,10 +2334,6 @@ class AuthRateLimiter {
     }
     bucket.count += 1;
     this.buckets.set(key, bucket);
-    if (this.buckets.size > 10_000) {
-      for (const [candidateKey, candidate] of this.buckets)
-        if (candidate.resetAt <= now) this.buckets.delete(candidateKey);
-    }
   }
 }
 

@@ -88,6 +88,121 @@ describe('TaskDock v2 API and sync protocol', () => {
     });
   });
 
+  it('captures a dated task atomically and replays the complete mutation by idempotency key', async () => {
+    const { app, accessToken } = await boot();
+    const taskId = uuidv7();
+    const pointId = uuidv7();
+    const placementId = uuidv7();
+    const requestHeaders = {
+      authorization: `Bearer ${accessToken}`,
+      'x-client-id': uuidv7(),
+      'idempotency-key': uuidv7(),
+    };
+    const payload = {
+      id: taskId,
+      noteId: uuidv7(),
+      parentFolderId: null,
+      title: '一次完成今日收集',
+      localDate: '2026-10-20',
+      datePointId: pointId,
+      placementId,
+    };
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v2/tasks',
+      headers: requestHeaders,
+      payload,
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({
+      task: { id: taskId },
+      note: { id: payload.noteId },
+      point: { id: pointId, localDate: '2026-10-20' },
+      placement: { id: placementId, taskId, timePointId: pointId },
+    });
+    const replay = await app.inject({
+      method: 'POST',
+      url: '/api/v2/tasks',
+      headers: requestHeaders,
+      payload,
+    });
+    expect(replay.statusCode).toBe(201);
+    expect(replay.json()).toEqual(created.json());
+    const today = await app.inject({
+      method: 'GET',
+      url: '/api/v2/today?localDate=2026-10-20',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(today.json().items).toHaveLength(1);
+
+    const event = await app.inject({
+      method: 'POST',
+      url: '/api/v2/time-points/events',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'x-client-id': uuidv7(),
+        'idempotency-key': uuidv7(),
+      },
+      payload: { title: '收集到事件' },
+    });
+    expect(event.statusCode).toBe(201);
+    const eventTask = await app.inject({
+      method: 'POST',
+      url: '/api/v2/tasks',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'x-client-id': uuidv7(),
+        'idempotency-key': uuidv7(),
+      },
+      payload: {
+        title: '一次完成事件收集',
+        timePointId: event.json().id,
+        placementId: uuidv7(),
+      },
+    });
+    expect(eventTask.statusCode).toBe(201);
+    expect(eventTask.json().placement).toMatchObject({ timePointId: event.json().id });
+    const ambiguous = await app.inject({
+      method: 'POST',
+      url: '/api/v2/tasks',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'x-client-id': uuidv7(),
+        'idempotency-key': uuidv7(),
+      },
+      payload: { title: '目标不能含糊', localDate: '2026-10-20', timePointId: event.json().id },
+    });
+    expect(ambiguous.statusCode).toBe(400);
+
+    const rejectedId = uuidv7();
+    const rejected = await app.inject({
+      method: 'POST',
+      url: '/api/v2/tasks',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'x-client-id': uuidv7(),
+        'idempotency-key': uuidv7(),
+      },
+      payload: {
+        id: rejectedId,
+        title: '不能留下半条任务',
+        localDate: '2026-02-30',
+        datePointId: uuidv7(),
+        placementId: uuidv7(),
+      },
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/api/v2/tasks/${rejectedId}`,
+          headers: { authorization: `Bearer ${accessToken}` },
+        })
+      ).statusCode,
+    ).toBe(404);
+  });
+
   it('covers the tree, workflows, steps, placements, event deletion, deletion preview and protocol gate', async () => {
     const { app, store, accessToken } = await boot();
     const headers = () => ({

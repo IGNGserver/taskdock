@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ProjectDao {
-    @Query("SELECT * FROM projects WHERE ownerId = :ownerId AND archivedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC")
+    @Query("SELECT * FROM projects WHERE ownerId = :ownerId AND archivedAt IS NULL ORDER BY $RANK_ORDER ASC")
     fun getAllProjectsFlow(ownerId: String): Flow<List<ProjectEntity>>
 
     @Query("SELECT * FROM projects WHERE id = :id AND ownerId = :ownerId")
@@ -27,15 +27,15 @@ interface ProjectDao {
 
 @Dao
 interface FolderDao {
-    @Query("SELECT * FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL AND archivedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent) AND (id IN (:ids) OR pendingSync = 1) ORDER BY CAST(rank AS INTEGER), id")
+    @Query("SELECT * FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL AND archivedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent) AND (id IN (:ids) OR pendingSync = 1) ORDER BY $RANK_ORDER, id")
     fun directoryMembers(ownerId: String, parent: String?, ids: List<String>): Flow<List<FolderEntity>>
-    @Query("SELECT * FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL AND archivedAt IS NULL AND ((:parentFolderId IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parentFolderId) ORDER BY CAST(rank AS INTEGER) ASC, id ASC")
+    @Query("SELECT * FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL AND archivedAt IS NULL AND ((:parentFolderId IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parentFolderId) ORDER BY $RANK_ORDER ASC, id ASC")
     fun getChildrenFlow(ownerId: String, parentFolderId: String?): Flow<List<FolderEntity>>
 
     @Query("SELECT * FROM folders WHERE ownerId = :ownerId AND id = :id LIMIT 1")
     suspend fun getById(id: String, ownerId: String): FolderEntity?
 
-    @Query("SELECT * FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC, id ASC")
+    @Query("SELECT * FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL ORDER BY $RANK_ORDER ASC, id ASC")
     fun getAllFlow(ownerId: String): Flow<List<FolderEntity>>
 
     @Query("SELECT * FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL")
@@ -59,7 +59,7 @@ interface FolderDao {
 
 @Dao
 interface TaskDao {
-    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND deletedAt IS NULL AND archivedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent) AND (id IN (:ids) OR pendingSync = 1) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER), id")
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND deletedAt IS NULL AND archivedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent) AND (id IN (:ids) OR pendingSync = 1) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, $RANK_ORDER, id")
     fun directoryMembers(ownerId: String, parent: String?, ids: List<String>): Flow<List<TaskEntity>>
     @Query("SELECT EXISTS(SELECT 1 FROM tasks WHERE ownerId = :ownerId AND deletedAt IS NULL) OR EXISTS(SELECT 1 FROM folders WHERE ownerId = :ownerId AND deletedAt IS NULL)")
     fun hasCacheFlow(ownerId: String): Flow<Boolean>
@@ -67,12 +67,12 @@ interface TaskDao {
     fun locationsFlow(ownerId: String): Flow<List<TaskLocation>>
     @Query("SELECT COUNT(*) AS total, COALESCE(SUM(status = 'DONE'), 0) AS done FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent)")
     fun directoryCounts(ownerId: String, parent: String?): Flow<DirectoryCounts>
-    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent) AND (id IN (:pinnedIds) OR id IN (SELECT id FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER), id LIMIT :limit)) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER), id")
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent) AND (id IN (:pinnedIds) OR id IN (SELECT id FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND ((:parent IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parent) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, $RANK_ORDER, id LIMIT :limit)) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, $RANK_ORDER, id")
     fun directoryWindow(ownerId: String, parent: String?, limit: Int, pinnedIds: List<String>): Flow<List<TaskEntity>>
-    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND projectId IS NULL AND category = 'MISC' AND archivedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC")
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND projectId IS NULL AND category = 'MISC' AND archivedAt IS NULL ORDER BY $RANK_ORDER ASC")
     fun getInboxTasksFlow(ownerId: String): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND projectId = :projectId AND archivedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC")
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND projectId = :projectId AND archivedAt IS NULL ORDER BY $RANK_ORDER ASC")
     fun getTasksByProjectFlow(projectId: String, ownerId: String): Flow<List<TaskEntity>>
 
     @Query("SELECT * FROM tasks WHERE id = :id AND ownerId = :ownerId AND deletedAt IS NULL")
@@ -96,13 +96,13 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NOT NULL AND deletedAt IS NULL ORDER BY updatedAt DESC")
     fun getArchivedTasksFlow(ownerId: String): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND ((:parentFolderId IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parentFolderId) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER) ASC, id ASC")
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND ((:parentFolderId IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parentFolderId) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, $RANK_ORDER ASC, id ASC")
     fun getTreeTasksByParentFlow(parentFolderId: String?, ownerId: String): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER) ASC, id ASC")
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, $RANK_ORDER ASC, id ASC")
     fun getTreeTasksFlow(ownerId: String): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND status != 'DONE' ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER) ASC, id ASC LIMIT :limit")
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND status != 'DONE' ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, $RANK_ORDER ASC, id ASC LIMIT :limit")
     suspend fun getOpenTasks(ownerId: String, limit: Int): List<TaskEntity>
 
     @Query("SELECT COUNT(*) FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND status != 'DONE'")
@@ -111,7 +111,7 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND status = 'DONE' AND completedAt IS NOT NULL AND completedAt >= :since ORDER BY completedAt DESC, id ASC LIMIT :limit")
     suspend fun getRecentlyCompleted(ownerId: String, since: String, limit: Int): List<TaskEntity>
 
-    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND status != 'DONE' AND ((:parentFolderId IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parentFolderId) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, CAST(rank AS INTEGER) ASC, id ASC LIMIT :limit")
+    @Query("SELECT * FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND status != 'DONE' AND ((:parentFolderId IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parentFolderId) ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, $RANK_ORDER ASC, id ASC LIMIT :limit")
     suspend fun getOpenTasksInFolder(ownerId: String, parentFolderId: String?, limit: Int): List<TaskEntity>
 
     @Query("SELECT COUNT(*) FROM tasks WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL AND status != 'DONE' AND ((:parentFolderId IS NULL AND parentFolderId IS NULL) OR parentFolderId = :parentFolderId)")
@@ -132,7 +132,7 @@ interface TaskDao {
 
 @Dao
 interface TaskStepDao {
-    @Query("SELECT * FROM task_steps WHERE ownerId = :ownerId AND taskId = :taskId AND deletedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC, id ASC")
+    @Query("SELECT * FROM task_steps WHERE ownerId = :ownerId AND taskId = :taskId AND deletedAt IS NULL ORDER BY $RANK_ORDER ASC, id ASC")
     fun getByTaskFlow(taskId: String, ownerId: String): Flow<List<TaskStepEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -159,13 +159,13 @@ interface TaskStepDao {
 
 @Dao
 interface WorkflowDao {
-    @Query("SELECT * FROM workflows WHERE ownerId = :ownerId AND deletedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC, id ASC")
+    @Query("SELECT * FROM workflows WHERE ownerId = :ownerId AND deletedAt IS NULL ORDER BY $RANK_ORDER ASC, id ASC")
     fun getActiveFlow(ownerId: String): Flow<List<WorkflowEntity>>
 
-    @Query("SELECT * FROM workflow_stages WHERE ownerId = :ownerId AND workflowId = :workflowId AND deletedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC, id ASC")
+    @Query("SELECT * FROM workflow_stages WHERE ownerId = :ownerId AND workflowId = :workflowId AND deletedAt IS NULL ORDER BY $RANK_ORDER ASC, id ASC")
     fun getStagesFlow(workflowId: String, ownerId: String): Flow<List<WorkflowStageEntity>>
 
-    @Query("SELECT * FROM workflow_task_memberships WHERE ownerId = :ownerId AND workflowId = :workflowId AND deletedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC, id ASC")
+    @Query("SELECT * FROM workflow_task_memberships WHERE ownerId = :ownerId AND workflowId = :workflowId AND deletedAt IS NULL ORDER BY $RANK_ORDER ASC, id ASC")
     fun getMembershipsFlow(workflowId: String, ownerId: String): Flow<List<WorkflowTaskMembershipEntity>>
 
     @Query("SELECT * FROM workflow_task_memberships WHERE ownerId = :ownerId AND taskId = :taskId AND deletedAt IS NULL")
@@ -286,13 +286,13 @@ interface NoteDao {
 interface TimePointDao {
     @Query("SELECT * FROM time_points WHERE ownerId = :ownerId AND type = 'DATE' AND localDate >= :start AND localDate <= :end AND deletedAt IS NULL AND archivedAt IS NULL ORDER BY localDate")
     fun monthPoints(ownerId: String, start: String, end: String): Flow<List<TimePointEntity>>
-    @Query("SELECT * FROM time_points WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL ORDER BY type, localDate, CAST(rank AS INTEGER)")
+    @Query("SELECT * FROM time_points WHERE ownerId = :ownerId AND archivedAt IS NULL AND deletedAt IS NULL ORDER BY type, localDate, $RANK_ORDER")
     fun getActiveTimePointsFlow(ownerId: String): Flow<List<TimePointEntity>>
 
     @Query("SELECT * FROM time_points WHERE ownerId = :ownerId AND type = 'DATE' AND localDate = :localDate AND archivedAt IS NULL AND deletedAt IS NULL LIMIT 1")
     suspend fun getTimePointByDate(ownerId: String, localDate: String): TimePointEntity?
 
-    @Query("SELECT * FROM time_points WHERE ownerId = :ownerId AND type = 'EVENT' AND archivedAt IS NULL AND deletedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC")
+    @Query("SELECT * FROM time_points WHERE ownerId = :ownerId AND type = 'EVENT' AND archivedAt IS NULL AND deletedAt IS NULL ORDER BY $RANK_ORDER ASC")
     fun getActiveEventsFlow(ownerId: String): Flow<List<TimePointEntity>>
 
     @Query("SELECT * FROM time_points WHERE id = :id AND ownerId = :ownerId AND deletedAt IS NULL")
@@ -321,21 +321,21 @@ interface TimePointDao {
 interface PlacementDao {
     @Query("SELECT time_points.localDate AS localDate, COUNT(*) AS total FROM placements JOIN time_points ON time_points.id = placements.timePointId AND time_points.ownerId = placements.ownerId JOIN tasks ON tasks.id = placements.taskId AND tasks.ownerId = placements.ownerId WHERE placements.ownerId = :ownerId AND time_points.type = 'DATE' AND time_points.localDate >= :start AND time_points.localDate <= :end AND time_points.deletedAt IS NULL AND time_points.archivedAt IS NULL AND placements.deletedAt IS NULL AND tasks.deletedAt IS NULL AND tasks.archivedAt IS NULL GROUP BY time_points.localDate")
     fun monthCounts(ownerId: String, start: String, end: String): Flow<List<MonthCount>>
-    @Query("SELECT tasks.*, placements.id AS placement_id, placements.ownerId AS placement_ownerId, placements.taskId AS placement_taskId, placements.timePointId AS placement_timePointId, placements.rank AS placement_rank, placements.version AS placement_version, placements.createdAt AS placement_createdAt, placements.updatedAt AS placement_updatedAt, placements.deletedAt AS placement_deletedAt, placements.pendingSync AS placement_pendingSync FROM placements JOIN time_points ON time_points.id = placements.timePointId AND time_points.ownerId = placements.ownerId JOIN tasks ON tasks.id = placements.taskId AND tasks.ownerId = placements.ownerId WHERE placements.ownerId = :ownerId AND time_points.type = 'DATE' AND time_points.localDate = :date AND time_points.deletedAt IS NULL AND time_points.archivedAt IS NULL AND placements.deletedAt IS NULL AND tasks.deletedAt IS NULL AND tasks.archivedAt IS NULL ORDER BY CAST(placements.rank AS INTEGER), placements.id")
+    @Query("SELECT tasks.*, placements.id AS placement_id, placements.ownerId AS placement_ownerId, placements.taskId AS placement_taskId, placements.timePointId AS placement_timePointId, placements.rank AS placement_rank, placements.version AS placement_version, placements.createdAt AS placement_createdAt, placements.updatedAt AS placement_updatedAt, placements.deletedAt AS placement_deletedAt, placements.pendingSync AS placement_pendingSync FROM placements JOIN time_points ON time_points.id = placements.timePointId AND time_points.ownerId = placements.ownerId JOIN tasks ON tasks.id = placements.taskId AND tasks.ownerId = placements.ownerId WHERE placements.ownerId = :ownerId AND time_points.type = 'DATE' AND time_points.localDate = :date AND time_points.deletedAt IS NULL AND time_points.archivedAt IS NULL AND placements.deletedAt IS NULL AND tasks.deletedAt IS NULL AND tasks.archivedAt IS NULL ORDER BY $PLACEMENT_RANK_ORDER, placements.id")
     fun scheduledTasksFlow(ownerId: String, date: String): Flow<List<ScheduledTaskRow>>
 
-    @Query("SELECT tasks.*, placements.id AS placement_id, placements.ownerId AS placement_ownerId, placements.taskId AS placement_taskId, placements.timePointId AS placement_timePointId, placements.rank AS placement_rank, placements.version AS placement_version, placements.createdAt AS placement_createdAt, placements.updatedAt AS placement_updatedAt, placements.deletedAt AS placement_deletedAt, placements.pendingSync AS placement_pendingSync FROM placements JOIN time_points ON time_points.id = placements.timePointId AND time_points.ownerId = placements.ownerId JOIN tasks ON tasks.id = placements.taskId AND tasks.ownerId = placements.ownerId WHERE placements.ownerId = :ownerId AND time_points.type = 'DATE' AND time_points.localDate = :date AND time_points.deletedAt IS NULL AND time_points.archivedAt IS NULL AND placements.deletedAt IS NULL AND tasks.deletedAt IS NULL AND tasks.archivedAt IS NULL ORDER BY CAST(placements.rank AS INTEGER), placements.id")
+    @Query("SELECT tasks.*, placements.id AS placement_id, placements.ownerId AS placement_ownerId, placements.taskId AS placement_taskId, placements.timePointId AS placement_timePointId, placements.rank AS placement_rank, placements.version AS placement_version, placements.createdAt AS placement_createdAt, placements.updatedAt AS placement_updatedAt, placements.deletedAt AS placement_deletedAt, placements.pendingSync AS placement_pendingSync FROM placements JOIN time_points ON time_points.id = placements.timePointId AND time_points.ownerId = placements.ownerId JOIN tasks ON tasks.id = placements.taskId AND tasks.ownerId = placements.ownerId WHERE placements.ownerId = :ownerId AND time_points.type = 'DATE' AND time_points.localDate = :date AND time_points.deletedAt IS NULL AND time_points.archivedAt IS NULL AND placements.deletedAt IS NULL AND tasks.deletedAt IS NULL AND tasks.archivedAt IS NULL ORDER BY $PLACEMENT_RANK_ORDER, placements.id")
     suspend fun scheduledTasks(ownerId: String, date: String): List<ScheduledTaskRow>
 
     @Query("UPDATE placements SET timePointId = :target WHERE ownerId = :ownerId AND timePointId = :source")
     suspend fun remapDate(ownerId: String, source: String, target: String)
-    @Query("SELECT * FROM placements WHERE ownerId = :ownerId AND deletedAt IS NULL ORDER BY timePointId ASC, CAST(rank AS INTEGER) ASC")
+    @Query("SELECT * FROM placements WHERE ownerId = :ownerId AND deletedAt IS NULL ORDER BY timePointId ASC, $RANK_ORDER ASC")
     fun getActivePlacementsFlow(ownerId: String): Flow<List<PlacementEntity>>
 
-    @Query("SELECT * FROM placements WHERE ownerId = :ownerId AND timePointId = :timePointId AND deletedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC")
+    @Query("SELECT * FROM placements WHERE ownerId = :ownerId AND timePointId = :timePointId AND deletedAt IS NULL ORDER BY $RANK_ORDER ASC")
     fun getPlacementsByTimePointFlow(ownerId: String, timePointId: String): Flow<List<PlacementEntity>>
 
-    @Query("SELECT * FROM placements WHERE ownerId = :ownerId AND timePointId = :timePointId AND deletedAt IS NULL ORDER BY CAST(rank AS INTEGER) ASC")
+    @Query("SELECT * FROM placements WHERE ownerId = :ownerId AND timePointId = :timePointId AND deletedAt IS NULL ORDER BY $RANK_ORDER ASC")
     suspend fun getPlacementsByTimePoint(timePointId: String, ownerId: String): List<PlacementEntity>
 
     @Query("SELECT * FROM placements WHERE ownerId = :ownerId AND taskId = :taskId AND deletedAt IS NULL")
@@ -461,6 +461,8 @@ interface SyncJournalDao {
     suspend fun guards(): List<SyncGuardEntity>
     @Query("DELETE FROM sync_guards WHERE mutationId = :id")
     suspend fun release(id: String)
+    @Query("UPDATE sync_guards SET mutationId = :newMutationId WHERE mutationId = :oldMutationId")
+    suspend fun reassignGuards(oldMutationId: String, newMutationId: String)
     @Query("SELECT COUNT(*) FROM sync_guards WHERE entityType = :type AND entityId = :id")
     suspend fun guardCount(type: String, id: String): Int
     @Query("SELECT * FROM remote_changes")

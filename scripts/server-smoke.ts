@@ -174,25 +174,36 @@ async function main(): Promise<void> {
     const meBody = (await me.json()) as { user?: Record<string, unknown> };
     assert(me.status === 200, `/me returned ${me.status}`);
     assert(!('passwordHash' in (meBody.user ?? {})), '/me leaked a private user field');
-    console.log(
-      'PASS: built API process stayed alive and separated health, SPA, and JSON API routes.',
-    );
   } catch (error) {
     console.error('FAIL: built API/Web process smoke failed.');
     console.error(error);
     console.error(output);
     process.exitCode = 1;
   } finally {
-    if (child.exitCode === null) child.kill('SIGTERM');
-    const result = await Promise.race([
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+    let result = await Promise.race([
       exit,
-      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 3_000)),
+      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 5_000)),
     ]);
-    if (result && result.code !== null && result.code !== 0 && process.exitCode === undefined) {
-      console.error(`FAIL: API process exited unexpectedly (code=${result.code}).`);
+    if (!result) {
+      console.error('FAIL: API process did not stop within five seconds of SIGTERM.');
+      console.error(output);
+      process.exitCode = 1;
+      child.kill('SIGKILL');
+      result = await exit;
+    }
+    if ((result.code !== 0 || result.signal !== null) && process.exitCode === undefined) {
+      console.error(
+        `FAIL: API process did not shut down gracefully (code=${result.code}, signal=${result.signal}).`,
+      );
       console.error(output);
       process.exitCode = 1;
     }
+  }
+  if (process.exitCode === undefined) {
+    console.log(
+      'PASS: built API routes, authentication and private-field filtering worked; SIGTERM shut down cleanly.',
+    );
   }
 }
 

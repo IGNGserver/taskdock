@@ -23,8 +23,8 @@ pnpm openapi:check                                                PASS（99 path
 pnpm test:e2e --projects=chromium,mobile,firefox                   PASS（21 passed / 3 skipped 真实后端按设计跳过）
 ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin PASS
 DATABASE_URL=... pnpm db:migrate（连续两次）                        PASS（幂等）
-DATABASE_URL=... pnpm test:integration                             PASS（含 v2 PostgresTreeStore 与 Folder-first 断言）
-DATABASE_URL=... PG_CTL=... pnpm test:pg-runtime                    PASS（真实 /api/v2 + v2 WebSocket + PG 重启恢复）
+TASKDOCK_TEST_DATABASE_URL=... pnpm test:integration               PASS（含 v2 PostgresTreeStore 与 Folder-first 断言）
+TASKDOCK_TEST_DATABASE_URL=... PG_CTL=... PGDATA=... pnpm test:pg-runtime PASS（真实 /api/v2 + v2 WebSocket + PG 重启恢复）
 ```
 
 未运行门禁（环境缺失，非实现缺陷）：

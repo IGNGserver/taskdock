@@ -21,11 +21,10 @@ on:
         type: string
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 concurrency:
-  group: taskdock-release-${{ inputs.version }}
+  group: taskdock-release
   cancel-in-progress: false
 
 env:
@@ -52,6 +51,28 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+      - name: 拒绝覆盖已有标签或 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          tag="v${RELEASE_VERSION}"
+          assert_absent() {
+            local kind="$1"
+            local endpoint="$2"
+            local output
+            if output="$(gh api "${endpoint}" 2>&1)"; then
+              echo "${kind} ${tag} 已存在；版本不可变，请使用新版本号。" >&2
+              exit 1
+            fi
+            if ! grep -q 'HTTP 404' <<<"${output}"; then
+              printf '无法确认 %s 是否不存在，停止发布：\n%s\n' "${kind}" "${output}" >&2
+              exit 1
+            fi
+          }
+          assert_absent 'Release' "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}"
+          assert_absent 'Git 标签' "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}"
       - name: 设置 pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -76,7 +97,7 @@ jobs:
 
           version = os.environ['RELEASE_VERSION'].strip()
           changes = os.environ['RELEASE_CHANGES'].strip()
-          if not re.fullmatch(r'(?:0|[1-9]\d*)\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?', version):
+          if not re.fullmatch(r'(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:alpha|beta|rc)\.(?:0|[1-9]\d*))?', version):
               print(f'版本号格式不正确: {version}', file=sys.stderr)
               sys.exit(1)
           prerelease = '-' in version
@@ -101,7 +122,7 @@ jobs:
         run: pnpm test
       - name: 集成测试
         env:
-          DATABASE_URL: postgres://devtodo:devtodo_test_password@127.0.0.1:5432/devtodo_test
+          TASKDOCK_TEST_DATABASE_URL: postgres://devtodo:devtodo_test_password@127.0.0.1:5432/devtodo_test
         run: pnpm test:integration
       - name: 构建
         run: pnpm build
@@ -175,6 +196,9 @@ jobs:
     name: 构建并发布 Docker 镜像
     needs: validate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -204,6 +228,20 @@ jobs:
             fi
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+      - name: 拒绝覆盖已有 GHCR 版本
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          for tag in "${RELEASE_VERSION}" "v${RELEASE_VERSION}"; do
+            if output="$(docker buildx imagetools inspect "${REGISTRY_IMAGE}:${tag}" 2>&1)"; then
+              echo "GHCR 镜像 ${REGISTRY_IMAGE}:${tag} 已存在；拒绝覆盖不可变版本。" >&2
+              exit 1
+            elif ! grep -qi 'not found' <<<"${output}"; then
+              printf '无法确认 GHCR 版本是否不存在，停止发布：\n%s\n' "${output}" >&2
+              exit 1
+            fi
+          done
       - name: 构建并推送镜像
         uses: docker/build-push-action@v6
         with:
@@ -227,6 +265,8 @@ jobs:
       - mobile-android
       - docker
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -265,30 +305,17 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_TYPE: ${{ inputs.release_type }}
         run: |
+          set -euo pipefail
           tag="v${RELEASE_VERSION}"
           if gh release view "${tag}" >/dev/null 2>&1; then
-            release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq .id)"
-            existing_assets="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets" --jq '[.[].name]')"
-            pending_assets=()
-            for file in release-assets/*; do
-              asset_name="$(basename "${file}")"
-              if jq --exit-status --arg name "${asset_name}" 'index($name) != null' <<<"${existing_assets}" >/dev/null; then
-                continue
-              fi
-              pending_assets+=("${file}")
-            done
-            if ((${#pending_assets[@]})); then
-              gh release upload "${tag}" "${pending_assets[@]}"
-            else
-              echo "所有发布资产已存在，跳过上传。"
-            fi
-          else
-            args=("${tag}" --title "TaskDock ${RELEASE_VERSION}" --target "${GITHUB_SHA}" --notes-file release-notes.md release-assets/*)
-            if [ "${RELEASE_TYPE}" = "prerelease" ]; then
-              args+=(--prerelease)
-            fi
-            gh release create "${args[@]}"
+            echo "Release ${tag} 在发布期间已出现；拒绝合并或替换既有资产。" >&2
+            exit 1
           fi
+          args=("${tag}" --title "TaskDock ${RELEASE_VERSION}" --target "${GITHUB_SHA}" --notes-file release-notes.md release-assets/*)
+          if [ "${RELEASE_TYPE}" = "prerelease" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${args[@]}"
       - name: Trigger website deploy
         env:
           GH_TOKEN: ${{ github.token }}

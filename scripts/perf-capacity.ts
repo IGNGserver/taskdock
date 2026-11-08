@@ -3,8 +3,9 @@ import os from 'node:os';
 import { performance } from 'node:perf_hooks';
 import { PostgresStore, type PostgresPage } from '../apps/api/src/postgres-store.js';
 import { createPool, runMigrations, type Pool } from '../packages/database/src/index.js';
+import { assertIsolatedEmptyDatabase, isolatedTestDatabaseUrl } from './test-database-safety.js';
 
-const databaseUrl = process.env['DATABASE_URL'];
+const databaseUrl = isolatedTestDatabaseUrl();
 const TASK_COUNT = 50_000;
 const DATE_COUNT = 5_000;
 const PLACEMENT_COUNT = 250_000;
@@ -176,7 +177,7 @@ async function walkPages<T>(
 async function main(): Promise<void> {
   if (!databaseUrl) {
     console.log(
-      'NOT RUN: DATABASE_URL is not configured; capacity requires a real PostgreSQL fixture.',
+      'NOT RUN: TASKDOCK_TEST_DATABASE_URL is not configured; capacity requires a dedicated empty PostgreSQL fixture.',
     );
     process.exitCode = 2;
     return;
@@ -190,6 +191,7 @@ async function main(): Promise<void> {
   const store = new PostgresStore(pool);
   let actualOwnerId: string | undefined;
   try {
+    await assertIsolatedEmptyDatabase(pool, 'capacity benchmark');
     await runMigrations(pool);
     await store.init();
     const owner = await store.withMutation(() => {

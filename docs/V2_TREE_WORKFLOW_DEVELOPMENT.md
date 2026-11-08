@@ -1594,8 +1594,8 @@ pnpm openapi:check                                                PASS（99 path
 pnpm test:e2e --projects=chromium,mobile,firefox                   PASS（21 passed / 3 skipped）
 ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin PASS
 DATABASE_URL=... pnpm db:migrate（连续两次）                        PASS（幂等）
-DATABASE_URL=... pnpm test:integration                             PASS
-DATABASE_URL=... PG_CTL=... pnpm test:pg-runtime                    PASS
+TASKDOCK_TEST_DATABASE_URL=... pnpm test:integration               PASS
+TASKDOCK_TEST_DATABASE_URL=... PG_CTL=... PGDATA=... pnpm test:pg-runtime PASS
 ```
 
 仍未运行（环境缺失，非实现缺陷）：WebKit E2E、Android 真机/仪器测试、Docker Compose、长期双端离线矩阵。这些继续阻断正式发布，但不属于已知源码缺陷。

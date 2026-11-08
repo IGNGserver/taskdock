@@ -6,3 +6,15 @@ coverage
 playwright-report
 test-results
 .env
+.env.*
+!.env.example
+**/local.properties
+**/signing/**
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.pfx
+**/*.key
+**/*.pem
+**/*keystore*.properties
+**/*signing*.properties

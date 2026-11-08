@@ -1,7 +1,8 @@
 import { createPool } from '../packages/database/src/index.js';
 import { PostgresStore } from '../apps/api/src/postgres-store.js';
+import { isolatedTestDatabaseUrl } from './test-database-safety.js';
 
-const databaseUrl = process.env['DATABASE_URL'];
+const databaseUrl = isolatedTestDatabaseUrl();
 const ownerId = process.env['DEVTODO_OWNER_ID'];
 const projectId = process.env['DEVTODO_PROJECT_ID'];
 const workerLabel = process.env['DEVTODO_WORKER_LABEL'] ?? 'worker';
@@ -9,7 +10,9 @@ const workerCount = Number(process.env['DEVTODO_WORKER_COUNT'] ?? 20);
 
 async function main(): Promise<void> {
   if (!databaseUrl || !ownerId || !projectId)
-    throw new Error('DATABASE_URL, DEVTODO_OWNER_ID, and DEVTODO_PROJECT_ID are required');
+    throw new Error(
+      'TASKDOCK_TEST_DATABASE_URL, DEVTODO_OWNER_ID, and DEVTODO_PROJECT_ID are required',
+    );
   if (!Number.isInteger(workerCount) || workerCount < 1 || workerCount > 100)
     throw new Error('DEVTODO_WORKER_COUNT must be an integer from 1 to 100');
 

@@ -40,7 +40,7 @@ PostgreSQL `0011_sync_bootstrap.sql` 增加中枢身份、快照元数据及页�
 服务端基线脚本（仅隔离空数据库）：
 
 ```sh
-DATABASE_URL=<隔离测试库> pnpm exec tsx scripts/sync-bootstrap-benchmark.ts
+TASKDOCK_TEST_DATABASE_URL=<隔离测试库> pnpm exec tsx scripts/sync-bootstrap-benchmark.ts
 ```
 
 默认 10,000 任务，每条 2,000 字备注，报告完整快照和首屏预览的 5 次样本中位数/最大值、响应大小、快照构建耗时和首批大小。这不是手机首屏 P95，不能用它宣称真机达到 1 秒缓存首屏或 2～3 秒无缓存首屏。
