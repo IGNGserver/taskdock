@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/** WebKit reports aborted in-flight fetches during a full navigation this way. */
+function isNavigationAbort(message: string): boolean {
+  return /due to access control checks|The operation was aborted|Load failed/.test(message);
+}
+
 test.beforeEach(() => {
   test.skip(
     !['chromium', 'webkit'].includes(test.info().project.name),
@@ -101,7 +106,9 @@ for (const viewport of [
       test.skip(process.env['E2E_REAL'] === '1', 'uses a public API fixture');
       await loginFixture(page);
       const errors: string[] = [];
-      page.on('pageerror', (error) => errors.push(error.message));
+      page.on('pageerror', (error) => {
+        if (!isNavigationAbort(error.message)) errors.push(error.message);
+      });
       for (const route of [
         '/today',
         '/tree',
