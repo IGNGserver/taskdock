@@ -1,168 +1,116 @@
-# TaskDock
+<div align="center">
+    <img src="apps/web/public/brand/taskdock-icon.png" alt="TaskDock" width="120">
+    <h1>TaskDock</h1>
+</div>
 
-TaskDock 是一个为个人开发者准备的任务工作台。
+<p align="center">
+    <em>把散落的任务，放回它该在的位置。</em>
+</p>
 
-它适合记录“想做什么”、安排“什么时候做”，也适合保存任务相关的开发笔记。TaskDock 可以自己部署在家里的 NAS、服务器或云主机上；网络暂时不可用时，已经打开过的数据仍然可以查看和编辑，网络恢复后会自动同步。
+<p align="center">
+    <a href="https://taskdock.igng.net/">官网</a> ·
+    <a href="https://github.com/IGNGserver/taskdock/releases">下载</a> ·
+    <a href="docs/DEPLOYMENT.md">部署文档</a>
+</p>
 
-> **当前定位：** 单用户、自托管、离线优先。
->
-> **当前状态：** 项目仍在早期版本阶段。请在正式使用前先备份数据，并根据发布页的说明选择稳定版或预览版。
->
-> **官网：** <https://taskdock.igng.net/>
+<p align="center">
+    <a href="https://github.com/IGNGserver/taskdock/releases"><img src="https://img.shields.io/github/v/release/IGNGserver/taskdock?include_prereleases&style=flat-square&label=release&color=22c55e" alt="最新版本" /></a>
+    <img src="https://img.shields.io/badge/Web-PWA-64748b?style=flat-square" alt="Web / PWA" />
+    <img src="https://img.shields.io/badge/Android-客户端-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android 客户端" />
+    <img src="https://img.shields.io/badge/自托管-Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker 自托管" />
+</p>
 
-## TaskDock 能做什么
+TaskDock 是一个给自己用的任务工作台，跑在你自己的服务器上。想法先记下来，再用目录、日期、流程和步骤把它安排明白，每个任务都能附上一份 Markdown 笔记。中枢放在 NAS、家用服务器或云主机上，浏览器和 Android 手机连过去用；断网时照样能看能改，连上以后再同步。数据只落在你自己的 PostgreSQL 里，没有托管后端，也没有团队和权限那一套。
 
-- **快速记下任务**：先把想法记下来，不需要一开始就填写复杂表单。
-- **按日期或事件安排**：同一个任务可以安排到今天、某个日期，或“额度重置后”“上线前”这类自定义事件中。
-- **项目和全局任务统一管理**：项目功能、项目杂项和不属于任何项目的事情可以放在一起管理。
-- **开发备注**：每个任务都可以保存 Markdown 笔记，适合记录思路、命令、链接和处理过程。
-- **离线优先**：中枢暂时不可用时，客户端仍可继续处理本地已有内容；恢复连接后再同步。
-- **多端使用**：同一套数据可通过浏览器和 Android 客户端访问；浏览器界面会按屏幕尺寸响应式适配。
-- **自己掌握数据**：数据存放在你自己的服务器和 PostgreSQL 数据库中，不依赖第三方任务平台。
+## 功能
+
+- **一个任务，只有一个事实**：目录决定它放在哪，日期和事件决定什么时候关注它，流程记录它走到哪一步，步骤拆开具体怎么做。四个维度互相独立，指的却始终是同一个任务——任何一处改了状态，其它视图跟着变，不会出现两份对不上的副本。
+- **目录树**：文件夹可以一直嵌套，同一层里文件夹和任务并排。文件夹没有自己的状态，由里面所有任务实时推导出来。
+- **日期和事件**：同一个任务能同时出现在好几天，也能挂在「额度重置后」「上线前」这种还没定日期的事件上。安排只是一条引用，完成一次、处处完成；把某天没做完的安排批量顺延到第二天，随时能撤销。
+- **流程看板**：把任务放进分阶段的流程里。一个任务可以同时属于几个流程，但在同一个流程里只出现一次。
+- **执行步骤**：在任务内部列出线性的步骤，每一步有三态状态，不会反过来改动任务本身。
+- **Markdown 笔记**：思路、命令、链接和处理过程都写在任务下面，不用另开一个地方记。
+- **归档按次恢复**：归档一个文件夹会连子目录一起归档；恢复时只恢复那一次操作归档的内容，不会把更早归档的任务一起捞回来。
+- **不变的任务编号**：新任务是 `TASK-` 加全局序号，创建后不再改变，写进笔记或提交信息里也不会失效。
+- **常用的小动作**：桌面浏览器按 `⌘ K` / `Ctrl K` 打开命令面板搜任务和笔记；手机浏览器右滑完成任务，左滑展开操作。
+
+## 离线优先
+
+界面先读本地数据，不等网络。浏览器用 IndexedDB，Android 用 Room，打开就能用。
+
+- 每次修改和它的待同步记录写在同一个本地事务里，恢复连接后按顺序推送，再拉取别的设备的变化。
+- 同一条修改重试不会重复写入。
+- 版本对不上时不会静默覆盖：你的修改和服务器的版本会同时保留，由你决定怎么处理。
+- 整棵目录删除、批量顺延这类不好回退的操作，离线时直接拒绝。
+- 实时连接只用来提醒「有东西要同步」，任务内容不走这条通道。
+
+## 多端
+
+- **网页 / PWA**：中枢启动后用浏览器打开 `APP_ORIGIN` 就能用，不用另装客户端。界面按屏幕自适应：手机单手记录，平板双栏，桌面支持拖放和键盘操作。HTTPS 下可以安装为 PWA 并离线打开。
+- **Android**：原生 Jetpack Compose 客户端，Room 本地存储，和网页端共用一套 API 与同步协议。APK 附在每个 Release 里。
+- **中枢**：Fastify + PostgreSQL 组成的单用户服务端。所有设备的数据最终汇集在这里，也只在这里。
 
 ## 下载与部署
 
-请前往 GitHub 的 [Releases](https://github.com/IGNGserver/taskdock/releases) 页面下载 Android APK，或使用 Docker 镜像部署中枢。
+先部署中枢，再从任意设备打开。
 
-每个版本的 Release 附件只有：
-
-- **Android**：APK 安装包（`.apk`）
-- **Source code (zip)** 和 **Source code (tar.gz)**：GitHub 根据标签自动生成的源代码归档
-
-Docker 镜像单独发布到 GitHub Container Registry（GHCR），不是 Release 附件。网页端直接通过部署后的地址使用，无需另行安装桌面客户端。
-
-## 最简单的使用方式：直接部署 Docker
-
-Docker 部署不需要从仓库下载源代码，也不需要在服务器上安装 Node.js。发布版本会生成 Docker 镜像，镜像发布在 GitHub Container Registry（GHCR）。
-
-### 1. 准备文件
-
-在服务器上建立一个空目录，下载以下两个文件：
-
-- [`compose.yaml`](https://github.com/IGNGserver/taskdock/blob/master/compose.yaml)
-- [`.env.example`](https://github.com/IGNGserver/taskdock/blob/master/.env.example)
-
-然后复制环境变量文件：
+**中枢（Docker）**：镜像发布在 GitHub Container Registry，服务器上不需要源码，也不需要 Node.js，装好 Docker 和 Docker Compose 就够了。
 
 ```bash
+# 1. 空目录里准备 compose.yaml 和 .env.example
 cp .env.example .env
-```
-
-编辑 `.env`，至少填写：
-
-- `TASKDOCK_PORT`：TaskDock 默认对外 HTTP 端口，默认是 `48731`；如果 NAS 上该端口已被占用，可以改成其他五位端口
-- `APP_ORIGIN`：用户访问 TaskDock 的 HTTP 或 HTTPS 地址，例如 `https://tasks.example.com` 或 `http://192.168.1.10:48731`。使用 HTTP 时页面会显示安全警告，公网环境建议使用 HTTPS
-- `POSTGRES_PASSWORD`：数据库密码
-- `BOOTSTRAP_TOKEN`：部署中枢首次初始化 Owner 时使用的一次性令牌，客户端不会要求填写
-- `OWNER_USERNAME` / `OWNER_PASSWORD`：部署中枢首次初始化 Owner 时使用；密码至少 6 位，6 位纯数字也可以
-- `ACCESS_TOKEN_SECRET`：访问令牌密钥
-- `REFRESH_TOKEN_PEPPER`：刷新令牌保护密钥
-- `REFRESH_TOKEN_IDLE_TTL_DAYS`：refresh session 的滑动不活动窗口，默认 `365` 天；每次 refresh 会续期。设为 `0` 表示不按时间过期（仅退出、设备撤销或重放检测会让会话失效）
-- `CORS_ALLOWED_ORIGINS`：允许访问的前端地址，通常与 `APP_ORIGIN` 相同
-
-首次初始化 Owner 时，用户密码至少 6 位，不限制数字、字母或其他字符，也没有最大长度限制。
-
-随机密钥可以用下面的命令生成：
-
-```bash
+# 2. 生成随机密钥，填写 .env（APP_ORIGIN、POSTGRES_PASSWORD、令牌密钥、Owner 账号）
 openssl rand -base64 48
-```
-
-### 2. 选择版本并启动
-
-推荐使用明确的版本号，方便升级和回滚：
-
-```bash
-export APP_VERSION=0.1.0
-
+# 3. 用要部署的版本启动，版本号见 Releases
+export APP_VERSION=2.0.0-rc.66
 docker compose pull
 docker compose --profile operations run --rm migrate
 docker compose up -d
+curl -fsS http://服务器地址:48731/health/ready
+# 4. 首次部署时初始化 Owner 账号
+docker compose --profile operations run --rm bootstrap
 ```
 
-也可以使用 `latest`：
+默认访问地址是 `http://服务器地址:48731`。初始化成功后建议从 `.env` 里删掉 `OWNER_PASSWORD`，并删除或轮换 `BOOTSTRAP_TOKEN`。需要 HTTPS 和反向代理时可加 `--profile gateway`，由 Caddy 签发证书并发布入口。
 
-```bash
-export APP_VERSION=latest
+**网页端**：中枢起来后，浏览器打开你配置的 `APP_ORIGIN` 即可，无需安装。
 
-docker compose pull
-docker compose --profile operations run --rm migrate
-docker compose up -d
-```
+**Android**：APK 在 [GitHub Releases](https://github.com/IGNGserver/taskdock/releases) 里，文件名形如 `TaskDock-<版本>-android.apk`。登录时填中枢地址、用户名和密码。
 
-TaskDock 的 Docker 部署使用已经构建好的版本镜像，不会在服务器上拉取仓库最新代码，也不会在服务器上重新编译项目。生产环境建议固定具体版本号；只有你明确接受自动跟随最新稳定版本时，才使用 `latest`。
+**升级**：先按 [备份与恢复](docs/BACKUP_RESTORE.md) 做一份备份，再把 `.env` 里的 `APP_VERSION` 改成新版本，重复 `pull` / `migrate` / `up -d`。出问题时把版本号改回去，并按备份文档处理数据库。
 
-> **数据库卷提示：** 当前 Docker 镜像使用 PostgreSQL 18 的标准数据目录。若你曾经使用早期版本的 `compose.yaml` 创建过数据库卷，升级前请先按 [备份与恢复](docs/BACKUP_RESTORE.md) 完成备份，并使用备份恢复到新的数据库卷；不要直接删除旧卷。
+完整的变量说明、外部 PostgreSQL、Caddy 网关和回滚步骤在[部署说明](docs/DEPLOYMENT.md)里。
 
-默认 Docker 部署会直接通过 `TASKDOCK_PORT` 提供 HTTP 服务，默认访问地址是 `http://服务器地址:48731`。首次部署时，在 `.env` 中填写 Owner 用户名和密码，并执行 `docker compose --profile operations run --rm bootstrap` 完成初始化；客户端不会显示初始化令牌输入框。初始化成功后，应从 `.env` 中删除 `OWNER_PASSWORD`，并删除或轮换 `BOOTSTRAP_TOKEN`。
+## 版本
 
-### 3. 升级
+TaskDock 现在处于 **2.0 预览阶段**，发出来的都是预发布版本（例如 `2.0.0-rc.66`）。每个版本有自己的镜像标签，推上去以后不会再改。
 
-升级前先备份数据库，然后修改 `.env` 中的 `APP_VERSION`：
+- `latest` 只跟随**正式稳定版**，目前还停在 `0.1.x`；想在 v2 上使用就写明确的版本号。
+- 预发布版不会覆盖 `latest`，也不会因为构建成功就自动转正。
+- 每次发布都会在 Release 里用中文写清更新内容、已知问题和附带文件。
 
-```bash
-# 例如从 0.1.0 升级到 0.2.0
-export APP_VERSION=0.2.0
+细节见[发布规范](docs/RELEASING.md)。
 
-docker compose pull
-docker compose --profile operations run --rm migrate
-docker compose up -d
-```
+## 数据与安全
 
-如果升级后出现问题，可以把 `APP_VERSION` 改回上一个版本，并根据备份恢复文档处理数据库：
+- 任务、安排和笔记保存在自托管中枢的 PostgreSQL 里；默认 Compose 不把数据库端口映射到宿主机。
+- 应用端口默认只绑定 `127.0.0.1`，要直连 HTTP 得显式设置 `TASKDOCK_BIND_ADDRESS=0.0.0.0`；公网请走 HTTPS。
+- 密码至少 6 位，6 位纯数字也可以，没有字符种类限制。
+- 用 HTTP 也能访问，但界面会提示这是明文传输，密码和会话信息不做加密。可信局域网可以接受，公网不建议。
+- 密钥、数据库口令只放在 `.env` 里，不要提交到仓库。
 
-- [部署说明](docs/DEPLOYMENT.md)
+用于重要数据之前，请先读[安全说明](docs/SECURITY.md)和[备份与恢复](docs/BACKUP_RESTORE.md)。
+
+## 文档
+
+- [部署说明](docs/DEPLOYMENT.md)——环境变量、首次部署、升级与回滚、Caddy 网关
+- [外部 PostgreSQL](docs/EXTERNAL_DATABASE.md)——接现有数据库、共享数据库服务器
 - [备份与恢复](docs/BACKUP_RESTORE.md)
-
-## 浏览器和本地开发
-
-如果你只是想试用界面，可以在本机运行开发模式：
-
-```bash
-corepack enable
-pnpm install --frozen-lockfile
-cp .env.example .env
-pnpm dev
-```
-
-然后打开 <http://localhost:5173>。
-
-开发模式默认使用本地内存数据，适合体验界面和功能；需要长期保存数据时，请使用 Docker + PostgreSQL 部署方式。
-
-## 数据和隐私
-
-TaskDock 的设计目标是让用户自己掌握数据：
-
-- 任务、安排和笔记保存在自托管中枢的 PostgreSQL 中；
-- 客户端会保存必要的本地缓存和待同步操作；
-- Docker Compose 默认不会把 PostgreSQL 端口暴露到公网；TaskDock 默认通过 `48731` 提供 HTTP 访问；
-- 访问令牌、数据库密码和其他密钥不应提交到 GitHub；
-- 生产环境建议使用 HTTPS，并定期执行备份和恢复演练。TaskDock 也支持 HTTP 外网地址，但会显示安全警告；HTTP 会明文传输密码和会话信息，请确认网络可信。
-
-请阅读 [安全说明](docs/SECURITY.md) 和 [备份与恢复](docs/BACKUP_RESTORE.md) 后再用于重要数据。
-
-## 版本规则
-
-TaskDock 的版本采用语义化版本号，例如 `0.1.0`、`0.2.0-rc.1`。
-
-- 普通发布默认是 **预发布版本**，例如 `0.2.0-rc.1`；
-- 只有明确选择“正式发布”时，才会生成正式 Release，例如 `0.2.0`；
-- `latest` 只指向正式稳定版本，不会指向预发布版本；
-- 预发布版本始终可以通过自己的版本号镜像标签使用，例如 `0.2.0-rc.1`；
-- 每次发布都必须在 GitHub Release 中用中文说明本次更新内容、已知问题和平台安装包状态。
-
-详细规则见 [发布规范](docs/RELEASING.md)。
-
-## 项目文档
-
-- [部署说明](docs/DEPLOYMENT.md)
-- [外部 PostgreSQL 与共享数据库服务器](docs/EXTERNAL_DATABASE.md)
-- [备份与恢复](docs/BACKUP_RESTORE.md)
-- [安全说明](docs/SECURITY.md)
-- [同步说明](docs/SYNC_PROTOCOL.md)
-- [当前状态](docs/STATUS.md)
-- [发布规范](docs/RELEASING.md)
+- [安全说明](docs/SECURITY.md)——认证、限流、代理信任、密钥处理
+- [同步协议](docs/SYNC_PROTOCOL.md)——离线队列、冲突处理、游标
+- [发布规范](docs/RELEASING.md)——版本号、预发布与稳定版的区别
+- [更新日志](CHANGELOG.md)——每个版本改了什么
 
 ## 许可证
 
-当前仓库尚未确定最终开源许可证。正式对外分发前，请先补充许可证文件。
+仓库尚未附上开源许可证，在正式分发前请先补齐许可证文件。
