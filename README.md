@@ -66,12 +66,12 @@ export APP_VERSION=2.0.0-rc.66
 docker compose pull
 docker compose --profile operations run --rm migrate
 docker compose up -d
-curl -fsS http://服务器地址:48731/health/ready
+curl -fsS http://127.0.0.1:48731/health/ready
 # 4. 首次部署时初始化 Owner 账号
 docker compose --profile operations run --rm bootstrap
 ```
 
-默认访问地址是 `http://服务器地址:48731`。初始化成功后建议从 `.env` 里删掉 `OWNER_PASSWORD`，并删除或轮换 `BOOTSTRAP_TOKEN`。需要 HTTPS 和反向代理时可加 `--profile gateway`，由 Caddy 签发证书并发布入口。
+默认只有服务器本机能访问 `http://127.0.0.1:48731`。要让其他设备打开，二选一：把 `.env` 里的 `TASKDOCK_BIND_ADDRESS` 改成 `0.0.0.0`（明文 HTTP，仅限可信网络），或在 `APP_ORIGIN` 填好域名后执行 `docker compose --profile gateway up -d`，由 Caddy 提供 HTTPS 入口。初始化成功后建议从 `.env` 里删掉 `OWNER_PASSWORD`，并删除或轮换 `BOOTSTRAP_TOKEN`。
 
 **网页端**：中枢起来后，浏览器打开你配置的 `APP_ORIGIN` 即可，无需安装。
 

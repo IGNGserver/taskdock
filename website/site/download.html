@@ -175,7 +175,7 @@
               <code class="inline-code">APP_ORIGIN</code> 地址就能使用，无需安装客户端。使用 HTTPS
               时可以安装为 PWA 并离线打开。
             </p>
-            <div class="actions"><span class="chip">默认 http://服务器地址:48731</span></div>
+            <div class="actions"><span class="chip">默认仅本机 http://127.0.0.1:48731</span></div>
           </article>
           <article class="channel reveal" style="--d: 2">
             <span class="kind">03 · 手机</span>
@@ -207,7 +207,7 @@
             <p class="eyebrow reveal"><span class="idx">部署</span>五步完成</p>
             <h2 class="reveal" id="deploy-title">用 Docker Compose<br />部署中枢。</h2>
             <p class="lead reveal">
-              以下步骤与产品仓库的 README 和部署说明一致。服务器只需要 Docker 与 Docker Compose。
+              以下步骤按产品仓库的 README 和部署说明整理。服务器只需要 Docker 与 Docker Compose。
             </p>
           </div>
 
@@ -261,8 +261,19 @@
                       <tr>
                         <td><code>TASKDOCK_PORT</code></td>
                         <td>
-                          对外 HTTP 端口，默认
-                          <code class="inline-code">48731</code>；被占用时可以换成其他五位端口。
+                          宿主机映射的 HTTP 端口，默认
+                          <code class="inline-code">48731</code>；默认只绑定
+                          <code class="inline-code">127.0.0.1</code>。被占用时可以换一个空闲端口。
+                        </td>
+                      </tr>
+                      <tr>
+                        <td><code>TASKDOCK_BIND_ADDRESS</code></td>
+                        <td>
+                          绑定的宿主机地址，默认
+                          <code class="inline-code">127.0.0.1</code
+                          >，只有服务器本机能访问。要让局域网内其他设备直连，设为
+                          <code class="inline-code">0.0.0.0</code>（明文
+                          HTTP，仅限可信网络）；公网请用 gateway。
                         </td>
                       </tr>
                       <tr>
@@ -325,8 +336,8 @@
 <span class="pr">$ </span>docker compose pull
 <span class="pr">$ </span>docker compose --profile operations run --rm migrate
 <span class="pr">$ </span>docker compose up -d
-<span class="cm"># 检查就绪状态（使用 HTTPS 或自定义端口时按 APP_ORIGIN 修改）</span>
-<span class="pr">$ </span>curl -fsS http://服务器地址:48731/health/ready</pre>
+<span class="cm"># 检查就绪状态（默认只绑本机，换地址或端口时按 APP_ORIGIN 修改）</span>
+<span class="pr">$ </span>curl -fsS http://127.0.0.1:48731/health/ready</pre>
                 </div>
                 <div class="callout">
                   <svg aria-hidden="true"><use href="#i-warn" /></svg
@@ -367,11 +378,19 @@
               <div class="body">
                 <h3>打开并登录</h3>
                 <p>
-                  浏览器访问 <code>APP_ORIGIN</code> 并登录；Android
+                  默认只有服务器本机能打开
+                  <code class="inline-code">http://127.0.0.1:48731</code
+                  >。要让其他设备访问，二选一：在 <code>.env</code> 里把
+                  <code>TASKDOCK_BIND_ADDRESS</code> 改成
+                  <code class="inline-code">0.0.0.0</code>（明文 HTTP，仅限可信网络），或执行
+                  <code>docker compose --profile gateway up -d</code>，由 Caddy 用
+                  <code>APP_ORIGIN</code> 的域名提供 HTTPS 入口。
+                </p>
+                <p>
+                  然后用浏览器访问 <code>APP_ORIGIN</code> 并登录；Android
                   客户端安装后填写同一个中枢地址。HTTP
                   地址可以使用，但页面会显示安全警告，密码与会话信息会明文传输。公网环境请使用
-                  HTTPS：需要反向代理时，可以启用 Compose 中的
-                  <code>gateway</code>（Caddy）profile，注意不要让两个服务占用同一个宿主机端口。
+                  HTTPS；启用 gateway 时注意不要让两个服务占用同一个宿主机端口。
                 </p>
               </div>
             </div>
@@ -526,7 +545,9 @@
               <li><a href="download.html">下载与部署</a></li>
               <li><a href="https://github.com/IGNGserver/taskdock/releases">GitHub Releases</a></li>
               <li><a href="https://github.com/IGNGserver/taskdock">产品源码</a></li>
-              <li><a href="https://github.com/IGNGserver/taskdock-website">官网源码</a></li>
+              <li>
+                <a href="https://github.com/IGNGserver/taskdock/tree/master/website">官网源码</a>
+              </li>
             </ul>
           </div>
         </div>
