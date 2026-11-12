@@ -13,7 +13,7 @@ Web/PWA 直接加载 React Web 产物，并通过浏览器的 Fetch、Cookie、I
 - `packages/sync-client`：IndexedDB/Dexie v2 schema、v1 outbox 转换、push/pull、冲突记录、tombstone 和重同步。
 - `apps/web`：React/PWA 目录树、混合排序、工作流、步骤、日期/Placement 和删除预览界面。
 - `apps/mobile`：Capacitor 工程与 `apps/mobile/android` 原生 Compose/Room 客户端；原生客户端不依赖 React 页面来满足 v2 功能。
-- `apps/api/src/tree-store.ts`：Owner-scoped v2 目录树、归档操作、Workflow、TaskStep、时间点/Placement 以及内存迁移投影。
+- `apps/api/src/tree-store.ts`：Owner-scoped v2 目录树、Workflow、TaskStep、时间点/Placement 以及内存迁移投影。
 - `apps/api/src/postgres-tree-store.ts`：PostgreSQL v2 projection 的单查询加载、增量 change-feed 追赶、批量持久化和 v2 change feed 适配。
 - `apps/api/src/cache.ts`：可选 Redis 共享限流/冷启动缓存；缓存投影故障回退数据库，认证限流是否允许进程内回退由 `AUTH_RATE_LIMIT_REQUIRE_SHARED` 决定。
 - 主题：Web 使用 `prefers-color-scheme`，Android 使用 `Configuration.uiMode` 同步系统栏并向 WebView 派发主题事件；主题是设备运行时状态，不进入账号同步设置。
@@ -28,8 +28,8 @@ Web/PWA 直接加载 React Web 产物，并通过浏览器的 Fetch、Cookie、I
 4. v2 Task 只有一个 `parentFolderId`；旧 `projectId/category/priority` 仅在兼容存储/迁移边界保留，不进入 v2 DTO/UI。
 5. 每次版本更新都检查 `baseVersion`；失败返回 `VERSION_CONFLICT` 和服务器快照。
 6. mutation receipt、领域写入、版本递增和 change feed 在同一 Store mutation 中提交。
-7. Folder 归档为一次有 operationId 的逐实体写入；恢复只恢复该 operationId 写入的边界，不误恢复此前已归档的后代。删除预览的 fingerprint/token 过期或变化时 fail-closed，并为 Folder、Task、Note、Step、Placement、Membership 产生 tombstone。
-8. Folder aggregate/status 是由未归档、未删除后代 Task 迭代派生的只读结果，不进入持久化状态或 change feed。
+7. 整树删除先由 `POST /api/v2/folders/:id/delete-preview` 生成短时 token 和 subtree fingerprint，再通过 `DELETE /api/v2/folders/:id/tree` 执行；fingerprint 变化或 token 过期时 fail-closed，并为 Folder、Task、Note、Step、Placement、Membership 产生 tombstone。
+8. Folder 的 `status` 是文件夹自身持久化的显式三态；`aggregate` 的计数由未删除后代 Task 迭代派生，不进入持久化状态或 change feed。
 9. 同一 Task 可进入多个 Workflow；同一 Workflow 内活动 Membership 唯一。TaskStep 的状态和 completedAt 独立于 Task.status。
 
 ## ADR

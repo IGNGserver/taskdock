@@ -1,11 +1,11 @@
 // “一个任务，四个维度”：同一个任务在目录、日程、流程、步骤四个视图里被引用。
 // 切换视图时，任务卡作为共享元素在视图之间移动（View Transitions）；
-// 任意一处切换状态，所有引用同时更新，文件夹状态随之重新推导。
+// 任意一处切换状态，所有引用同时更新；文件夹状态由文件夹自己维护，不跟着任务变。
 
 const NEXT = { todo: 'doing', doing: 'done', done: 'todo' };
 const LABEL = { todo: '待开始', doing: '进行中', done: '已完成' };
 const DESC = {
-  tree: '文件夹可以无限嵌套，同一级里文件夹和任务并存。文件夹没有手动状态，由全部后代任务实时推导。',
+  tree: '文件夹可以无限嵌套，同一级里文件夹和任务并存。文件夹也有自己的三态状态，默认待开始，在更多菜单里切换；后代任务只用来统计完成进度。',
   time: '同一个任务可以同时出现在多个日期，也可以挂在「额度重置后」「上线前」这样的自定义事件上。',
   flow: '把任务放进分阶段的流程看板。一个任务可以加入多个流程，在同一个流程里只出现一次。',
   steps:
@@ -61,26 +61,19 @@ function days() {
   return out;
 }
 
-/** 文件夹状态：全部待开始＝待开始，全部完成＝已完成，其余为进行中。 */
-function derive(list) {
-  if (list.every((s) => s === 'todo')) return 'todo';
-  if (list.every((s) => s === 'done')) return 'done';
-  return 'doing';
-}
-
 function views() {
   const d = days();
   return {
     tree: `
       <div class="tree">
-        <div class="tree-row is-folder">${svg('i-folder')}开发<span class="agg" data-agg="dev"></span></div>
-        <div class="tree-row is-folder" style="--depth:1">${svg('i-folder')}TaskDock<span class="agg" data-agg="td"></span></div>
-        <div class="tree-row is-folder" style="--depth:2">${svg('i-folder')}发布 2.0<span class="agg" data-agg="rel"></span></div>
+        <div class="tree-row is-folder">${svg('i-folder')}开发<span class="agg" style="color: var(--amber)">进行中</span></div>
+        <div class="tree-row is-folder" style="--depth:1">${svg('i-folder')}TaskDock<span class="agg" style="color: var(--amber)">进行中</span></div>
+        <div class="tree-row is-folder" style="--depth:2">${svg('i-folder')}发布 2.0<span class="agg" style="color: var(--amber)">进行中</span></div>
         ${focusCard('style="--depth:3"')}
         <div class="tree-row" style="--depth:3"><span class="status" data-s="done"></span>更新部署说明</div>
-        <div class="tree-row is-folder" style="--depth:2">${svg('i-folder')}Android<span class="agg" data-agg="and"></span></div>
+        <div class="tree-row is-folder" style="--depth:2">${svg('i-folder')}Android<span class="agg">待开始</span></div>
         <div class="tree-row" style="--depth:1"><span class="status" data-s="todo"></span>整理家里 NAS 的备份</div>
-        <p class="tree-note">文件夹状态由全部后代任务推导，试试把任务标记为已完成。</p>
+        <p class="tree-note">文件夹状态在更多菜单里单独切换，点任务只改任务。</p>
       </div>`,
     time: `
       ${focusCard()}
@@ -160,34 +153,6 @@ export function initDimensions(lens, tabsEl) {
     });
     const ref = stage.querySelector('[data-caption-ref]');
     if (ref) ref.textContent = `${focus.ref} · ${LABEL[focus.s]}`;
-
-    // 文件夹状态推导
-    // 每个文件夹统计全部层级的后代任务，而不是子文件夹的状态
-    const relTasks = [focus.s, 'done'];
-    const andTasks = ['doing', 'todo'];
-    const tdTasks = [...relTasks, ...andTasks];
-    const devTasks = [...tdTasks, 'todo'];
-    const aggs = {
-      rel: derive(relTasks),
-      and: derive(andTasks),
-      td: derive(tdTasks),
-      dev: derive(devTasks),
-    };
-    stage.querySelectorAll('[data-agg]').forEach((el) => {
-      const s = aggs[el.dataset.agg];
-      const changed = el.dataset.s && el.dataset.s !== s;
-      el.dataset.s = s;
-      el.innerHTML = `${LABEL[s]}`;
-      el.style.color = s === 'done' ? 'var(--sage)' : s === 'doing' ? 'var(--amber)' : '';
-      if (changed)
-        el.animate(
-          [
-            { opacity: 0.2, transform: 'translateY(-4px)' },
-            { opacity: 1, transform: 'none' },
-          ],
-          { duration: 420, easing: 'cubic-bezier(.22,1,.36,1)' },
-        );
-    });
   }
 
   function render(view) {

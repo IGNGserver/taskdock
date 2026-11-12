@@ -4,7 +4,7 @@
 
 ## 备份与校验
 
-TaskDock v2 数据升级前必须先完成 PostgreSQL custom dump；本轮新增 migration `0005_v2_structure.sql`、`0006_v2_backfill.sql`、`0007_v2_constraints.sql`。升级顺序是先备份，再让新代码读取旧/新结构，执行 backfill 和约束校验；禁止用 `TRUNCATE`、重建业务表或 destructive migration 替代。必须核对 Project→Folder、Task `reference_id`、Note、Placement、归档边界和用户设置计数后再继续。
+TaskDock v2 数据升级前必须先完成 PostgreSQL custom dump；本轮新增 migration `0005_v2_structure.sql`、`0006_v2_backfill.sql`、`0007_v2_constraints.sql`。升级顺序是先备份，再让新代码读取旧/新结构，执行 backfill 和约束校验；禁止用 `TRUNCATE`、重建业务表或 destructive migration 替代。必须核对 Project→Folder、Task `reference_id`、Note、Placement、删除边界（tombstone）和用户设置计数后再继续。
 
 ```bash
 BACKUP_DIR="$PWD/backups"

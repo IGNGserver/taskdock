@@ -4,29 +4,29 @@
 
 ## v2 资源
 
-v2 不再把 Project/Inbox/category/priority 作为产品模型。`GET /api/v2/tree/children` 返回 Folder 与 Task 的混合直接子项；Folder 的 `aggregate` 由后代 Task 派生，状态顺序为 `IN_PROGRESS → TODO → DONE`。`POST /api/v2/tree/items/move` 使用 `baseVersion`、状态快照和前后锚点保护循环、已归档目标以及并发排序冲突。
+v2 不再把 Project/Inbox/category/priority 作为产品模型。`GET /api/v2/tree/children` 返回 Folder 与 Task 的混合直接子项；Folder 的 `status` 是文件夹自身持有的显式三态（默认 `TODO`），`aggregate` 里的 `todoCount/inProgressCount/doneCount/totalCount` 由后代 Task 派生，排序状态顺序为 `IN_PROGRESS → TODO → DONE`。`POST /api/v2/tree/items/move` 使用 `baseVersion`、状态快照和前后锚点保护循环、目标父级以及并发排序冲突。
 
 目录分页：`GET /api/v2/tree/children?parentFolderId=root&limit=100`，`limit` 为 1–200；下一页携带响应的 `nextCursor`，末页为 `null`。游标绑定账户、父目录及账户版本；中途发生写入返回 HTTP 410 `SYNC_CURSOR_EXPIRED`，调用方应保留已展示内容并提供从第一页重新加载，不自动无限重试。排序键为状态组、整数 rank、类型（文件夹优先）、ID。未指定 `limit` 的旧客户端继续得到全部直接子项。
 
 `GET /api/v2/tasks/{id}?view=summary` 只返回 `{ task }`，用于状态切换后保持当前行的位置，不读取备注或关系；省略 `view` 继续返回原有详情。
 
-PostgreSQL 的目录、文件夹选择器及面包屑读取不调用全账户 `prepare()`，不读取备注、步骤或工作流关系；文件夹状态汇总仍需扫描该目录下的活动后代，不能将一级分页当成后代扫描恒定开销。面包屑与内容独立加载。分页不推进全局同步游标；客户端只缓存精确页面成员，未完整 bootstrap 时不能据此构造未读取页或宣称全目录完整。完整本地投影使用独立的 `local.` 游标，绝不发送给服务器。
+PostgreSQL 的目录、文件夹选择器及面包屑读取不调用全账户 `prepare()`，不读取备注、步骤或工作流关系；文件夹进度计数仍需扫描该目录下的活动后代，不能将一级分页当成后代扫描恒定开销。面包屑与内容独立加载。分页不推进全局同步游标；客户端只缓存精确页面成员，未完整 bootstrap 时不能据此构造未读取页或宣称全目录完整。完整本地投影使用独立的 `local.` 游标，绝不发送给服务器。
 
-目录归档使用 `POST /api/v2/folders/:id/archive-tree`，响应 `ArchiveOperation`；恢复使用原 operationId，保证逐项精确恢复。归档中心通过 `GET /api/v2/archive-operations` 按顶层归档操作分组返回（含 `rootFolderTitle`、后代 Folder/Task 计数、原本已归档而恢复时需保留的计数，以及可展开的嵌套 Folder 列表）；`?includeRestored=true` 才包含已恢复操作，`GET /api/v2/archive-operations/:id` 额外返回该操作的归档 Task 明细与独立归档 Task。整树删除必须先 `POST /api/v2/folders/:id/delete-preview`，再把短时 `confirmationToken` 发送到 `DELETE /api/v2/folders/:id/tree`；预览 fingerprint 变化或令牌过期时拒绝，不物理删除关联 Note、TaskStep、Placement、Workflow Membership 或父级引用。整树删除必须在线执行；离线客户端 fail-closed 并返回 `OFFLINE_TREE_DELETE_FORBIDDEN` 与归档建议，不允许排队执行不可恢复的删除。
+整树删除必须先 `POST /api/v2/folders/:id/delete-preview`，再把短时 `confirmationToken` 发送到 `DELETE /api/v2/folders/:id/tree`。预览返回将删除的文件夹、任务、备注、步骤、日程和流程关联计数，以及 `subtreeFingerprint`；fingerprint 变化或令牌过期时拒绝，不物理删除关联 Note、TaskStep、Placement、Workflow Membership 或父级引用。整树删除必须在线执行；离线客户端 fail-closed 并返回 `OFFLINE_TREE_DELETE_FORBIDDEN`，不允许排队执行不可恢复的删除。
 
-批量顺延使用 `POST /api/v2/dates/:localDate/rollover`，只把该日期仍处于活动状态的 Placement 复制到次日，跳过已完成或已归档任务；响应 `{ createdIds, skippedTaskIds, targetDate }`。撤销使用 `POST /api/v2/rollovers/undo`，body 传 `{ placementIds }`。该操作无服务端状态，可跨进程与重启使用；离线时不排队，直接 fail-closed。
+批量顺延使用 `POST /api/v2/dates/:localDate/rollover`，只把该日期仍处于活动状态的 Placement 复制到次日，跳过已完成或已删除的任务；响应 `{ createdIds, skippedTaskIds, targetDate }`。撤销使用 `POST /api/v2/rollovers/undo`，body 传 `{ placementIds }`。该操作无服务端状态，可跨进程与重启使用；离线时不排队，直接 fail-closed。
 
-`GET /api/v2/tasks?archived=false&q=...` 支持按任务标题、引用 ID 或备注内容搜索。Task 详情通过 `GET /api/v2/tasks/:id` 聚合 Note、独立 TaskStep、Placement、Workflow Membership 和 Folder path；每个 Placement 同时返回可直接展示的 `timePoint` 日期/事件信息。日期与 Event/Placement 使用 `/time-points`、`/placements` v2 路由；Workflow、Stage、Membership 使用 `/workflows`、`/workflow-stages` 和 `/workflow-memberships`。同一 Task 可以加入多个 Workflow，但同一 Workflow 只能有一个活动 Membership。
+`GET /api/v2/tasks?q=...` 支持按任务标题、引用 ID 或备注内容搜索。Task 详情通过 `GET /api/v2/tasks/:id` 聚合 Note、独立 TaskStep、Placement、Workflow Membership 和 Folder path；每个 Placement 同时返回可直接展示的 `timePoint` 日期/事件信息。日期与 Event/Placement 使用 `/time-points`、`/placements` v2 路由；Workflow、Stage、Membership 使用 `/workflows`、`/workflow-stages` 和 `/workflow-memberships`。同一 Task 可以加入多个 Workflow，但同一 Workflow 只能有一个活动 Membership。
 
 v2 设置通过 `/api/v2/settings` 保存 `ROOT/RECENT_FOLDER` 目标；`GET /api/v2/status` 返回 `schemaVersion: 2`、支持的 API/sync 版本和 `minClientVersion`。v2 写入继续要求 `Idempotency-Key`、`X-Client-Id` 和适用的 `baseVersion`。
 
 ## 认证
 
-首次部署由部署中枢执行 `docker compose --profile operations run --rm bootstrap`，服务端内部仍使用 `POST /bootstrap` 和 `BOOTSTRAP_TOKEN`，成功后永久关闭；Web、桌面和手机客户端不提供初始化令牌输入。`POST /auth/login` 返回短时 access token；Web refresh token 是 `HttpOnly`、`SameSite=Lax` Cookie：使用 HTTPS 时还会带有 `Secure` 属性，使用 HTTP 时为了让 HTTP 外网地址可用而不带 `Secure`，但密码和会话信息会明文传输，页面会显示安全警告。原生容器应通过平台安全存储持有 refresh token。每次 refresh 都轮换 token，并把 365 天滑动不活动窗口重新计时；旧链重放会撤销该设备会话链。Web Cookie 同样按该窗口重设，但浏览器对持久 Cookie 有约 400 天上限。`DELETE /devices/{id}` 可撤销指定设备的全部会话，`GET /devices` 会标记 `current` 表示当前设备。
+首次部署由部署中枢执行 `docker compose --profile operations run --rm bootstrap`，服务端内部仍使用 `POST /bootstrap` 和 `BOOTSTRAP_TOKEN`，成功后永久关闭；Web 和 Android 客户端不提供初始化令牌输入。`POST /auth/login` 返回短时 access token；Web refresh token 是 `HttpOnly`、`SameSite=Lax` Cookie：使用 HTTPS 时还会带有 `Secure` 属性，使用 HTTP 时为了让 HTTP 外网地址可用而不带 `Secure`，但密码和会话信息会明文传输，页面会显示安全警告。原生容器应通过平台安全存储持有 refresh token。每次 refresh 都轮换 token，并把 365 天滑动不活动窗口重新计时；旧链重放会撤销该设备会话链。Web Cookie 同样按该窗口重设，但浏览器对持久 Cookie 有约 400 天上限。`DELETE /devices/{id}` 可撤销指定设备的全部会话，`GET /devices` 会标记 `current` 表示当前设备。
 
 ## 写入约定
 
-所有写请求需要合法 UUID `Idempotency-Key` 和 `X-Client-Id`。更新/归档/恢复需要 body 中的 `baseVersion`。服务端重复接收相同 mutation 返回第一次结果，不重复创建 Task 或 Placement。冲突 HTTP 409，错误体固定为：
+所有写请求需要合法 UUID `Idempotency-Key` 和 `X-Client-Id`。更新/删除需要 body 中的 `baseVersion`。服务端重复接收相同 mutation 返回第一次结果，不重复创建 Task 或 Placement。冲突 HTTP 409，错误体固定为：
 
 ```json
 {
@@ -45,8 +45,8 @@ v2 设置通过 `/api/v2/settings` 保存 `ROOT/RECENT_FOLDER` 目标；`GET /ap
 - `/placements/:id/move` 在一个 mutation 中建立目标并软删除来源。
 - `/tasks/:id/duplicate` 才创建新的 Task、Note 和引用 ID。
 - `POST /time-points/date` 对同一 Owner/localDate 幂等返回同一 Date TimePoint。
-- Task status 全局生效，Event 的 `reachedAt/archivedAt` 独立。
-- 普通列表默认排除归档和 tombstone；`/search/tasks?includeArchived=true` 可搜索归档任务。
+- Task status 全局生效，Event 的 `reachedAt` 独立。
+- 普通列表默认排除 tombstone；任务搜索使用 `GET /api/v2/tasks?q=`，覆盖标题、引用 ID 和备注内容。
 
 ## 列表与分页
 

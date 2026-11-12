@@ -2,6 +2,8 @@
 
 更新时间：2026-10-13
 
+> 后续变更（2026-11-12）：归档机制已在 `2.0.0-rc.26` 移除，本文中归档中心相关条目已失效；文件夹状态在 `2.0.0-rc.62` 改为文件夹自身持有的显式三态。冲突时以 `docs/ARCHITECTURE.md` 和代码为准。
+
 总体发布状态：**FAIL（v2 完成定义未满足，但阻断项已全部关闭）**。本轮已关闭全部已知 P0/P1 源码缺陷，并补齐归档中心、v2 rollover、V2 restore 策略、离线删除 fail-closed、Folder-first 迁移分层、Android 同步恢复等此前遗留项。所有本地门禁、真实 PostgreSQL migration/integration/runtime 门禁与三浏览器 E2E 均为 PASS。
 
 仍未运行、因而继续阻断正式发布的门禁只有环境类项：WebKit、Android 真机/仪器、Docker Compose 与长期双端离线矩阵。这些是环境缺失，不是已知实现缺陷。

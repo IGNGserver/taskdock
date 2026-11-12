@@ -297,7 +297,7 @@
                 <span class="k">01</span><span class="t">目录树</span>
                 <span class="d"
                   ><span
-                    >文件夹可以无限嵌套，同一级里文件夹和任务并存。文件夹没有手动状态，由全部后代任务实时推导。</span
+                    >文件夹可以无限嵌套，同一级里文件夹和任务并存。文件夹也有自己的三态状态，默认待开始，在更多菜单里切换；后代任务只用来统计完成进度。</span
                   ></span
                 >
               </button>
@@ -406,9 +406,7 @@
             </div>
             <div class="reveal" style="--d: 1">
               <h3>顺延可以撤销</h3>
-              <p>
-                把某一天仍未完成的安排批量顺延到次日，自动跳过已完成或已归档的任务，随时可以撤销。
-              </p>
+              <p>把某一天还没做完的安排顺延到第二天，已完成的任务会跳过，顺延完还能撤销。</p>
             </div>
             <div class="reveal" style="--d: 2">
               <h3>事件到达不改任务</h3>
@@ -586,7 +584,7 @@
 <span class="pr">$ </span>docker compose pull
 <span class="pr">$ </span>docker compose --profile operations run --rm migrate
 <span class="pr">$ </span>docker compose up -d
-<span class="cm"># 默认访问 http://服务器地址:48731</span></pre>
+<span class="cm"># 默认只在服务器本机可访问：http://127.0.0.1:48731</span></pre>
               <pre
                 id="term-owner"
                 role="tabpanel"
@@ -716,7 +714,7 @@
               <span class="no">05.3</span>
               <h3>右滑完成</h3>
               <p>
-                在手机浏览器里，向右滑过阈值即可完成任务，向左滑展开操作菜单；随手记录有常驻的新建按钮。
+                在手机浏览器里，向右滑过阈值切换完成状态，向左滑展开操作菜单；随手记录有常驻的新建按钮。
               </p>
               <div class="demo" aria-hidden="true">
                 <div class="demo-swipe">
@@ -726,16 +724,15 @@
             </div>
             <div class="ledger-row reveal">
               <span class="no">05.4</span>
-              <h3>按操作恢复归档</h3>
+              <h3>删除前先预览</h3>
               <p>
-                归档文件夹会逐项归档整棵子树；恢复时只恢复这一次操作归档的内容，不会误恢复更早归档的任务。
+                删整棵目录之前，先把会一起消失的文件夹、任务、备注、步骤、日程和流程关联列出来。确认了才执行，断网时直接拒绝。
               </p>
               <div class="demo" aria-hidden="true">
-                <div class="demo-archive">
-                  <span class="box"
-                    ><i style="--i: 0"></i><i style="--i: 1"></i><i style="--i: 2"></i
-                    ><i style="--i: 3"></i></span
-                  ><span>归档 → 恢复同一次操作</span>
+                <div class="demo-delete">
+                  <span class="files"><i></i><i></i><i></i></span>
+                  <span class="sum">文件夹 3<br />任务 12<br />备注 8</span>
+                  <span class="go">永久删除</span>
                 </div>
               </div>
             </div>
@@ -887,7 +884,9 @@
               <li><a href="download.html">下载与部署</a></li>
               <li><a href="https://github.com/IGNGserver/taskdock/releases">GitHub Releases</a></li>
               <li><a href="https://github.com/IGNGserver/taskdock">产品源码</a></li>
-              <li><a href="https://github.com/IGNGserver/taskdock-website">官网源码</a></li>
+              <li>
+                <a href="https://github.com/IGNGserver/taskdock/tree/master/website">官网源码</a>
+              </li>
             </ul>
           </div>
         </div>

@@ -17,13 +17,13 @@ TaskDock 的产品官网：介绍产品、提供下载与部署入口和文档�
 桌面客户端已停止维护（产品 `CHANGELOG.md`，2.0.0-rc.37 起），站点不再介绍。
 中枢以 Docker 镜像发布在 GitHub Container Registry（GHCR）。
 
-## 当前状态（2026-10-25）
+## 当前状态（2026-11-12）
 
 - 首页、下载与部署页、404 页已实现；
 - 已部署到 Cloudflare Pages 项目 `taskdock-website`，正式地址为 <https://taskdock.igng.net/>（默认别名
   <https://taskdock-website.pages.dev/>）；
 - `.github/workflows/website.yml` 在 `master` 和正式发版后自动构建并部署；线上版本来自最新发布
-  （当前 2.0.0-rc.59）；
+  （当前 2.0.0-rc.66）；
 - 旧的独立仓库 `IGNGserver/taskdock-website` 已归档，代码与历史以产品仓库为准。
 
 ## 已定案的决策
@@ -86,15 +86,16 @@ website/
 
 站点上的产品事实与出处（改文案前先核对产品仓库当前版本）：
 
-| 站点内容                                                                       | 产品仓库出处                                                             |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| 目录树、日期与时间点、流程、执行步骤四个维度；文件夹状态推导；一个任务多处安排 | `docs/V2_TREE_WORKFLOW_DEVELOPMENT.md`、`docs/ARCHITECTURE.md`（不变量） |
-| 顺延只复制未完成的安排、可撤销、离线拒绝；事件到达不改任务                     | `docs/API.md`、`docs/ARCHITECTURE.md`                                    |
-| 先读本地、待同步队列、按顺序推送、冲突保留双方、WebSocket 只发信号             | `docs/SYNC_PROTOCOL.md`                                                  |
-| Docker 部署步骤、`.env` 变量、端口 48731、Owner 初始化、升级与回滚             | `README.md`、`docs/DEPLOYMENT.md`、`compose.yaml`                        |
-| PWA 安装与离线打开需要 HTTPS                                                   | `docs/DEPLOYMENT.md`                                                     |
-| 命令面板（⌘K / Ctrl K）、移动端右滑完成与左滑菜单、三态状态圆圈                | `apps/web/src/App.tsx`、`CHANGELOG.md`（rc.24、rc.28）                   |
-| 版本规则（预发布默认、`latest` 只指向正式版）                                  | `README.md`、`docs/RELEASING.md`                                         |
+| 站点内容                                                                                     | 产品仓库出处                                                                                                  |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 目录树、日期与时间点、流程、执行步骤四个维度；文件夹独立三态与后代进度统计；一个任务多处安排 | `packages/database/migrations/0013_folder_status.sql`、`packages/domain/src/index.ts`、`docs/ARCHITECTURE.md` |
+| 顺延只复制未完成的安排、可撤销、离线拒绝；事件到达不改任务                                   | `docs/API.md`、`docs/ARCHITECTURE.md`                                                                         |
+| 整树删除先预览计数与确认 token，离线拒绝                                                     | `apps/api/src/tree-store.ts`（`previewDelete`/`deleteTree`）、`apps/web/src/TreePage.tsx`                     |
+| 先读本地、待同步队列、按顺序推送、冲突保留双方、WebSocket 只发信号                           | `docs/SYNC_PROTOCOL.md`                                                                                       |
+| Docker 部署步骤、`.env` 变量、端口 48731、默认只绑 127.0.0.1、Owner 初始化、升级与回滚       | `README.md`、`docs/DEPLOYMENT.md`、`compose.yaml`                                                             |
+| PWA 安装与离线打开需要 HTTPS                                                                 | `docs/DEPLOYMENT.md`                                                                                          |
+| 命令面板（⌘K / Ctrl K）、移动端右滑切换完成状态与左滑菜单、三态状态圆圈                      | `apps/web/src/App.tsx`、`CHANGELOG.md`（rc.24、rc.28）                                                        |
+| 版本规则（预发布默认、`latest` 只指向正式版）                                                | `README.md`、`docs/RELEASING.md`                                                                              |
 
 ## 维护
 
