@@ -43,6 +43,17 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+      mysql:
+        image: mysql:8.4@sha256:a81d043930e51745522bd5c430961cf8286f0a23f0a9a2a6e0108f7ea71b0902
+        env:
+          MYSQL_ROOT_PASSWORD: root_test_password
+          MYSQL_DATABASE: devtodo_mysql_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot_test_password --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -52,6 +63,24 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Block known high-severity dependency advisories
         run: pnpm audit --audit-level=high --registry=https://registry.npmjs.org
+      # `docker compose config` resolves interpolation and anchors, so a broken
+      # anchor, a missing required variable or a YAML typo fails here instead of
+      # at deploy time. It never pulls images.
+      - name: Validate Compose files
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APP_VERSION=validate APP_ORIGIN=http://localhost:3000
+          export POSTGRES_PASSWORD=validate MYSQL_PASSWORD=validate MYSQL_ROOT_PASSWORD=validate
+          export DATABASE_URL=postgres://validate:validate@127.0.0.1:5432/validate
+          export BOOTSTRAP_TOKEN=validate-token-at-least-32-characters-long
+          export ACCESS_TOKEN_SECRET=validate-secret-at-least-32-characters-long
+          export REFRESH_TOKEN_PEPPER=validate-pepper-at-least-32-characters-long
+          export CORS_ALLOWED_ORIGINS=http://localhost:3000
+          export OWNER_USERNAME=validate OWNER_PASSWORD=validate-password
+          docker compose -f compose.yaml config --quiet
+          docker compose -f compose.external-db.yaml config --quiet
+          docker compose -f compose.mysql.yaml config --quiet
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm tokens:check
@@ -67,6 +96,21 @@ jobs:
       - run: pnpm build
       - name: Verify precompressed static delivery
         run: pnpm exec tsx scripts/check-static-delivery.ts
+      # MySQL is a first-class engine: dialect probes, the full integration
+      # smoke and the HTTP runtime smoke all run against a real server.
+      - name: MySQL dialect, integration and runtime gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          TASKDOCK_MYSQL_TEST_URL=mysql://root:root_test_password@127.0.0.1:3306 \
+            pnpm test:mysql-compat
+          TASKDOCK_TEST_DATABASE_URL=mysql://root:root_test_password@127.0.0.1:3306/devtodo_mysql_test \
+            pnpm test:integration
+          # The runtime smoke needs a database with no Owner, so give it a
+          # separate schema instead of relying on the cleanup above.
+          node -e "const mysql=require('mysql2/promise');(async()=>{const c=await mysql.createConnection({host:'127.0.0.1',port:3306,user:'root',password:'root_test_password'});await c.query('CREATE DATABASE IF NOT EXISTS devtodo_mysql_runtime CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci');await c.end();})()"
+          TASKDOCK_TEST_DATABASE_URL=mysql://root:root_test_password@127.0.0.1:3306/devtodo_mysql_runtime \
+            pnpm test:mysql-runtime
       - name: PostgreSQL restart and mobile loading benchmark
         shell: bash
         run: |

@@ -2,7 +2,12 @@ import { createHash } from 'node:crypto';
 import os from 'node:os';
 import { performance } from 'node:perf_hooks';
 import { SqlStore, type PostgresPage } from '../apps/api/src/sql-store.js';
-import { createPool, runMigrations, type Pool } from '../packages/database/src/index.js';
+import {
+  createPool,
+  databaseFromPool,
+  runMigrations,
+  type Pool,
+} from '../packages/database/src/index.js';
 import { assertIsolatedEmptyDatabase, isolatedTestDatabaseUrl } from './test-database-safety.js';
 
 const databaseUrl = isolatedTestDatabaseUrl();
@@ -191,8 +196,9 @@ async function main(): Promise<void> {
   const store = new SqlStore(pool);
   let actualOwnerId: string | undefined;
   try {
-    await assertIsolatedEmptyDatabase(pool, 'capacity benchmark');
-    await runMigrations(pool);
+    const database = databaseFromPool(pool);
+    await assertIsolatedEmptyDatabase(database, 'capacity benchmark');
+    await runMigrations(database);
     await store.init();
     const owner = await store.withMutation(() => {
       return store.createOwner(username, 'perf-fixture-hash');

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { createPool, runMigrations } from '../packages/database/src/index.js';
+import { createPool, databaseFromPool, runMigrations } from '../packages/database/src/index.js';
 import { SqlStore } from '../apps/api/src/sql-store.js';
 import { SqlTreeStore } from '../apps/api/src/sql-tree-store.js';
 import { BootstrapSnapshots } from '../apps/api/src/sync-bootstrap.js';
@@ -17,8 +17,9 @@ if (!Number.isInteger(taskCount) || taskCount < 100 || taskCount > 100_000)
   throw new Error('invalid task count');
 let ownerId: string | undefined;
 try {
-  await assertIsolatedEmptyDatabase(pool, 'bootstrap benchmark');
-  await runMigrations(pool);
+  const database = databaseFromPool(pool);
+  await assertIsolatedEmptyDatabase(database, 'bootstrap benchmark');
+  await runMigrations(database);
   if ((await pool.query('SELECT 1 FROM users LIMIT 1')).rowCount)
     throw new Error('refusing to modify a database with existing users');
   await store.init();
