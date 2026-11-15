@@ -1,21 +1,6 @@
 # Changelog
 
-## 2.0.0-rc.66 · 2026-11-08
-
-### 安全、同步与性能修复
-
-- 完成全平台安全边界、认证限流、代理信任、容器部署和发布门禁加固。
-- 修复 Web、API 与 Android 离线同步的冲突恢复、复合快速收集、批次事务和游标一致性问题。
-- 修复超大十进制 rank 的排序与重平衡，并防止 Android 拒绝操作的依赖闭包反向吞掉前序成功操作。
-- 增加 PostgreSQL 批次、限流、静态交付、rank、同步恢复、数据库安全和官网版本选择回归测试。
-
-### 升级说明
-
-- 升级前请完成数据库备份；启动前按部署流程执行 migration。
-- 本版本为预发布版本，Docker 镜像使用 `ghcr.io/igngserver/taskdock:2.0.0-rc.66`，不会更新 `latest`。
-- Android APK 将作为 GitHub Release 附件发布；真实 PostgreSQL、Docker 和 Android 设备门禁由 GitHub Actions 环境执行。
-
-## 未发布
+## 2.0.0-rc.67 · 2026-11-15
 
 - 新增 MySQL 8.4 支持：`DATABASE_URL` 换成 `mysql://` 或使用离散 `MYSQL_*` 即可切换引擎，也可以保留 PostgreSQL 不动；`compose.mysql.yaml` 提供内置 MySQL 部署，`compose.external-db.yaml` 对两种引擎通用。方言差异集中在 `@devtodo/database`（占位符、类型转换、`ILIKE`、保留字 `rank`/`cursor`），存储层仍是同一份实现。
 - MySQL 的能力边界写在 `docs/adr/0005-mysql-support.md`：跨实例实时推送降级为进程内通知或 Redis pub/sub，搜索退化为 owner 范围内的 `LIKE` 扫描，语句级超时只覆盖 SELECT，迁移改为逐文件提交。
@@ -34,6 +19,21 @@
 - 从旧版本升级时，如果 `.env` 的 `NATIVE_ALLOWED_ORIGINS` 包含 `devtodo://app`，请删除该项后再启动中枢。
 - 修复 Android 同步横幅把后台校验误报为“显示缓存”：前台校验改为 60 秒增量同步，不再每轮强制页面预览；新鲜度窗口调整为 120 秒，正常校验显示紧凑的“上次核验”状态。
 - 修复会话或中枢切换取消同步时，Android 同步状态可能永久停在 `SYNCING` 的问题。
+
+## 2.0.0-rc.66 · 2026-11-08
+
+### 安全、同步与性能修复
+
+- 完成全平台安全边界、认证限流、代理信任、容器部署和发布门禁加固。
+- 修复 Web、API 与 Android 离线同步的冲突恢复、复合快速收集、批次事务和游标一致性问题。
+- 修复超大十进制 rank 的排序与重平衡，并防止 Android 拒绝操作的依赖闭包反向吞掉前序成功操作。
+- 增加 PostgreSQL 批次、限流、静态交付、rank、同步恢复、数据库安全和官网版本选择回归测试。
+
+### 升级说明
+
+- 升级前请完成数据库备份；启动前按部署流程执行 migration。
+- 本版本为预发布版本，Docker 镜像使用 `ghcr.io/igngserver/taskdock:2.0.0-rc.66`，不会更新 `latest`。
+- Android APK 将作为 GitHub Release 附件发布；真实 PostgreSQL、Docker 和 Android 设备门禁由 GitHub Actions 环境执行。
 
 ## 2.0.0-rc.28 · 2026-09-27
 
