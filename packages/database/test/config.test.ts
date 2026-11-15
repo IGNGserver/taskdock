@@ -91,3 +91,47 @@ describe('database runtime config', () => {
     ).toThrow(/DATABASE_SSL_MODE/);
   });
 });
+
+describe('dual engine settings', () => {
+  it('detects MySQL from the DATABASE_URL scheme', async () => {
+    const { readDatabaseSettings } = await import('../src/config.js');
+    const settings = readDatabaseSettings({
+      DATABASE_URL: 'mysql://taskdock:secret@db.example.lan:3307/taskdock',
+      DB_POOL_MAX: '4',
+    });
+    expect(settings.dialect).toBe('mysql');
+    expect(settings.connectionString).toBe('mysql://taskdock:secret@db.example.lan:3307/taskdock');
+    expect(settings.max).toBe(4);
+    // MySQL has no LISTEN/NOTIFY; the flag must not claim otherwise.
+    expect(settings.listenEnabled).toBe(false);
+  });
+
+  it('supports discrete MYSQL_* variables and the 3306 default', async () => {
+    const { readDatabaseSettings } = await import('../src/config.js');
+    const settings = readDatabaseSettings({
+      MYSQL_HOST: 'db.example.lan',
+      MYSQL_USER: 'taskdock',
+      MYSQL_PASSWORD: 'p@ss:word',
+      MYSQL_DATABASE: 'taskdock_home',
+    });
+    expect(settings.dialect).toBe('mysql');
+    expect(settings.port).toBe(3306);
+    expect(settings.password).toBe('p@ss:word');
+    expect(settings.database).toBe('taskdock_home');
+  });
+
+  it('honours an explicit DB_DIALECT override', async () => {
+    const { readDatabaseSettings } = await import('../src/config.js');
+    expect(() => readDatabaseSettings({ DB_DIALECT: 'oracle' })).toThrow(/DB_DIALECT/);
+    expect(() =>
+      readDatabaseSettings({ DB_DIALECT: 'mysql', DATABASE_URL: 'mysql://host/db' }),
+    ).not.toThrow();
+  });
+
+  it('rejects a DATABASE_URL without a recognised scheme', async () => {
+    const { readDatabaseSettings } = await import('../src/config.js');
+    expect(() => readDatabaseSettings({ DATABASE_URL: 'file:/tmp/db' })).toThrow(
+      /postgres:|mysql:/,
+    );
+  });
+});

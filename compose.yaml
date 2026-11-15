@@ -1,3 +1,5 @@
+# Built-in PostgreSQL deployment (the default). For MySQL instead of PostgreSQL,
+# use compose.mysql.yaml; for an existing database server, compose.external-db.yaml.
 x-taskdock-image: &taskdock_image '${TASKDOCK_IMAGE:-ghcr.io/igngserver/taskdock}:${APP_VERSION:?set APP_VERSION to an immutable image tag}'
 x-app-security: &app_security
   read_only: true

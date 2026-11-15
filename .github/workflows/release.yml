@@ -48,6 +48,18 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+      mysql:
+        image: mysql:8.4@sha256:a81d043930e51745522bd5c430961cf8286f0a23f0a9a2a6e0108f7ea71b0902
+        env:
+          MYSQL_ROOT_PASSWORD: root_test_password
+          MYSQL_DATABASE: devtodo_mysql_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot_test_password --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -126,6 +138,16 @@ jobs:
         run: pnpm test:integration
       - name: 构建
         run: pnpm build
+      - name: MySQL 方言与集成测试
+        env:
+          TASKDOCK_MYSQL_TEST_URL: mysql://root:root_test_password@127.0.0.1:3306
+          TASKDOCK_TEST_DATABASE_URL: mysql://root:root_test_password@127.0.0.1:3306/devtodo_mysql_test
+        run: |
+          set -euo pipefail
+          pnpm test:mysql-compat
+          pnpm test:integration
+          node -e "const mysql=require('mysql2/promise');(async()=>{const c=await mysql.createConnection({host:'127.0.0.1',port:3306,user:'root',password:'root_test_password'});await c.query('CREATE DATABASE IF NOT EXISTS devtodo_mysql_runtime CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci');await c.end();})()"
+          TASKDOCK_TEST_DATABASE_URL=mysql://root:root_test_password@127.0.0.1:3306/devtodo_mysql_runtime pnpm test:mysql-runtime
       - name: OpenAPI 检查
         run: pnpm openapi:check
 

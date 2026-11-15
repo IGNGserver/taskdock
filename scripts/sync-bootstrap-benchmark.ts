@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { createPool, runMigrations } from '../packages/database/src/index.js';
-import { PostgresStore } from '../apps/api/src/postgres-store.js';
-import { PostgresTreeStore } from '../apps/api/src/postgres-tree-store.js';
+import { createPool, databaseFromPool, runMigrations } from '../packages/database/src/index.js';
+import { SqlStore } from '../apps/api/src/sql-store.js';
+import { SqlTreeStore } from '../apps/api/src/sql-tree-store.js';
 import { BootstrapSnapshots } from '../apps/api/src/sync-bootstrap.js';
 import { DirectoryReads } from '../apps/api/src/directory-reads.js';
 import { assertIsolatedEmptyDatabase, isolatedTestDatabaseUrl } from './test-database-safety.js';
@@ -11,14 +11,15 @@ const databaseUrl = isolatedTestDatabaseUrl();
 if (!databaseUrl)
   throw new Error('TASKDOCK_TEST_DATABASE_URL must point to an isolated empty test database');
 const pool = createPool(databaseUrl);
-const store = new PostgresStore(pool);
+const store = new SqlStore(pool);
 const taskCount = Number(process.env['BOOTSTRAP_BENCH_TASKS'] ?? 10_000);
 if (!Number.isInteger(taskCount) || taskCount < 100 || taskCount > 100_000)
   throw new Error('invalid task count');
 let ownerId: string | undefined;
 try {
-  await assertIsolatedEmptyDatabase(pool, 'bootstrap benchmark');
-  await runMigrations(pool);
+  const database = databaseFromPool(pool);
+  await assertIsolatedEmptyDatabase(database, 'bootstrap benchmark');
+  await runMigrations(database);
   if ((await pool.query('SELECT 1 FROM users LIMIT 1')).rowCount)
     throw new Error('refusing to modify a database with existing users');
   await store.init();
@@ -36,7 +37,7 @@ try {
     SELECT gen_random_uuid(), owner_id, id, repeat('大备注内容',400), 1 FROM tasks WHERE owner_id=$1`,
     [ownerId],
   );
-  const optimized = new BootstrapSnapshots(new PostgresTreeStore(store));
+  const optimized = new BootstrapSnapshots(new SqlTreeStore(store));
   const measure = async (read: () => Promise<unknown>) => {
     const samples: number[] = [];
     let bytes = 0;
@@ -55,10 +56,10 @@ try {
       responseBytes: bytes,
     };
   };
-  const full = await measure(() => new PostgresTreeStore(store).snapshot(owner.id));
+  const full = await measure(() => new SqlTreeStore(store).snapshot(owner.id));
   const preview = await measure(() => optimized.preview(owner.id, '2026-10-13', null));
   const today = await measure(() => optimized.today(owner.id, '2026-10-13'));
-  const directoryTree = new PostgresTreeStore(store);
+  const directoryTree = new SqlTreeStore(store);
   directoryTree.prepare = async () => {
     throw new Error('directory benchmark loaded full projection');
   };
@@ -91,7 +92,7 @@ try {
   let version = 1;
   const benchmarkClient = randomUUID();
   const focusedEdit = await measure(() =>
-    new PostgresTreeStore(store).applyMutationIdempotent(owner.id, benchmarkClient, {
+    new SqlTreeStore(store).applyMutationIdempotent(owner.id, benchmarkClient, {
       mutationId: randomUUID(),
       command: 'task.update',
       entityId: taskId,

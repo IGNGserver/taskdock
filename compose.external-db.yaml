@@ -7,10 +7,12 @@ x-app-security: &app_security
   tmpfs:
     - /tmp:rw,noexec,nosuid,size=64m
 
-# External PostgreSQL deployment. Use this file when PostgreSQL is managed
+# External database deployment. Use this file when the database is managed
 # outside this Compose project (a NAS, a shared database server, or a managed
-# service). Each TaskDock hub must use its own database; do not point several
-# hubs at the same database.
+# service). PostgreSQL and MySQL are both supported: the DATABASE_URL scheme
+# selects the engine (postgres:// or mysql://), and DB_DIALECT can override it.
+# Each TaskDock hub must use its own database; do not point several hubs at the
+# same database.
 #
 #   docker compose -f compose.external-db.yaml run --rm migrate
 #   docker compose -f compose.external-db.yaml run --rm bootstrap
@@ -26,7 +28,8 @@ services:
       APP_PORT: 3000
       APP_ORIGIN: ${APP_ORIGIN:?set the public HTTP or HTTPS origin in .env}
       # Full URL, e.g. postgres://taskdock_app:...@db.example.lan:5432/taskdock
-      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL to the external PostgreSQL URL}
+      # or mysql://taskdock_app:...@db.example.lan:3306/taskdock
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL to the external database URL}
       # Optional DDL role. Falls back to DATABASE_URL when empty.
       MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:-}
       DATABASE_SSL_MODE: ${DATABASE_SSL_MODE:-}

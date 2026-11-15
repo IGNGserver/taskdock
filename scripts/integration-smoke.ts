@@ -1,11 +1,27 @@
 import { spawn } from 'node:child_process';
-import { createPool, databaseReady, runMigrations } from '../packages/database/src/index.js';
-import { PostgresStore } from '../apps/api/src/postgres-store.js';
+import { isDeepStrictEqual } from 'node:util';
+import {
+  databaseReady,
+  openDatabase,
+  readDatabaseSettings,
+  runMigrations,
+  type SqlDatabase,
+} from '../packages/database/src/index.js';
+import { SqlStore } from '../apps/api/src/sql-store.js';
 import { uuidv7, type Mutation } from '../packages/contracts/src/index.js';
 import { DomainError } from '../packages/domain/src/index.js';
 import { assertIsolatedEmptyDatabase, isolatedTestDatabaseUrl } from './test-database-safety.js';
 
 const databaseUrl = isolatedTestDatabaseUrl();
+const settings = databaseUrl
+  ? readDatabaseSettings({ ...process.env, DATABASE_URL: databaseUrl })
+  : undefined;
+const engine = settings?.dialect === 'mysql' ? 'MySQL' : 'PostgreSQL';
+
+function testDatabase(): SqlDatabase {
+  if (!settings) throw new Error('TASKDOCK_TEST_DATABASE_URL is not configured');
+  return openDatabase({ ...settings, max: 10 });
+}
 const root = process.cwd();
 const workerCount = 20;
 
@@ -37,7 +53,7 @@ function runConcurrencyWorker(
 ): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const executable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-    const child = spawn(executable, ['exec', 'tsx', 'scripts/pg-concurrency-worker.ts'], {
+    const child = spawn(executable, ['exec', 'tsx', 'scripts/sql-concurrency-worker.ts'], {
       cwd: root,
       env: {
         ...process.env,
@@ -97,37 +113,39 @@ function runConcurrencyWorker(
 async function main(): Promise<void> {
   if (!databaseUrl) {
     console.log(
-      'NOT RUN: TASKDOCK_TEST_DATABASE_URL is not configured; the integration smoke requires a dedicated empty PostgreSQL database.',
+      'NOT RUN: TASKDOCK_TEST_DATABASE_URL is not configured; the integration smoke requires a dedicated empty database.',
     );
     process.exitCode = 2;
     return;
   }
 
-  const cleanupPool = createPool(databaseUrl);
-  const stores: PostgresStore[] = [];
-  const closedStores = new Set<PostgresStore>();
-  const closeStore = async (store: PostgresStore): Promise<void> => {
+  const cleanupDatabase = testDatabase();
+  const stores: SqlStore[] = [];
+  const closedStores = new Set<SqlStore>();
+  const closeStore = async (store: SqlStore): Promise<void> => {
     if (closedStores.has(store)) return;
     closedStores.add(store);
     await store.close();
   };
   let ownerIds: string[] = [];
   try {
-    await assertIsolatedEmptyDatabase(cleanupPool, 'integration smoke');
-    await runMigrations(cleanupPool);
-    await runMigrations(cleanupPool);
-    assert(await databaseReady(cleanupPool), 'PostgreSQL schema is not ready after migrations');
-    const existingOwners = await cleanupPool.query<{ id: string }>('SELECT id FROM users LIMIT 1');
+    await assertIsolatedEmptyDatabase(cleanupDatabase, 'integration smoke');
+    await runMigrations(cleanupDatabase);
+    await runMigrations(cleanupDatabase);
+    assert(await databaseReady(cleanupDatabase), `${engine} schema is not ready after migrations`);
+    const existingOwners = await cleanupDatabase.query<{ id: string }>(
+      'SELECT id FROM users LIMIT 1',
+    );
     if (existingOwners.rowCount) {
       throw new Error(
         'integration smoke requires an isolated empty database; refusing to modify an existing Owner',
       );
     }
 
-    const primary = new PostgresStore(createPool(databaseUrl), {
+    const primary = new SqlStore(testDatabase(), {
       clock: () => new Date('2026-09-04T10:00:00.000Z'),
     });
-    const peer = new PostgresStore(createPool(databaseUrl), {
+    const peer = new SqlStore(testDatabase(), {
       clock: () => new Date('2026-09-04T10:00:00.000Z'),
     });
     stores.push(primary, peer);
@@ -172,11 +190,11 @@ async function main(): Promise<void> {
     const ownerB = uuidv7();
     ownerIds.push(ownerB);
     const ownerBNow = new Date().toISOString();
-    await cleanupPool.query(
+    await cleanupDatabase.query(
       'INSERT INTO users (id, username, password_hash, next_misc_task_number, created_at, updated_at) VALUES ($1, $2, $3, 1, $4, $4)',
       [ownerB, `integration-b-${process.pid}`, 'not-used-in-integration', ownerBNow],
     );
-    await cleanupPool.query(
+    await cleanupDatabase.query(
       "INSERT INTO user_settings (owner_id, timezone, week_starts_on, default_capture_target, version, created_at, updated_at) VALUES ($1, 'Asia/Shanghai', 1, 'ROOT', 1, $2, $2)",
       [ownerB, ownerBNow],
     );
@@ -225,7 +243,6 @@ async function main(): Promise<void> {
       (await primary.syncStatus(owner.id)).cursor === cursorBeforeRollback,
       'failed transaction advanced the change cursor',
     );
-
     const failedReceiptId = uuidv7();
     const failedReceiptTaskId = uuidv7();
     await expectDomainError(
@@ -254,7 +271,7 @@ async function main(): Promise<void> {
       () => primary.getTask(owner.id, failedReceiptTaskId),
       'ENTITY_NOT_FOUND',
     );
-    const failedReceipt = await cleanupPool.query(
+    const failedReceipt = await cleanupDatabase.query(
       'SELECT 1 FROM client_mutations WHERE owner_id = $1 AND mutation_id = $2',
       [owner.id, failedReceiptId],
     );
@@ -284,7 +301,7 @@ async function main(): Promise<void> {
       new Set([firstIdempotent.replayed, secondIdempotent.replayed]).size === 2,
       'concurrent idempotent mutation did not produce exactly one replay',
     );
-    const receiptCount = await cleanupPool.query(
+    const receiptCount = await cleanupDatabase.query(
       'SELECT COUNT(*)::int AS count FROM client_mutations WHERE owner_id = $1 AND client_id = $2 AND mutation_id = $3',
       [owner.id, clientId, mutationId],
     );
@@ -292,7 +309,7 @@ async function main(): Promise<void> {
       Number(receiptCount.rows[0]?.count) === 1,
       'idempotent mutation produced more than one receipt',
     );
-    const changeCount = await cleanupPool.query(
+    const changeCount = await cleanupDatabase.query(
       'SELECT COUNT(*)::int AS count FROM sync_changes WHERE owner_id = $1 AND entity_id = $2',
       [owner.id, idempotentTaskId],
     );
@@ -333,7 +350,7 @@ async function main(): Promise<void> {
     const cursorBeforeRestart = (await primary.syncStatus(owner.id)).cursor;
     await closeStore(peer);
     await closeStore(primary);
-    const restartStore = new PostgresStore(createPool(databaseUrl), {
+    const restartStore = new SqlStore(testDatabase(), {
       clock: () => new Date('2026-09-04T10:00:00.000Z'),
     });
     stores.push(restartStore);
@@ -358,9 +375,9 @@ async function main(): Promise<void> {
       'placement did not survive restart',
     );
 
-    // Verify v2 PostgresTreeStore invariants: transaction lock, delete preview, cascade deletion
-    const { PostgresTreeStore } = await import('../apps/api/src/postgres-tree-store.js');
-    const v2Store = new PostgresTreeStore(restartStore);
+    // Verify v2 SqlTreeStore invariants: transaction lock, delete preview, cascade deletion
+    const { SqlTreeStore } = await import('../apps/api/src/sql-tree-store.js');
+    const v2Store = new SqlTreeStore(restartStore);
     const v2FolderId = uuidv7();
     const v2TaskId = uuidv7();
     const v2CursorBefore = (await restartStore.syncStatusV2(owner.id)).cursor;
@@ -387,7 +404,7 @@ async function main(): Promise<void> {
       v2CursorAfterWrite !== v2CursorBefore,
       'v2 mutation did not advance the database cursor',
     );
-    const reloadedV2Store = new PostgresTreeStore(restartStore);
+    const reloadedV2Store = new SqlTreeStore(restartStore);
     const reloadedSnapshot = await reloadedV2Store.snapshot(owner.id);
     const { BootstrapSnapshots } = await import('../apps/api/src/sync-bootstrap.js');
     const bootstrap = new BootstrapSnapshots(reloadedV2Store);
@@ -417,7 +434,7 @@ async function main(): Promise<void> {
     );
     const directDetail = await bootstrap.detail(owner.id, v2TaskId);
     const { DirectoryReads } = await import('../apps/api/src/directory-reads.js');
-    const directoryStore = new PostgresTreeStore(restartStore);
+    const directoryStore = new SqlTreeStore(restartStore);
     directoryStore.prepare = async () => {
       throw new Error('directory read loaded the full owner projection');
     };
@@ -474,7 +491,7 @@ async function main(): Promise<void> {
       'direct task detail lost the readable folder path',
     );
     // Focused mobile edits must reuse domain validation without prepare/full-account reads.
-    const focusedStore = new PostgresTreeStore(restartStore);
+    const focusedStore = new SqlTreeStore(restartStore);
     focusedStore.prepare = async () => {
       throw new Error('focused mutation loaded the entire owner');
     };
@@ -534,10 +551,10 @@ async function main(): Promise<void> {
       'focused retry lost the edit',
     );
     const manifest = await bootstrap.create(owner.id, '2026-09-04');
-    const bootstrapPeer = new PostgresStore(createPool(databaseUrl));
+    const bootstrapPeer = new SqlStore(testDatabase());
     stores.push(bootstrapPeer);
     await bootstrapPeer.init();
-    const peerBootstrap = new BootstrapSnapshots(new PostgresTreeStore(bootstrapPeer));
+    const peerBootstrap = new BootstrapSnapshots(new SqlTreeStore(bootstrapPeer));
     const peerManifest = await peerBootstrap.create(owner.id, '2026-09-04');
     assert(
       peerManifest.snapshotId === manifest.snapshotId,
@@ -567,32 +584,32 @@ async function main(): Promise<void> {
       () => peerBootstrap.page(ownerB, manifest.snapshotId, 0),
       'SYNC_CURSOR_EXPIRED',
     );
-    await cleanupPool.query(
-      "UPDATE sync_bootstrap_snapshots SET expires_at = now() - interval '1 minute' WHERE id = $1",
-      [manifest.snapshotId],
+    await cleanupDatabase.query(
+      'UPDATE sync_bootstrap_snapshots SET expires_at = $2 WHERE id = $1',
+      [manifest.snapshotId, new Date(Date.now() - 60_000).toISOString()],
     );
     await expectDomainError(
       () => bootstrap.page(owner.id, manifest.snapshotId, 0),
       'SYNC_CURSOR_EXPIRED',
     );
     await bootstrap.cleanup();
-    const expired = await cleanupPool.query(
+    const expired = await cleanupDatabase.query(
       'SELECT 1 FROM sync_bootstrap_snapshots WHERE id = $1',
       [manifest.snapshotId],
     );
     assert(expired.rowCount === 0, 'bounded background cleanup retained expired snapshot');
     assert(
       reloadedSnapshot.folders.some((folder) => folder.id === v2FolderId),
-      'v2 folder did not survive a PostgresTreeStore restart',
+      'v2 folder did not survive a SqlTreeStore restart',
     );
     assert(
       reloadedSnapshot.tasks.some((task) => task.id === v2TaskId),
-      'v2 task did not survive a PostgresTreeStore restart',
+      'v2 task did not survive a SqlTreeStore restart',
     );
     const reloadedPull = await reloadedV2Store.pull(owner.id, v2CursorBefore, 500);
     assert(
       reloadedPull.changes.some((change) => change.entityId === v2TaskId),
-      'v2 pull did not read durable changes after a PostgresTreeStore restart',
+      'v2 pull did not read durable changes after a SqlTreeStore restart',
     );
 
     // Section 7.2 invariant: a newly created root Task must not be sorted above
@@ -650,8 +667,45 @@ async function main(): Promise<void> {
       'v2 delete was not persisted for a reloaded store',
     );
 
+    // UPDATE ... RETURNING paths without an `id` predicate: settings (keyed by
+    // owner), notes (keyed by task) and the multi-row placement tombstone.
+    const returningTask = await restartStore.withMutation(() =>
+      restartStore.createTask(owner.id, {
+        projectId: project.id,
+        category: 'FEATURE',
+        title: 'returning shapes',
+        priority: 'NONE',
+      }),
+    );
+    assert(
+      (
+        await restartStore.withMutation(() =>
+          restartStore.updateNote(owner.id, returningTask.id, 'note v2', 1),
+        )
+      ).contentMarkdown === 'note v2',
+      'note update did not read its own row back',
+    );
+    assert(
+      (await restartStore.updateSettings(owner.id, { timezone: 'UTC' }, 1)).version === 2,
+      'settings update did not read its own row back',
+    );
+    const returningEvent = await restartStore.createEvent(owner.id, 'returning event');
+    await restartStore.withMutation(() =>
+      restartStore.addPlacement(owner.id, returningTask.id, returningEvent.id),
+    );
+    const cursorBeforeEventDelete = (await restartStore.syncStatus(owner.id)).cursor;
+    await restartStore.deleteTimePoint(owner.id, returningEvent.id, returningEvent.version);
+    assert(
+      BigInt((await restartStore.syncStatus(owner.id)).cursor) > BigInt(cursorBeforeEventDelete),
+      'event deletion did not append placement tombstones',
+    );
+    assert(
+      (await restartStore.getTask(owner.id, returningTask.id)).id === returningTask.id,
+      'deleting an event also removed its task',
+    );
+
     console.log(
-      `PASS: PostgreSQL migration, row-level transaction, owner isolation, two-process concurrency, idempotency, rollback, restart, multi-placement invariants, and PostgresTreeStore v2 delete preview/tree deletion; cursor ${afterRestart.cursor}`,
+      `PASS: ${engine} migration, row-level transaction, owner isolation, two-process concurrency, idempotency, rollback, restart, multi-placement invariants, and SqlTreeStore v2 delete preview/tree deletion; cursor ${afterRestart.cursor}`,
     );
   } finally {
     for (const store of stores) {
@@ -664,13 +718,14 @@ async function main(): Promise<void> {
     }
     if (ownerIds.length) {
       try {
-        await cleanupPool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [ownerIds]);
+        const list = ownerIds.map((_, index) => `$${index + 1}`).join(',');
+        await cleanupDatabase.query(`DELETE FROM users WHERE id IN (${list})`, ownerIds);
       } catch (error) {
         console.error(`cleanup fixture failed: ${String(error)}`);
         process.exitCode = 1;
       }
     }
-    await cleanupPool.end();
+    await cleanupDatabase.end();
   }
 }
 
@@ -678,4 +733,3 @@ void main().catch((error: unknown) => {
   console.error(error);
   process.exitCode = 1;
 });
-import { isDeepStrictEqual } from 'node:util';

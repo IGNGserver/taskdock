@@ -1,3 +1,10 @@
+/**
+ * PostgreSQL-only Drizzle definition kept for reference and for the type
+ * aliases at the bottom. Nothing queries through it: the runtime SQL lives in
+ * `apps/api/src/sql-*.ts`, and the schema of record is
+ * `packages/database/migrations/{postgres,mysql}`. There is no MySQL twin by
+ * design; adding one would be a second schema to keep in sync for no benefit.
+ */
 import { sql } from 'drizzle-orm';
 import {
   bigint,

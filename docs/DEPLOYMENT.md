@@ -22,7 +22,7 @@ TaskDock 允许至少 6 位的密码，6 位纯数字也可以，没有额外的
 
 从 GitHub 仓库取得 `compose.yaml` 和 `.env.example` 后，在服务器上执行：
 
-> **数据库卷提示：** 当前 Compose 使用 PostgreSQL 18 的 `/var/lib/postgresql` 数据卷布局。若旧部署使用过早期 Compose 文件，请先完成数据库备份，再按 [备份与恢复](BACKUP_RESTORE.md) 恢复到新的数据库卷；不要直接删除旧卷。
+> **数据库卷提示：** 默认 Compose 使用 PostgreSQL 18 的 `/var/lib/postgresql` 数据卷布局；`compose.mysql.yaml` 使用 `taskdock_mysql` 卷。若旧部署使用过早期 Compose 文件，请先完成数据库备份，再按 [备份与恢复](BACKUP_RESTORE.md) 恢复到新的数据库卷；不要直接删除旧卷。
 
 ```bash
 cp .env.example .env
@@ -44,7 +44,7 @@ ghcr.io/igngserver/taskdock:${APP_VERSION}
 
 如果需要使用其他镜像仓库，可以设置 `TASKDOCK_IMAGE`。不要把生产 Compose 改回 `build:`，也不要在生产服务器上执行 `git pull` 后从源代码构建。
 
-默认应用端口仅绑定 `127.0.0.1:48731`；直接提供 HTTP 服务时必须显式设置 `TASKDOCK_BIND_ADDRESS=0.0.0.0`，公网仍应改用 HTTPS 网关。使用 HTTP 时页面会显示安全警告，密码和会话信息会明文传输。PostgreSQL 没有宿主机端口。在 `.env` 中填写 `OWNER_USERNAME`、`OWNER_PASSWORD`，然后由部署中枢执行一次 Owner 初始化：
+默认应用端口仅绑定 `127.0.0.1:48731`；直接提供 HTTP 服务时必须显式设置 `TASKDOCK_BIND_ADDRESS=0.0.0.0`，公网仍应改用 HTTPS 网关。使用 HTTP 时页面会显示安全警告，密码和会话信息会明文传输。数据库没有宿主机端口。在 `.env` 中填写 `OWNER_USERNAME`、`OWNER_PASSWORD`，然后由部署中枢执行一次 Owner 初始化：
 
 ```bash
 docker compose --profile operations run --rm migrate
@@ -54,13 +54,27 @@ docker compose up -d app
 
 初始化命令会读取部署环境中的 `BOOTSTRAP_TOKEN`，不会把令牌交给 Web、桌面或手机客户端。初始化成功后，建议从 `.env` 中删除 `OWNER_PASSWORD`，并轮换或移除 `BOOTSTRAP_TOKEN`。`app` 依赖迁移 job 成功后才会进入 ready；`/health/live` 只证明进程存活，不能替代迁移和数据库就绪检查。
 
-## 外部 PostgreSQL / 共享数据库服务器
+## 内置 MySQL
 
-如果 PostgreSQL 已经运行在 NAS、共享服务器或托管服务上，不要使用 `compose.yaml` 的内置数据库，改用 `compose.external-db.yaml`。每个 TaskDock 中枢必须使用独立 database；多个应用可以共用同一台 PostgreSQL 服务器。
+默认 `compose.yaml` 带的是 PostgreSQL。要用内置 MySQL，换一个 Compose 文件即可：
+
+```bash
+docker compose -f compose.mysql.yaml up -d mysql
+docker compose -f compose.mysql.yaml run --rm migrate
+docker compose -f compose.mysql.yaml --profile operations run --rm bootstrap
+docker compose -f compose.mysql.yaml up -d app
+```
+
+MySQL 数据在 `taskdock_mysql` 卷里，同样不映射宿主机端口。服务端字符集与排序规则固定为 `utf8mb4` / `utf8mb4_0900_ai_ci`，时区固定为 UTC。
+
+## 外部数据库 / 共享数据库服务器
+
+如果 PostgreSQL 或 MySQL 已经运行在 NAS、共享服务器或托管服务上，不要使用内置数据库，改用 `compose.external-db.yaml`：它只读 `DATABASE_URL`，scheme 决定引擎（`postgres://` 或 `mysql://`）。每个 TaskDock 中枢必须使用独立 database；多个应用可以共用同一台数据库服务器。
 
 ```bash
 cp .env.example .env
 # 填写 DATABASE_URL、MIGRATION_DATABASE_URL、APP_ORIGIN 和密钥
+# MySQL 只是把 scheme 换成 mysql://，其余步骤一致
 docker compose -f compose.external-db.yaml pull
 docker compose -f compose.external-db.yaml run --rm migrate
 docker compose -f compose.external-db.yaml --profile operations run --rm bootstrap
@@ -68,7 +82,7 @@ docker compose -f compose.external-db.yaml up -d app
 curl -fsS http://your-host.example:48731/health/ready
 ```
 
-外部库建议使用 `DATABASE_SSL_MODE=verify-full` 和 CA secret；应用角色与迁移角色分开。连接池、PgBouncer、TLS、备份和“一个服务器多个 database”的完整说明见 [外部 PostgreSQL 与共享数据库服务器](EXTERNAL_DATABASE.md)。
+外部库建议使用 `DATABASE_SSL_MODE=verify-full` 和 CA secret；应用角色与迁移角色分开。连接池、PgBouncer、TLS、备份、“一个服务器多个 database”以及两种引擎的行为差异见 [外部数据库与共享数据库服务器](EXTERNAL_DATABASE.md)。
 
 可选 Redis 用于共享认证限流和多副本冷启动缓存。内置 Compose 可使用 `--profile cache`，外部 Redis 通过 `CACHE_URL` 指向；多副本必须配置同一个高可用 Redis。生产环境中只要配置了 `CACHE_URL`，Redis 故障就始终使认证请求 fail-closed，而不是退回各副本独立的本地计数；Compose 还默认设置 `AUTH_RATE_LIMIT_REQUIRE_SHARED=true`，该变量可在非生产环境强制同样行为。未配置 Redis 时使用本地限流，只适合单进程部署。权威任务写入、同步和冷启动投影缓存回退均不依赖 Redis 可用性。
 
@@ -83,6 +97,6 @@ docker compose up -d app
 curl -fsS http://your-host.example:48731/health/ready  # 使用 HTTPS 或自定义端口时按 APP_ORIGIN 修改
 ```
 
-迁移 job 成功后再切换 app；`/health/live` 只证明进程存活，`/health/ready` 才用于确认 PostgreSQL schema 已就绪。迁移失败时不要替换正在运行的 app；不兼容 schema 按恢复文档在新卷恢复旧备份。
+迁移 job 成功后再切换 app；`/health/live` 只证明进程存活，`/health/ready` 才用于确认数据库 schema 已就绪。迁移失败时不要替换正在运行的 app；不兼容 schema 按恢复文档在新卷恢复旧备份。
 
 预发布版本也可以部署，但必须使用它自己的版本号，例如 `APP_VERSION=0.2.0-rc.1`。预发布镜像不会使用 `latest` 标签；升级后应检查 `/version` 的 `appVersion` 与 `.env` 中的 `APP_VERSION` 一致，避免旧镜像或旧 Service Worker 继续提供旧版资源。

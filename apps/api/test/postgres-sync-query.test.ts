@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Pool } from 'pg';
-import { PostgresStore } from '../src/postgres-store.js';
+import { SqlStore } from '../src/sql-store.js';
 
-describe('PostgresStore v2 read/write batching', () => {
+describe('SqlStore v2 read/write batching', () => {
   it('reads a pull page, retention boundary and has-more flag in one statement', async () => {
     const queries: Array<{ text: string; values: unknown[] }> = [];
     const pool = {
@@ -33,7 +33,7 @@ describe('PostgresStore v2 read/write batching', () => {
       },
       end: async () => undefined,
     } as unknown as Pool;
-    const store = new PostgresStore(pool);
+    const store = new SqlStore(pool);
     const result = await store.syncPullV2('owner-1', '0', 100);
     expect(queries).toHaveLength(1);
     expect(result.nextCursor).toBe('2');
@@ -50,7 +50,7 @@ describe('PostgresStore v2 read/write batching', () => {
       },
       end: async () => undefined,
     } as unknown as Pool;
-    const store = new PostgresStore(pool);
+    const store = new SqlStore(pool);
     await expect(store.syncStatusV2('owner-1')).resolves.toEqual({
       cursor: '5',
       oldestCursor: '1',
@@ -68,7 +68,7 @@ describe('PostgresStore v2 read/write batching', () => {
       },
       end: async () => undefined,
     } as unknown as Pool;
-    const store = new PostgresStore(pool);
+    const store = new SqlStore(pool);
     const cursor = await store.appendV2Changes('00000000-0000-7000-8000-0000000000aa', [
       {
         entityType: 'task',
@@ -89,6 +89,8 @@ describe('PostgresStore v2 read/write batching', () => {
     ]);
     expect(cursor).toBe('8');
     expect(queries).toHaveLength(1);
-    expect(queries[0]?.text).toContain('jsonb_to_recordset');
+    // One multi-row INSERT for the whole mutation, no per-row round trip.
+    expect(queries[0]?.text).toContain('INSERT INTO sync_changes');
+    expect(queries[0]?.text.split('(').length).toBeGreaterThan(2);
   });
 });

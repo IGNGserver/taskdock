@@ -3,6 +3,8 @@
 更新时间：2026-10-13
 
 > 后续变更（2026-11-12）：归档机制已在 `2.0.0-rc.26` 移除，本文中归档中心相关条目已失效；文件夹状态在 `2.0.0-rc.62` 改为文件夹自身持有的显式三态。冲突时以 `docs/ARCHITECTURE.md` 和代码为准。
+>
+> 后续变更（2026-11-15）：数据库层已是 PostgreSQL/MySQL 双引擎，`PostgresStore`/`PostgresTreeStore` 更名为 `SqlStore`/`SqlTreeStore`；本文提到的“PostgreSQL 权威存储”按双引擎理解，差异见 [ADR 0005](adr/0005-mysql-support.md)。
 
 总体发布状态：**FAIL（v2 完成定义未满足，但阻断项已全部关闭）**。本轮已关闭全部已知 P0/P1 源码缺陷，并补齐归档中心、v2 rollover、V2 restore 策略、离线删除 fail-closed、Folder-first 迁移分层、Android 同步恢复等此前遗留项。所有本地门禁、真实 PostgreSQL migration/integration/runtime 门禁与三浏览器 E2E 均为 PASS。
 

@@ -1,7 +1,8 @@
 import type { V2Mutation } from '@devtodo/contracts';
 import { DomainError } from '@devtodo/domain';
 import type { CacheStore } from './cache.js';
-import type { PostgresStore } from './postgres-store.js';
+import { OWNER_SNAPSHOT_QUERY } from './sql-statements.js';
+import type { SqlStore } from './sql-store.js';
 import { v2SqlDto } from './v2-sql-dto.js';
 import {
   MemoryTreeStore,
@@ -17,7 +18,7 @@ import {
  * domain operates on one owner-scoped projection, while every flush happens
  * inside PostgresStore's existing transaction and change-feed boundary.
  */
-export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
+export class SqlTreeStore extends MemoryTreeStore implements V2TreeStore {
   /**
    * The projection is a read cache, not the sync authority. Keep the owner's
    * latest change sequence alongside it so writes on another API instance,
@@ -26,24 +27,29 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
   private readonly loaded = new Map<string, string>();
 
   constructor(
-    readonly postgres: PostgresStore,
+    readonly sql: SqlStore,
     private readonly cache?: CacheStore,
   ) {
     super();
+  }
+
+  /** Dialect of the backing store; a test double without one means Postgres. */
+  private get dialect(): 'postgres' | 'mysql' {
+    return this.sql.dialect === 'mysql' ? 'mysql' : 'postgres';
   }
 
   override async prepare(ownerId?: string): Promise<void> {
     if (!ownerId) return;
     // Warm-cache validation is one round trip. The full load below runs inside
     // a repeatable-read transaction so all tables come from the same snapshot.
-    const current = await this.postgres.v2Query(
+    const current = await this.sql.v2Query(
       `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND disabled_at IS NULL) AS owner_ok,
               (SELECT next_task_number FROM users WHERE id = $1 AND disabled_at IS NULL) AS next_task_number,
-              (SELECT COALESCE(MAX(seq), 0)::text FROM sync_changes WHERE owner_id = $1) AS cursor`,
+              (SELECT COALESCE(MAX(seq), 0)::text FROM sync_changes WHERE owner_id = $1) AS \`cursor\``,
       [ownerId],
     );
     const currentRow = current.rows[0];
-    if (!currentRow || currentRow['owner_ok'] !== true) throw new Error('Owner is not available');
+    if (!currentRow || !truthy(currentRow['owner_ok'])) throw new Error('Owner is not available');
     // next_task_number only moves forward. A read racing a commit must not
     // overwrite a newer value with the pre-commit snapshot.
     const databaseNextTaskNumber = Number(currentRow['next_task_number']);
@@ -74,7 +80,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
       }
     }
 
-    await this.postgres.v2ReadSnapshot(async () => {
+    await this.sql.v2ReadSnapshot(async () => {
       const snapshot = await this.loadOwnerSnapshot(ownerId);
       this.loadOwnerState(ownerId, snapshot.state);
       this.loaded.set(ownerId, snapshot.cursor);
@@ -118,7 +124,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
   }
 
   private async applyDelta(ownerId: string, previousCursor: string): Promise<string | undefined> {
-    const result = await this.postgres.v2Query(
+    const result = await this.sql.v2Query(
       `SELECT seq::text, protocol_version, entity_type, operation, snapshot
        FROM sync_changes
        WHERE owner_id = $1 AND seq > $2
@@ -158,33 +164,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
   private async loadOwnerSnapshot(
     ownerId: string,
   ): Promise<{ state: Record<string, unknown>; cursor: string }> {
-    const result = await this.postgres.v2Query(
-      `SELECT
-         (SELECT u.next_task_number FROM users u
-          WHERE u.id = $1 AND u.disabled_at IS NULL) AS next_task_number,
-         (SELECT COALESCE(MAX(sc.seq), 0)::text FROM sync_changes sc
-          WHERE sc.owner_id = $1) AS cursor,
-         COALESCE((SELECT jsonb_agg(to_jsonb(f) || jsonb_build_object('rank', f.rank::text) ORDER BY f.id)
-                   FROM folders f WHERE f.owner_id = $1), '[]'::jsonb) AS folders,
-         COALESCE((SELECT jsonb_agg(to_jsonb(t) || jsonb_build_object('rank', t.rank::text) ORDER BY t.id)
-                   FROM tasks t WHERE t.owner_id = $1), '[]'::jsonb) AS tasks,
-         COALESCE((SELECT jsonb_agg(to_jsonb(n) ORDER BY n.id)
-                   FROM notes n WHERE n.owner_id = $1), '[]'::jsonb) AS notes,
-         COALESCE((SELECT jsonb_agg(to_jsonb(s) || jsonb_build_object('rank', s.rank::text) ORDER BY s.id)
-                   FROM task_steps s WHERE s.owner_id = $1), '[]'::jsonb) AS steps,
-         COALESCE((SELECT jsonb_agg(to_jsonb(w) || jsonb_build_object('rank', w.rank::text) ORDER BY w.id)
-                   FROM workflows w WHERE w.owner_id = $1), '[]'::jsonb) AS workflows,
-         COALESCE((SELECT jsonb_agg(to_jsonb(s) || jsonb_build_object('rank', s.rank::text) ORDER BY s.id)
-                   FROM workflow_stages s WHERE s.owner_id = $1), '[]'::jsonb) AS stages,
-         COALESCE((SELECT jsonb_agg(to_jsonb(m) || jsonb_build_object('rank', m.rank::text) ORDER BY m.id)
-                   FROM workflow_task_memberships m WHERE m.owner_id = $1), '[]'::jsonb) AS memberships,
-         COALESCE((SELECT jsonb_agg(to_jsonb(p) || jsonb_build_object('rank', p.rank::text) ORDER BY p.id)
-                   FROM time_points p WHERE p.owner_id = $1), '[]'::jsonb) AS time_points,
-         COALESCE((SELECT jsonb_agg(to_jsonb(p) || jsonb_build_object('rank', p.rank::text) ORDER BY p.id)
-                   FROM placements p WHERE p.owner_id = $1), '[]'::jsonb) AS placements,
-         (SELECT to_jsonb(s) FROM user_settings s WHERE s.owner_id = $1) AS settings`,
-      [ownerId],
-    );
+    const result = await this.sql.v2Query(OWNER_SNAPSHOT_QUERY[this.dialect], [ownerId]);
     const row = result.rows[0];
     if (!row || row['next_task_number'] === null || row['next_task_number'] === undefined)
       throw new Error('Owner is not available');
@@ -202,13 +182,17 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     const state: Record<string, unknown> = {};
     for (const [source, key] of collections) {
       const value = row[source];
-      state[key] = Array.isArray(value)
+      const mapped = Array.isArray(value)
         ? value.map((item) => {
-            const mapped = v2SqlDto(item as Record<string, unknown>);
-            if (key === 'folders' && !mapped['status']) mapped['status'] = 'TODO';
-            return mapped;
+            const dto = v2SqlDto(item as Record<string, unknown>);
+            if (key === 'folders' && !dto['status']) dto['status'] = 'TODO';
+            return dto;
           })
         : [];
+      // JSON_ARRAYAGG does not preserve the derived table's ORDER BY.
+      if (this.dialect === 'mysql')
+        mapped.sort((left, right) => String(left['id']).localeCompare(String(right['id'])));
+      state[key] = mapped;
     }
     state['settings'] = row['settings']
       ? v2SqlDto(row['settings'] as Record<string, unknown>)
@@ -233,14 +217,14 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     // uncommitted mutation, and a COMMIT failure leaves the projection intact
     // without a full-state rollback clone.
     const response = await super.withOwnerMutationLock(ownerId, () =>
-      this.postgres.withMutation(() =>
-        this.postgres.withIdempotency(
+      this.sql.withMutation(() =>
+        this.sql.withIdempotency(
           ownerId,
           clientId,
           mutation.mutationId,
           v2MutationIdempotencyInput(mutation),
           async () => {
-            await this.postgres.v2LockOwner(ownerId);
+            await this.sql.v2LockOwner(ownerId);
             await this.prepare(ownerId);
             const draft = new MemoryTreeStore();
             draft.loadOwnerState(ownerId, this.dumpOwnerState(ownerId));
@@ -248,7 +232,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
             changes = draft.changesFrom(0);
             nextTaskNumber = draft.getNextTaskNumber(ownerId);
             await this.persistChanges(ownerId, changes);
-            committedCursor = await this.postgres.appendV2Changes(ownerId, changes);
+            committedCursor = await this.sql.appendV2Changes(ownerId, changes);
             return result;
           },
         ),
@@ -288,8 +272,8 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     let committedCursor: string | undefined;
     let nextTaskNumber: number | undefined;
     await super.withOwnerMutationLock(ownerId, () =>
-      this.postgres.withMutation(async () => {
-        await this.postgres.v2LockOwner(ownerId);
+      this.sql.withMutation(async () => {
+        await this.sql.v2LockOwner(ownerId);
         await this.prepare(ownerId);
         const draft = new MemoryTreeStore();
         const baseState = this.dumpOwnerState(ownerId);
@@ -297,11 +281,11 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
         for (const [index, mutation] of mutations.entries()) {
           const savepoint = `mutation_${index}`;
           const changeStart = draft.changeCount();
-          await this.postgres.createSavepoint(savepoint);
+          await this.sql.createSavepoint(savepoint);
           try {
             let actionCursor: string | undefined;
             let actionChanges: V2SyncChange[] = [];
-            const response = await this.postgres.withIdempotency(
+            const response = await this.sql.withIdempotency(
               ownerId,
               clientId,
               mutation.mutationId,
@@ -310,11 +294,11 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
                 const result = draft.applyMutationForPersistence(ownerId, mutation);
                 actionChanges = draft.changesFrom(changeStart);
                 await this.persistChanges(ownerId, actionChanges);
-                actionCursor = await this.postgres.appendV2Changes(ownerId, actionChanges);
+                actionCursor = await this.sql.appendV2Changes(ownerId, actionChanges);
                 return result;
               },
             );
-            await this.postgres.releaseSavepoint(savepoint);
+            await this.sql.releaseSavepoint(savepoint);
             results.push({
               mutation,
               status: 'applied',
@@ -324,7 +308,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
             if (actionCursor) committedCursor = actionCursor;
             published.push(...actionChanges);
           } catch (error) {
-            await this.postgres.rollbackToSavepoint(savepoint);
+            await this.sql.rollbackToSavepoint(savepoint);
             // A rejected item rolls back only its savepoint. Rebuild from the
             // one batch base plus successful deltas instead of cloning the
             // entire owner before every mutation (the former O(batch²) path).
@@ -370,25 +354,25 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
    * No account-wide notes read, clone, or flush is needed. Receipt, row and feed
    * remain in the existing atomic transaction and owner lock. */
   private async applyFocusedMutation(ownerId: string, clientId: string, mutation: V2Mutation) {
-    const response = await this.postgres.withMutation(() =>
-      this.postgres.withIdempotency(
+    const response = await this.sql.withMutation(() =>
+      this.sql.withIdempotency(
         ownerId,
         clientId,
         mutation.mutationId,
         v2MutationIdempotencyInput(mutation),
         async () => {
-          await this.postgres.v2LockOwner(ownerId);
+          await this.sql.v2LockOwner(ownerId);
           const taskId =
             mutation.command === 'note.update'
               ? (mutation.payload['taskId'] ?? mutation.entityId)
               : mutation.entityId;
-          const tasks = await this.postgres.v2Query(
+          const tasks = await this.sql.v2Query(
             'SELECT * FROM tasks WHERE owner_id = $1 AND id = $2 AND deleted_at IS NULL FOR UPDATE',
             [ownerId, taskId],
           );
           const notes =
             mutation.command === 'note.update'
-              ? await this.postgres.v2Query(
+              ? await this.sql.v2Query(
                   'SELECT * FROM notes WHERE owner_id = $1 AND task_id = $2 AND deleted_at IS NULL FOR UPDATE',
                   [ownerId, taskId],
                 )
@@ -423,7 +407,7 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
           const result = await focused.applyMutationIdempotent(ownerId, clientId, mutation);
           const changes = focused.changesFrom(0);
           await this.persistChanges(ownerId, changes);
-          await this.postgres.appendV2Changes(ownerId, changes);
+          await this.sql.appendV2Changes(ownerId, changes);
           return result.result;
         },
       ),
@@ -436,16 +420,16 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
   }
 
   override async snapshot(ownerId: string) {
-    return this.postgres.v2ReadSnapshot(async () => {
+    return this.sql.v2ReadSnapshot(async () => {
       await this.prepare(ownerId);
       const snapshot = super.snapshot(ownerId) as V2Snapshot;
-      const status = await this.postgres.syncStatusV2(ownerId);
+      const status = await this.sql.syncStatusV2(ownerId);
       return { ...snapshot, cursor: status.cursor };
     });
   }
 
   override async pull(ownerId: string, cursor: string, limit: number) {
-    return this.postgres.syncPullV2(ownerId, cursor, limit) as Promise<{
+    return this.sql.syncPullV2(ownerId, cursor, limit) as Promise<{
       changes: V2SyncChange[];
       nextCursor: string;
       hasMore: boolean;
@@ -453,11 +437,11 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
   }
 
   override async status(ownerId: string) {
-    return this.postgres.syncStatusV2(ownerId);
+    return this.sql.syncStatusV2(ownerId);
   }
 
   override subscribeChanges(listener: (ownerId: string, cursor: string) => void): () => void {
-    return this.postgres.subscribeChanges(listener);
+    return this.sql.subscribeChanges(listener);
   }
 
   private async persistChanges(ownerId: string, changes: V2SyncChange[]): Promise<void> {
@@ -493,70 +477,48 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
     entityType: V2SyncChange['entityType'],
     changes: V2SyncChange[],
   ): Promise<void> {
-    const payload = changes.map((change) => {
-      const row = asRecord(change.snapshot);
-      return { change, row };
-    });
-    const json = (rows: Array<Record<string, unknown>>) => JSON.stringify(rows);
+    const payload = changes.map((change) => ({ change, row: asRecord(change.snapshot) }));
     switch (entityType) {
       case 'folder':
-        await this.postgres.v2Query(
-          `INSERT INTO folders (id,owner_id,parent_folder_id,title,status,completed_at,rank,version,created_at,updated_at,deleted_at)
-           SELECT x.id, $1, x.parent_folder_id, x.title, x.status, x.completed_at, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
-           FROM jsonb_to_recordset($2::jsonb) AS x(
-             id uuid, parent_folder_id uuid, title text, status text, completed_at timestamptz,
-             rank bigint, version integer, created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
-           )
-           ON CONFLICT (id) DO UPDATE SET parent_folder_id=EXCLUDED.parent_folder_id,title=EXCLUDED.title,status=EXCLUDED.status,completed_at=EXCLUDED.completed_at,rank=EXCLUDED.rank,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
-           WHERE folders.owner_id = EXCLUDED.owner_id`,
-          [
-            ownerId,
-            json(
-              payload.map(({ change, row }) => ({
-                id: change.entityId,
-                parent_folder_id: nullableValue(row.parentFolderId),
-                title: row.title,
-                status: row.status ?? 'TODO',
-                completed_at: nullableValue(row.completedAt),
-                rank: row.rank,
-                version: row.version,
-                created_at: row.createdAt,
-                updated_at: row.updatedAt,
-                deleted_at: nullableValue(row.deletedAt),
-              })),
-            ),
-          ],
+        await this.upsertBatch(
+          'folders',
+          FOLDER_COLUMNS,
+          payload.map(({ change, row }) => ({
+            id: change.entityId,
+            owner_id: ownerId,
+            parent_folder_id: nullableValue(row.parentFolderId),
+            title: row.title,
+            status: row.status ?? 'TODO',
+            completed_at: nullableValue(row.completedAt),
+            rank: row.rank,
+            version: row.version,
+            created_at: row.createdAt,
+            updated_at: row.updatedAt,
+            deleted_at: nullableValue(row.deletedAt),
+          })),
         );
         return;
       case 'task': {
-        await this.postgres.v2Query(
-          `INSERT INTO tasks (id,owner_id,project_id,category,reference_id,title,status,priority,rank,completed_at,version,created_at,updated_at,deleted_at,parent_folder_id)
-           SELECT x.id, $1, NULL, 'MISC', x.reference_id, x.title, x.status, 'NONE', x.rank, x.completed_at, x.version, x.created_at, x.updated_at, x.deleted_at, x.parent_folder_id
-           FROM jsonb_to_recordset($2::jsonb) AS x(
-             id uuid, reference_id text, title text, status text, rank bigint,
-             completed_at timestamptz, version integer, created_at timestamptz,
-             updated_at timestamptz, deleted_at timestamptz, parent_folder_id uuid
-           )
-           ON CONFLICT (id) DO UPDATE SET reference_id=EXCLUDED.reference_id,title=EXCLUDED.title,status=EXCLUDED.status,rank=EXCLUDED.rank,completed_at=EXCLUDED.completed_at,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at,parent_folder_id=EXCLUDED.parent_folder_id
-           WHERE tasks.owner_id = EXCLUDED.owner_id`,
-          [
-            ownerId,
-            json(
-              payload.map(({ change, row }) => ({
-                id: change.entityId,
-                reference_id: row.referenceId,
-                title: row.title,
-                status: row.status,
-                rank: row.rank,
-                completed_at: nullableValue(row.completedAt),
-                version: row.version,
-                created_at: row.createdAt,
-                updated_at: row.updatedAt,
-                deleted_at: nullableValue(row.deletedAt),
-                parent_folder_id: nullableValue(row.parentFolderId),
-              })),
-            ),
-          ],
+        await this.upsertBatch(
+          'tasks',
+          TASK_COLUMNS,
+          payload.map(({ change, row }) => ({
+            id: change.entityId,
+            owner_id: ownerId,
+            project_id: null,
+            category: 'MISC',
+            reference_id: row.referenceId,
+            title: row.title,
+            status: row.status,
+            priority: 'NONE',
+            rank: row.rank,
+            completed_at: nullableValue(row.completedAt),
+            version: row.version,
+            created_at: row.createdAt,
+            updated_at: row.updatedAt,
+            deleted_at: nullableValue(row.deletedAt),
+            parent_folder_id: nullableValue(row.parentFolderId),
+          })),
         );
         let nextTaskNumber: number | undefined;
         for (const { row } of payload) {
@@ -564,231 +526,336 @@ export class PostgresTreeStore extends MemoryTreeStore implements V2TreeStore {
           if (match) nextTaskNumber = Math.max(nextTaskNumber ?? 0, Number(match[1]) + 1);
         }
         if (nextTaskNumber !== undefined)
-          await this.postgres.v2Query(
+          await this.sql.v2Query(
             'UPDATE users SET next_task_number = GREATEST(next_task_number, $2) WHERE id = $1',
             [ownerId, nextTaskNumber],
           );
         return;
       }
       case 'note':
-        await this.postgres.v2Query(
-          `INSERT INTO notes (id,owner_id,task_id,content_markdown,version,created_at,updated_at,deleted_at)
-           SELECT x.id, $1, x.task_id, x.content_markdown, x.version, x.created_at, x.updated_at, x.deleted_at
-           FROM jsonb_to_recordset($2::jsonb) AS x(
-             id uuid, task_id uuid, content_markdown text, version integer,
-             created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
-           )
-           ON CONFLICT (id) DO UPDATE SET task_id=EXCLUDED.task_id,content_markdown=EXCLUDED.content_markdown,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
-           WHERE notes.owner_id = EXCLUDED.owner_id`,
-          [
-            ownerId,
-            json(
-              payload.map(({ change, row }) => ({
-                id: change.entityId,
-                task_id: row.taskId,
-                content_markdown: row.contentMarkdown,
-                version: row.version,
-                created_at: row.createdAt,
-                updated_at: row.updatedAt,
-                deleted_at: nullableValue(row.deletedAt),
-              })),
-            ),
-          ],
+        await this.upsertBatch(
+          'notes',
+          NOTE_COLUMNS,
+          payload.map(({ change, row }) => ({
+            id: change.entityId,
+            owner_id: ownerId,
+            task_id: row.taskId,
+            content_markdown: row.contentMarkdown,
+            version: row.version,
+            created_at: row.createdAt,
+            updated_at: row.updatedAt,
+            deleted_at: nullableValue(row.deletedAt),
+          })),
         );
         return;
       case 'taskStep':
-        await this.postgres.v2Query(
-          `INSERT INTO task_steps (id,owner_id,task_id,title,note_markdown,status,rank,completed_at,version,created_at,updated_at,deleted_at)
-           SELECT x.id, $1, x.task_id, x.title, x.note_markdown, x.status, x.rank, x.completed_at, x.version, x.created_at, x.updated_at, x.deleted_at
-           FROM jsonb_to_recordset($2::jsonb) AS x(
-             id uuid, task_id uuid, title text, note_markdown text, status text, rank bigint,
-             completed_at timestamptz, version integer, created_at timestamptz,
-             updated_at timestamptz, deleted_at timestamptz
-           )
-           ON CONFLICT (id) DO UPDATE SET task_id=EXCLUDED.task_id,title=EXCLUDED.title,note_markdown=EXCLUDED.note_markdown,status=EXCLUDED.status,rank=EXCLUDED.rank,completed_at=EXCLUDED.completed_at,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
-           WHERE task_steps.owner_id = EXCLUDED.owner_id`,
-          [
-            ownerId,
-            json(
-              payload.map(({ change, row }) => ({
-                id: change.entityId,
-                task_id: row.taskId,
-                title: row.title,
-                note_markdown: row.noteMarkdown,
-                status: row.status,
-                rank: row.rank,
-                completed_at: nullableValue(row.completedAt),
-                version: row.version,
-                created_at: row.createdAt,
-                updated_at: row.updatedAt,
-                deleted_at: nullableValue(row.deletedAt),
-              })),
-            ),
-          ],
+        await this.upsertBatch(
+          'task_steps',
+          TASK_STEP_COLUMNS,
+          payload.map(({ change, row }) => ({
+            id: change.entityId,
+            owner_id: ownerId,
+            task_id: row.taskId,
+            title: row.title,
+            note_markdown: row.noteMarkdown,
+            status: row.status,
+            rank: row.rank,
+            completed_at: nullableValue(row.completedAt),
+            version: row.version,
+            created_at: row.createdAt,
+            updated_at: row.updatedAt,
+            deleted_at: nullableValue(row.deletedAt),
+          })),
         );
         return;
       case 'workflow':
-        await this.postgres.v2Query(
-          `INSERT INTO workflows (id,owner_id,name,rank,version,created_at,updated_at,deleted_at)
-           SELECT x.id, $1, x.name, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
-           FROM jsonb_to_recordset($2::jsonb) AS x(
-             id uuid, name text, rank bigint, version integer,
-             created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
-           )
-           ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,rank=EXCLUDED.rank,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
-           WHERE workflows.owner_id = EXCLUDED.owner_id`,
-          [
-            ownerId,
-            json(
-              payload.map(({ change, row }) => ({
-                id: change.entityId,
-                name: row.name,
-                rank: row.rank,
-                version: row.version,
-                created_at: row.createdAt,
-                updated_at: row.updatedAt,
-                deleted_at: nullableValue(row.deletedAt),
-              })),
-            ),
-          ],
+        await this.upsertBatch(
+          'workflows',
+          WORKFLOW_COLUMNS,
+          payload.map(({ change, row }) => ({
+            id: change.entityId,
+            owner_id: ownerId,
+            name: row.name,
+            rank: row.rank,
+            version: row.version,
+            created_at: row.createdAt,
+            updated_at: row.updatedAt,
+            deleted_at: nullableValue(row.deletedAt),
+          })),
         );
         return;
       case 'workflowStage':
-        await this.postgres.v2Query(
-          `INSERT INTO workflow_stages (id,owner_id,workflow_id,name,rank,version,created_at,updated_at,deleted_at)
-           SELECT x.id, $1, x.workflow_id, x.name, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
-           FROM jsonb_to_recordset($2::jsonb) AS x(
-             id uuid, workflow_id uuid, name text, rank bigint, version integer,
-             created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
-           )
-           ON CONFLICT (id) DO UPDATE SET workflow_id=EXCLUDED.workflow_id,name=EXCLUDED.name,rank=EXCLUDED.rank,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
-           WHERE workflow_stages.owner_id = EXCLUDED.owner_id`,
-          [
-            ownerId,
-            json(
-              payload.map(({ change, row }) => ({
-                id: change.entityId,
-                workflow_id: row.workflowId,
-                name: row.name,
-                rank: row.rank,
-                version: row.version,
-                created_at: row.createdAt,
-                updated_at: row.updatedAt,
-                deleted_at: nullableValue(row.deletedAt),
-              })),
-            ),
-          ],
+        await this.upsertBatch(
+          'workflow_stages',
+          WORKFLOW_STAGE_COLUMNS,
+          payload.map(({ change, row }) => ({
+            id: change.entityId,
+            owner_id: ownerId,
+            workflow_id: row.workflowId,
+            name: row.name,
+            rank: row.rank,
+            version: row.version,
+            created_at: row.createdAt,
+            updated_at: row.updatedAt,
+            deleted_at: nullableValue(row.deletedAt),
+          })),
         );
         return;
       case 'workflowTaskMembership':
-        await this.postgres.v2Query(
-          `INSERT INTO workflow_task_memberships (id,owner_id,workflow_id,stage_id,task_id,rank,version,created_at,updated_at,deleted_at)
-           SELECT x.id, $1, x.workflow_id, x.stage_id, x.task_id, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
-           FROM jsonb_to_recordset($2::jsonb) AS x(
-             id uuid, workflow_id uuid, stage_id uuid, task_id uuid, rank bigint, version integer,
-             created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
-           )
-           ON CONFLICT (id) DO UPDATE SET workflow_id=EXCLUDED.workflow_id,stage_id=EXCLUDED.stage_id,task_id=EXCLUDED.task_id,rank=EXCLUDED.rank,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
-           WHERE workflow_task_memberships.owner_id = EXCLUDED.owner_id`,
-          [
-            ownerId,
-            json(
-              payload.map(({ change, row }) => ({
-                id: change.entityId,
-                workflow_id: row.workflowId,
-                stage_id: row.stageId,
-                task_id: row.taskId,
-                rank: row.rank,
-                version: row.version,
-                created_at: row.createdAt,
-                updated_at: row.updatedAt,
-                deleted_at: nullableValue(row.deletedAt),
-              })),
-            ),
-          ],
+        await this.upsertBatch(
+          'workflow_task_memberships',
+          WORKFLOW_MEMBERSHIP_COLUMNS,
+          payload.map(({ change, row }) => ({
+            id: change.entityId,
+            owner_id: ownerId,
+            workflow_id: row.workflowId,
+            stage_id: row.stageId,
+            task_id: row.taskId,
+            rank: row.rank,
+            version: row.version,
+            created_at: row.createdAt,
+            updated_at: row.updatedAt,
+            deleted_at: nullableValue(row.deletedAt),
+          })),
         );
         return;
       case 'timePoint':
-        await this.postgres.v2Query(
-          `INSERT INTO time_points (id,owner_id,type,local_date,title,rank,version,reached_at,created_at,updated_at,deleted_at)
-           SELECT x.id, $1, x.type, x.local_date, x.title, x.rank, x.version, x.reached_at, x.created_at, x.updated_at, x.deleted_at
-           FROM jsonb_to_recordset($2::jsonb) AS x(
-             id uuid, type text, local_date date, title text, rank bigint, version integer,
-             reached_at timestamptz, created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
-           )
-           ON CONFLICT (id) DO UPDATE SET type=EXCLUDED.type,local_date=EXCLUDED.local_date,title=EXCLUDED.title,rank=EXCLUDED.rank,version=EXCLUDED.version,reached_at=EXCLUDED.reached_at,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
-           WHERE time_points.owner_id = EXCLUDED.owner_id`,
-          [
-            ownerId,
-            json(
-              payload.map(({ change, row }) => ({
-                id: change.entityId,
-                type: row.type,
-                local_date: nullableValue(row.localDate),
-                title: nullableValue(row.title),
-                rank: row.rank,
-                version: row.version,
-                reached_at: nullableValue(row.reachedAt),
-                created_at: row.createdAt,
-                updated_at: row.updatedAt,
-                deleted_at: nullableValue(row.deletedAt),
-              })),
-            ),
-          ],
+        await this.upsertBatch(
+          'time_points',
+          TIME_POINT_COLUMNS,
+          payload.map(({ change, row }) => ({
+            id: change.entityId,
+            owner_id: ownerId,
+            type: row.type,
+            local_date: nullableValue(row.localDate),
+            title: nullableValue(row.title),
+            rank: row.rank,
+            version: row.version,
+            reached_at: nullableValue(row.reachedAt),
+            created_at: row.createdAt,
+            updated_at: row.updatedAt,
+            deleted_at: nullableValue(row.deletedAt),
+          })),
         );
         return;
       case 'placement':
-        await this.postgres.v2Query(
-          `INSERT INTO placements (id,owner_id,task_id,time_point_id,rank,version,created_at,updated_at,deleted_at)
-           SELECT x.id, $1, x.task_id, x.time_point_id, x.rank, x.version, x.created_at, x.updated_at, x.deleted_at
-           FROM jsonb_to_recordset($2::jsonb) AS x(
-             id uuid, task_id uuid, time_point_id uuid, rank bigint, version integer,
-             created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
-           )
-           ON CONFLICT (id) DO UPDATE SET task_id=EXCLUDED.task_id,time_point_id=EXCLUDED.time_point_id,rank=EXCLUDED.rank,version=EXCLUDED.version,created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at
-           WHERE placements.owner_id = EXCLUDED.owner_id`,
-          [
-            ownerId,
-            json(
-              payload.map(({ change, row }) => ({
-                id: change.entityId,
-                task_id: row.taskId,
-                time_point_id: row.timePointId,
-                rank: row.rank,
-                version: row.version,
-                created_at: row.createdAt,
-                updated_at: row.updatedAt,
-                deleted_at: nullableValue(row.deletedAt),
-              })),
-            ),
-          ],
+        await this.upsertBatch(
+          'placements',
+          PLACEMENT_COLUMNS,
+          payload.map(({ change, row }) => ({
+            id: change.entityId,
+            owner_id: ownerId,
+            task_id: row.taskId,
+            time_point_id: row.timePointId,
+            rank: row.rank,
+            version: row.version,
+            created_at: row.createdAt,
+            updated_at: row.updatedAt,
+            deleted_at: nullableValue(row.deletedAt),
+          })),
         );
         return;
       case 'settings':
-        await this.postgres.v2Query(
-          `INSERT INTO user_settings (owner_id,timezone,week_starts_on,default_capture_target,version,created_at,updated_at,deleted_at)
-           SELECT $1, x.timezone, x.week_starts_on, x.default_capture_target, x.version, x.updated_at, x.updated_at, NULL
-           FROM jsonb_to_recordset($2::jsonb) AS x(
-             timezone text, week_starts_on smallint, default_capture_target text,
-             version integer, updated_at timestamptz
-           )
-           ON CONFLICT (owner_id) DO UPDATE SET timezone=EXCLUDED.timezone,week_starts_on=EXCLUDED.week_starts_on,default_capture_target=EXCLUDED.default_capture_target,version=EXCLUDED.version,updated_at=EXCLUDED.updated_at,deleted_at=NULL`,
-          [
-            ownerId,
-            json(
-              payload.map(({ row }) => ({
-                timezone: row.timezone,
-                week_starts_on: row.weekStartsOn,
-                default_capture_target: row.defaultCaptureTarget,
-                version: row.version,
-                updated_at: row.updatedAt,
-              })),
-            ),
-          ],
+        await this.upsertBatch(
+          'user_settings',
+          SETTINGS_COLUMNS,
+          payload.map(({ row }) => ({
+            owner_id: ownerId,
+            timezone: row.timezone,
+            week_starts_on: row.weekStartsOn,
+            default_capture_target: row.defaultCaptureTarget,
+            version: row.version,
+            created_at: row.updatedAt,
+            updated_at: row.updatedAt,
+            deleted_at: null,
+          })),
+          { conflict: ['owner_id'], guardOwner: false },
         );
         return;
     }
   }
+
+  /**
+   * One multi-row upsert per entity type.
+   *
+   * PostgreSQL uses ON CONFLICT with a row-count guard so a stray id from
+   * another owner can never be overwritten. MySQL has no ON CONFLICT and no
+   * EXCLUDED, so the same batch is expressed as INSERT ... AS new ON
+   * DUPLICATE KEY UPDATE; id collisions across owners are impossible because
+   * entity ids are server-generated UUIDv7.
+   */
+  private async upsertBatch(
+    table: string,
+    columns: readonly string[],
+    rows: Array<Record<string, unknown>>,
+    options: { conflict?: readonly string[]; guardOwner?: boolean } = {},
+  ): Promise<void> {
+    if (!rows.length) return;
+    const conflict = options.conflict ?? ['id'];
+    const dialect = this.dialect;
+    const quoted = columns.map(ident);
+    const updatable = columns
+      .filter((column) => !conflict.includes(column) && column !== 'owner_id')
+      .map(ident);
+    const chunkSize = Math.max(1, Math.min(200, Math.floor(20_000 / columns.length)));
+    for (let offset = 0; offset < rows.length; offset += chunkSize) {
+      const chunk = rows.slice(offset, offset + chunkSize);
+      const parameters: unknown[] = [];
+      const tuples = chunk.map((row) => {
+        const values = columns.map((column) => {
+          parameters.push(row[column] ?? null);
+          return `$${parameters.length}`;
+        });
+        return `(${values.join(',')})`;
+      });
+      const statement =
+        dialect === 'mysql'
+          ? `INSERT INTO ${table} (${quoted.join(',')}) VALUES ${tuples.join(',')} AS new ON DUPLICATE KEY UPDATE ${updatable
+              .map((column) => `${column} = new.${column}`)
+              .join(',')}`
+          : `INSERT INTO ${table} (${quoted.join(',')}) VALUES ${tuples.join(',')} ON CONFLICT (${conflict
+              .map(ident)
+              .join(',')}) DO UPDATE SET ${updatable
+              .map((column) => `${column} = EXCLUDED.${column}`)
+              .join(
+                ',',
+              )}${options.guardOwner === false ? '' : ` WHERE ${table}.owner_id = EXCLUDED.owner_id`}`;
+      await this.sql.v2Query(statement, parameters);
+    }
+  }
+}
+
+const FOLDER_COLUMNS = [
+  'id',
+  'owner_id',
+  'parent_folder_id',
+  'title',
+  'status',
+  'completed_at',
+  'rank',
+  'version',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+] as const;
+const TASK_COLUMNS = [
+  'id',
+  'owner_id',
+  'project_id',
+  'category',
+  'reference_id',
+  'title',
+  'status',
+  'priority',
+  'rank',
+  'completed_at',
+  'version',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+  'parent_folder_id',
+] as const;
+const NOTE_COLUMNS = [
+  'id',
+  'owner_id',
+  'task_id',
+  'content_markdown',
+  'version',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+] as const;
+const TASK_STEP_COLUMNS = [
+  'id',
+  'owner_id',
+  'task_id',
+  'title',
+  'note_markdown',
+  'status',
+  'rank',
+  'completed_at',
+  'version',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+] as const;
+const WORKFLOW_COLUMNS = [
+  'id',
+  'owner_id',
+  'name',
+  'rank',
+  'version',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+] as const;
+const WORKFLOW_STAGE_COLUMNS = [
+  'id',
+  'owner_id',
+  'workflow_id',
+  'name',
+  'rank',
+  'version',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+] as const;
+const WORKFLOW_MEMBERSHIP_COLUMNS = [
+  'id',
+  'owner_id',
+  'workflow_id',
+  'stage_id',
+  'task_id',
+  'rank',
+  'version',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+] as const;
+const TIME_POINT_COLUMNS = [
+  'id',
+  'owner_id',
+  'type',
+  'local_date',
+  'title',
+  'rank',
+  'version',
+  'reached_at',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+] as const;
+const PLACEMENT_COLUMNS = [
+  'id',
+  'owner_id',
+  'task_id',
+  'time_point_id',
+  'rank',
+  'version',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+] as const;
+const SETTINGS_COLUMNS = [
+  'owner_id',
+  'timezone',
+  'week_starts_on',
+  'default_capture_target',
+  'version',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+] as const;
+
+const RESERVED_IDENTIFIERS = new Set(['rank', 'cursor']);
+
+function ident(name: string): string {
+  return RESERVED_IDENTIFIERS.has(name) ? `\`${name}\`` : name;
+}
+
+/** MySQL reports booleans and EXISTS as 1/0; PostgreSQL reports true/false. */
+function truthy(value: unknown): boolean {
+  return value === true || value === 1 || value === '1';
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

@@ -3,7 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 
 import { DomainError } from '@devtodo/domain';
 
-import { PostgresStore } from '../src/postgres-store.js';
+import { SqlStore } from '../src/sql-store.js';
 import { MemoryStore } from '../src/store.js';
 
 function fixture() {
@@ -27,7 +27,7 @@ describe('DevTodo store invariants', () => {
       connect: async () => client,
       end: async () => undefined,
     } as unknown as Pool;
-    const store = new PostgresStore(pool);
+    const store = new SqlStore(pool);
 
     await store.withMutation(async () => {
       await (
@@ -68,7 +68,7 @@ describe('DevTodo store invariants', () => {
       connect: async () => client,
       end: async () => undefined,
     } as unknown as Pool;
-    const store = new PostgresStore(pool);
+    const store = new SqlStore(pool);
 
     await expect(
       store.withMutation(() =>
@@ -337,12 +337,12 @@ describe('DevTodo store invariants', () => {
     expect(() => store.deleteTimePoint(owner.id, date.id, date.version)).toThrow(DomainError);
   });
 
-  it('verifies PostgresTreeStore transaction locking, rollback, and no notification on error', async () => {
+  it('verifies SqlTreeStore transaction locking, rollback, and no notification on error', async () => {
     const queries: Array<{ text: string; values: unknown[] }> = [];
     const client = {
       query: async (text: string, values: unknown[] = []) => {
         queries.push({ text, values });
-        if (text.includes('AS owner_ok') && text.includes('AS cursor')) {
+        if (text.includes('AS owner_ok') && text.includes('cursor')) {
           return { rows: [{ owner_ok: true, cursor: '9' }], rowCount: 1 };
         }
         if (text.includes('AS next_task_number') && text.includes('AS folders')) {
@@ -410,9 +410,9 @@ describe('DevTodo store invariants', () => {
       end: async () => undefined,
     } as unknown as Pool;
 
-    const postgres = new PostgresStore(pool);
-    const { PostgresTreeStore } = await import('../src/postgres-tree-store.js');
-    const treeStore = new PostgresTreeStore(postgres);
+    const postgres = new SqlStore(pool);
+    const { SqlTreeStore } = await import('../src/sql-tree-store.js');
+    const treeStore = new SqlTreeStore(postgres);
 
     const notifications: string[] = [];
     treeStore.subscribeChanges((_ownerId, cursor) => notifications.push(cursor));

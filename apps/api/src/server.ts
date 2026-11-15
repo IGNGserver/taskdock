@@ -29,7 +29,7 @@ import {
   uuidSchema,
   type ErrorCode,
 } from '@devtodo/contracts';
-import { createPoolFromEnv } from '@devtodo/database';
+import { openDatabase, readDatabaseSettings } from '@devtodo/database';
 import { DomainError } from '@devtodo/domain';
 import { createCacheFromEnv, type CacheStore } from './cache.js';
 import { DirectoryReads } from './directory-reads.js';
@@ -41,8 +41,8 @@ import websocket, { type WebSocket as HubWebSocket } from '@fastify/websocket';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { z, ZodError } from 'zod';
 import { AuthService, type AuthConfig } from './auth.js';
-import { DatabaseConstraintError, PostgresStore } from './postgres-store.js';
-import { PostgresTreeStore } from './postgres-tree-store.js';
+import { DatabaseConstraintError, SqlStore } from './sql-store.js';
+import { SqlTreeStore } from './sql-tree-store.js';
 import { assertProductionSecrets } from './runtime-secrets.js';
 import { MemoryStore, type Store } from './store.js';
 import { MemoryTreeStore, type V2TreeStore } from './tree-store.js';
@@ -117,8 +117,8 @@ function treeStoreFor(store: Store, cache: CacheStore): V2TreeStore {
   // the same interface; keeping this boundary here prevents route handlers
   // from ever reaching across Owner scopes.
   const tree =
-    store instanceof PostgresStore
-      ? new PostgresTreeStore(store, cache)
+    store instanceof SqlStore
+      ? new SqlTreeStore(store, cache)
       : new MemoryTreeStore(store instanceof MemoryStore ? store : undefined);
   v2StoreCache.set(store, tree);
   return tree;
@@ -183,7 +183,7 @@ export async function buildServer(
   const cache = options.cache ?? (await createCacheFromEnv());
   const ownsCache = options.cache === undefined;
   const hubId =
-    store instanceof PostgresStore
+    store instanceof SqlStore
       ? String(
           (await store.v2Query('SELECT id FROM hub_identity WHERE singleton = true')).rows[0]?.id,
         )
@@ -271,7 +271,7 @@ export async function buildServer(
     return payload;
   });
   let maintenanceTimer: ReturnType<typeof setInterval> | undefined;
-  if (store instanceof PostgresStore) {
+  if (store instanceof SqlStore) {
     maintenanceTimer = setInterval(() => {
       void store.runMaintenance().catch((error: unknown) => {
         app.log.warn({ err: error, event: 'maintenance.cleanup_failed' }, 'maintenance failed');
@@ -398,7 +398,7 @@ export async function buildServer(
 
   app.get('/health/live', async () => ({ status: 'ok' }));
   app.get('/health/ready', async (_request, reply) => {
-    const ready = store instanceof PostgresStore ? await store.checkReady() : true;
+    const ready = store instanceof SqlStore ? await store.checkReady() : true;
     if (!ready) return reply.code(503).send({ status: 'not_ready' });
     const cacheOk = cache.enabled ? await cache.ping() : true;
     return {
@@ -570,7 +570,7 @@ export async function buildServer(
           })
           .parse(request.query);
         const page =
-          store instanceof PostgresStore
+          store instanceof SqlStore
             ? await store.listProjectsPage(request.auth!.ownerId, query.cursor, query.limit)
             : paginateList(
                 await store.listProjects(request.auth!.ownerId),
@@ -630,7 +630,7 @@ export async function buildServer(
           timePointId: query['timePointId'],
         };
         const page =
-          store instanceof PostgresStore
+          store instanceof SqlStore
             ? await store.listTasksPage(request.auth!.ownerId, filters, query.cursor, query.limit)
             : paginateList(
                 await store.listTasks(request.auth!.ownerId, filters),
@@ -696,7 +696,7 @@ export async function buildServer(
           .parse(request.query);
         const type = enumQuery(query.type, ['DATE', 'EVENT']);
         const page =
-          store instanceof PostgresStore
+          store instanceof SqlStore
             ? await store.listTimePointsPage(request.auth!.ownerId, type, query.cursor, query.limit)
             : paginateList(
                 await store.listTimePoints(request.auth!.ownerId, type),
@@ -824,7 +824,7 @@ export async function buildServer(
           })
           .parse(request.query);
         const page =
-          store instanceof PostgresStore
+          store instanceof SqlStore
             ? await store.listPlacementsPage(
                 request.auth!.ownerId,
                 paramId(request),
@@ -2041,7 +2041,13 @@ async function versionedV2Action(
 }
 
 function databaseConfigured(config: AppConfig): boolean {
-  return Boolean(config.databaseUrl || (process.env['PGHOST'] && process.env['PGDATABASE']));
+  if (config.databaseUrl) return true;
+  const env = process.env;
+  const discrete =
+    (env['PGHOST'] && env['PGDATABASE']) ||
+    (env['MYSQL_HOST'] && env['MYSQL_DATABASE']) ||
+    (env['DATABASE_HOST'] && env['DATABASE_NAME']);
+  return Boolean(discrete);
 }
 
 async function createStore(config: AppConfig): Promise<Store> {
@@ -2051,7 +2057,7 @@ async function createStore(config: AppConfig): Promise<Store> {
         JSON.stringify({
           event: 'database.memory_store_override',
           message:
-            'DEV_MEMORY_STORE=true; the configured PostgreSQL URL is ignored. Set DEV_MEMORY_STORE=false to persist data.',
+            'DEV_MEMORY_STORE=true; the configured DATABASE_URL is ignored. Set DEV_MEMORY_STORE=false to persist data.',
         }),
       );
     return new MemoryStore();
@@ -2071,17 +2077,17 @@ async function createStore(config: AppConfig): Promise<Store> {
     DB_APPLICATION_NAME: config.dbApplicationName,
     DB_LISTEN_ENABLED: String(config.dbListenEnabled),
   };
-  const { pool } = createPoolFromEnv(env);
-  return new PostgresStore(pool, {
+  const database = openDatabase(readDatabaseSettings(env));
+  return new SqlStore(database, {
     changeRetentionDays: config.syncChangeRetentionDays,
     mutationReceiptRetentionDays: config.mutationReceiptRetentionDays,
     transactionTimeoutMs: config.dbStatementTimeoutMs,
-    listenEnabled: config.dbListenEnabled,
+    listenEnabled: database.settings.listenEnabled,
   });
 }
 
 async function initStore(store: Store, config: AppConfig): Promise<void> {
-  if (!(store instanceof PostgresStore)) {
+  if (!(store instanceof SqlStore)) {
     await store.init();
     return;
   }

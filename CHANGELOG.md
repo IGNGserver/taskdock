@@ -17,6 +17,11 @@
 
 ## 未发布
 
+- 新增 MySQL 8.4 支持：`DATABASE_URL` 换成 `mysql://` 或使用离散 `MYSQL_*` 即可切换引擎，也可以保留 PostgreSQL 不动；`compose.mysql.yaml` 提供内置 MySQL 部署，`compose.external-db.yaml` 对两种引擎通用。方言差异集中在 `@devtodo/database`（占位符、类型转换、`ILIKE`、保留字 `rank`/`cursor`），存储层仍是同一份实现。
+- MySQL 的能力边界写在 `docs/adr/0005-mysql-support.md`：跨实例实时推送降级为进程内通知或 Redis pub/sub，搜索退化为 owner 范围内的 `LIKE` 扫描，语句级超时只覆盖 SELECT，迁移改为逐文件提交。
+- 新增 MySQL 合并基线 `packages/database/migrations/mysql/0013_baseline.sql`（等价于 PostgreSQL `0013`）；此后每个 schema 变更两边各出一个同版本迁移，并有测试保证版本与表集合一致。
+- 新增 `pnpm test:mysql-compat`、`pnpm test:mysql-runtime`；`pnpm test:integration` 与 `pnpm test:pg-runtime` 现在由 `TASKDOCK_TEST_DATABASE_URL` 的 scheme 选择引擎，CI 同时跑 PostgreSQL 与 MySQL 两套门禁。
+
 - 新增外部 PostgreSQL 部署：`DATABASE_URL`/离散 `PG*`、SSL CA、连接池、启动重试；提供 `compose.external-db.yaml`，可连接 NAS、共享数据库服务器或托管 PostgreSQL。一个 PostgreSQL 服务器可承载多个应用，但每个 TaskDock 中枢必须使用独立 database。
 - 降低远端数据库延迟下的请求开销：v2 投影冷加载由 11 条 SELECT 改为 1 条、缓存失效改为 change feed 增量追赶；mutation 按实体类型批量 upsert/append；`/sync/push` 改为单事务 + 每 mutation savepoint；retention 清理移出请求事务。
 - 新增可选 Redis：多 API 副本共享登录限流、冷启动投影缓存；投影缓存故障回退数据库，不进入权威写路径。生产环境配置 Redis 后认证限流在故障时 fail-closed；`AUTH_RATE_LIMIT_REQUIRE_SHARED=true` 可在其他环境强制该行为。

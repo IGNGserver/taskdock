@@ -4,12 +4,23 @@ import { createServer } from 'node:net';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import { createPool, type Pool } from '../packages/database/src/index.js';
-import { isolatedTestDatabaseUrl } from './test-database-safety.js';
+import mysql from 'mysql2/promise';
+import {
+  databaseReady,
+  openDatabase,
+  readDatabaseSettings,
+  runMigrations,
+  type SqlDatabase,
+} from '../packages/database/src/index.js';
 
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
-const databaseUrl = isolatedTestDatabaseUrl();
+const databaseUrl = process.env['TASKDOCK_TEST_DATABASE_URL'];
+const settings = databaseUrl
+  ? readDatabaseSettings({ ...process.env, DATABASE_URL: databaseUrl })
+  : undefined;
+const dialect = settings?.dialect ?? 'postgres';
+const engine = dialect === 'mysql' ? 'MySQL' : 'PostgreSQL';
 const pgCtl = process.env['PG_CTL'];
 const pgData = process.env['PGDATA'] ?? process.env['PG_DATA'];
 const apiEntry = join(root, 'apps', 'api', 'dist', 'main.js');
@@ -222,7 +233,7 @@ async function waitForWebSocketReady(url: string, token: string): Promise<WebSoc
   return socket;
 }
 
-async function waitForSyncRequired(socket: WebSocket, timeoutMs = 5_000): Promise<string> {
+function nextSyncRequired(socket: WebSocket, timeoutMs = 5_000): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const timer = setTimeout(
       () => reject(new Error('sync.required notification timed out')),
@@ -247,31 +258,84 @@ async function waitForSyncRequired(socket: WebSocket, timeoutMs = 5_000): Promis
   });
 }
 
-async function cleanupOwner(pool: Pool, ownerId: string): Promise<void> {
-  await pool.query('DELETE FROM users WHERE id = $1', [ownerId]);
+async function cleanupOwner(database: SqlDatabase, ownerId: string): Promise<void> {
+  await database.query('DELETE FROM users WHERE id = $1', [ownerId]);
+}
+
+async function tableExists(database: SqlDatabase, table: string): Promise<boolean> {
+  const result =
+    dialect === 'mysql'
+      ? await database.query<{ n: number | string }>(
+          'SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = $1',
+          [table],
+        )
+      : await database.query<{ n: number | string }>(
+          "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1",
+          [table],
+        );
+  return Number(result.rows[0]?.n ?? 0) > 0;
+}
+
+/**
+ * Losing every connection is the closest MySQL analogue to restarting
+ * PostgreSQL: the server stays up, the pool's sockets die, and the API has to
+ * notice on its own. Killing by session id keeps the fixture scoped.
+ */
+async function killOtherMysqlSessions(): Promise<void> {
+  const admin = await mysql.createConnection({ uri: databaseUrl });
+  try {
+    const [rows] = await admin.query<mysql.RowDataPacket[]>(
+      `SELECT ID FROM information_schema.processlist
+       WHERE USER = SUBSTRING_INDEX(CURRENT_USER(), '@', 1) AND ID <> CONNECTION_ID()`,
+    );
+    for (const row of rows) await admin.query(`KILL ${Number(row['ID'])}`);
+  } finally {
+    await admin.end();
+  }
+}
+
+async function stopDatabase(): Promise<void> {
+  if (dialect === 'mysql') {
+    await killOtherMysqlSessions();
+    return;
+  }
+  await runPg(['stop', '-m', 'fast', '-w']);
+}
+
+async function startDatabase(): Promise<void> {
+  if (dialect === 'mysql') return;
+  await runPg(['start', '-w']);
+}
+
+async function assertEmptyDatabase(database: SqlDatabase): Promise<void> {
+  if (!(await tableExists(database, 'users'))) return;
+  const existing = await database.query<{ n: number | string }>('SELECT COUNT(*) AS n FROM users');
+  assert(
+    Number(existing.rows[0]?.n ?? 0) === 0,
+    'runtime smoke requires an isolated empty database',
+  );
 }
 
 async function main(): Promise<void> {
-  if (!databaseUrl) {
-    console.log(
-      'NOT RUN: TASKDOCK_TEST_DATABASE_URL is required for real PostgreSQL runtime smoke.',
-    );
+  if (!databaseUrl || !settings) {
+    console.log('NOT RUN: TASKDOCK_TEST_DATABASE_URL is required for the real SQL runtime smoke.');
     process.exitCode = 2;
     return;
   }
-  if (!pgCtl || !pgData) {
-    console.log('NOT RUN: PG_CTL and PGDATA are required for database restart smoke.');
+  if (dialect === 'postgres' && (!pgCtl || !pgData)) {
+    console.log('NOT RUN: PG_CTL and PGDATA are required for the PostgreSQL restart smoke.');
     process.exitCode = 2;
     return;
   }
   await access(apiEntry);
 
-  const pool = createPool(databaseUrl);
-  pool.on('error', (error: Error) => {
+  const database = openDatabase({ ...settings, max: 4 });
+  database.onConnectionError((error: Error) => {
     console.warn(`runtime smoke pool error: ${error.message}`);
   });
-  const existing = await pool.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM users');
-  assert(existing.rows[0]?.count === '0', 'runtime smoke requires an isolated empty database');
+  await assertEmptyDatabase(database);
+  await runMigrations(database);
+  assert(await databaseReady(database), `${engine} schema is not ready after migrations`);
 
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -354,6 +418,9 @@ async function main(): Promise<void> {
     socket = await waitForWebSocketReady(`ws://127.0.0.1:${port}/api/v2/ws`, refreshedToken);
     const folderId = randomUUID();
     const folderMutationId = randomUUID();
+    // Subscribe before the write: MySQL fires the local notification inside the
+    // committing request, so a listener attached afterwards would miss it.
+    const folderNotificationPromise = nextSyncRequired(socket);
     const folderResponse = await requestJson(baseUrl, '/api/v2/folders', {
       method: 'POST',
       headers: mutationHeaders(refreshedToken, clientId, folderMutationId),
@@ -364,7 +431,7 @@ async function main(): Promise<void> {
       `folder create returned ${folderResponse.response.status}`,
     );
     assert(idFromBody(folderResponse.body, 'id') === folderId, 'folder id did not round-trip');
-    const folderNotification = await waitForSyncRequired(socket);
+    const folderNotification = await folderNotificationPromise;
     assert(/^\d+$/.test(folderNotification), 'folder notification cursor was invalid');
 
     const taskId = randomUUID();
@@ -374,12 +441,13 @@ async function main(): Promise<void> {
       headers: mutationHeaders(refreshedToken, clientId, taskMutationId),
       body: JSON.stringify({ id: taskId, parentFolderId: folderId, title: 'runtime task' }),
     } satisfies RequestInit;
+    const taskNotification = nextSyncRequired(socket);
     const taskResponse = await requestJson(baseUrl, '/api/v2/tasks', taskRequest);
     assert(
       taskResponse.response.status === 201,
       `task create returned ${taskResponse.response.status}`,
     );
-    await waitForSyncRequired(socket);
+    await taskNotification;
     const replay = await requestJson(baseUrl, '/api/v2/tasks', taskRequest);
     assert(replay.response.status === 201, `idempotent replay returned ${replay.response.status}`);
     const afterWrites = await requestJson(baseUrl, '/api/v2/sync/status', {
@@ -453,33 +521,44 @@ async function main(): Promise<void> {
       'old cursor did not read a change created after API restart',
     );
 
-    await runPg(['stop', '-m', 'fast', '-w']);
+    await stopDatabase();
     databaseStopped = true;
     const liveDuringDbStop = await requestJson(baseUrl, '/health/live');
     assert(
       liveDuringDbStop.response.status === 200,
-      'live failed while only PostgreSQL was stopped',
+      `live failed while only ${engine} was stopped`,
     );
-    await waitForStatus(baseUrl, '/health/ready', 503, api);
-    const unavailable = await requestJson(
-      baseUrl,
-      '/api/v2/sync/status',
-      { headers: { Authorization: `Bearer ${refreshedToken}` } },
-      5_000,
-    );
-    assert(unavailable.response.status >= 500, `DB outage returned ${unavailable.response.status}`);
-
-    await runPg(['start', '-w']);
-    databaseStopped = false;
-    await waitForStatus(baseUrl, '/health/ready', 200, api);
+    if (dialect === 'postgres') {
+      // A stopped server is a real outage: readiness must fail until it returns.
+      await waitForStatus(baseUrl, '/health/ready', 503, api);
+      const unavailable = await requestJson(
+        baseUrl,
+        '/api/v2/sync/status',
+        { headers: { Authorization: `Bearer ${refreshedToken}` } },
+        5_000,
+      );
+      assert(
+        unavailable.response.status >= 500,
+        `DB outage returned ${unavailable.response.status}`,
+      );
+      await startDatabase();
+      databaseStopped = false;
+      await waitForStatus(baseUrl, '/health/ready', 200, api);
+    } else {
+      // Killing the pooled sockets is a transport outage, not a database
+      // outage: the MySQL server still answers, so the pool must self-heal and
+      // readiness must come back without an operator.
+      await waitForStatus(baseUrl, '/health/ready', 200, api, 20_000);
+      databaseStopped = false;
+    }
     await new Promise((resolve) => setTimeout(resolve, 2_000));
     const folderAfterDbRestartId = randomUUID();
     const afterDbRestartWrite = await requestJson(baseUrl, '/api/v2/folders', {
       method: 'POST',
       headers: mutationHeaders(refreshedToken, clientId, randomUUID()),
-      body: JSON.stringify({ id: folderAfterDbRestartId, title: 'after PostgreSQL restart' }),
+      body: JSON.stringify({ id: folderAfterDbRestartId, title: `after ${engine} restart` }),
     });
-    assert(afterDbRestartWrite.response.status === 201, 'write after PostgreSQL restart failed');
+    assert(afterDbRestartWrite.response.status === 201, `write after ${engine} restart failed`);
     const afterDbRestartPull = await requestJson(
       baseUrl,
       `/api/v2/sync/pull?cursor=${cursorAfterWrites}&limit=500`,
@@ -491,7 +570,7 @@ async function main(): Promise<void> {
         afterDbRestartChanges.some(
           (change) => objectBody(change)['entityId'] === folderAfterDbRestartId,
         ),
-      'cursor did not read a change after PostgreSQL restart',
+      `cursor did not read a change after ${engine} restart`,
     );
 
     const pointId = randomUUID();
@@ -514,7 +593,7 @@ async function main(): Promise<void> {
     const today = await requestJson(baseUrl, '/api/v2/today?localDate=2026-10-20', {
       headers: todayHeaders,
     });
-    assert(today.response.status === 200, 'PostgreSQL read-only Today failed');
+    assert(today.response.status === 200, `${engine} read-only Today failed`);
     assert(
       objectBody(objectBody(today.body)['point'])['id'] === pointId,
       'Today returned the wrong date',
@@ -536,10 +615,10 @@ async function main(): Promise<void> {
     );
 
     console.log(
-      `PASS: real PostgreSQL API runtime, cookie refresh, v2 WebSocket notification, idempotency, API restart cursor continuity, PostgreSQL restart recovery, and ready/live failure boundary; cursor ${cursorAfterWrites}`,
+      `PASS: real ${engine} API runtime, cookie refresh, v2 WebSocket notification, idempotency, API restart cursor continuity, connection-loss recovery, and ready/live failure boundary; cursor ${cursorAfterWrites}`,
     );
   } catch (error) {
-    console.error('FAIL: real PostgreSQL API runtime smoke failed.');
+    console.error(`FAIL: real ${engine} API runtime smoke failed.`);
     console.error(error);
     if (api?.output) console.error(api.output);
     process.exitCode = 1;
@@ -548,26 +627,26 @@ async function main(): Promise<void> {
     if (api) await stopApi(api);
     if (databaseStopped) {
       try {
-        await runPg(['start', '-w']);
+        await startDatabase();
       } catch (error) {
-        console.error(`FAIL: PostgreSQL recovery failed: ${String(error)}`);
+        console.error(`FAIL: ${engine} recovery failed: ${String(error)}`);
         process.exitCode = 1;
       }
     }
     if (ownerId) {
       try {
-        await cleanupOwner(pool, ownerId);
+        await cleanupOwner(database, ownerId);
       } catch (error) {
         console.error(`FAIL: runtime fixture cleanup failed: ${String(error)}`);
         process.exitCode = 1;
       }
     }
-    await pool.end();
+    await database.end();
   }
 }
 
 void main().catch((error: unknown) => {
-  console.error('FAIL: real PostgreSQL API runtime smoke crashed.');
+  console.error('FAIL: real SQL API runtime smoke crashed.');
   console.error(error);
   process.exitCode = 1;
 });

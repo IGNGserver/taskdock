@@ -1,7 +1,7 @@
 import type { V2Mutation } from '@devtodo/contracts';
 import { describe, expect, it } from 'vitest';
-import type { PostgresStore } from '../src/postgres-store.js';
-import { PostgresTreeStore } from '../src/postgres-tree-store.js';
+import type { SqlStore } from '../src/sql-store.js';
+import { SqlTreeStore } from '../src/sql-tree-store.js';
 import { MemoryTreeStore } from '../src/tree-store.js';
 
 function mutation(
@@ -38,7 +38,7 @@ function emptyOwnerRow(cursor: string) {
   };
 }
 
-describe('PostgresTreeStore batch push', () => {
+describe('SqlTreeStore batch push', () => {
   it('serializes each owner independently without a process-global write barrier', async () => {
     const store = new MemoryTreeStore();
     const events: string[] = [];
@@ -136,8 +136,8 @@ describe('PostgresTreeStore batch push', () => {
       },
       appendV2Changes: async () => '1',
       subscribeChanges: () => () => undefined,
-    } as unknown as PostgresStore;
-    const tree = new PostgresTreeStore(postgres);
+    } as unknown as SqlStore;
+    const tree = new SqlTreeStore(postgres);
     const pending = tree.applyMutationIdempotent('owner-1', 'client-1', {
       mutationId: '00000000-0000-7000-8000-000000000021',
       command: 'folder.create',
@@ -184,8 +184,8 @@ describe('PostgresTreeStore batch push', () => {
         return cursor;
       },
       subscribeChanges: () => () => undefined,
-    } as unknown as PostgresStore;
-    const tree = new PostgresTreeStore(postgres);
+    } as unknown as SqlStore;
+    const tree = new SqlTreeStore(postgres);
     const first = await tree.applyMutationIdempotent('owner-1', 'client-1', {
       mutationId: '00000000-0000-7000-8000-000000000041',
       command: 'task.create',
@@ -240,8 +240,8 @@ describe('PostgresTreeStore batch push', () => {
         return { rows: [], rowCount: 0 };
       },
       v2ReadSnapshot: async <T>(fn: () => T | Promise<T>) => fn(),
-    } as unknown as PostgresStore;
-    const tree = new PostgresTreeStore(postgres);
+    } as unknown as SqlStore;
+    const tree = new SqlTreeStore(postgres);
     await tree.prepare('owner-1');
     expect(tree.listTimePoints('owner-1', 'DATE').map((point) => point.localDate)).toEqual([
       '2026-09-04',
@@ -265,8 +265,8 @@ describe('PostgresTreeStore batch push', () => {
         return { rows: [], rowCount: 0 };
       },
       v2ReadSnapshot: async <T>(fn: () => T | Promise<T>) => fn(),
-    } as unknown as PostgresStore;
-    const tree = new PostgresTreeStore(postgres);
+    } as unknown as SqlStore;
+    const tree = new SqlTreeStore(postgres);
     await tree.prepare('owner-1');
     expect(tree.listFolders('owner-1')).toHaveLength(0);
 
@@ -331,8 +331,8 @@ describe('PostgresTreeStore batch push', () => {
         return { rows: [], rowCount: 0 };
       },
       v2ReadSnapshot: async <T>(fn: () => T | Promise<T>) => fn(),
-    } as unknown as PostgresStore;
-    const tree = new PostgresTreeStore(postgres);
+    } as unknown as SqlStore;
+    const tree = new SqlTreeStore(postgres);
     await tree.prepare('owner-1');
     cursor = '2';
     await tree.prepare('owner-1');
@@ -399,8 +399,8 @@ describe('PostgresTreeStore batch push', () => {
         return { rows: [], rowCount: 0 };
       },
       v2ReadSnapshot: async <T>(fn: () => T | Promise<T>) => fn(),
-    } as unknown as PostgresStore;
-    const tree = new PostgresTreeStore(postgres, cache);
+    } as unknown as SqlStore;
+    const tree = new SqlTreeStore(postgres, cache);
     await tree.prepare('owner-1');
     expect(fullLoadQueries).toBe(0);
     expect(tree.listFolders('owner-1').map((folder) => folder.title)).toEqual(['Cached folder']);
@@ -461,9 +461,9 @@ describe('PostgresTreeStore batch push', () => {
         savepoints.push(`rollback:${name}`);
       },
       subscribeChanges: () => () => undefined,
-    } as unknown as PostgresStore;
+    } as unknown as SqlStore;
 
-    const tree = new PostgresTreeStore(postgres);
+    const tree = new SqlTreeStore(postgres);
     const folderId = '00000000-0000-7000-8000-000000000001';
     const results = await tree.applyMutationBatch('owner-1', 'client-1', [
       mutation('00000000-0000-7000-8000-000000000011', 'folder.create', folderId, null, {
@@ -497,7 +497,10 @@ describe('PostgresTreeStore batch push', () => {
     expect(savepoints).toContain('rollback:mutation_1');
     expect(
       batchSql.some(
-        (sql) => sql.includes('INSERT INTO folders') && sql.includes('SELECT x.id, $1,'),
+        (sql) =>
+          sql.includes('INSERT INTO folders') &&
+          sql.includes('ON CONFLICT (id) DO UPDATE') &&
+          sql.includes('WHERE folders.owner_id = EXCLUDED.owner_id'),
       ),
     ).toBe(true);
   });
@@ -543,8 +546,8 @@ describe('PostgresTreeStore batch push', () => {
       rollbackToSavepoint: async (name: string) => {
         savepoints.push(`rollback:${name}`);
       },
-    } as unknown as PostgresStore;
-    const tree = new PostgresTreeStore(postgres);
+    } as unknown as SqlStore;
+    const tree = new SqlTreeStore(postgres);
     const folderId = '00000000-0000-7000-8000-000000000001';
     await expect(
       tree.applyMutationBatch('owner-1', 'client-1', [
