@@ -2,19 +2,19 @@
 
 ## 拓扑
 
-Web/PWA 直接加载 React Web 产物，并通过浏览器的 Fetch、Cookie、IndexedDB 和 WebSocket 访问中枢；Android 使用独立 Jetpack Compose 原生 UI、Room、OkHttp 和同一 v2 API/同步协议。所有客户端通过 Fastify REST 推送/拉取；WebSocket 只发送认证后的 `sync.required` 失效通知。生产入口是 Caddy → Fastify → PostgreSQL。PostgreSQL 可以是 Compose 内置服务，也可以是外部/共享数据库服务器；每个 TaskDock 中枢使用独立 database。可选 Redis 只做共享限流和冷启动投影缓存，不进入权威写路径；生产 Compose 默认要求共享认证限流，已配置 Redis 但不可用时认证请求 fail-closed。
+Web/PWA 直接加载 React Web 产物，并通过浏览器的 Fetch、Cookie、IndexedDB 和 WebSocket 访问中枢；Android 使用独立 Jetpack Compose 原生 UI、Room、OkHttp 和同一 v2 API/同步协议。所有客户端通过 Fastify REST 推送/拉取；WebSocket 只发送认证后的 `sync.required` 失效通知。生产入口是 Caddy → Fastify → SQL 数据库。数据库可以是 PostgreSQL 18（默认）或 MySQL 8.4，可以是 Compose 内置服务，也可以是外部/共享数据库服务器；引擎由 `DATABASE_URL` 的 scheme 或 `DB_DIALECT` 决定，方言差异集中在 `@devtodo/database`，每个 TaskDock 中枢使用独立 database。可选 Redis 只做共享限流和冷启动投影缓存，不进入权威写路径；生产 Compose 默认要求共享认证限流，已配置 Redis 但不可用时认证请求 fail-closed。
 
 ## 包边界
 
 - `packages/contracts`：Zod 输入、DTO、枚举和 UUIDv7。
 - `packages/domain`：无 UI 的状态机、日期、rank、引用 ID、Markdown 安全渲染规则。
 - `packages/database`：Drizzle 描述、显式 SQL migration、外部库/SSL/连接池配置、ready 检查。
-- `apps/api`：认证、Owner 限定的资源端点、同步协议、PostgreSQL adapter 和可选 Redis cache adapter。
+- `apps/api`：认证、Owner 限定的资源端点、同步协议、SQL adapter（PostgreSQL / MySQL）和可选 Redis cache adapter。
 - `packages/sync-client`：IndexedDB/Dexie v2 schema、v1 outbox 转换、push/pull、冲突记录、tombstone 和重同步。
 - `apps/web`：React/PWA 目录树、混合排序、工作流、步骤、日期/Placement 和删除预览界面。
 - `apps/mobile`：Capacitor 工程与 `apps/mobile/android` 原生 Compose/Room 客户端；原生客户端不依赖 React 页面来满足 v2 功能。
 - `apps/api/src/tree-store.ts`：Owner-scoped v2 目录树、Workflow、TaskStep、时间点/Placement 以及内存迁移投影。
-- `apps/api/src/postgres-tree-store.ts`：PostgreSQL v2 projection 的单查询加载、增量 change-feed 追赶、批量持久化和 v2 change feed 适配。
+- `apps/api/src/sql-tree-store.ts`：v2 projection 的单查询加载、增量 change-feed 追赶、批量持久化（多行 upsert）和 v2 change feed 适配；引擎专用语句在 `apps/api/src/sql-statements.ts`。
 - `apps/api/src/cache.ts`：可选 Redis 共享限流/冷启动缓存；缓存投影故障回退数据库，认证限流是否允许进程内回退由 `AUTH_RATE_LIMIT_REQUIRE_SHARED` 决定。
 - 主题：Web 使用 `prefers-color-scheme`，Android 使用 `Configuration.uiMode` 同步系统栏并向 WebView 派发主题事件；主题是设备运行时状态，不进入账号同步设置。
 
@@ -36,4 +36,5 @@ Web/PWA 直接加载 React Web 产物，并通过浏览器的 Fetch、Cookie、I
 
 - [0001 Store persistence](adr/0001-store-persistence.md)：说明 PostgreSQL 权威存储、owner-scoped SQL、事务内 change/receipt 和容量升级边界。
 - [0004 外部数据库与可选缓存](adr/0004-external-database-and-cache.md)：说明外部 PostgreSQL、共享服务器边界和 Redis fail-open 策略。
+- [0005 双引擎数据库支持](adr/0005-mysql-support.md)：说明 MySQL 8.4 的方言层、合并迁移基线、能力降级与移植代价。
 - [深色模式](DARK_MODE.md)：说明 Web/PWA 与 Android 的系统主题读取、共享颜色令牌和验收边界。

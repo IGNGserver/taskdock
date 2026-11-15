@@ -6,7 +6,7 @@
     <title>TaskDock — 让散落的任务各归其位</title>
     <meta
       name="description"
-      content="TaskDock 是为个人开发者准备的自托管、离线优先任务工作台：目录树、日期与时间点、流程和执行步骤，数据保存在你自己的服务器与 PostgreSQL 中。"
+      content="TaskDock 是为个人开发者准备的自托管、离线优先任务工作台：目录树、日期与时间点、流程和执行步骤，数据保存在你自己的服务器与 PostgreSQL（或 MySQL）中。"
     />
     <meta name="theme-color" content="#0a1124" />
     <meta name="color-scheme" content="dark" />
@@ -482,7 +482,7 @@
               <div class="hub" data-hub>
                 <svg aria-hidden="true"><use href="#i-hub" /></svg>
                 <span class="name">TaskDock 中枢</span>
-                <span class="sub">Fastify · PostgreSQL</span>
+                <span class="sub">Fastify · PostgreSQL / MySQL</span>
                 <span class="cursor" data-cursor>cursor 1042</span>
               </div>
               <div class="client" data-client="android">
@@ -636,7 +636,7 @@
                     ><svg aria-hidden="true"><use href="#i-hub" /></svg
                   ></span>
                   <span
-                    ><span class="t">PostgreSQL 18</span><br /><span class="d"
+                    ><span class="t">PostgreSQL 18 / MySQL 8.4</span><br /><span class="d"
                       >权威数据源，只在容器网络内可达</span
                     ></span
                   >
@@ -800,7 +800,8 @@
               ></span>
               <h3>中枢 · Docker</h3>
               <p>
-                Fastify 与 PostgreSQL 组成的单用户中枢。所有设备的数据最终汇集在这里，也只在这里。
+                Fastify 与 PostgreSQL/MySQL
+                组成的单用户中枢。所有设备的数据最终汇集在这里，也只在这里。
               </p>
               <span class="foot">ghcr.io/igngserver/taskdock</span>
             </article>

@@ -20,7 +20,7 @@
     <img src="https://img.shields.io/badge/自托管-Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker 自托管" />
 </p>
 
-TaskDock 是一个给自己用的任务工作台，跑在你自己的服务器上。想法先记下来，再用目录、日期、流程和步骤把它安排明白，每个任务都能附上一份 Markdown 笔记。中枢放在 NAS、家用服务器或云主机上，浏览器和 Android 手机连过去用；断网时照样能看能改，连上以后再同步。数据只落在你自己的 PostgreSQL 里，没有托管后端，也没有团队和权限那一套。
+TaskDock 是一个给自己用的任务工作台，跑在你自己的服务器上。想法先记下来，再用目录、日期、流程和步骤把它安排明白，每个任务都能附上一份 Markdown 笔记。中枢放在 NAS、家用服务器或云主机上，浏览器和 Android 手机连过去用；断网时照样能看能改，连上以后再同步。数据只落在你自己的数据库里（PostgreSQL 或 MySQL），没有托管后端，也没有团队和权限那一套。
 
 ## 功能
 
@@ -48,7 +48,7 @@ TaskDock 是一个给自己用的任务工作台，跑在你自己的服务器�
 
 - **网页 / PWA**：中枢启动后用浏览器打开 `APP_ORIGIN` 就能用，不用另装客户端。界面按屏幕自适应：手机单手记录，平板双栏，桌面支持拖放和键盘操作。HTTPS 下可以安装为 PWA 并离线打开。
 - **Android**：原生 Jetpack Compose 客户端，Room 本地存储，和网页端共用一套 API 与同步协议。APK 附在每个 Release 里。
-- **中枢**：Fastify + PostgreSQL 组成的单用户服务端。所有设备的数据最终汇集在这里，也只在这里。
+- **中枢**：Fastify + PostgreSQL/MySQL 组成的单用户服务端。所有设备的数据最终汇集在这里，也只在这里。
 
 ## 下载与部署
 
@@ -79,7 +79,7 @@ docker compose --profile operations run --rm bootstrap
 
 **升级**：先按 [备份与恢复](docs/BACKUP_RESTORE.md) 做一份备份，再把 `.env` 里的 `APP_VERSION` 改成新版本，重复 `pull` / `migrate` / `up -d`。出问题时把版本号改回去，并按备份文档处理数据库。
 
-完整的变量说明、外部 PostgreSQL、Caddy 网关和回滚步骤在[部署说明](docs/DEPLOYMENT.md)里。
+完整的变量说明、外部数据库（PostgreSQL/MySQL）、Caddy 网关和回滚步骤在[部署说明](docs/DEPLOYMENT.md)里。
 
 ## 版本
 
@@ -93,7 +93,7 @@ TaskDock 现在处于 **2.0 预览阶段**，发出来的都是预发布版本�
 
 ## 数据与安全
 
-- 任务、安排和笔记保存在自托管中枢的 PostgreSQL 里；默认 Compose 不把数据库端口映射到宿主机。
+- 任务、安排和笔记保存在自托管中枢的 PostgreSQL（默认）或 MySQL 里；两种 Compose 都不把数据库端口映射到宿主机。
 - 应用端口默认只绑定 `127.0.0.1`，要直连 HTTP 得显式设置 `TASKDOCK_BIND_ADDRESS=0.0.0.0`；公网请走 HTTPS。
 - 密码至少 6 位，6 位纯数字也可以，没有字符种类限制。
 - 用 HTTP 也能访问，但界面会提示这是明文传输，密码和会话信息不做加密。可信局域网可以接受，公网不建议。
@@ -104,7 +104,7 @@ TaskDock 现在处于 **2.0 预览阶段**，发出来的都是预发布版本�
 ## 文档
 
 - [部署说明](docs/DEPLOYMENT.md)——环境变量、首次部署、升级与回滚、Caddy 网关
-- [外部 PostgreSQL](docs/EXTERNAL_DATABASE.md)——接现有数据库、共享数据库服务器
+- [外部数据库](docs/EXTERNAL_DATABASE.md)——接现有 PostgreSQL/MySQL、共享数据库服务器
 - [备份与恢复](docs/BACKUP_RESTORE.md)
 - [安全说明](docs/SECURITY.md)——认证、限流、代理信任、密钥处理
 - [同步协议](docs/SYNC_PROTOCOL.md)——离线队列、冲突处理、游标
