@@ -122,6 +122,13 @@ function prepareMysql(sql: string, values: readonly unknown[]): PreparedQuery {
         continue;
       }
     }
+    if ((char === 'I' || char === 'i') && /^ilike\b/i.test(sql.slice(index))) {
+      // MySQL's default collation is case-insensitive, so LIKE matches what
+      // PostgreSQL's ILIKE matches; the wildcard escaping is identical.
+      text += 'LIKE';
+      index += 5;
+      continue;
+    }
     if (char === ':' && sql[index + 1] === ':') {
       const afterCast = skipCast(sql, index);
       if (afterCast > index) {

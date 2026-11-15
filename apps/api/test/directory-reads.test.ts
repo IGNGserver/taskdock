@@ -10,8 +10,8 @@ import { DirectoryReads } from '../src/directory-reads.js';
 import { MemoryTreeStore } from '../src/tree-store.js';
 import { buildServer } from '../src/server.js';
 import { MemoryStore } from '../src/store.js';
-import { PostgresTreeStore } from '../src/postgres-tree-store.js';
-import type { PostgresStore } from '../src/postgres-store.js';
+import { SqlTreeStore } from '../src/sql-tree-store.js';
+import type { SqlStore } from '../src/sql-store.js';
 
 describe('directory keyset reads', () => {
   it('bounds SQL candidate keys before constructing any task or folder payload', async () => {
@@ -22,8 +22,8 @@ describe('directory keyset reads', () => {
         statements.push(sql);
         return { rows: sql.includes('AS revision') ? [{ revision: '1' }] : [], rowCount: 0 };
       },
-    } as unknown as PostgresStore;
-    const tree = new PostgresTreeStore(postgres);
+    } as unknown as SqlStore;
+    const tree = new SqlTreeStore(postgres);
     tree.prepare = async () => {
       throw new Error('unexpected full projection');
     };

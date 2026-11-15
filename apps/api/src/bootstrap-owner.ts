@@ -1,8 +1,8 @@
-import { createPoolFromEnv } from '@devtodo/database';
+import { openDatabase, readDatabaseSettings } from '@devtodo/database';
 import { DomainError } from '@devtodo/domain';
 import { z } from 'zod';
 import { AuthService } from './auth.js';
-import { PostgresStore } from './postgres-store.js';
+import { SqlStore } from './sql-store.js';
 import { assertProductionSecrets } from './runtime-secrets.js';
 
 const requiredEnv = (name: string): string => {
@@ -34,8 +34,7 @@ async function main(): Promise<void> {
     )
       throw new Error('production token secrets must contain at least 32 characters');
   }
-  const { pool } = createPoolFromEnv(process.env);
-  const store = new PostgresStore(pool);
+  const store = new SqlStore(openDatabase(readDatabaseSettings(process.env)));
   try {
     await store.init();
     if (await store.hasOwner()) {

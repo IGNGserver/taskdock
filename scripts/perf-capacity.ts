@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import os from 'node:os';
 import { performance } from 'node:perf_hooks';
-import { PostgresStore, type PostgresPage } from '../apps/api/src/postgres-store.js';
+import { SqlStore, type PostgresPage } from '../apps/api/src/sql-store.js';
 import { createPool, runMigrations, type Pool } from '../packages/database/src/index.js';
 import { assertIsolatedEmptyDatabase, isolatedTestDatabaseUrl } from './test-database-safety.js';
 
@@ -188,7 +188,7 @@ async function main(): Promise<void> {
   const firstDateId = idFor(runKey, 'date', 1);
   const username = `perf-${process.pid}-${Date.now()}`;
   const pool = createPool(databaseUrl);
-  const store = new PostgresStore(pool);
+  const store = new SqlStore(pool);
   let actualOwnerId: string | undefined;
   try {
     await assertIsolatedEmptyDatabase(pool, 'capacity benchmark');

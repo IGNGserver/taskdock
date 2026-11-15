@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createPool, databaseReady, runMigrations } from '../packages/database/src/index.js';
-import { PostgresStore } from '../apps/api/src/postgres-store.js';
+import { SqlStore } from '../apps/api/src/sql-store.js';
 import { uuidv7, type Mutation } from '../packages/contracts/src/index.js';
 import { DomainError } from '../packages/domain/src/index.js';
 import { assertIsolatedEmptyDatabase, isolatedTestDatabaseUrl } from './test-database-safety.js';
@@ -104,9 +104,9 @@ async function main(): Promise<void> {
   }
 
   const cleanupPool = createPool(databaseUrl);
-  const stores: PostgresStore[] = [];
-  const closedStores = new Set<PostgresStore>();
-  const closeStore = async (store: PostgresStore): Promise<void> => {
+  const stores: SqlStore[] = [];
+  const closedStores = new Set<SqlStore>();
+  const closeStore = async (store: SqlStore): Promise<void> => {
     if (closedStores.has(store)) return;
     closedStores.add(store);
     await store.close();
@@ -124,10 +124,10 @@ async function main(): Promise<void> {
       );
     }
 
-    const primary = new PostgresStore(createPool(databaseUrl), {
+    const primary = new SqlStore(createPool(databaseUrl), {
       clock: () => new Date('2026-09-04T10:00:00.000Z'),
     });
-    const peer = new PostgresStore(createPool(databaseUrl), {
+    const peer = new SqlStore(createPool(databaseUrl), {
       clock: () => new Date('2026-09-04T10:00:00.000Z'),
     });
     stores.push(primary, peer);
@@ -333,7 +333,7 @@ async function main(): Promise<void> {
     const cursorBeforeRestart = (await primary.syncStatus(owner.id)).cursor;
     await closeStore(peer);
     await closeStore(primary);
-    const restartStore = new PostgresStore(createPool(databaseUrl), {
+    const restartStore = new SqlStore(createPool(databaseUrl), {
       clock: () => new Date('2026-09-04T10:00:00.000Z'),
     });
     stores.push(restartStore);
@@ -358,9 +358,9 @@ async function main(): Promise<void> {
       'placement did not survive restart',
     );
 
-    // Verify v2 PostgresTreeStore invariants: transaction lock, delete preview, cascade deletion
-    const { PostgresTreeStore } = await import('../apps/api/src/postgres-tree-store.js');
-    const v2Store = new PostgresTreeStore(restartStore);
+    // Verify v2 SqlTreeStore invariants: transaction lock, delete preview, cascade deletion
+    const { SqlTreeStore } = await import('../apps/api/src/sql-tree-store.js');
+    const v2Store = new SqlTreeStore(restartStore);
     const v2FolderId = uuidv7();
     const v2TaskId = uuidv7();
     const v2CursorBefore = (await restartStore.syncStatusV2(owner.id)).cursor;
@@ -387,7 +387,7 @@ async function main(): Promise<void> {
       v2CursorAfterWrite !== v2CursorBefore,
       'v2 mutation did not advance the database cursor',
     );
-    const reloadedV2Store = new PostgresTreeStore(restartStore);
+    const reloadedV2Store = new SqlTreeStore(restartStore);
     const reloadedSnapshot = await reloadedV2Store.snapshot(owner.id);
     const { BootstrapSnapshots } = await import('../apps/api/src/sync-bootstrap.js');
     const bootstrap = new BootstrapSnapshots(reloadedV2Store);
@@ -417,7 +417,7 @@ async function main(): Promise<void> {
     );
     const directDetail = await bootstrap.detail(owner.id, v2TaskId);
     const { DirectoryReads } = await import('../apps/api/src/directory-reads.js');
-    const directoryStore = new PostgresTreeStore(restartStore);
+    const directoryStore = new SqlTreeStore(restartStore);
     directoryStore.prepare = async () => {
       throw new Error('directory read loaded the full owner projection');
     };
@@ -474,7 +474,7 @@ async function main(): Promise<void> {
       'direct task detail lost the readable folder path',
     );
     // Focused mobile edits must reuse domain validation without prepare/full-account reads.
-    const focusedStore = new PostgresTreeStore(restartStore);
+    const focusedStore = new SqlTreeStore(restartStore);
     focusedStore.prepare = async () => {
       throw new Error('focused mutation loaded the entire owner');
     };
@@ -534,10 +534,10 @@ async function main(): Promise<void> {
       'focused retry lost the edit',
     );
     const manifest = await bootstrap.create(owner.id, '2026-09-04');
-    const bootstrapPeer = new PostgresStore(createPool(databaseUrl));
+    const bootstrapPeer = new SqlStore(createPool(databaseUrl));
     stores.push(bootstrapPeer);
     await bootstrapPeer.init();
-    const peerBootstrap = new BootstrapSnapshots(new PostgresTreeStore(bootstrapPeer));
+    const peerBootstrap = new BootstrapSnapshots(new SqlTreeStore(bootstrapPeer));
     const peerManifest = await peerBootstrap.create(owner.id, '2026-09-04');
     assert(
       peerManifest.snapshotId === manifest.snapshotId,
@@ -583,16 +583,16 @@ async function main(): Promise<void> {
     assert(expired.rowCount === 0, 'bounded background cleanup retained expired snapshot');
     assert(
       reloadedSnapshot.folders.some((folder) => folder.id === v2FolderId),
-      'v2 folder did not survive a PostgresTreeStore restart',
+      'v2 folder did not survive a SqlTreeStore restart',
     );
     assert(
       reloadedSnapshot.tasks.some((task) => task.id === v2TaskId),
-      'v2 task did not survive a PostgresTreeStore restart',
+      'v2 task did not survive a SqlTreeStore restart',
     );
     const reloadedPull = await reloadedV2Store.pull(owner.id, v2CursorBefore, 500);
     assert(
       reloadedPull.changes.some((change) => change.entityId === v2TaskId),
-      'v2 pull did not read durable changes after a PostgresTreeStore restart',
+      'v2 pull did not read durable changes after a SqlTreeStore restart',
     );
 
     // Section 7.2 invariant: a newly created root Task must not be sorted above
@@ -651,7 +651,7 @@ async function main(): Promise<void> {
     );
 
     console.log(
-      `PASS: PostgreSQL migration, row-level transaction, owner isolation, two-process concurrency, idempotency, rollback, restart, multi-placement invariants, and PostgresTreeStore v2 delete preview/tree deletion; cursor ${afterRestart.cursor}`,
+      `PASS: PostgreSQL migration, row-level transaction, owner isolation, two-process concurrency, idempotency, rollback, restart, multi-placement invariants, and SqlTreeStore v2 delete preview/tree deletion; cursor ${afterRestart.cursor}`,
     );
   } finally {
     for (const store of stores) {

@@ -62,14 +62,50 @@ export function openDatabase(settings: DatabaseSettings): SqlDatabase {
     : new PostgresDatabase(settings);
 }
 
+/**
+ * Wrap an already-created node-postgres pool. Used by tests and by scripts that
+ * build their own pool; application startup goes through `openDatabase`.
+ */
+export function databaseFromPool(pool: pg.Pool): SqlDatabase {
+  return new PostgresDatabase(poolSettings(pool), pool);
+}
+
+function poolSettings(pool: pg.Pool): DatabaseSettings {
+  const options = (pool.options ?? {}) as pg.PoolOptions;
+  return {
+    dialect: 'postgres',
+    connectionString: options.connectionString,
+    host: typeof options.host === 'string' ? options.host : undefined,
+    port: options.port,
+    user: typeof options.user === 'string' ? options.user : undefined,
+    password: typeof options.password === 'string' ? options.password : undefined,
+    database: options.database,
+    applicationName:
+      typeof options.application_name === 'string' ? options.application_name : 'devtodo-api',
+    max: options.max ?? 10,
+    maxUses: options.maxUses ?? 1_000,
+    connectionTimeoutMillis: options.connectionTimeoutMillis ?? 5_000,
+    idleTimeoutMillis: options.idleTimeoutMillis ?? 30_000,
+    queryTimeoutMillis: (options.query_timeout as number | undefined) ?? 30_000,
+    statementTimeoutMillis: (options.statement_timeout as number | undefined) ?? 30_000,
+    lockTimeoutMillis: (options.lock_timeout as number | undefined) ?? 5_000,
+    keepAlive: options.keepAlive ?? true,
+    keepAliveInitialDelayMillis: options.keepAliveInitialDelayMillis ?? 10_000,
+    listenEnabled: true,
+  };
+}
+
 class PostgresDatabase implements SqlDatabase {
   readonly dialect = 'postgres' as const;
   readonly maxConnections: number;
   private readonly pool: pg.Pool;
 
-  constructor(readonly settings: DatabaseSettings) {
+  constructor(
+    readonly settings: DatabaseSettings,
+    pool?: pg.Pool,
+  ) {
     this.maxConnections = settings.max;
-    this.pool = new pg.Pool(poolConfigFromRuntime(runtimeConfig(settings)));
+    this.pool = pool ?? new pg.Pool(poolConfigFromRuntime(runtimeConfig(settings)));
   }
 
   async query<T = Record<string, unknown>>(

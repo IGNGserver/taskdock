@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { DomainError } from '@devtodo/domain';
-import { PostgresTreeStore } from './postgres-tree-store.js';
+import { taskRowJson } from './sql-statements.js';
+import { SqlTreeStore } from './sql-tree-store.js';
 import type { V2Snapshot, V2TreeStore } from './tree-store.js';
 
 const ttlMs = 30 * 60_000;
@@ -109,7 +110,7 @@ export class BootstrapSnapshots {
   constructor(private readonly tree: V2TreeStore) {}
 
   startMaintenance(onError: (error: unknown) => void): void {
-    if (this.maintenance || !(this.tree instanceof PostgresTreeStore)) return;
+    if (this.maintenance || !(this.tree instanceof SqlTreeStore)) return;
     this.maintenance = setInterval(() => {
       void this.cleanup().catch(onError);
     }, 60_000);
@@ -125,8 +126,8 @@ export class BootstrapSnapshots {
   cleanup(): Promise<void> {
     if (this.cleanupFlight) return this.cleanupFlight;
     const tree = this.tree;
-    if (!(tree instanceof PostgresTreeStore)) return Promise.resolve();
-    this.cleanupFlight = tree.postgres
+    if (!(tree instanceof SqlTreeStore)) return Promise.resolve();
+    this.cleanupFlight = tree.sql
       .v2Query(
         'DELETE FROM sync_bootstrap_snapshots WHERE id IN (SELECT id FROM sync_bootstrap_snapshots WHERE expires_at <= now() ORDER BY expires_at LIMIT 2 FOR UPDATE SKIP LOCKED)',
       )
@@ -138,33 +139,33 @@ export class BootstrapSnapshots {
   }
 
   private async capture(ownerId: string): Promise<V2Snapshot> {
-    if (!(this.tree instanceof PostgresTreeStore)) return this.tree.snapshot(ownerId);
-    const postgres = this.tree.postgres;
-    return postgres.v2ReadSnapshot(async () => {
+    if (!(this.tree instanceof SqlTreeStore)) return this.tree.snapshot(ownerId);
+    const sql = this.tree.sql;
+    return sql.v2ReadSnapshot(async () => {
       const snapshot: Record<string, unknown> = {};
       for (const [key, [, table]] of Object.entries(collections)) {
         const order =
           table === 'folders' || table === 'tasks' ? 'parent_folder_id NULLS FIRST, id' : 'id';
         const rank = table === 'notes' ? '' : ', rank::text AS rank';
-        const rows = await postgres.v2Query(
+        const rows = await sql.v2Query(
           `SELECT *${rank} FROM ${table} WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY ${order}`,
           [ownerId],
         );
         snapshot[key] = rows.rows.map(dto);
       }
-      const settings = await postgres.v2Query('SELECT * FROM user_settings WHERE owner_id = $1', [
+      const settings = await sql.v2Query('SELECT * FROM user_settings WHERE owner_id = $1', [
         ownerId,
       ]);
       if (!settings.rows[0]) throw new DomainError('AUTH_REQUIRED', '账户设置不可用');
       snapshot['settings'] = dto(settings.rows[0]);
-      snapshot['cursor'] = (await postgres.syncStatusV2(ownerId)).cursor;
+      snapshot['cursor'] = (await sql.syncStatusV2(ownerId)).cursor;
       return snapshot as unknown as V2Snapshot;
     });
   }
 
   /** Read-only Today surface: no date creation, notes or account-wide projection. */
   async today(ownerId: string, localDate: string) {
-    if (!(this.tree instanceof PostgresTreeStore)) {
+    if (!(this.tree instanceof SqlTreeStore)) {
       const full = await this.capture(ownerId);
       const point =
         full.timePoints.find(
@@ -185,20 +186,26 @@ export class BootstrapSnapshots {
         .map((row) => ({ ...row, task: tasks.get(row.taskId)! }));
       return { point, items };
     }
-    const postgres = this.tree.postgres;
-    return postgres.withMutation(async () => {
-      await postgres.v2Query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
-      const points = await postgres.v2Query(
+    const sql = this.tree.sql;
+    return sql.withMutation(async () => {
+      if (sql.dialect === 'postgres')
+        await sql.v2Query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+      const points = await sql.v2Query(
         "SELECT *, rank::text AS rank FROM time_points WHERE owner_id = $1 AND type = 'DATE' AND local_date = $2::date AND deleted_at IS NULL",
         [ownerId, localDate],
       );
       const point = points.rows[0];
       if (!point) return { point: null, items: [] };
-      const placements = await postgres.v2Query(
-        `SELECT p.*, p.rank::text AS rank, to_jsonb(t) || jsonb_build_object('rank', t.rank::text) AS task
-         FROM placements p JOIN tasks t ON t.id = p.task_id AND t.owner_id = p.owner_id
-         WHERE p.owner_id = $1 AND p.time_point_id = $2 AND p.deleted_at IS NULL AND t.deleted_at IS NULL
-         ORDER BY p.rank, p.id`,
+      const placements = await sql.v2Query(
+        sql.dialect === 'mysql'
+          ? `SELECT p.*, ${taskRowJson('t')} AS task
+             FROM placements p JOIN tasks t ON t.id = p.task_id AND t.owner_id = p.owner_id
+             WHERE p.owner_id = $1 AND p.time_point_id = $2 AND p.deleted_at IS NULL AND t.deleted_at IS NULL
+             ORDER BY p.rank, p.id`
+          : `SELECT p.*, p.rank::text AS rank, to_jsonb(t) || jsonb_build_object('rank', t.rank::text) AS task
+             FROM placements p JOIN tasks t ON t.id = p.task_id AND t.owner_id = p.owner_id
+             WHERE p.owner_id = $1 AND p.time_point_id = $2 AND p.deleted_at IS NULL AND t.deleted_at IS NULL
+             ORDER BY p.rank, p.id`,
         [ownerId, point['id']],
       );
       return {
@@ -212,7 +219,7 @@ export class BootstrapSnapshots {
   }
 
   async preview(ownerId: string, localDate: string, parentFolderId: string | null) {
-    if (!(this.tree instanceof PostgresTreeStore)) {
+    if (!(this.tree instanceof SqlTreeStore)) {
       const full = await this.capture(ownerId);
       const points = full.timePoints.filter((p) => p.localDate === localDate);
       const ids = new Set(points.map((p) => p.id));
@@ -262,35 +269,35 @@ export class BootstrapSnapshots {
         complete: false,
       };
     }
-    const postgres = this.tree.postgres;
-    return postgres.v2ReadSnapshot(async () => {
-      const cursor = (await postgres.syncStatusV2(ownerId)).cursor;
+    const sql = this.tree.sql;
+    return sql.v2ReadSnapshot(async () => {
+      const cursor = (await sql.syncStatusV2(ownerId)).cursor;
       // Explicit null/equality branches let PostgreSQL use the ordered directory indexes.
       const parent =
         parentFolderId === null ? 'parent_folder_id IS NULL' : 'parent_folder_id = $2::uuid';
       const parentValues = parentFolderId === null ? [ownerId] : [ownerId, parentFolderId];
-      const settings = await postgres.v2Query('SELECT * FROM user_settings WHERE owner_id = $1', [
+      const settings = await sql.v2Query('SELECT * FROM user_settings WHERE owner_id = $1', [
         ownerId,
       ]);
-      const folders = await postgres.v2Query(
+      const folders = await sql.v2Query(
         `SELECT *, rank::text AS rank FROM folders WHERE owner_id = $1 AND deleted_at IS NULL AND ${parent} ORDER BY folders.rank, id LIMIT 101`,
         parentValues,
       );
-      const points = await postgres.v2Query(
+      const points = await sql.v2Query(
         "SELECT *, rank::text AS rank FROM time_points WHERE owner_id = $1 AND type = 'DATE' AND local_date = $2::date AND deleted_at IS NULL",
         [ownerId, localDate],
       );
       const pointIds = points.rows.map((p) => p['id']);
-      const placements = await postgres.v2Query(
+      const placements = await sql.v2Query(
         'SELECT *, rank::text AS rank FROM placements WHERE owner_id = $1 AND time_point_id = ANY($2::uuid[]) AND deleted_at IS NULL ORDER BY placements.rank, id LIMIT 101',
         [ownerId, pointIds],
       );
       const taskIds = placements.rows.slice(0, 100).map((p) => p['task_id']);
-      const rootTasks = await postgres.v2Query(
+      const rootTasks = await sql.v2Query(
         `SELECT *, rank::text AS rank FROM tasks WHERE owner_id = $1 AND ${parent} AND deleted_at IS NULL ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, tasks.rank, id LIMIT 101`,
         parentValues,
       );
-      const scheduledTasks = await postgres.v2Query(
+      const scheduledTasks = await sql.v2Query(
         'SELECT *, rank::text AS rank FROM tasks WHERE owner_id = $1 AND id = ANY($2::uuid[]) AND deleted_at IS NULL',
         [ownerId, taskIds],
       );
@@ -341,7 +348,7 @@ export class BootstrapSnapshots {
   }
 
   private async createNew(ownerId: string, localDate: string) {
-    if (this.tree instanceof PostgresTreeStore) return this.createPostgres(ownerId);
+    if (this.tree instanceof SqlTreeStore) return this.createFromSql(ownerId);
     const snapshot = await this.capture(ownerId);
     // Dependencies precede relations; large note bodies are always last.
     const todayIds = new Set(
@@ -376,16 +383,18 @@ export class BootstrapSnapshots {
     };
   }
 
-  private async createPostgres(ownerId: string) {
-    if (!(this.tree instanceof PostgresTreeStore)) throw new Error('PostgreSQL required');
-    const postgres = this.tree.postgres;
-    return postgres.withMutation(async () => {
-      await postgres.v2Query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
-      const cursor = (await postgres.syncStatusV2(ownerId)).cursor;
+  private async createFromSql(ownerId: string) {
+    if (!(this.tree instanceof SqlTreeStore)) throw new Error('SQL store required');
+    const sql = this.tree.sql;
+    return sql.withMutation(async () => {
+      if (sql.dialect === 'postgres')
+        await sql.v2Query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+      const cursor = (await sql.syncStatusV2(ownerId)).cursor;
       // Reuse only an immutable snapshot at exactly this revision, with enough
       // remaining lifetime to resume it. This also works across API instances.
-      const reusable = await postgres.v2Query(
-        "SELECT id, expires_at, page_count FROM sync_bootstrap_snapshots WHERE owner_id = $1 AND cursor = $2 AND expires_at > now() + interval '5 minutes' AND page_count > 0 ORDER BY expires_at DESC LIMIT 1",
+      const fiveMinutes = sql.dialect === 'mysql' ? 'INTERVAL 5 MINUTE' : "interval '5 minutes'";
+      const reusable = await sql.v2Query(
+        `SELECT id, expires_at, page_count FROM sync_bootstrap_snapshots WHERE owner_id = $1 AND cursor = $2 AND expires_at > now() + ${fiveMinutes} AND page_count > 0 ORDER BY expires_at DESC LIMIT 1`,
         [ownerId, cursor],
       );
       const previous = reusable.rows[0];
@@ -399,7 +408,7 @@ export class BootstrapSnapshots {
         };
       const snapshotId = randomUUID();
       const expiresAt = new Date(Date.now() + ttlMs).toISOString();
-      await postgres.v2Query(
+      await sql.v2Query(
         'INSERT INTO sync_bootstrap_snapshots(id,owner_id,cursor,expires_at,page_count) VALUES($1,$2,$3,$4,0)',
         [snapshotId, ownerId, cursor, expiresAt],
       );
@@ -408,7 +417,7 @@ export class BootstrapSnapshots {
       let pageCount = 0;
       const flush = async () => {
         if (!page.length) return;
-        await postgres.v2Query(
+        await sql.v2Query(
           'INSERT INTO sync_bootstrap_pages(snapshot_id,page,payload) VALUES($1,$2,$3::jsonb)',
           [snapshotId, pageCount++, JSON.stringify(page)],
         );
@@ -431,7 +440,7 @@ export class BootstrapSnapshots {
         page.push(change);
         bytes += size;
       };
-      const settings = await postgres.v2Query('SELECT * FROM user_settings WHERE owner_id = $1', [
+      const settings = await sql.v2Query('SELECT * FROM user_settings WHERE owner_id = $1', [
         ownerId,
       ]);
       if (!settings.rows[0]) throw new DomainError('AUTH_REQUIRED', '账户设置不可用');
@@ -444,7 +453,7 @@ export class BootstrapSnapshots {
           const rank = table === 'notes' ? '' : ', rank::text AS rank';
           const after = lastId ? ' AND id > $2::uuid' : '';
           const values = lastId ? [ownerId, lastId] : [ownerId];
-          const rows = await postgres.v2Query(
+          const rows = await sql.v2Query(
             `SELECT *${rank} FROM ${table} WHERE owner_id = $1 AND deleted_at IS NULL${after} ORDER BY id LIMIT ${table === 'notes' ? 50 : maxPageItems}`,
             values,
           );
@@ -454,7 +463,7 @@ export class BootstrapSnapshots {
         }
       }
       await flush();
-      await postgres.v2Query('UPDATE sync_bootstrap_snapshots SET page_count = $2 WHERE id = $1', [
+      await sql.v2Query('UPDATE sync_bootstrap_snapshots SET page_count = $2 WHERE id = $1', [
         snapshotId,
         pageCount,
       ]);
@@ -463,47 +472,47 @@ export class BootstrapSnapshots {
   }
 
   async detail(ownerId: string, id: string) {
-    if (!(this.tree instanceof PostgresTreeStore)) return this.tree.getTaskDetails(ownerId, id);
-    const postgres = this.tree.postgres;
-    return postgres.v2ReadSnapshot(async () => {
-      const tasks = await postgres.v2Query(
+    if (!(this.tree instanceof SqlTreeStore)) return this.tree.getTaskDetails(ownerId, id);
+    const sql = this.tree.sql;
+    return sql.v2ReadSnapshot(async () => {
+      const tasks = await sql.v2Query(
         'SELECT *, rank::text AS rank FROM tasks WHERE owner_id = $1 AND id = $2 AND deleted_at IS NULL',
         [ownerId, id],
       );
       if (!tasks.rows[0]) throw new DomainError('ENTITY_NOT_FOUND', '找不到任务');
       const task = dto(tasks.rows[0]);
-      const notes = await postgres.v2Query(
+      const notes = await sql.v2Query(
         'SELECT * FROM notes WHERE owner_id = $1 AND task_id = $2 AND deleted_at IS NULL',
         [ownerId, id],
       );
-      const steps = await postgres.v2Query(
+      const steps = await sql.v2Query(
         'SELECT *, rank::text AS rank FROM task_steps WHERE owner_id = $1 AND task_id = $2 AND deleted_at IS NULL ORDER BY task_steps.rank, id',
         [ownerId, id],
       );
-      const placements = await postgres.v2Query(
+      const placements = await sql.v2Query(
         'SELECT *, rank::text AS rank FROM placements WHERE owner_id = $1 AND task_id = $2 AND deleted_at IS NULL ORDER BY placements.rank, id',
         [ownerId, id],
       );
-      const memberships = await postgres.v2Query(
+      const memberships = await sql.v2Query(
         'SELECT *, rank::text AS rank FROM workflow_task_memberships WHERE owner_id = $1 AND task_id = $2 AND deleted_at IS NULL ORDER BY workflow_task_memberships.rank, id',
         [ownerId, id],
       );
-      const points = await postgres.v2Query(
+      const points = await sql.v2Query(
         'SELECT *, rank::text AS rank FROM time_points WHERE owner_id = $1 AND id = ANY($2::uuid[]) AND deleted_at IS NULL',
         [ownerId, placements.rows.map((p) => p['time_point_id'])],
       );
       const pointById = new Map(points.rows.map((p) => [p['id'], dto(p)]));
-      const workflows = await postgres.v2Query(
+      const workflows = await sql.v2Query(
         'SELECT id, name FROM workflows WHERE owner_id = $1 AND id = ANY($2::uuid[])',
         [ownerId, memberships.rows.map((m) => m['workflow_id'])],
       );
-      const stages = await postgres.v2Query(
+      const stages = await sql.v2Query(
         'SELECT id, name FROM workflow_stages WHERE owner_id = $1 AND id = ANY($2::uuid[])',
         [ownerId, memberships.rows.map((m) => m['stage_id'])],
       );
       const workflowById = new Map(workflows.rows.map((w) => [w['id'], w]));
       const stageById = new Map(stages.rows.map((s) => [s['id'], s]));
-      const path = await postgres.v2Query(
+      const path = await sql.v2Query(
         'WITH RECURSIVE path AS (SELECT f.*, ARRAY[f.id] AS visited, 0 AS depth FROM folders f WHERE owner_id = $1 AND id = $2 UNION ALL SELECT f.*, path.visited || f.id, depth + 1 FROM folders f JOIN path ON f.id = path.parent_folder_id WHERE f.owner_id = $1 AND NOT f.id = ANY(path.visited)) SELECT * FROM path ORDER BY depth DESC',
         [ownerId, task['parentFolderId']],
       );
@@ -531,8 +540,8 @@ export class BootstrapSnapshots {
     let expiresAt: string;
     let pageCount: number;
     let items: BootstrapChange[] | undefined;
-    if (this.tree instanceof PostgresTreeStore) {
-      const rows = await this.tree.postgres.v2Query(
+    if (this.tree instanceof SqlTreeStore) {
+      const rows = await this.tree.sql.v2Query(
         'SELECT s.cursor::text, s.expires_at, s.page_count, p.payload FROM sync_bootstrap_snapshots s JOIN sync_bootstrap_pages p ON p.snapshot_id = s.id WHERE s.id = $1 AND s.owner_id = $2 AND p.page = $3 AND s.expires_at > now()',
         [id, ownerId, page],
       );

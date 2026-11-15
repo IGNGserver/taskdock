@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
-import { databaseReady } from '@devtodo/database';
+import { databaseFromPool, databaseReady } from '@devtodo/database';
 import {
   uuidSchema,
   uuidv7,
@@ -30,7 +30,8 @@ import {
   transitionTask,
   validateLocalDate,
 } from '@devtodo/domain';
-import type { Pool, PoolClient } from 'pg';
+import type pg from 'pg';
+import type { SqlDatabase, SqlSession } from '@devtodo/database';
 import type {
   DeviceRecord,
   NoteRecord,
@@ -46,6 +47,7 @@ import type {
   TimePointRecord,
   UserRecord,
 } from './store.js';
+import { SYNC_PULL_QUERY } from './sql-statements.js';
 
 type Row = Record<string, unknown>;
 
@@ -68,9 +70,11 @@ export class DatabaseConstraintError extends DomainError {
 }
 
 interface TxContext {
-  client: PoolClient;
+  session: SqlSession;
   pending: Map<string, string>;
 }
+
+const SYNC_CHANNEL = 'devtodo_sync_changes';
 
 export interface V2ChangeWrite {
   entityType: SyncChange['entityType'];
@@ -97,24 +101,24 @@ type PageCursor = {
  * owner-scoped SQL queries and every mutation, receipt, and change-feed row
  * is committed by the same PostgreSQL transaction.
  */
-export class PostgresStore implements Store {
+export class SqlStore implements Store {
   private readonly tx = new AsyncLocalStorage<TxContext>();
+  private readonly database: SqlDatabase;
   private readonly clock: () => Date;
   private readonly changeRetentionDays: number;
   private readonly mutationReceiptRetentionDays: number;
   private readonly transactionTimeoutMs: number;
   private readonly listenEnabled: boolean;
   private readonly listeners = new Set<(ownerId: string, cursor: string) => void>();
-  private listener: PoolClient | null = null;
+  private listener: SqlSession | null = null;
   private listenerReconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private listenerConnecting = false;
   private listenerReconnectAttempt = 0;
-  private poolErrorHandlerAttached = false;
   private closed = false;
   private ready = false;
 
   constructor(
-    private readonly pool: Pool,
+    pointOfTruth: SqlDatabase | pg.Pool,
     options: {
       clock?: () => Date;
       changeRetentionDays?: number;
@@ -123,36 +127,35 @@ export class PostgresStore implements Store {
       listenEnabled?: boolean;
     } = {},
   ) {
+    this.database = isSqlDatabase(pointOfTruth) ? pointOfTruth : databaseFromPool(pointOfTruth);
     this.clock = options.clock ?? (() => new Date());
     this.changeRetentionDays = options.changeRetentionDays ?? 90;
     this.mutationReceiptRetentionDays = options.mutationReceiptRetentionDays ?? 90;
     this.transactionTimeoutMs = options.transactionTimeoutMs ?? 30_000;
-    this.listenEnabled = options.listenEnabled ?? true;
+    this.listenEnabled = options.listenEnabled ?? this.database.settings.listenEnabled;
+  }
+
+  get dialect(): SqlDatabase['dialect'] {
+    return this.database.dialect;
+  }
+
+  /** Narrow bridge used by the v2 tree adapter; resolves to the ambient transaction. */
+  async v2Query(
+    text: string,
+    values: unknown[] = [],
+  ): Promise<{ rows: Row[]; rowCount: number | null }> {
+    return this.query(text, values);
   }
 
   async init(): Promise<void> {
     this.closed = false;
-    this.attachPoolErrorHandler();
-    if (!(await databaseReady(this.pool)))
-      throw new Error('PostgreSQL schema is not ready; run the migrate job first');
-    if (this.listenEnabled) {
-      const listener = await this.pool.connect();
-      try {
-        await listener.query('LISTEN devtodo_sync_changes');
-      } catch (error) {
-        listener.release(error instanceof Error ? error : new Error(String(error)));
-        throw error;
-      }
-      this.listener = listener;
-      this.attachListener(listener);
-    }
+    this.database.onConnectionError(this.handlePoolError);
+    if (!(await databaseReady(this.database)))
+      throw new Error(
+        `${this.database.dialect === 'mysql' ? 'MySQL' : 'PostgreSQL'} schema is not ready; run the migrate job first`,
+      );
+    if (this.listenEnabled && this.database.dialect === 'postgres') await this.openListener();
     this.ready = true;
-  }
-
-  private attachPoolErrorHandler(): void {
-    if (this.poolErrorHandlerAttached) return;
-    this.pool.on('error', this.handlePoolError);
-    this.poolErrorHandlerAttached = true;
   }
 
   private readonly handlePoolError = (error: Error): void => {
@@ -160,40 +163,44 @@ export class PostgresStore implements Store {
     this.ready = false;
     console.warn(
       JSON.stringify({
-        event: 'postgres.pool_error',
+        event: 'database.pool_error',
         message: error.message,
         code: (error as Error & { code?: string }).code,
       }),
     );
   };
 
-  private attachListener(listener: PoolClient): void {
-    listener.on('notification', (message) => {
-      if (message.channel !== 'devtodo_sync_changes') return;
-      try {
-        const payload = JSON.parse(message.payload ?? '') as {
-          ownerId?: unknown;
-          cursor?: unknown;
-        };
-        if (typeof payload.ownerId === 'string' && typeof payload.cursor === 'string')
-          this.notify(payload.ownerId, payload.cursor);
-      } catch {
-        /* Notifications are advisory; the pull cursor remains authoritative. */
-      }
-    });
-    listener.on('error', (error: Error) => this.handleListenerFailure(listener, error));
-    listener.on('end', () => this.handleListenerFailure(listener));
+  private handleNotification(payload: string): void {
+    try {
+      const parsed = JSON.parse(payload) as { ownerId?: unknown; cursor?: unknown };
+      if (typeof parsed.ownerId === 'string' && typeof parsed.cursor === 'string')
+        this.notify(parsed.ownerId, parsed.cursor);
+    } catch {
+      /* Notifications are advisory; the pull cursor remains authoritative. */
+    }
   }
 
-  private handleListenerFailure(listener: PoolClient, error?: Error): void {
-    if (this.listener !== listener || this.closed) return;
+  private async openListener(): Promise<void> {
+    const session = await this.database.session();
+    try {
+      await session.listen?.(SYNC_CHANNEL, {
+        onPayload: (payload) => this.handleNotification(payload),
+        onFailure: (error) => this.handleListenerFailure(session, error),
+      });
+    } catch (error) {
+      session.release(error instanceof Error ? error : new Error(String(error)));
+      throw error;
+    }
+    this.listener = session;
+  }
+
+  private handleListenerFailure(session: SqlSession, error?: Error): void {
+    if (this.listener !== session || this.closed) return;
     this.listener = null;
-    if (error) {
-      try {
-        listener.release(error);
-      } catch {
-        /* The pool may already have removed a failed client. */
-      }
+    try {
+      session.release(error);
+    } catch {
+      /* The pool may already have removed a failed connection. */
     }
     this.scheduleListenerReconnect();
   }
@@ -211,22 +218,25 @@ export class PostgresStore implements Store {
 
   private async reconnectListener(): Promise<void> {
     if (!this.listenEnabled || this.closed || this.listener || this.listenerConnecting) return;
+    if (this.database.dialect !== 'postgres') return;
     this.listenerConnecting = true;
     try {
-      const listener = await this.pool.connect();
+      const session = await this.database.session();
       if (this.closed) {
-        listener.release();
+        session.release();
         return;
       }
       try {
-        await listener.query('LISTEN devtodo_sync_changes');
+        await session.listen?.(SYNC_CHANNEL, {
+          onPayload: (payload) => this.handleNotification(payload),
+          onFailure: (error) => this.handleListenerFailure(session, error),
+        });
       } catch (error) {
-        listener.release(error instanceof Error ? error : new Error(String(error)));
+        session.release(error instanceof Error ? error : new Error(String(error)));
         throw error;
       }
-      this.listener = listener;
+      this.listener = session;
       this.listenerReconnectAttempt = 0;
-      this.attachListener(listener);
     } catch (error) {
       console.warn(
         JSON.stringify({ event: 'sync.listener_reconnect_failed', message: String(error) }),
@@ -243,7 +253,7 @@ export class PostgresStore implements Store {
 
   async checkReady(): Promise<boolean> {
     try {
-      await this.pool.query('SELECT 1');
+      await this.database.query('SELECT 1');
       this.ready = true;
       return true;
     } catch {
@@ -252,29 +262,57 @@ export class PostgresStore implements Store {
     }
   }
 
+  async createNativeChallenge(origin: string, expiresAt: string): Promise<string> {
+    const id = uuidv7();
+    await this.query(
+      'INSERT INTO native_auth_challenges (id, origin, expires_at) VALUES ($1, $2, $3)',
+      [id, origin, expiresAt],
+    );
+    return id;
+  }
+
+  async consumeNativeChallenge(id: string, origin: string): Promise<boolean> {
+    const result = await this.executeReturning(
+      'DELETE FROM native_auth_challenges WHERE id = $1 AND origin = $2 AND expires_at > now() RETURNING id',
+      [id, origin],
+    );
+    return result.rowCount === 1;
+  }
+
   /** Best-effort warm-up after the schema check has succeeded. */
   async warmConnections(count: number): Promise<void> {
-    const warm = Math.max(0, Math.min(Math.trunc(count), this.pool.options.max ?? 0));
-    if (!warm) return;
-    const clients = await Promise.all(Array.from({ length: warm }, () => this.pool.connect()));
-    for (const client of clients) client.release();
+    await this.database.warm(count);
   }
 
   /**
-   * Retention cleanup is deliberately outside the request transaction. Keeping
-   * three DELETE statements on every mutation cost a high-latency deployment
-   * 3 round trips even when there was nothing to delete.
+   * Retention cleanup is deliberately outside the request transaction, so a
+   * mutation never pays for it. PostgreSQL deletes all three classes in one
+   * statement; MySQL refuses to select from the table it deletes from, so it
+   * uses three bounded `DELETE ... ORDER BY ... LIMIT` statements instead.
    */
   async runMaintenance(): Promise<{
     syncChanges: number;
     mutationReceipts: number;
     nativeChallenges: number;
   }> {
-    const result = await this.pool.query<{
-      changes: number;
-      receipts: number;
-      challenges: number;
-    }>(
+    if (this.database.dialect === 'mysql') {
+      const changes = await this.query(
+        'DELETE FROM sync_changes WHERE committed_at < NOW(6) - INTERVAL $1 DAY ORDER BY seq LIMIT 1000',
+        [this.changeRetentionDays],
+      );
+      const receipts = await this.query(
+        'DELETE FROM client_mutations WHERE expires_at <= NOW(6) ORDER BY expires_at LIMIT 1000',
+      );
+      const challenges = await this.query(
+        'DELETE FROM native_auth_challenges WHERE expires_at <= NOW(6) ORDER BY expires_at LIMIT 1000',
+      );
+      return {
+        syncChanges: changes.rowCount ?? 0,
+        mutationReceipts: receipts.rowCount ?? 0,
+        nativeChallenges: challenges.rowCount ?? 0,
+      };
+    }
+    const result = await this.query(
       `WITH deleted_changes AS (
          DELETE FROM sync_changes WHERE seq IN (
            SELECT seq FROM sync_changes
@@ -299,9 +337,9 @@ export class PostgresStore implements Store {
     );
     const row = result.rows[0];
     return {
-      syncChanges: row?.changes ?? 0,
-      mutationReceipts: row?.receipts ?? 0,
-      nativeChallenges: row?.challenges ?? 0,
+      syncChanges: Number(row?.changes ?? 0),
+      mutationReceipts: Number(row?.receipts ?? 0),
+      nativeChallenges: Number(row?.challenges ?? 0),
     };
   }
 
@@ -311,120 +349,137 @@ export class PostgresStore implements Store {
       clearTimeout(this.listenerReconnectTimer);
       this.listenerReconnectTimer = undefined;
     }
-    if (this.listener) {
+    const listener = this.listener;
+    this.listener = null;
+    if (listener) {
       try {
-        await this.listener.query('UNLISTEN devtodo_sync_changes');
+        await listener.unlisten?.(SYNC_CHANNEL);
       } catch {
         /* Preserve shutdown even when the listener connection is already closed. */
       }
-      this.listener.release();
-      this.listener = null;
+      listener.release();
     }
     this.listenerReconnectAttempt = 0;
     this.ready = false;
-    if (this.poolErrorHandlerAttached) {
-      this.pool.off('error', this.handlePoolError);
-      this.poolErrorHandlerAttached = false;
-    }
-    await this.pool.end();
-  }
-
-  async createNativeChallenge(origin: string, expiresAt: string): Promise<string> {
-    const id = uuidv7();
-    await this.query(
-      'INSERT INTO native_auth_challenges (id, origin, expires_at) VALUES ($1, $2, $3)',
-      [id, origin, expiresAt],
-    );
-    return id;
-  }
-
-  async consumeNativeChallenge(id: string, origin: string): Promise<boolean> {
-    const result = await this.query(
-      'DELETE FROM native_auth_challenges WHERE id = $1 AND origin = $2 AND expires_at > now() RETURNING id',
-      [id, origin],
-    );
-    return result.rowCount === 1;
+    await this.database.end();
   }
 
   async withMutation<T>(fn: () => T | Promise<T>): Promise<T> {
     const nested = this.tx.getStore();
     if (nested) return await fn();
-    const client = await this.pool.connect();
-    const context: TxContext = { client, pending: new Map() };
+    const session = await this.database.session();
+    const context: TxContext = { session, pending: new Map() };
     try {
-      await client.query('BEGIN');
-      await client.query(`SET LOCAL statement_timeout = ${this.transactionTimeoutMs}`);
-      await client.query(
-        `SET LOCAL idle_in_transaction_session_timeout = ${this.transactionTimeoutMs}`,
-      );
+      await session.begin();
+      if (session.dialect === 'postgres') {
+        await session.query(`SET LOCAL statement_timeout = ${this.transactionTimeoutMs}`);
+        await session.query(
+          `SET LOCAL idle_in_transaction_session_timeout = ${this.transactionTimeoutMs}`,
+        );
+      }
       const value = await this.tx.run(context, async () => {
         const result = await fn();
         for (const [ownerId, cursor] of context.pending)
-          await client.query('SELECT pg_notify($1, $2)', [
-            'devtodo_sync_changes',
-            JSON.stringify({ ownerId, cursor }),
-          ]);
-        await client.query('COMMIT');
+          await this.publishCursor(session, ownerId, cursor);
+        await session.commit();
         return result;
       });
       return value;
     } catch (error) {
       try {
-        await client.query('ROLLBACK');
+        await session.rollback();
       } catch {
         /* Preserve the original error. */
       }
       if (error instanceof DomainError) throw error;
       throwSql(error, '数据库事务被拒绝', 'MUTATION_REJECTED');
     } finally {
-      client.release();
+      session.release();
     }
   }
 
   private async readSnapshot<T>(fn: () => T | Promise<T>): Promise<T> {
     const nested = this.tx.getStore();
     if (nested) return await fn();
-    const client = await this.pool.connect();
-    const context: TxContext = { client, pending: new Map() };
+    const session = await this.database.session();
+    const context: TxContext = { session, pending: new Map() };
     try {
-      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await session.begin({ readOnly: true });
       const value = await this.tx.run(context, fn);
-      await client.query('COMMIT');
+      await session.commit();
       return value;
     } catch (error) {
       try {
-        await client.query('ROLLBACK');
+        await session.rollback();
       } catch {
         /* Preserve the original error. */
       }
       throw error;
     } finally {
-      client.release();
+      session.release();
     }
+  }
+
+  private async publishCursor(session: SqlSession, ownerId: string, cursor: string): Promise<void> {
+    // MySQL has no NOTIFY; the in-process listener already fired through the
+    // pending map, and multi-instance fan-out is Redis' job when configured.
+    if (session.dialect !== 'postgres') return;
+    await session.query('SELECT pg_notify($1, $2)', [
+      SYNC_CHANNEL,
+      JSON.stringify({ ownerId, cursor }),
+    ]);
   }
 
   private async query(
     text: string,
     values: unknown[] = [],
-  ): Promise<{ rows: Row[]; rowCount: number | null }> {
-    const client = this.tx.getStore()?.client ?? this.pool;
-    return (await client.query(text, values)) as { rows: Row[]; rowCount: number | null };
+  ): Promise<{ rows: Row[]; rowCount: number | null; insertId?: string }> {
+    const session = this.tx.getStore()?.session;
+    return session ? session.query(text, values) : this.database.query(text, values);
   }
 
-  /** Narrow bridge used by the v2 tree adapter; it still resolves to the
-   * current AsyncLocalStorage transaction and therefore cannot escape the
-   * Store's atomic mutation boundary. */
-  async v2Query(
-    text: string,
+  /**
+   * Run a statement that ends with RETURNING.
+   *
+   * PostgreSQL answers in one round trip. MySQL has no RETURNING, so the
+   * statement runs first and the row is read back by primary key. Inside a
+   * transaction the read-back observes the write; outside one it is the only
+   * way to return server-defaulted columns.
+   */
+  private async executeReturning(
+    sql: string,
     values: unknown[] = [],
+    key?: ReturningKey,
   ): Promise<{ rows: Row[]; rowCount: number | null }> {
-    return this.query(text, values);
+    if (this.database.dialect === 'postgres') return this.query(sql, values);
+    const match = /RETURNING\s+([\s\S]+)$/i.exec(sql);
+    if (!match) throw new Error('executeReturning requires a RETURNING clause');
+    const columns = match[1]!.trim();
+    const statement = sql.slice(0, match.index).trimEnd();
+    const written = await this.query(statement, values);
+    const derived = key ?? deriveReturningKey(statement, values);
+    if (!derived)
+      throw new Error(`executeReturning cannot derive the row key: ${statement.slice(0, 70)}`);
+    if (derived.deleted) {
+      // A DELETEd row can never be read back; rowCount carries the outcome.
+      return {
+        rows: (written.rowCount ?? 0) > 0 ? [{ [derived.column]: derived.value }] : [],
+        rowCount: written.rowCount,
+      };
+    }
+    const selected = await this.query(
+      `SELECT ${columns} FROM ${derived.table} WHERE ${derived.column} = $1`,
+      [derived.value],
+    );
+    return { rows: selected.rows, rowCount: selected.rowCount };
   }
 
   async v2LockOwner(ownerId: string): Promise<void> {
-    await this.query("SELECT pg_advisory_xact_lock(hashtextextended('devtodo:owner:' || $1, 0))", [
-      ownerId,
-    ]);
+    if (this.database.dialect === 'postgres')
+      await this.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('devtodo:owner:' || $1, 0))",
+        [ownerId],
+      );
     await this.lockOwner(ownerId);
   }
 
@@ -460,28 +515,53 @@ export class PostgresStore implements Store {
         first.operation,
         first.snapshot,
       );
-    const payload = changes.map((change) => ({
-      entity_type: change.entityType,
-      entity_id: change.entityId,
-      entity_version: change.entityVersion,
-      operation: change.operation,
-      snapshot: change.snapshot,
-      committed_at: change.committedAt,
-    }));
-    const result = await this.query(
-      `INSERT INTO sync_changes (owner_id, entity_type, entity_id, entity_version, operation, snapshot, committed_at, protocol_version)
-       SELECT $1, x.entity_type, x.entity_id, x.entity_version, x.operation, x.snapshot, x.committed_at, 2
-       FROM jsonb_to_recordset($2::jsonb) AS x(
-         entity_type text, entity_id uuid, entity_version integer, operation text,
-         snapshot jsonb, committed_at timestamptz
-       )
-       RETURNING seq`,
-      [ownerId, JSON.stringify(payload)],
-    );
     let cursor = '0';
-    for (const row of result.rows)
-      if (BigInt(String(row['seq'])) > BigInt(cursor)) cursor = String(row['seq']);
-    if (cursor === '0') return undefined;
+    if (this.database.dialect === 'mysql') {
+      const tuples: string[] = [];
+      const values: unknown[] = [];
+      for (const change of changes) {
+        tuples.push('(?, ?, ?, ?, ?, CAST(? AS JSON), ?, 2)');
+        values.push(
+          ownerId,
+          change.entityType,
+          change.entityId,
+          change.entityVersion,
+          change.operation,
+          JSON.stringify(change.snapshot ?? null),
+          change.committedAt,
+        );
+      }
+      const inserted = await this.query(
+        `INSERT INTO sync_changes (owner_id, entity_type, entity_id, entity_version, operation, snapshot, committed_at, protocol_version) VALUES ${tuples.join(',')}`,
+        values,
+      );
+      const start = BigInt(inserted.insertId ?? '0');
+      const count = BigInt(inserted.rowCount ?? changes.length);
+      if (start === 0n) return undefined;
+      cursor = (start + count - 1n).toString();
+    } else {
+      const payload = changes.map((change) => ({
+        entity_type: change.entityType,
+        entity_id: change.entityId,
+        entity_version: change.entityVersion,
+        operation: change.operation,
+        snapshot: change.snapshot,
+        committed_at: change.committedAt,
+      }));
+      const result = await this.query(
+        `INSERT INTO sync_changes (owner_id, entity_type, entity_id, entity_version, operation, snapshot, committed_at, protocol_version)
+         SELECT $1, x.entity_type, x.entity_id, x.entity_version, x.operation, x.snapshot, x.committed_at, 2
+         FROM jsonb_to_recordset($2::jsonb) AS x(
+           entity_type text, entity_id uuid, entity_version integer, operation text,
+           snapshot jsonb, committed_at timestamptz
+         )
+         RETURNING seq`,
+        [ownerId, JSON.stringify(payload)],
+      );
+      for (const row of result.rows)
+        if (BigInt(String(row['seq'])) > BigInt(cursor)) cursor = String(row['seq']);
+      if (cursor === '0') return undefined;
+    }
     const context = this.tx.getStore();
     if (context) context.pending.set(ownerId, cursor);
     else this.notify(ownerId, cursor);
@@ -502,6 +582,66 @@ export class PostgresStore implements Store {
 
   private now(): string {
     return this.clock().toISOString();
+  }
+
+  /**
+   * Conflict handling for "insert only when the active row does not exist".
+   * MySQL has no partial unique index, so the schema uses a generated column
+   * that is NULL once deleted_at is set; `ON DUPLICATE KEY UPDATE id = id`
+   * makes the duplicate a no-op while still reporting 0 affected rows.
+   */
+  private doNothingOnConflict(columns: string, predicate = 'deleted_at IS NULL'): string {
+    return this.database.dialect === 'mysql'
+      ? 'ON DUPLICATE KEY UPDATE id = id '
+      : `ON CONFLICT (${columns}) WHERE ${predicate} DO NOTHING `;
+  }
+
+  private async appendChange(
+    ownerId: string,
+    entityType: SyncChange['entityType'],
+    entityId: string,
+    entityVersion: number,
+    operation: SyncChange['operation'],
+    snapshot: unknown,
+    protocolVersion: 1 | 2 = 1,
+  ): Promise<string> {
+    let cursor: string;
+    if (this.database.dialect === 'mysql') {
+      const inserted = await this.query(
+        'INSERT INTO sync_changes (owner_id, entity_type, entity_id, entity_version, operation, snapshot, committed_at, protocol_version) VALUES ($1, $2, $3, $4, $5, CAST($6 AS JSON), $7, $8)',
+        [
+          ownerId,
+          entityType,
+          entityId,
+          entityVersion,
+          operation,
+          JSON.stringify(snapshot ?? null),
+          this.now(),
+          protocolVersion,
+        ],
+      );
+      cursor = inserted.insertId ?? '0';
+    } else {
+      const result = await this.query(
+        'INSERT INTO sync_changes (owner_id, entity_type, entity_id, entity_version, operation, snapshot, committed_at, protocol_version) ' +
+          'VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8) RETURNING seq',
+        [
+          ownerId,
+          entityType,
+          entityId,
+          entityVersion,
+          operation,
+          JSON.stringify(snapshot),
+          this.now(),
+          protocolVersion,
+        ],
+      );
+      cursor = String(result.rows[0]!.seq);
+    }
+    const context = this.tx.getStore();
+    if (context) context.pending.set(ownerId, cursor);
+    else this.notify(ownerId, cursor);
+    return cursor;
   }
 
   private async owner(ownerId: string, lock = false): Promise<UserRecord> {
@@ -552,7 +692,7 @@ export class PostgresStore implements Store {
     const id = uuidv7();
     const now = this.now();
     try {
-      const result = await this.query(
+      const result = await this.executeReturning(
         'INSERT INTO users (id, username, password_hash, next_misc_task_number, created_at, updated_at) ' +
           'VALUES ($1, $2, $3, 1, $4, $4) ' +
           'RETURNING id, username, password_hash, next_misc_task_number, created_at, updated_at, disabled_at',
@@ -605,7 +745,7 @@ export class PostgresStore implements Store {
           : requestedCaptureTarget;
     if (!['ROOT', 'RECENT_FOLDER'].includes(defaultCaptureTarget))
       throw new DomainError('VALIDATION_FAILED', '默认捕获位置无效');
-    const result = await this.query(
+    const result = await this.executeReturning(
       'UPDATE user_settings SET timezone = $2, week_starts_on = $3, default_capture_target = $4, ' +
         'version = version + 1, updated_at = $5 ' +
         'WHERE owner_id = $1 AND version = $6 ' +
@@ -634,7 +774,7 @@ export class PostgresStore implements Store {
       throw new DomainError('MUTATION_REJECTED', '设备 ID 已属于其他 Owner');
     const now = this.now();
     if (existing) {
-      const result = await this.query(
+      const result = await this.executeReturning(
         'UPDATE devices SET name = $2, platform = $3, last_seen_at = $4, revoked_at = NULL ' +
           'WHERE id = $1 RETURNING id, owner_id, name, platform, last_seen_at, created_at, revoked_at',
         [id, name, platform, now],
@@ -642,7 +782,7 @@ export class PostgresStore implements Store {
       return deviceDto(deviceRecord(requireUpdatedRow(result, '设备版本已变化')));
     }
     try {
-      const result = await this.query(
+      const result = await this.executeReturning(
         'INSERT INTO devices (id, owner_id, name, platform, last_seen_at, created_at) ' +
           'VALUES ($1, $2, $3, $4, $5, $5) ' +
           'RETURNING id, owner_id, name, platform, last_seen_at, created_at, revoked_at',
@@ -694,7 +834,7 @@ export class PostgresStore implements Store {
   ): Promise<RefreshSessionRecord> {
     const device = await this.getDevice(ownerId, deviceId);
     if (device.revokedAt) throw new DomainError('AUTH_SESSION_REVOKED', '设备会话已撤销');
-    const result = await this.query(
+    const result = await this.executeReturning(
       'INSERT INTO refresh_sessions ' +
         '(id, owner_id, device_id, token_hash, expires_at, created_at) ' +
         'VALUES ($1, $2, $3, $4, $5, $6) ' +
@@ -769,7 +909,7 @@ export class PostgresStore implements Store {
       [ownerId, normalizedPrefix],
     );
     if (existing.rowCount) throw new DomainError('VALIDATION_FAILED', '项目代号已存在');
-    const result = await this.query(
+    const result = await this.executeReturning(
       'INSERT INTO projects ' +
         '(id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at) ' +
         'VALUES ($1, $2, $3, $4, 1, (SELECT COALESCE(MAX(rank), 0) + 1024 FROM projects WHERE owner_id = $2 AND deleted_at IS NULL), 1, $5, $5) ' +
@@ -796,8 +936,8 @@ export class PostgresStore implements Store {
     await this.owner(ownerId);
     const result = await this.query(
       'SELECT p.id AS project_id, ' +
-        "COUNT(t.id) FILTER (WHERE t.status <> 'DONE')::int AS open_count, " +
-        "COUNT(t.id) FILTER (WHERE t.status = 'DONE')::int AS done_count " +
+        "SUM(CASE WHEN t.status <> 'DONE' THEN 1 ELSE 0 END)::int AS open_count, " +
+        "SUM(CASE WHEN t.status = 'DONE' THEN 1 ELSE 0 END)::int AS done_count " +
         'FROM projects p ' +
         'LEFT JOIN tasks t ON t.owner_id = p.owner_id AND t.project_id = p.id ' +
         'AND t.deleted_at IS NULL ' +
@@ -870,7 +1010,7 @@ export class PostgresStore implements Store {
       );
       if (duplicate.rowCount) throw new DomainError('VALIDATION_FAILED', '项目代号无效或已存在');
     }
-    const result = await this.query(
+    const result = await this.executeReturning(
       'UPDATE projects SET name = $3, task_prefix = $4, version = version + 1, updated_at = $5 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $6 ' +
         'RETURNING id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at, deleted_at',
@@ -926,7 +1066,7 @@ export class PostgresStore implements Store {
     const referenceId = allocateReference(project?.taskPrefix ?? 'MISC', number);
     const taskId = newEntityId(input.id);
     const noteId = uuidv7();
-    const result = await this.query(
+    const result = await this.executeReturning(
       'INSERT INTO tasks ' +
         '(id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, created_at, updated_at) ' +
         "VALUES ($1, $2, $3, $4, $5, $6, 'TODO', $7, " +
@@ -1117,7 +1257,7 @@ export class PostgresStore implements Store {
       status = transition.status;
       completedAt = transition.completedAt?.toISOString() ?? null;
     }
-    const result = await this.query(
+    const result = await this.executeReturning(
       'UPDATE tasks SET project_id = $3, category = $4, title = $5, status = $6, priority = $7, ' +
         'rank = $8, completed_at = $9, version = version + 1, updated_at = $10 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $11 ' +
@@ -1192,7 +1332,7 @@ export class PostgresStore implements Store {
     const taskId = newEntityId(requestedIds.taskId);
     const noteId = newEntityId(requestedIds.noteId);
     const sourceNote = await this.findNoteRecord(ownerId, id);
-    const result = await this.query(
+    const result = await this.executeReturning(
       'INSERT INTO tasks ' +
         '(id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, created_at, updated_at) ' +
         "VALUES ($1, $2, $3, $4, $5, $6, 'TODO', $7, " +
@@ -1210,7 +1350,7 @@ export class PostgresStore implements Store {
         this.now(),
       ],
     );
-    const noteResult = await this.query(
+    const noteResult = await this.executeReturning(
       'INSERT INTO notes (id, owner_id, task_id, content_markdown, version, created_at, updated_at) ' +
         'VALUES ($1, $2, $3, $4, 1, $5, $5) ' +
         'RETURNING id, owner_id, task_id, content_markdown, version, created_at, updated_at, deleted_at',
@@ -1253,7 +1393,7 @@ export class PostgresStore implements Store {
     assertVersion(note.version, baseVersion, noteDto(note));
     if (contentMarkdown.length > 1024 * 1024)
       throw new DomainError('VALIDATION_FAILED', '备注超过 1 MiB');
-    const result = await this.query(
+    const result = await this.executeReturning(
       'UPDATE notes SET content_markdown = $3, version = version + 1, updated_at = $4 ' +
         'WHERE owner_id = $1 AND task_id = $2 AND version = $5 AND deleted_at IS NULL ' +
         'RETURNING id, owner_id, task_id, content_markdown, version, created_at, updated_at, deleted_at',
@@ -1293,13 +1433,13 @@ export class PostgresStore implements Store {
     const title = input.title?.trim() ?? null;
     if (input.type === 'EVENT' && (!title || title.length > 200))
       throw new DomainError('VALIDATION_FAILED', '时间点名称无效');
-    const result = await this.query(
+    const result = await this.executeReturning(
       'INSERT INTO time_points (id, owner_id, type, local_date, title, rank, version, created_at, updated_at) ' +
         'VALUES ($1, $2, $3, $4, $5, ' +
         "(SELECT COALESCE(MAX(rank), 0) + 1024 FROM time_points WHERE owner_id = $2 AND type = 'EVENT' AND deleted_at IS NULL), " +
         '1, $6, $6) ' +
         (input.type === 'DATE'
-          ? "ON CONFLICT (owner_id, local_date) WHERE type = 'DATE' AND deleted_at IS NULL DO NOTHING "
+          ? this.doNothingOnConflict('owner_id, local_date', "type = 'DATE' AND deleted_at IS NULL")
           : '') +
         'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at',
       [newEntityId(input.id), ownerId, input.type, input.localDate ?? null, title, this.now()],
@@ -1356,8 +1496,8 @@ export class PostgresStore implements Store {
     const result = await this.query(
       'SELECT tp.id AS time_point_id, tp.local_date, ' +
         'COUNT(t.id)::int AS total_count, ' +
-        "COUNT(t.id) FILTER (WHERE t.status <> 'DONE')::int AS open_count, " +
-        "COUNT(t.id) FILTER (WHERE t.status = 'DONE')::int AS done_count " +
+        "SUM(CASE WHEN t.status <> 'DONE' THEN 1 ELSE 0 END)::int AS open_count, " +
+        "SUM(CASE WHEN t.status = 'DONE' THEN 1 ELSE 0 END)::int AS done_count " +
         'FROM time_points tp ' +
         'LEFT JOIN placements p ON p.owner_id = tp.owner_id AND p.time_point_id = tp.id ' +
         'AND p.deleted_at IS NULL ' +
@@ -1457,7 +1597,7 @@ export class PostgresStore implements Store {
     const point = await this.timePointRecord(ownerId, id, true);
     if (point.type !== 'EVENT') throw new DomainError('VALIDATION_FAILED', '日期没有到达状态');
     assertVersion(point.version, baseVersion, timePointDto(point));
-    const result = await this.query(
+    const result = await this.executeReturning(
       'UPDATE time_points SET reached_at = COALESCE(reached_at, $3), version = version + 1, updated_at = $4 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $5 ' +
         'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at',
@@ -1476,7 +1616,7 @@ export class PostgresStore implements Store {
     if (point.type !== 'EVENT') throw new DomainError('VALIDATION_FAILED', '日期不能删除');
     assertVersion(point.version, baseVersion, timePointDto(point));
     const now = this.now();
-    const placements = await this.query(
+    const placements = await this.executeReturning(
       'UPDATE placements SET deleted_at = $3, version = version + 1, updated_at = $3 ' +
         'WHERE owner_id = $1 AND time_point_id = $2 AND deleted_at IS NULL ' +
         'RETURNING id, version',
@@ -1492,7 +1632,7 @@ export class PostgresStore implements Store {
         null,
       );
     }
-    const result = await this.query(
+    const result = await this.executeReturning(
       'UPDATE time_points SET deleted_at = $3, version = version + 1, updated_at = $3 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $4 ' +
         'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at',
@@ -1553,12 +1693,12 @@ export class PostgresStore implements Store {
     );
     if (existing.rows[0])
       return { placement: placementDto(placementRecord(existing.rows[0])), existed: true };
-    const result = await this.query(
+    const result = await this.executeReturning(
       'INSERT INTO placements (id, owner_id, task_id, time_point_id, rank, version, created_at, updated_at) ' +
         'VALUES ($1, $2, $3, $4, ' +
         '(SELECT COALESCE(MAX(rank), 0) + 1024 FROM placements WHERE owner_id = $2 AND time_point_id = $4 AND deleted_at IS NULL), ' +
         '1, $5, $5) ' +
-        'ON CONFLICT (task_id, time_point_id) WHERE deleted_at IS NULL DO NOTHING ' +
+        this.doNothingOnConflict('task_id, time_point_id') +
         'RETURNING id, owner_id, task_id, time_point_id, rank, version, created_at, updated_at, deleted_at',
       [newEntityId(id), ownerId, taskId, timePointId, this.now()],
     );
@@ -1639,7 +1779,7 @@ export class PostgresStore implements Store {
     await this.lockOwner(ownerId);
     const placement = await this.placementRecord(ownerId, id);
     assertVersion(placement.version, baseVersion, placementDto(placement));
-    const result = await this.query(
+    const result = await this.executeReturning(
       'UPDATE placements SET deleted_at = $3, version = version + 1, updated_at = $4 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $5 AND deleted_at IS NULL ' +
         'RETURNING id, owner_id, task_id, time_point_id, rank, version, created_at, updated_at, deleted_at',
@@ -1683,7 +1823,7 @@ export class PostgresStore implements Store {
         )
       ).placement;
     }
-    const result = await this.query(
+    const result = await this.executeReturning(
       'UPDATE placements SET deleted_at = $3, version = version + 1, updated_at = $4 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $5 AND deleted_at IS NULL ' +
         'RETURNING id, owner_id, task_id, time_point_id, rank, version, created_at, updated_at, deleted_at',
@@ -1807,7 +1947,7 @@ export class PostgresStore implements Store {
         skippedIds.push(placementId);
         continue;
       }
-      const deleteResult = await this.query(
+      const deleteResult = await this.executeReturning(
         'UPDATE placements SET deleted_at = $3, version = version + 1, updated_at = $4 ' +
           'WHERE owner_id = $1 AND id = $2 AND version = 1 AND deleted_at IS NULL ' +
           'RETURNING id, owner_id, task_id, time_point_id, rank, version, created_at, updated_at, deleted_at',
@@ -1877,7 +2017,8 @@ export class PostgresStore implements Store {
       );
     const key = ownerId + ':' + clientId + ':' + mutationId;
     const requestHash = hash(input);
-    await this.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [key]);
+    if (this.database.dialect === 'postgres')
+      await this.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [key]);
     // Expired receipts are removed by runMaintenance(). Treating them as
     // absent here avoids a DELETE round trip on every mutation.
     const existing = await this.query(
@@ -1896,9 +2037,12 @@ export class PostgresStore implements Store {
         'VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7) ' +
         // An expired receipt is logically absent; overwrite it so the primary
         // key does not reject a legitimate retry after the retention window.
-        'ON CONFLICT (owner_id, client_id, mutation_id) DO UPDATE SET ' +
-        'request_hash = EXCLUDED.request_hash, result = EXCLUDED.result, ' +
-        'first_processed_at = EXCLUDED.first_processed_at, expires_at = EXCLUDED.expires_at',
+        (this.database.dialect === 'mysql'
+          ? 'AS new ON DUPLICATE KEY UPDATE request_hash = new.request_hash, result = new.result, ' +
+            'first_processed_at = new.first_processed_at, expires_at = new.expires_at'
+          : 'ON CONFLICT (owner_id, client_id, mutation_id) DO UPDATE SET ' +
+            'request_hash = EXCLUDED.request_hash, result = EXCLUDED.result, ' +
+            'first_processed_at = EXCLUDED.first_processed_at, expires_at = EXCLUDED.expires_at'),
       [
         ownerId,
         clientId,
@@ -2129,42 +2273,17 @@ export class PostgresStore implements Store {
     // One statement gives a consistent owner check, retention boundary, page
     // and has-more flag. The previous implementation used 6 sequential queries
     // inside a repeatable-read transaction on every client pull.
-    const result = await this.query(
-      `WITH owner AS (
-         SELECT 1 FROM users WHERE id = $1 AND disabled_at IS NULL
-       ), oldest AS (
-         SELECT seq FROM sync_changes WHERE protocol_version = 2 ORDER BY seq LIMIT 1
-       ), page AS (
-         SELECT seq, owner_id, entity_type, entity_id, entity_version, operation, snapshot, committed_at
-         FROM sync_changes
-         WHERE owner_id = $1 AND protocol_version = 2 AND seq > $2
-         ORDER BY seq LIMIT $3
-       )
-       SELECT EXISTS(SELECT 1 FROM owner) AS owner_ok,
-              (SELECT seq FROM oldest) AS oldest,
-              COALESCE((
-                SELECT jsonb_agg(jsonb_build_object(
-                  'seq', p.seq::text,
-                  'owner_id', p.owner_id,
-                  'entity_type', p.entity_type,
-                  'entity_id', p.entity_id,
-                  'entity_version', p.entity_version,
-                  'operation', p.operation,
-                  'snapshot', p.snapshot,
-                  'committed_at', p.committed_at
-                ) ORDER BY p.seq)
-                FROM page p
-              ), '[]'::jsonb) AS changes,
-              EXISTS(
-                SELECT 1 FROM sync_changes
-                WHERE owner_id = $1 AND protocol_version = 2
-                  AND seq > COALESCE((SELECT MAX(seq) FROM page), $2)
-                LIMIT 1
-              ) AS has_more`,
-      [ownerId, cursor, Math.min(limit, 500)],
-    );
+    const pageLimit = Math.min(limit, 500);
+    const mysql = this.database.dialect === 'mysql';
+    // MySQL's JSON_ARRAYAGG cannot carry the page's ORDER BY, so it returns one
+    // extra row and this method trims the page itself.
+    const result = await this.query(SYNC_PULL_QUERY[this.database.dialect], [
+      ownerId,
+      cursor,
+      mysql ? pageLimit + 1 : pageLimit,
+    ]);
     const row = result.rows[0];
-    if (!row || row['owner_ok'] !== true) throw new DomainError('AUTH_REQUIRED', '账户不可用');
+    if (!row || !truthy(row['owner_ok'])) throw new DomainError('AUTH_REQUIRED', '账户不可用');
     const oldest = row['oldest'];
     // A v2 client starts at cursor 0 even when older v1 rows occupy the
     // global sequence range before the first retained v2 change. Treat that
@@ -2173,14 +2292,23 @@ export class PostgresStore implements Store {
       if (requested < BigInt(String(oldest)) - 1n)
         throw new DomainError('SYNC_CURSOR_EXPIRED', '同步游标已超过保留窗口');
     }
-    const changes = Array.isArray(row['changes'])
+    const parsed = Array.isArray(row['changes'])
       ? (row['changes'] as Row[]).map((change) => syncChange(change))
       : [];
+    let changes = parsed;
+    let hasMore = truthy(row['has_more']);
+    if (mysql) {
+      changes = parsed
+        .slice()
+        .sort((left, right) => compareCursor(left.seq, right.seq))
+        .slice(0, pageLimit);
+      hasMore = parsed.length > pageLimit;
+    }
     const nextCursor = changes.at(-1)?.seq ?? requested;
     return {
       changes,
       nextCursor: nextCursor.toString(),
-      hasMore: row['has_more'] === true,
+      hasMore,
     };
   }
 
@@ -2196,7 +2324,7 @@ export class PostgresStore implements Store {
       [ownerId],
     );
     const row = result.rows[0];
-    if (!row || row['owner_ok'] !== true) throw new DomainError('AUTH_REQUIRED', '账户不可用');
+    if (!row || !truthy(row['owner_ok'])) throw new DomainError('AUTH_REQUIRED', '账户不可用');
     const cursor = String(row['cursor'] ?? '0');
     const oldestCursor =
       row['oldest'] !== null && row['oldest'] !== undefined
@@ -2223,36 +2351,6 @@ export class PostgresStore implements Store {
         /* A WebSocket observer cannot roll back a committed transaction. */
       }
     }
-  }
-
-  private async appendChange(
-    ownerId: string,
-    entityType: SyncChange['entityType'],
-    entityId: string,
-    entityVersion: number,
-    operation: SyncChange['operation'],
-    snapshot: unknown,
-    protocolVersion: 1 | 2 = 1,
-  ): Promise<string> {
-    const result = await this.query(
-      'INSERT INTO sync_changes (owner_id, entity_type, entity_id, entity_version, operation, snapshot, committed_at, protocol_version) ' +
-        'VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8) RETURNING seq',
-      [
-        ownerId,
-        entityType,
-        entityId,
-        entityVersion,
-        operation,
-        JSON.stringify(snapshot),
-        this.now(),
-        protocolVersion,
-      ],
-    );
-    const cursor = String(result.rows[0]!.seq);
-    const context = this.tx.getStore();
-    if (context) context.pending.set(ownerId, cursor);
-    else this.notify(ownerId, cursor);
-    return cursor;
   }
 
   private async settingsRecord(ownerId: string, lock = false): Promise<SettingsRecord> {
@@ -2345,7 +2443,7 @@ export class PostgresStore implements Store {
     project: ProjectRecord,
     rank: string,
   ): Promise<ProjectRecord> {
-    const result = await this.query(
+    const result = await this.executeReturning(
       'UPDATE projects SET rank = $3, version = version + 1, updated_at = $4 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $5 ' +
         'RETURNING id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at, deleted_at',
@@ -2361,7 +2459,7 @@ export class PostgresStore implements Store {
     task: TaskRecord,
     rank: string,
   ): Promise<TaskRecord> {
-    const result = await this.query(
+    const result = await this.executeReturning(
       'UPDATE tasks SET rank = $3, version = version + 1, updated_at = $4 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $5 ' +
         'RETURNING id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, created_at, updated_at, deleted_at',
@@ -2377,7 +2475,7 @@ export class PostgresStore implements Store {
     point: TimePointRecord,
     title: string | null,
   ): Promise<TimePointDto> {
-    const result = await this.query(
+    const result = await this.executeReturning(
       'UPDATE time_points SET title = $3, version = version + 1, updated_at = $4 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $5 ' +
         'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at',
@@ -2394,7 +2492,7 @@ export class PostgresStore implements Store {
     point: TimePointRecord,
     rank: string,
   ): Promise<TimePointRecord> {
-    const result = await this.query(
+    const result = await this.executeReturning(
       'UPDATE time_points SET rank = $3, version = version + 1, updated_at = $4 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $5 ' +
         'RETURNING id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at',
@@ -2417,7 +2515,7 @@ export class PostgresStore implements Store {
     placement: PlacementRecord,
     rank: string,
   ): Promise<PlacementRecord> {
-    const result = await this.query(
+    const result = await this.executeReturning(
       'UPDATE placements SET rank = $3, version = version + 1, updated_at = $4 ' +
         'WHERE owner_id = $1 AND id = $2 AND version = $5 ' +
         'RETURNING id, owner_id, task_id, time_point_id, rank, version, created_at, updated_at, deleted_at',
@@ -2483,6 +2581,52 @@ export class PostgresStore implements Store {
 
 function normalizeUsername(value: string): string {
   return value.trim().toLocaleLowerCase('en-US');
+}
+
+/** MySQL reports booleans and EXISTS as 1/0; PostgreSQL reports true/false. */
+function truthy(value: unknown): boolean {
+  return value === true || value === 1 || value === '1';
+}
+
+function compareCursor(left: bigint, right: bigint): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function isSqlDatabase(value: unknown): value is SqlDatabase {
+  const candidate = value as Partial<SqlDatabase> | undefined;
+  return Boolean(
+    candidate &&
+    typeof candidate.dialect === 'string' &&
+    typeof candidate.session === 'function' &&
+    candidate.settings,
+  );
+}
+
+interface ReturningKey {
+  table: string;
+  column: string;
+  value: unknown;
+  deleted?: boolean;
+}
+
+/**
+ * Derive the row a RETURNING clause refers to. Every INSERT lists `id` first
+ * and every UPDATE/DELETE filters on `id = $n`, which is what makes the MySQL
+ * read-back emulation possible without a per-statement key argument.
+ */
+function deriveReturningKey(statement: string, values: unknown[]): ReturningKey | undefined {
+  const insert = /^\s*INSERT\s+INTO\s+([a-z_]+)\s*\(\s*([a-z_]+)/i.exec(statement);
+  if (insert && insert[2] === 'id') return { table: insert[1]!, column: 'id', value: values[0] };
+  const where = /\bWHERE\b([\s\S]*)$/i.exec(statement);
+  if (!where) return undefined;
+  const predicate = /\bid\s*=\s*\$(\d+)/i.exec(where[1]!);
+  if (!predicate) return undefined;
+  const index = Number(predicate[1]) - 1;
+  const update = /^\s*UPDATE\s+([a-z_]+)\s+SET/i.exec(statement);
+  if (update) return { table: update[1]!, column: 'id', value: values[index] };
+  const remove = /^\s*DELETE\s+FROM\s+([a-z_]+)/i.exec(statement);
+  if (remove) return { table: remove[1]!, column: 'id', value: values[index], deleted: true };
+  return undefined;
 }
 
 function savepointName(value: string): string {
