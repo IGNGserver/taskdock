@@ -33,7 +33,8 @@
     "android:assembleRelease": "pnpm brand:sync && tsx scripts/android-assemble.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "openapi:check": "tsx scripts/openapi-check.ts",
-    "verify:m3e:web": "tsx scripts/verify-m3e-web.ts"
+    "verify:m3e:web": "tsx scripts/verify-m3e-web.ts",
+    "test:mysql-compat": "tsx scripts/mysql-compat.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
@@ -44,6 +45,7 @@
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
+    "mysql2": "^3.24.6",
     "prettier": "^3.6.2",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
