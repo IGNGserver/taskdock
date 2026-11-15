@@ -282,12 +282,29 @@ async function main(): Promise<void> {
       `${backupDir}:/backup:ro`,
       'postgres:18.6-alpine3.24@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2',
     ]);
+    // `pg_isready` reports success as soon as the entrypoint's temporary server
+    // accepts connections, which happens before POSTGRES_DB exists. Probing the
+    // database itself is the only check that distinguishes "initialising" from
+    // "ready to restore".
     let restored = false;
     for (let attempt = 0; attempt < 60; attempt += 1) {
       if (
         spawnSync(
           'docker',
-          ['exec', restoreContainer, 'pg_isready', '-U', 'devtodo', '-d', 'devtodo'],
+          [
+            'exec',
+            restoreContainer,
+            'psql',
+            '--no-psqlrc',
+            '--quiet',
+            '--tuples-only',
+            '-U',
+            'devtodo',
+            '-d',
+            'devtodo',
+            '-c',
+            'select 1',
+          ],
           { stdio: 'ignore', timeout: 5_000 },
         ).status === 0
       ) {
