@@ -134,6 +134,15 @@ function prepareMysql(sql: string, values: readonly unknown[]): PreparedQuery {
         continue;
       }
     }
+    if (char === 'I' || char === 'i') {
+      // PostgreSQL's null-safe comparison; MySQL has the <=> operator.
+      const notDistinct = /^is\s+not\s+distinct\s+from\b/i.exec(sql.slice(index));
+      if (notDistinct) {
+        text += '<=>';
+        index += notDistinct[0].length;
+        continue;
+      }
+    }
     if ((char === 'I' || char === 'i') && /^ilike\b/i.test(sql.slice(index))) {
       // MySQL's default collation is case-insensitive, so LIKE matches what
       // PostgreSQL's ILIKE matches; the wildcard escaping is identical.

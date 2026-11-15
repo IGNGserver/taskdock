@@ -1,4 +1,4 @@
-import { createPool } from '../packages/database/src/index.js';
+import { openDatabase, readDatabaseSettings } from '../packages/database/src/index.js';
 import { SqlStore } from '../apps/api/src/sql-store.js';
 import { isolatedTestDatabaseUrl } from './test-database-safety.js';
 
@@ -16,8 +16,12 @@ async function main(): Promise<void> {
   if (!Number.isInteger(workerCount) || workerCount < 1 || workerCount > 100)
     throw new Error('DEVTODO_WORKER_COUNT must be an integer from 1 to 100');
 
-  const pool = createPool(databaseUrl);
-  const store = new SqlStore(pool);
+  const store = new SqlStore(
+    openDatabase({
+      ...readDatabaseSettings({ ...process.env, DATABASE_URL: databaseUrl }),
+      max: 4,
+    }),
+  );
   try {
     await store.init();
     const references: string[] = [];

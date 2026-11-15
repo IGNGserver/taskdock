@@ -924,7 +924,7 @@ export class SqlStore implements Store {
     const result = await this.executeReturning(
       'INSERT INTO projects ' +
         '(id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at) ' +
-        'VALUES ($1, $2, $3, $4, 1, (SELECT COALESCE(MAX(rank), 0) + 1024 FROM projects WHERE owner_id = $2 AND deleted_at IS NULL), 1, $5, $5) ' +
+        'VALUES ($1, $2, $3, $4, 1, (SELECT COALESCE(MAX(project.rank), 0) + 1024 FROM projects project WHERE project.owner_id = $2 AND project.deleted_at IS NULL), 1, $5, $5) ' +
         'RETURNING id, owner_id, name, task_prefix, next_task_number, rank, version, created_at, updated_at, deleted_at',
       [newEntityId(id), ownerId, normalizedName, normalizedPrefix, this.now()],
     );
@@ -1082,7 +1082,7 @@ export class SqlStore implements Store {
       'INSERT INTO tasks ' +
         '(id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, created_at, updated_at) ' +
         "VALUES ($1, $2, $3, $4, $5, $6, 'TODO', $7, " +
-        '(SELECT COALESCE(MAX(rank), 0) + 1024 FROM tasks WHERE owner_id = $2 AND project_id IS NOT DISTINCT FROM $3 AND category = $4 AND deleted_at IS NULL), ' +
+        '(SELECT COALESCE(MAX(sibling.rank), 0) + 1024 FROM tasks sibling WHERE sibling.owner_id = $2 AND sibling.project_id IS NOT DISTINCT FROM $3 AND sibling.category = $4 AND sibling.deleted_at IS NULL), ' +
         '1, $8, $8) ' +
         'RETURNING id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, created_at, updated_at, deleted_at',
       [taskId, ownerId, projectId, input.category, referenceId, title, input.priority, this.now()],
@@ -1348,7 +1348,7 @@ export class SqlStore implements Store {
       'INSERT INTO tasks ' +
         '(id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, created_at, updated_at) ' +
         "VALUES ($1, $2, $3, $4, $5, $6, 'TODO', $7, " +
-        '(SELECT COALESCE(MAX(rank), 0) + 1024 FROM tasks WHERE owner_id = $2 AND project_id IS NOT DISTINCT FROM $3 AND category = $4 AND deleted_at IS NULL), ' +
+        '(SELECT COALESCE(MAX(sibling.rank), 0) + 1024 FROM tasks sibling WHERE sibling.owner_id = $2 AND sibling.project_id IS NOT DISTINCT FROM $3 AND sibling.category = $4 AND sibling.deleted_at IS NULL), ' +
         '1, $8, $8) ' +
         'RETURNING id, owner_id, project_id, category, reference_id, title, status, priority, rank, version, completed_at, created_at, updated_at, deleted_at',
       [
@@ -1448,7 +1448,7 @@ export class SqlStore implements Store {
     const result = await this.executeReturning(
       'INSERT INTO time_points (id, owner_id, type, local_date, title, rank, version, created_at, updated_at) ' +
         'VALUES ($1, $2, $3, $4, $5, ' +
-        "(SELECT COALESCE(MAX(rank), 0) + 1024 FROM time_points WHERE owner_id = $2 AND type = 'EVENT' AND deleted_at IS NULL), " +
+        "(SELECT COALESCE(MAX(point.rank), 0) + 1024 FROM time_points point WHERE point.owner_id = $2 AND point.type = 'EVENT' AND point.deleted_at IS NULL), " +
         '1, $6, $6) ' +
         (input.type === 'DATE'
           ? this.doNothingOnConflict('owner_id, local_date', "type = 'DATE' AND deleted_at IS NULL")
@@ -1482,7 +1482,7 @@ export class SqlStore implements Store {
       'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at ' +
         'FROM time_points WHERE ' +
         where.join(' AND ') +
-        " ORDER BY CASE WHEN type = 'DATE' THEN 0 ELSE 1 END, local_date NULLS LAST, rank, id",
+        " ORDER BY CASE WHEN type = 'DATE' THEN 0 ELSE 1 END, (local_date IS NULL), local_date, rank, id",
       values,
     );
     return result.rows.map((row) => timePointDto(timePointRecord(row)));
@@ -1518,7 +1518,7 @@ export class SqlStore implements Store {
         'WHERE ' +
         where.join(' AND ') +
         ' GROUP BY tp.id, tp.local_date ' +
-        "ORDER BY CASE WHEN tp.type = 'DATE' THEN 0 ELSE 1 END, tp.local_date NULLS LAST, tp.id",
+        "ORDER BY CASE WHEN tp.type = 'DATE' THEN 0 ELSE 1 END, (tp.local_date IS NULL), tp.local_date, tp.id",
       values,
     );
     return result.rows.map((row) => ({
@@ -1570,7 +1570,7 @@ export class SqlStore implements Store {
       'SELECT id, owner_id, type, local_date, title, rank, version, reached_at, created_at, updated_at, deleted_at ' +
         'FROM time_points WHERE ' +
         where.join(' AND ') +
-        " ORDER BY CASE WHEN type = 'DATE' THEN 0 ELSE 1 END, local_date NULLS LAST, rank, id LIMIT $" +
+        " ORDER BY CASE WHEN type = 'DATE' THEN 0 ELSE 1 END, (local_date IS NULL), local_date, rank, id LIMIT $" +
         values.length,
       values,
     );
@@ -1708,7 +1708,7 @@ export class SqlStore implements Store {
     const result = await this.executeReturning(
       'INSERT INTO placements (id, owner_id, task_id, time_point_id, rank, version, created_at, updated_at) ' +
         'VALUES ($1, $2, $3, $4, ' +
-        '(SELECT COALESCE(MAX(rank), 0) + 1024 FROM placements WHERE owner_id = $2 AND time_point_id = $4 AND deleted_at IS NULL), ' +
+        '(SELECT COALESCE(MAX(placement.rank), 0) + 1024 FROM placements placement WHERE placement.owner_id = $2 AND placement.time_point_id = $4 AND placement.deleted_at IS NULL), ' +
         '1, $5, $5) ' +
         this.doNothingOnConflict('task_id, time_point_id') +
         'RETURNING id, owner_id, task_id, time_point_id, rank, version, created_at, updated_at, deleted_at',
@@ -2029,12 +2029,20 @@ export class SqlStore implements Store {
       );
     const key = ownerId + ':' + clientId + ':' + mutationId;
     const requestHash = hash(input);
-    if (this.database.dialect === 'postgres')
+    const mysql = this.database.dialect === 'mysql';
+    if (mysql) {
+      // MySQL has no transaction-scoped advisory lock. Locking the owner row is
+      // the narrowest lock that still serialises "check receipt then mutate",
+      // and it is released by the same COMMIT that publishes the receipt.
+      await this.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [ownerId]);
+    } else {
       await this.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [key]);
+    }
     // Expired receipts are removed by runMaintenance(). Treating them as
     // absent here avoids a DELETE round trip on every mutation.
     const existing = await this.query(
-      'SELECT request_hash, result FROM client_mutations WHERE owner_id = $1 AND client_id = $2 AND mutation_id = $3 AND expires_at > now()',
+      'SELECT request_hash, result FROM client_mutations WHERE owner_id = $1 AND client_id = $2 AND mutation_id = $3 AND expires_at > now()' +
+        (mysql ? ' FOR UPDATE' : ''),
       [ownerId, clientId, mutationId],
     );
     if (existing.rows[0]) {
@@ -3108,8 +3116,16 @@ function throwSql(
     'code' in error &&
     typeof error.code === 'string'
   ) {
-    if (error.code === '23505') throw new DatabaseConstraintError(duplicateCode, message, error);
-    if (error.code === '23503' || error.code === '23514')
+    // PostgreSQL reports SQLSTATE codes; MySQL reports symbolic ER_* codes.
+    if (error.code === '23505' || error.code === 'ER_DUP_ENTRY')
+      throw new DatabaseConstraintError(duplicateCode, message, error);
+    if (
+      error.code === '23503' ||
+      error.code === '23514' ||
+      error.code === 'ER_NO_REFERENCED_ROW_2' ||
+      error.code === 'ER_ROW_IS_REFERENCED_2' ||
+      error.code === 'ER_CHECK_CONSTRAINT_VIOLATED'
+    )
       throw new DatabaseConstraintError('VALIDATION_FAILED', message, error);
   }
   throw error;
@@ -3121,7 +3137,9 @@ function databaseConstraintDiagnostic(error: unknown): DatabaseConstraintDiagnos
     const value = (error as Record<string, unknown>)[key];
     return typeof value === 'string' && value.length > 0 ? value.slice(0, 128) : undefined;
   };
-  const constraint = read('constraint');
+  // MySQL names the violated key inside the message: "for key 'tbl.key_name'".
+  const mysqlKey = /for key '([^']+)'/.exec(read('sqlMessage') ?? '');
+  const constraint = read('constraint') ?? (mysqlKey ? mysqlKey[1] : undefined);
   const table = read('table');
   const schema = read('schema');
   return {

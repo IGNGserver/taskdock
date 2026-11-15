@@ -1,11 +1,26 @@
 import { spawn } from 'node:child_process';
-import { createPool, databaseReady, runMigrations } from '../packages/database/src/index.js';
+import {
+  databaseReady,
+  openDatabase,
+  readDatabaseSettings,
+  runMigrations,
+  type SqlDatabase,
+} from '../packages/database/src/index.js';
 import { SqlStore } from '../apps/api/src/sql-store.js';
 import { uuidv7, type Mutation } from '../packages/contracts/src/index.js';
 import { DomainError } from '../packages/domain/src/index.js';
 import { assertIsolatedEmptyDatabase, isolatedTestDatabaseUrl } from './test-database-safety.js';
 
 const databaseUrl = isolatedTestDatabaseUrl();
+const settings = databaseUrl
+  ? readDatabaseSettings({ ...process.env, DATABASE_URL: databaseUrl })
+  : undefined;
+const engine = settings?.dialect === 'mysql' ? 'MySQL' : 'PostgreSQL';
+
+function testDatabase(): SqlDatabase {
+  if (!settings) throw new Error('TASKDOCK_TEST_DATABASE_URL is not configured');
+  return openDatabase({ ...settings, max: 10 });
+}
 const root = process.cwd();
 const workerCount = 20;
 
@@ -37,7 +52,7 @@ function runConcurrencyWorker(
 ): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const executable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-    const child = spawn(executable, ['exec', 'tsx', 'scripts/pg-concurrency-worker.ts'], {
+    const child = spawn(executable, ['exec', 'tsx', 'scripts/sql-concurrency-worker.ts'], {
       cwd: root,
       env: {
         ...process.env,
@@ -97,13 +112,13 @@ function runConcurrencyWorker(
 async function main(): Promise<void> {
   if (!databaseUrl) {
     console.log(
-      'NOT RUN: TASKDOCK_TEST_DATABASE_URL is not configured; the integration smoke requires a dedicated empty PostgreSQL database.',
+      'NOT RUN: TASKDOCK_TEST_DATABASE_URL is not configured; the integration smoke requires a dedicated empty database.',
     );
     process.exitCode = 2;
     return;
   }
 
-  const cleanupPool = createPool(databaseUrl);
+  const cleanupDatabase = testDatabase();
   const stores: SqlStore[] = [];
   const closedStores = new Set<SqlStore>();
   const closeStore = async (store: SqlStore): Promise<void> => {
@@ -113,21 +128,23 @@ async function main(): Promise<void> {
   };
   let ownerIds: string[] = [];
   try {
-    await assertIsolatedEmptyDatabase(cleanupPool, 'integration smoke');
-    await runMigrations(cleanupPool);
-    await runMigrations(cleanupPool);
-    assert(await databaseReady(cleanupPool), 'PostgreSQL schema is not ready after migrations');
-    const existingOwners = await cleanupPool.query<{ id: string }>('SELECT id FROM users LIMIT 1');
+    await assertIsolatedEmptyDatabase(cleanupDatabase, 'integration smoke');
+    await runMigrations(cleanupDatabase);
+    await runMigrations(cleanupDatabase);
+    assert(await databaseReady(cleanupDatabase), `${engine} schema is not ready after migrations`);
+    const existingOwners = await cleanupDatabase.query<{ id: string }>(
+      'SELECT id FROM users LIMIT 1',
+    );
     if (existingOwners.rowCount) {
       throw new Error(
         'integration smoke requires an isolated empty database; refusing to modify an existing Owner',
       );
     }
 
-    const primary = new SqlStore(createPool(databaseUrl), {
+    const primary = new SqlStore(testDatabase(), {
       clock: () => new Date('2026-09-04T10:00:00.000Z'),
     });
-    const peer = new SqlStore(createPool(databaseUrl), {
+    const peer = new SqlStore(testDatabase(), {
       clock: () => new Date('2026-09-04T10:00:00.000Z'),
     });
     stores.push(primary, peer);
@@ -172,11 +189,11 @@ async function main(): Promise<void> {
     const ownerB = uuidv7();
     ownerIds.push(ownerB);
     const ownerBNow = new Date().toISOString();
-    await cleanupPool.query(
+    await cleanupDatabase.query(
       'INSERT INTO users (id, username, password_hash, next_misc_task_number, created_at, updated_at) VALUES ($1, $2, $3, 1, $4, $4)',
       [ownerB, `integration-b-${process.pid}`, 'not-used-in-integration', ownerBNow],
     );
-    await cleanupPool.query(
+    await cleanupDatabase.query(
       "INSERT INTO user_settings (owner_id, timezone, week_starts_on, default_capture_target, version, created_at, updated_at) VALUES ($1, 'Asia/Shanghai', 1, 'ROOT', 1, $2, $2)",
       [ownerB, ownerBNow],
     );
@@ -254,7 +271,7 @@ async function main(): Promise<void> {
       () => primary.getTask(owner.id, failedReceiptTaskId),
       'ENTITY_NOT_FOUND',
     );
-    const failedReceipt = await cleanupPool.query(
+    const failedReceipt = await cleanupDatabase.query(
       'SELECT 1 FROM client_mutations WHERE owner_id = $1 AND mutation_id = $2',
       [owner.id, failedReceiptId],
     );
@@ -284,7 +301,7 @@ async function main(): Promise<void> {
       new Set([firstIdempotent.replayed, secondIdempotent.replayed]).size === 2,
       'concurrent idempotent mutation did not produce exactly one replay',
     );
-    const receiptCount = await cleanupPool.query(
+    const receiptCount = await cleanupDatabase.query(
       'SELECT COUNT(*)::int AS count FROM client_mutations WHERE owner_id = $1 AND client_id = $2 AND mutation_id = $3',
       [owner.id, clientId, mutationId],
     );
@@ -292,7 +309,7 @@ async function main(): Promise<void> {
       Number(receiptCount.rows[0]?.count) === 1,
       'idempotent mutation produced more than one receipt',
     );
-    const changeCount = await cleanupPool.query(
+    const changeCount = await cleanupDatabase.query(
       'SELECT COUNT(*)::int AS count FROM sync_changes WHERE owner_id = $1 AND entity_id = $2',
       [owner.id, idempotentTaskId],
     );
@@ -333,7 +350,7 @@ async function main(): Promise<void> {
     const cursorBeforeRestart = (await primary.syncStatus(owner.id)).cursor;
     await closeStore(peer);
     await closeStore(primary);
-    const restartStore = new SqlStore(createPool(databaseUrl), {
+    const restartStore = new SqlStore(testDatabase(), {
       clock: () => new Date('2026-09-04T10:00:00.000Z'),
     });
     stores.push(restartStore);
@@ -534,7 +551,7 @@ async function main(): Promise<void> {
       'focused retry lost the edit',
     );
     const manifest = await bootstrap.create(owner.id, '2026-09-04');
-    const bootstrapPeer = new SqlStore(createPool(databaseUrl));
+    const bootstrapPeer = new SqlStore(testDatabase());
     stores.push(bootstrapPeer);
     await bootstrapPeer.init();
     const peerBootstrap = new BootstrapSnapshots(new SqlTreeStore(bootstrapPeer));
@@ -567,16 +584,16 @@ async function main(): Promise<void> {
       () => peerBootstrap.page(ownerB, manifest.snapshotId, 0),
       'SYNC_CURSOR_EXPIRED',
     );
-    await cleanupPool.query(
-      "UPDATE sync_bootstrap_snapshots SET expires_at = now() - interval '1 minute' WHERE id = $1",
-      [manifest.snapshotId],
+    await cleanupDatabase.query(
+      'UPDATE sync_bootstrap_snapshots SET expires_at = $2 WHERE id = $1',
+      [manifest.snapshotId, new Date(Date.now() - 60_000).toISOString()],
     );
     await expectDomainError(
       () => bootstrap.page(owner.id, manifest.snapshotId, 0),
       'SYNC_CURSOR_EXPIRED',
     );
     await bootstrap.cleanup();
-    const expired = await cleanupPool.query(
+    const expired = await cleanupDatabase.query(
       'SELECT 1 FROM sync_bootstrap_snapshots WHERE id = $1',
       [manifest.snapshotId],
     );
@@ -651,7 +668,7 @@ async function main(): Promise<void> {
     );
 
     console.log(
-      `PASS: PostgreSQL migration, row-level transaction, owner isolation, two-process concurrency, idempotency, rollback, restart, multi-placement invariants, and SqlTreeStore v2 delete preview/tree deletion; cursor ${afterRestart.cursor}`,
+      `PASS: ${engine} migration, row-level transaction, owner isolation, two-process concurrency, idempotency, rollback, restart, multi-placement invariants, and SqlTreeStore v2 delete preview/tree deletion; cursor ${afterRestart.cursor}`,
     );
   } finally {
     for (const store of stores) {
@@ -664,13 +681,14 @@ async function main(): Promise<void> {
     }
     if (ownerIds.length) {
       try {
-        await cleanupPool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [ownerIds]);
+        const list = ownerIds.map((_, index) => `$${index + 1}`).join(',');
+        await cleanupDatabase.query(`DELETE FROM users WHERE id IN (${list})`, ownerIds);
       } catch (error) {
         console.error(`cleanup fixture failed: ${String(error)}`);
         process.exitCode = 1;
       }
     }
-    await cleanupPool.end();
+    await cleanupDatabase.end();
   }
 }
 

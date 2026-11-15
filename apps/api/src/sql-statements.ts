@@ -101,6 +101,7 @@ const SNAPSHOT_COLLECTIONS: SnapshotCollection[] = [
       'parent_folder_id',
       'title',
       'status',
+      { name: 'completed_at', timestamp: true },
       { name: 'rank', asChar: true },
       'version',
       { name: 'created_at', timestamp: true },
@@ -368,7 +369,7 @@ export function directoryChildrenQuery(
     SUM(CASE WHEN t.status='DONE' THEN 1 ELSE 0 END) AS done
   FROM branch b LEFT JOIN tasks t ON t.owner_id=$1 AND t.parent_folder_id=b.id AND t.deleted_at IS NULL
   GROUP BY b.root
-), rows AS (
+), entries AS (
   SELECT f.id,f.\`rank\` AS r,0 AS k,
     CASE f.status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END AS g,
     JSON_OBJECT('status',f.status,
@@ -379,7 +380,7 @@ export function directoryChildrenQuery(
     NULL
   FROM tasks t WHERE t.owner_id=$1 AND t.deleted_at IS NULL AND ${parentWhere}
 ), page AS (
-  SELECT * FROM rows ${seek} ORDER BY g,r,k,id ${take}
+  SELECT * FROM entries ${seek} ORDER BY g,r,k,id ${take}
 ) SELECT CASE p.k WHEN 0 THEN
   JSON_OBJECT('kind','FOLDER','folder',${folderRowJson('f')},'aggregate',p.aggregate)
   ELSE JSON_OBJECT('kind','TASK','task',${taskRowJson('t')}) END AS item
@@ -399,7 +400,7 @@ ORDER BY p.g,p.r,p.k,p.id`;
     COUNT(t.id) FILTER (WHERE t.status='DONE')::int AS done
   FROM branch b LEFT JOIN tasks t ON t.owner_id=$1 AND t.parent_folder_id=b.id AND t.deleted_at IS NULL
   GROUP BY b.root
-), rows AS (
+), entries AS (
   SELECT f.id,f.rank AS r,0 AS k,
     CASE f.status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END AS g,
     jsonb_build_object('status',f.status,
@@ -410,7 +411,7 @@ ORDER BY p.g,p.r,p.k,p.id`;
     NULL::jsonb
   FROM tasks t WHERE t.owner_id=$1 AND t.deleted_at IS NULL AND ${parentWhere}
 ), page AS MATERIALIZED (
-  SELECT * FROM rows ${seek} ORDER BY g,r,k,id ${take}
+  SELECT * FROM entries ${seek} ORDER BY g,r,k,id ${take}
 ) SELECT CASE p.k WHEN 0 THEN
   jsonb_build_object('kind','FOLDER','folder',to_jsonb(f) || jsonb_build_object('rank',f.rank::text),'aggregate',p.aggregate)
   ELSE jsonb_build_object('kind','TASK','task',to_jsonb(t) || jsonb_build_object('rank',t.rank::text)) END AS item
@@ -432,4 +433,12 @@ export const FOLDER_PATH_QUERY: Record<DatabaseDialectName, string> = {
     UNION ALL SELECT f.id,f.title,f.parent_folder_id,p.depth+1 FROM folders f JOIN parents p ON f.id=p.parent_folder_id
     WHERE f.owner_id=$1 AND f.deleted_at IS NULL AND p.depth < 100
   ) SELECT * FROM parents ORDER BY depth DESC`,
+};
+
+/** Full folder ancestry rows (used by the bootstrap task detail). */
+export const FOLDER_FULL_PATH_QUERY: Record<DatabaseDialectName, string> = {
+  postgres:
+    'WITH RECURSIVE path AS (SELECT f.*, ARRAY[f.id] AS visited, 0 AS depth FROM folders f WHERE owner_id = $1 AND id = $2 UNION ALL SELECT f.*, path.visited || f.id, depth + 1 FROM folders f JOIN path ON f.id = path.parent_folder_id WHERE f.owner_id = $1 AND NOT f.id = ANY(path.visited)) SELECT * FROM path ORDER BY depth DESC',
+  mysql:
+    'WITH RECURSIVE path AS (SELECT f.*, 0 AS depth FROM folders f WHERE owner_id = $1 AND id = $2 UNION ALL SELECT f.*, depth + 1 FROM folders f JOIN path ON f.id = path.parent_folder_id WHERE f.owner_id = $1 AND path.depth < 100) SELECT * FROM path ORDER BY depth DESC',
 };

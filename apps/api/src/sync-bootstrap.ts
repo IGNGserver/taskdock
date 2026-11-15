@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { DomainError } from '@devtodo/domain';
-import { taskRowJson } from './sql-statements.js';
+import { FOLDER_FULL_PATH_QUERY, taskRowJson } from './sql-statements.js';
 import { SqlTreeStore } from './sql-tree-store.js';
 import type { V2Snapshot, V2TreeStore } from './tree-store.js';
 
@@ -36,6 +36,11 @@ interface Session {
 }
 
 /** Maps SQL rows without loading the mutable domain projection or its notes. */
+/** `$start, $start+1, ...` for a portable IN (...) list. */
+function placeholders(start: number, count: number): string {
+  return Array.from({ length: count }, (_, index) => `$${start + index}`).join(',');
+}
+
 function dto(row: Record<string, unknown>): Record<string, unknown> {
   const value: Record<string, unknown> = {};
   for (const [key, raw] of Object.entries(row)) {
@@ -127,9 +132,13 @@ export class BootstrapSnapshots {
     if (this.cleanupFlight) return this.cleanupFlight;
     const tree = this.tree;
     if (!(tree instanceof SqlTreeStore)) return Promise.resolve();
+    // MySQL refuses a LIMIT subquery inside IN (...) and supports a directly
+    // bounded DELETE; deleting an already-removed row is a harmless no-op.
     this.cleanupFlight = tree.sql
       .v2Query(
-        'DELETE FROM sync_bootstrap_snapshots WHERE id IN (SELECT id FROM sync_bootstrap_snapshots WHERE expires_at <= now() ORDER BY expires_at LIMIT 2 FOR UPDATE SKIP LOCKED)',
+        tree.sql.dialect === 'mysql'
+          ? 'DELETE FROM sync_bootstrap_snapshots WHERE expires_at <= now() ORDER BY expires_at LIMIT 2'
+          : 'DELETE FROM sync_bootstrap_snapshots WHERE id IN (SELECT id FROM sync_bootstrap_snapshots WHERE expires_at <= now() ORDER BY expires_at LIMIT 2 FOR UPDATE SKIP LOCKED)',
       )
       .then(() => undefined)
       .finally(() => {
@@ -145,7 +154,9 @@ export class BootstrapSnapshots {
       const snapshot: Record<string, unknown> = {};
       for (const [key, [, table]] of Object.entries(collections)) {
         const order =
-          table === 'folders' || table === 'tasks' ? 'parent_folder_id NULLS FIRST, id' : 'id';
+          table === 'folders' || table === 'tasks'
+            ? '(parent_folder_id IS NOT NULL), parent_folder_id, id'
+            : 'id';
         const rank = table === 'notes' ? '' : ', rank::text AS rank';
         const rows = await sql.v2Query(
           `SELECT *${rank} FROM ${table} WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY ${order}`,
@@ -288,19 +299,25 @@ export class BootstrapSnapshots {
         [ownerId, localDate],
       );
       const pointIds = points.rows.map((p) => p['id']);
-      const placements = await sql.v2Query(
-        'SELECT *, rank::text AS rank FROM placements WHERE owner_id = $1 AND time_point_id = ANY($2::uuid[]) AND deleted_at IS NULL ORDER BY placements.rank, id LIMIT 101',
-        [ownerId, pointIds],
-      );
+      const placements =
+        pointIds.length === 0
+          ? { rows: [] as Array<Record<string, unknown>> }
+          : await sql.v2Query(
+              `SELECT *, rank::text AS rank FROM placements WHERE owner_id = $1 AND time_point_id IN (${placeholders(2, pointIds.length)}) AND deleted_at IS NULL ORDER BY placements.rank, id LIMIT 101`,
+              [ownerId, ...pointIds],
+            );
       const taskIds = placements.rows.slice(0, 100).map((p) => p['task_id']);
       const rootTasks = await sql.v2Query(
         `SELECT *, rank::text AS rank FROM tasks WHERE owner_id = $1 AND ${parent} AND deleted_at IS NULL ORDER BY CASE status WHEN 'IN_PROGRESS' THEN 0 WHEN 'TODO' THEN 1 ELSE 2 END, tasks.rank, id LIMIT 101`,
         parentValues,
       );
-      const scheduledTasks = await sql.v2Query(
-        'SELECT *, rank::text AS rank FROM tasks WHERE owner_id = $1 AND id = ANY($2::uuid[]) AND deleted_at IS NULL',
-        [ownerId, taskIds],
-      );
+      const scheduledTasks =
+        taskIds.length === 0
+          ? { rows: [] as Array<Record<string, unknown>> }
+          : await sql.v2Query(
+              `SELECT *, rank::text AS rank FROM tasks WHERE owner_id = $1 AND id IN (${placeholders(2, taskIds.length)}) AND deleted_at IS NULL`,
+              [ownerId, ...taskIds],
+            );
       const selected = new Map(
         [...rootTasks.rows.slice(0, 100), ...scheduledTasks.rows].map((t) => [t['id'], dto(t)]),
       );
@@ -497,25 +514,37 @@ export class BootstrapSnapshots {
         'SELECT *, rank::text AS rank FROM workflow_task_memberships WHERE owner_id = $1 AND task_id = $2 AND deleted_at IS NULL ORDER BY workflow_task_memberships.rank, id',
         [ownerId, id],
       );
-      const points = await sql.v2Query(
-        'SELECT *, rank::text AS rank FROM time_points WHERE owner_id = $1 AND id = ANY($2::uuid[]) AND deleted_at IS NULL',
-        [ownerId, placements.rows.map((p) => p['time_point_id'])],
-      );
+      const pointIds = placements.rows.map((p) => p['time_point_id']);
+      const points =
+        pointIds.length === 0
+          ? { rows: [] as Array<Record<string, unknown>> }
+          : await sql.v2Query(
+              `SELECT *, rank::text AS rank FROM time_points WHERE owner_id = $1 AND id IN (${placeholders(2, pointIds.length)}) AND deleted_at IS NULL`,
+              [ownerId, ...pointIds],
+            );
       const pointById = new Map(points.rows.map((p) => [p['id'], dto(p)]));
-      const workflows = await sql.v2Query(
-        'SELECT id, name FROM workflows WHERE owner_id = $1 AND id = ANY($2::uuid[])',
-        [ownerId, memberships.rows.map((m) => m['workflow_id'])],
-      );
-      const stages = await sql.v2Query(
-        'SELECT id, name FROM workflow_stages WHERE owner_id = $1 AND id = ANY($2::uuid[])',
-        [ownerId, memberships.rows.map((m) => m['stage_id'])],
-      );
+      const workflowIds = memberships.rows.map((m) => m['workflow_id']);
+      const workflows =
+        workflowIds.length === 0
+          ? { rows: [] as Array<Record<string, unknown>> }
+          : await sql.v2Query(
+              `SELECT id, name FROM workflows WHERE owner_id = $1 AND id IN (${placeholders(2, workflowIds.length)})`,
+              [ownerId, ...workflowIds],
+            );
+      const stageIds = memberships.rows.map((m) => m['stage_id']);
+      const stages =
+        stageIds.length === 0
+          ? { rows: [] as Array<Record<string, unknown>> }
+          : await sql.v2Query(
+              `SELECT id, name FROM workflow_stages WHERE owner_id = $1 AND id IN (${placeholders(2, stageIds.length)})`,
+              [ownerId, ...stageIds],
+            );
       const workflowById = new Map(workflows.rows.map((w) => [w['id'], w]));
       const stageById = new Map(stages.rows.map((s) => [s['id'], s]));
-      const path = await sql.v2Query(
-        'WITH RECURSIVE path AS (SELECT f.*, ARRAY[f.id] AS visited, 0 AS depth FROM folders f WHERE owner_id = $1 AND id = $2 UNION ALL SELECT f.*, path.visited || f.id, depth + 1 FROM folders f JOIN path ON f.id = path.parent_folder_id WHERE f.owner_id = $1 AND NOT f.id = ANY(path.visited)) SELECT * FROM path ORDER BY depth DESC',
-        [ownerId, task['parentFolderId']],
-      );
+      const path = await sql.v2Query(FOLDER_FULL_PATH_QUERY[sql.dialect], [
+        ownerId,
+        task['parentFolderId'],
+      ]);
       if (!notes.rows[0]) throw new DomainError('ENTITY_NOT_FOUND', '找不到任务备注');
       return {
         task,
