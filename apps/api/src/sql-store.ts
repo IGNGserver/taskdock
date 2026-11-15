@@ -467,14 +467,16 @@ export class SqlStore implements Store {
       throw new Error(`executeReturning cannot derive the row key: ${statement.slice(0, 70)}`);
     if (derived.deleted) {
       // A DELETEd row can never be read back; rowCount carries the outcome.
+      const first = derived.where[0];
       return {
-        rows: (written.rowCount ?? 0) > 0 ? [{ [derived.column]: derived.value }] : [],
+        rows: (written.rowCount ?? 0) > 0 && first ? [{ [first.column]: first.value }] : [],
         rowCount: written.rowCount,
       };
     }
+    const predicate = derived.where.map((entry, index) => `${entry.column} = $${index + 1}`);
     const selected = await this.query(
-      `SELECT ${columns} FROM ${derived.table} WHERE ${derived.column} = $1`,
-      [derived.value],
+      `SELECT ${columns} FROM ${derived.table} WHERE ${predicate.join(' AND ')}`,
+      derived.where.map((entry) => entry.value),
     );
     return { rows: selected.rows, rowCount: selected.rowCount };
   }
@@ -763,6 +765,7 @@ export class SqlStore implements Store {
         'WHERE owner_id = $1 AND version = $6 ' +
         'RETURNING owner_id, timezone, week_starts_on, default_capture_target, version, created_at, updated_at, deleted_at',
       [ownerId, timezone, weekStartsOn, defaultCaptureTarget, this.now(), baseVersion],
+      { table: 'user_settings', where: [{ column: 'owner_id', value: ownerId }] },
     );
     if (!result.rows[0])
       throw new DomainError('VERSION_CONFLICT', '实体版本已变化', {
@@ -1410,6 +1413,13 @@ export class SqlStore implements Store {
         'WHERE owner_id = $1 AND task_id = $2 AND version = $5 AND deleted_at IS NULL ' +
         'RETURNING id, owner_id, task_id, content_markdown, version, created_at, updated_at, deleted_at',
       [ownerId, taskId, contentMarkdown, this.now(), baseVersion],
+      {
+        table: 'notes',
+        where: [
+          { column: 'owner_id', value: ownerId },
+          { column: 'task_id', value: taskId },
+        ],
+      },
     );
     const next = noteRecord(requireUpdatedRow(result, '备注版本已变化'));
     const dto = noteDto(next);
@@ -1633,6 +1643,16 @@ export class SqlStore implements Store {
         'WHERE owner_id = $1 AND time_point_id = $2 AND deleted_at IS NULL ' +
         'RETURNING id, version',
       [ownerId, id, now],
+      // Soft delete keeps the rows, so the freshly written tombstone value is
+      // exactly the set this statement touched.
+      {
+        table: 'placements',
+        where: [
+          { column: 'owner_id', value: ownerId },
+          { column: 'time_point_id', value: id },
+          { column: 'deleted_at', value: now },
+        ],
+      },
     );
     for (const row of placements.rows) {
       await this.appendChange(
@@ -2624,8 +2644,8 @@ function isSqlDatabase(value: unknown): value is SqlDatabase {
 
 interface ReturningKey {
   table: string;
-  column: string;
-  value: unknown;
+  /** Equality conditions of the read-back, in binding order. */
+  where: Array<{ column: string; value: unknown }>;
   deleted?: boolean;
 }
 
@@ -2636,16 +2656,22 @@ interface ReturningKey {
  */
 function deriveReturningKey(statement: string, values: unknown[]): ReturningKey | undefined {
   const insert = /^\s*INSERT\s+INTO\s+([a-z_]+)\s*\(\s*([a-z_]+)/i.exec(statement);
-  if (insert && insert[2] === 'id') return { table: insert[1]!, column: 'id', value: values[0] };
+  if (insert && insert[2] === 'id')
+    return { table: insert[1]!, where: [{ column: 'id', value: values[0] }] };
   const where = /\bWHERE\b([\s\S]*)$/i.exec(statement);
   if (!where) return undefined;
   const predicate = /\bid\s*=\s*\$(\d+)/i.exec(where[1]!);
   if (!predicate) return undefined;
   const index = Number(predicate[1]) - 1;
   const update = /^\s*UPDATE\s+([a-z_]+)\s+SET/i.exec(statement);
-  if (update) return { table: update[1]!, column: 'id', value: values[index] };
+  if (update) return { table: update[1]!, where: [{ column: 'id', value: values[index] }] };
   const remove = /^\s*DELETE\s+FROM\s+([a-z_]+)/i.exec(statement);
-  if (remove) return { table: remove[1]!, column: 'id', value: values[index], deleted: true };
+  if (remove)
+    return {
+      table: remove[1]!,
+      where: [{ column: 'id', value: values[index] }],
+      deleted: true,
+    };
   return undefined;
 }
 

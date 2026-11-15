@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { isDeepStrictEqual } from 'node:util';
 import {
   databaseReady,
   openDatabase,
@@ -242,7 +243,6 @@ async function main(): Promise<void> {
       (await primary.syncStatus(owner.id)).cursor === cursorBeforeRollback,
       'failed transaction advanced the change cursor',
     );
-
     const failedReceiptId = uuidv7();
     const failedReceiptTaskId = uuidv7();
     await expectDomainError(
@@ -667,6 +667,43 @@ async function main(): Promise<void> {
       'v2 delete was not persisted for a reloaded store',
     );
 
+    // UPDATE ... RETURNING paths without an `id` predicate: settings (keyed by
+    // owner), notes (keyed by task) and the multi-row placement tombstone.
+    const returningTask = await restartStore.withMutation(() =>
+      restartStore.createTask(owner.id, {
+        projectId: project.id,
+        category: 'FEATURE',
+        title: 'returning shapes',
+        priority: 'NONE',
+      }),
+    );
+    assert(
+      (
+        await restartStore.withMutation(() =>
+          restartStore.updateNote(owner.id, returningTask.id, 'note v2', 1),
+        )
+      ).contentMarkdown === 'note v2',
+      'note update did not read its own row back',
+    );
+    assert(
+      (await restartStore.updateSettings(owner.id, { timezone: 'UTC' }, 1)).version === 2,
+      'settings update did not read its own row back',
+    );
+    const returningEvent = await restartStore.createEvent(owner.id, 'returning event');
+    await restartStore.withMutation(() =>
+      restartStore.addPlacement(owner.id, returningTask.id, returningEvent.id),
+    );
+    const cursorBeforeEventDelete = (await restartStore.syncStatus(owner.id)).cursor;
+    await restartStore.deleteTimePoint(owner.id, returningEvent.id, returningEvent.version);
+    assert(
+      BigInt((await restartStore.syncStatus(owner.id)).cursor) > BigInt(cursorBeforeEventDelete),
+      'event deletion did not append placement tombstones',
+    );
+    assert(
+      (await restartStore.getTask(owner.id, returningTask.id)).id === returningTask.id,
+      'deleting an event also removed its task',
+    );
+
     console.log(
       `PASS: ${engine} migration, row-level transaction, owner isolation, two-process concurrency, idempotency, rollback, restart, multi-placement invariants, and SqlTreeStore v2 delete preview/tree deletion; cursor ${afterRestart.cursor}`,
     );
@@ -696,4 +733,3 @@ void main().catch((error: unknown) => {
   console.error(error);
   process.exitCode = 1;
 });
-import { isDeepStrictEqual } from 'node:util';
