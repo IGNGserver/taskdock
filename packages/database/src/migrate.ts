@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type pg from 'pg';
-import type { DatabaseDialectName } from './dialect.js';
+import { splitSqlStatements, type DatabaseDialectName } from './dialect.js';
 import type { QueryResult, SqlDatabase } from './pool.js';
 
 export interface MigrationOptions {
@@ -151,7 +151,7 @@ async function runMysqlMigrations(
   let locked = false;
   try {
     const lock = await session.query<{ locked: number | null }>(
-      'SELECT GET_LOCK(?, 60) AS locked',
+      'SELECT GET_LOCK($1, 60) AS locked',
       [MIGRATION_LOCK],
     );
     locked = Number(lock.rows[0]?.locked) === 1;
@@ -173,9 +173,11 @@ async function runMysqlMigrations(
         continue;
       }
       // MySQL commits DDL implicitly, so the file cannot be rolled back; record
-      // it right after it succeeds instead of at the end of the run.
-      await session.query(migration.sql);
-      await session.query('INSERT INTO schema_migrations(name, checksum) VALUES (?, ?)', [
+      // it right after it succeeds instead of at the end of the run. The server
+      // also refuses a whole multi-statement script unless multi-statements are
+      // enabled for the connection, which is deliberately not the case.
+      for (const statement of splitSqlStatements(migration.sql)) await session.query(statement);
+      await session.query('INSERT INTO schema_migrations(name, checksum) VALUES ($1, $2)', [
         migration.name,
         migration.checksum,
       ]);
@@ -183,7 +185,7 @@ async function runMysqlMigrations(
   } finally {
     if (locked) {
       try {
-        await session.query('SELECT RELEASE_LOCK(?)', [MIGRATION_LOCK]);
+        await session.query('SELECT RELEASE_LOCK($1)', [MIGRATION_LOCK]);
       } catch {
         /* The lock is released when the session closes. */
       }

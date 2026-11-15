@@ -11,6 +11,10 @@
  *
  * MySQL also receives implicit casts: `$1::date` becomes `?`. The cast exists
  * to satisfy PostgreSQL's type inference, and MySQL rejects the syntax.
+ *
+ * MySQL reserves `rank` and `cursor`, which the schema uses as column names.
+ * Bare occurrences in SQL are quoted automatically, so every statement can be
+ * written once. PostgreSQL leaves them bare because it does not reserve them.
  */
 
 export type DatabaseDialectName = 'postgres' | 'mysql';
@@ -119,6 +123,14 @@ function prepareMysql(sql: string, values: readonly unknown[]): PreparedQuery {
         params.push(values[position - 1]);
         index += placeholder[0].length;
         index = skipCast(sql, index);
+        continue;
+      }
+    }
+    if (/[A-Za-z_]/.test(char) && !/[A-Za-z0-9_]/.test(sql[index - 1] ?? '')) {
+      const reserved = /^(rank|cursor)\b/i.exec(sql.slice(index));
+      if (reserved && sql[index + reserved[0].length] !== '(') {
+        text += '`' + reserved[0] + '`';
+        index += reserved[0].length;
         continue;
       }
     }
@@ -254,4 +266,58 @@ export function normaliseMysqlValue(value: unknown): unknown {
 
 export function normaliseMysqlValues(values: readonly unknown[]): unknown[] {
   return values.map(normaliseMysqlValue);
+}
+
+/**
+ * Split a migration script into single statements.
+ *
+ * PostgreSQL accepts a whole script in one `query()` call; MySQL rejects it
+ * when multi-statement execution is off, which is the safe default. Semicolons
+ * inside strings, identifiers and comments never split.
+ */
+export function splitSqlStatements(sql: string): string[] {
+  const statements: string[] = [];
+  let start = 0;
+  let index = 0;
+  while (index < sql.length) {
+    const char = sql[index]!;
+    if (char === "'") {
+      index = skipSingleQuoted(sql, index);
+      continue;
+    }
+    if (char === '"') {
+      index = skipDoubleQuoted(sql, index);
+      continue;
+    }
+    if (char === '`') {
+      index = skipBacktick(sql, index);
+      continue;
+    }
+    if (char === '-' && sql[index + 1] === '-') {
+      index = lineCommentEnd(sql, index);
+      continue;
+    }
+    if (char === '/' && sql[index + 1] === '*') {
+      index = blockCommentEnd(sql, index);
+      continue;
+    }
+    if (char === '$') {
+      const dollar = /^\$([A-Za-z_]*)\$/.exec(sql.slice(index));
+      if (dollar) {
+        const close = sql.indexOf(dollar[0], index + dollar[0].length);
+        index = close === -1 ? sql.length : close + dollar[0].length;
+        continue;
+      }
+    }
+    if (char === ';') {
+      statements.push(sql.slice(start, index + 1).trim());
+      start = index + 1;
+      index += 1;
+      continue;
+    }
+    index += 1;
+  }
+  const tail = sql.slice(start).trim();
+  if (tail) statements.push(tail);
+  return statements.filter((statement) => statement && statement !== ';');
 }

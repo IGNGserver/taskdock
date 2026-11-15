@@ -382,6 +382,11 @@ export class SqlStore implements Store {
         for (const [ownerId, cursor] of context.pending)
           await this.publishCursor(session, ownerId, cursor);
         await session.commit();
+        // PostgreSQL delivers the commit notification through its LISTEN
+        // connection. MySQL has no NOTIFY, so the in-process observers are the
+        // only fan-out and must fire after the commit succeeded.
+        if (session.dialect !== 'postgres')
+          for (const [ownerId, cursor] of context.pending) this.notify(ownerId, cursor);
         return result;
       });
       return value;
@@ -520,7 +525,11 @@ export class SqlStore implements Store {
       const tuples: string[] = [];
       const values: unknown[] = [];
       for (const change of changes) {
-        tuples.push('(?, ?, ?, ?, ?, CAST(? AS JSON), ?, 2)');
+        const base = values.length;
+        const at = (offset: number) => `$${base + offset}`;
+        tuples.push(
+          `(${at(1)}, ${at(2)}, ${at(3)}, ${at(4)}, ${at(5)}, CAST(${at(6)} AS JSON), ${at(7)}, 2)`,
+        );
         values.push(
           ownerId,
           change.entityType,
@@ -683,7 +692,10 @@ export class SqlStore implements Store {
   }
 
   async createOwner(username: string, passwordHash: string): Promise<UserDto> {
-    await this.query("SELECT pg_advisory_xact_lock(hashtextextended('devtodo:bootstrap', 0))");
+    // PostgreSQL serialises concurrent bootstraps with an advisory lock; MySQL
+    // relies on the unique username index (only one bootstrap can win).
+    if (this.database.dialect === 'postgres')
+      await this.query("SELECT pg_advisory_xact_lock(hashtextextended('devtodo:bootstrap', 0))");
     if (await this.hasOwner())
       throw new DomainError('BOOTSTRAP_ALREADY_COMPLETED', 'Owner 已初始化');
     const normalizedUsername = normalizeUsername(username);
@@ -2252,7 +2264,7 @@ export class SqlStore implements Store {
   ): Promise<{ cursor: string; oldestCursor: string; protocolVersion: 1 }> {
     await this.owner(ownerId);
     const current = await this.query(
-      'SELECT COALESCE(MAX(seq), 0)::text AS cursor FROM sync_changes WHERE owner_id = $1',
+      'SELECT COALESCE(MAX(seq), 0)::text AS `cursor` FROM sync_changes WHERE owner_id = $1',
       [ownerId],
     );
     const first = await this.query('SELECT seq FROM sync_changes ORDER BY seq LIMIT 1');
@@ -2318,7 +2330,7 @@ export class SqlStore implements Store {
     const result = await this.query(
       `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND disabled_at IS NULL) AS owner_ok,
               (SELECT COALESCE(MAX(seq), 0)::text FROM sync_changes
-               WHERE owner_id = $1 AND protocol_version = 2) AS cursor,
+               WHERE owner_id = $1 AND protocol_version = 2) AS \`cursor\`,
               (SELECT seq FROM sync_changes WHERE protocol_version = 2
                ORDER BY seq LIMIT 1) AS oldest`,
       [ownerId],

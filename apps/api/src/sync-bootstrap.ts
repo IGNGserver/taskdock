@@ -394,7 +394,7 @@ export class BootstrapSnapshots {
       // remaining lifetime to resume it. This also works across API instances.
       const fiveMinutes = sql.dialect === 'mysql' ? 'INTERVAL 5 MINUTE' : "interval '5 minutes'";
       const reusable = await sql.v2Query(
-        `SELECT id, expires_at, page_count FROM sync_bootstrap_snapshots WHERE owner_id = $1 AND cursor = $2 AND expires_at > now() + ${fiveMinutes} AND page_count > 0 ORDER BY expires_at DESC LIMIT 1`,
+        `SELECT id, expires_at, page_count FROM sync_bootstrap_snapshots WHERE owner_id = $1 AND \`cursor\` = $2 AND expires_at > now() + ${fiveMinutes} AND page_count > 0 ORDER BY expires_at DESC LIMIT 1`,
         [ownerId, cursor],
       );
       const previous = reusable.rows[0];
@@ -409,7 +409,7 @@ export class BootstrapSnapshots {
       const snapshotId = randomUUID();
       const expiresAt = new Date(Date.now() + ttlMs).toISOString();
       await sql.v2Query(
-        'INSERT INTO sync_bootstrap_snapshots(id,owner_id,cursor,expires_at,page_count) VALUES($1,$2,$3,$4,0)',
+        'INSERT INTO sync_bootstrap_snapshots(id,owner_id,`cursor`,expires_at,page_count) VALUES($1,$2,$3,$4,0)',
         [snapshotId, ownerId, cursor, expiresAt],
       );
       let page: BootstrapChange[] = [];
@@ -542,7 +542,7 @@ export class BootstrapSnapshots {
     let items: BootstrapChange[] | undefined;
     if (this.tree instanceof SqlTreeStore) {
       const rows = await this.tree.sql.v2Query(
-        'SELECT s.cursor::text, s.expires_at, s.page_count, p.payload FROM sync_bootstrap_snapshots s JOIN sync_bootstrap_pages p ON p.snapshot_id = s.id WHERE s.id = $1 AND s.owner_id = $2 AND p.page = $3 AND s.expires_at > now()',
+        'SELECT s.`cursor`::text, s.expires_at, s.page_count, p.payload FROM sync_bootstrap_snapshots s JOIN sync_bootstrap_pages p ON p.snapshot_id = s.id WHERE s.id = $1 AND s.owner_id = $2 AND p.page = $3 AND s.expires_at > now()',
         [id, ownerId, page],
       );
       const row = rows.rows[0];

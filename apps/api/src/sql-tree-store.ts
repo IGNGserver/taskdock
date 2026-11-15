@@ -45,7 +45,7 @@ export class SqlTreeStore extends MemoryTreeStore implements V2TreeStore {
     const current = await this.sql.v2Query(
       `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND disabled_at IS NULL) AS owner_ok,
               (SELECT next_task_number FROM users WHERE id = $1 AND disabled_at IS NULL) AS next_task_number,
-              (SELECT COALESCE(MAX(seq), 0)::text FROM sync_changes WHERE owner_id = $1) AS cursor`,
+              (SELECT COALESCE(MAX(seq), 0)::text FROM sync_changes WHERE owner_id = $1) AS \`cursor\``,
       [ownerId],
     );
     const currentRow = current.rows[0];

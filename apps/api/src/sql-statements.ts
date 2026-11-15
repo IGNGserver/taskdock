@@ -310,7 +310,7 @@ export const OWNER_SNAPSHOT_QUERY: Record<DatabaseDialectName, string> = {
      (SELECT u.next_task_number FROM users u
       WHERE u.id = $1 AND u.disabled_at IS NULL) AS next_task_number,
      (SELECT COALESCE(MAX(sc.seq), 0)::text FROM sync_changes sc
-      WHERE sc.owner_id = $1) AS cursor,
+      WHERE sc.owner_id = $1) AS \`cursor\`,
      COALESCE((SELECT jsonb_agg(to_jsonb(f) || jsonb_build_object('rank', f.rank::text) ORDER BY f.id)
                FROM folders f WHERE f.owner_id = $1), '[]'::jsonb) AS folders,
      COALESCE((SELECT jsonb_agg(to_jsonb(t) || jsonb_build_object('rank', t.rank::text) ORDER BY t.id)
@@ -334,7 +334,7 @@ export const OWNER_SNAPSHOT_QUERY: Record<DatabaseDialectName, string> = {
      (SELECT u.next_task_number FROM users u
       WHERE u.id = $1 AND u.disabled_at IS NULL) AS next_task_number,
      (SELECT CAST(COALESCE(MAX(sc.seq), 0) AS CHAR) FROM sync_changes sc
-      WHERE sc.owner_id = $1) AS cursor,
+      WHERE sc.owner_id = $1) AS \`cursor\`,
      ${SNAPSHOT_COLLECTIONS.map(mysqlCollectionAggregate).join(',\n     ')},
      ${mysqlSettingsAggregate()}`,
 };
